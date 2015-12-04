@@ -146,7 +146,6 @@ class FileHandler (object):
             )
         )
         ra = app.find_action("OpenRecent")
-        ra.add_filter(rf)
 
         ag = app.builder.get_object('FileActions')
         for action in ag.list_actions():
