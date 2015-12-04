@@ -761,64 +761,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def _simplify_nodes_single(self,angle,distance):
         """Internal method of optimize nodes."""
-       #newnodes=[self.nodes[0],]
-       #for idx in range(1,len(self.nodes)-2,2):
-       #    newnodes.append(self.nodes[idx])
-       #   #self.nodes.pop(idx-prev)
-       #   #prev=idx
-       #newnodes.append(self.nodes[-1])
-       #self.nodes=newnodes
-       #return 1
-
-       ## for-loop version
-       #to_be_deleted_nodes=[]
-       #for i in range(1,len(self.nodes)-2,2):# [TODO] wrong maximum  number??
-       #    # Create 2 vectors
-       #    # and get angle between them.
-       #    # It represents how far the node "i" from the ink stroke.
-       #    v1x=self.nodes[i+1].x-self.nodes[i-1].x
-       #    v1y=self.nodes[i+1].y-self.nodes[i-1].y
-       #
-       #    v2x=self.nodes[i].x-self.nodes[i-1].x
-       #    v2y=self.nodes[i].y-self.nodes[i-1].y
-       #
-       #    try:
-       #
-       #        vs1=math.sqrt(v1x*v1x + v1y*v1y)
-       #        vs2=math.sqrt(v2x*v2x + v2y*v2y)
-       #        
-       #        if abs(vs1-vs2) < 8:
-       #            to_be_deleted_nodes.append(i)
-       #        else:
-       #            v1x/=vs1
-       #            v1y/=vs1
-       #
-       #            v2x/=vs2
-       #            v2y/=vs2
-       #    
-       #            dp=v1x*v2x + v1y*v2y
-       #            if -1.0 < dp < 1.0:
-       #                if math.acos(dp) < e:
-       #                    to_be_deleted_nodes.append(i)
-       #
-       #    except ZeroDivisionError:
-       #        pass
-       #
-       #for offset,idx in enumerate(to_be_deleted_nodes):
-       #    self.nodes.pop(idx-offset)
-       #
-       #return len(to_be_deleted_nodes)
-
         ## while version
         i=1
         cnt=0
-        def pop_node(i):
-           #self.set_node_dtime(i+1,0)
-            t=self.get_node_dtime(i)
-            self.nodes.pop(i)
-            self.set_node_dtime(i,t)
 
-        while i<len(self.nodes)-2:
+        while i<len(self.nodes)-1:
             # Create 2 vectors
             # and get angle between them.
             # It represents how far the node "i" from the ink stroke.
@@ -834,9 +781,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 vs2=math.sqrt(v2x*v2x + v2y*v2y)
 
                 if vs1 < distance or vs2 < distance: 
-                   #self.nodes.pop(i)
+                    self.nodes.pop(i)
                     cnt+=1
-                    pop_node(i)
                 else:
                     v1x/=vs1
                     v1y/=vs1
@@ -846,27 +792,27 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             
                     dp=v1x*v2x + v1y*v2y
                     if -1.0 < dp < 1.0 and math.acos(dp) < angle:
-                        pop_node(i)
-                       #self.nodes.pop(i)
+                        self.nodes.pop(i)
                         cnt+=1
                     else:
                         i+=1
     
             except ZeroDivisionError:
                 pass
-        
+
         return cnt
 
     def _cull_nodes_single(self):
         """Internal method of cull nodes."""
+        curcnt=len(self.nodes)
         newnodes=[self.nodes[0],]
-        for idx in range(1,len(self.nodes)-2,2):
+        for idx in range(1,len(self.nodes)-1,2):
             newnodes.append(self.nodes[idx])
            #self.nodes.pop(idx-prev)
            #prev=idx
         newnodes.append(self.nodes[-1])
         self.nodes=newnodes
-        return len(newnodes)
+        return curcnt-len(self.nodes)
 
     def _nodes_operation(self,callable,args):
         self._queue_draw_buttons() 
@@ -874,7 +820,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_draw_node(len(self.nodes)-1) 
 
         if callable(*args) > 0: 
-            # FIXME: CODE DUPLICATION: almost copied from delete_node()
 
             new_cn = self.current_node_index
             if new_cn >= len(self.nodes):
@@ -882,6 +827,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 self.current_node_index = new_cn
                 self.current_node_changed(new_cn)
                 self.options_presenter.target = (self, new_cn)
+
+            self.target_node_index=None
 
             # Issue redraws for the changed on-canvas elements
             self._queue_redraw_curve()
