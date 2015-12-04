@@ -61,8 +61,32 @@ class Presenter (object):
         """
         # Load the available autosaves
         self._liststore.clear()
-        autosaves = [a for a in lib.document.get_available_autosaves()
-                     if not a.cache_in_use]
+        doc = self._app.doc
+        autosaves = []
+        for asav in lib.document.get_available_autosaves():
+            # Another instance may be working in there.
+            if asav.cache_in_use:
+                logger.debug(
+                    "Ignoring %r: in use",
+                    asav.path,
+                )
+                continue
+            # Skip autosaves inside the current doc's cache folder.
+            asav_cachedir = os.path.dirname(asav.path)
+            asav_cachedir = os.path.normpath(os.path.realpath(asav_cachedir))
+            doc_cachedir = doc.model.cache_dir
+            doc_cachedir = os.path.normpath(os.path.realpath(doc_cachedir))
+            if doc_cachedir == asav_cachedir:
+                logger.debug(
+                    "Ignoring %r: belongs to current working doc.",
+                    asav.path,
+                )
+                continue
+            logger.debug(
+                "Making %r available for autosave recovery.",
+                asav.path,
+            )
+            autosaves.append(asav)
         if not autosaves:
             if no_autosaves_dialog:
                 cache_root = lib.document.get_app_cache_root()
@@ -105,7 +129,6 @@ class Presenter (object):
                 path = path.decode("utf-8")
                 autosave = lib.document.AutosaveInfo.new_for_path(path)
                 logger.info("Recovering %r...", autosave)
-                doc = self._app.doc
                 try:
                     doc.model.resume_from_autosave(path)
                 except lib.errors.FileHandlingError as e:
@@ -128,6 +151,7 @@ class Presenter (object):
         # If it loaded OK, get the user to save the recovered file ASAP.
         elif autosave:
             fh = self._app.filehandler
+            fh.set_filename(None)
             lastmod = autosave.last_modified
             strftime_tmpl = "%Y-%m-%d %H%M%S"
             sugg_name_tmpl = _(u"Recovered file from {iso_datetime}.ora")

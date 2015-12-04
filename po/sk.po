@@ -2,13 +2,12 @@
 # Copyright (C) 2015 Dušan Kazik
 # This file is distributed under the same license as the mypaint package
 # Dušan Kazik <prescott66@gmail.com>, 2015.
-#
 msgid ""
 msgstr ""
 "Project-Id-Version: libmypaint for mypaint 1.2.0\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2015-07-11 21:24+0100\n"
-"PO-Revision-Date: 2015-11-03 22:10+0200\n"
+"PO-Revision-Date: 2015-12-01 17:39+0100\n"
 "Last-Translator: Dušan Kazik <prescott66@gmail.com>\n"
 "Language-Team: Slovak "
 "<https://hosted.weblate.org/projects/mypaint/mypaint/sk/>\n"
@@ -17,7 +16,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n==1) ? 0 : (n>=2 && n<=4) ? 1 : 2;\n"
-"X-Generator: Weblate 2.5-dev\n"
+"X-Generator: Poedit 1.8.6\n"
 
 #: ../gui/accelmap.py:55
 #, python-brace-format
@@ -189,6 +188,9 @@ msgid "Basic"
 msgstr "Základné"
 
 #: ../gui/brusheditor.py:300
+#: ../brushsettings-gen.h:4
+#: ../po/tmp/resources.xml.h:183
+#, fuzzy
 msgctxt "brush settings list: setting group"
 msgid "Opacity"
 msgstr "Krytie"
@@ -199,6 +201,8 @@ msgid "Dabs"
 msgstr "Kvapky"
 
 #: ../gui/brusheditor.py:323
+#: ../brushsettings-gen.h:33
+#, fuzzy
 msgctxt "brush settings list: setting group"
 msgid "Smudge"
 msgstr "Rozmazanie"
@@ -214,6 +218,8 @@ msgid "Tracking"
 msgstr "Sledovanie"
 
 #: ../gui/brusheditor.py:359
+#: ../brushsettings-gen.h:57
+#, fuzzy
 msgctxt "brush settings list: setting group"
 msgid "Stroke"
 msgstr "Ťah"
@@ -224,6 +230,8 @@ msgid "Color"
 msgstr "Farba"
 
 #: ../gui/brusheditor.py:385
+#: ../brushsettings-gen.h:61
+#, fuzzy
 msgctxt "brush settings list: setting group"
 msgid "Custom"
 msgstr "Vlastné"
@@ -1105,7 +1113,7 @@ msgstr "Prekrížený ovál"
 #: ../gui/colortools.py:180
 msgctxt "color changer dock panels: tab tooltip description"
 msgid "Change color with HSV ramps crossing a radial bowl of color."
-msgstr ""
+msgstr "Mení farbu pomocou kruhovej misky farieb prekríženej HSV rampami."
 
 #: ../gui/device.py:46
 msgctxt "prefs: device's type label"
@@ -1113,6 +1121,8 @@ msgid "Cursor/puck"
 msgstr "Kurzor/puk"
 
 #: ../gui/device.py:50
+#: ../brushsettings-gen.h:36
+#, fuzzy
 msgctxt "prefs: device's type label"
 msgid "Eraser"
 msgstr "Guma"
@@ -1608,6 +1618,9 @@ msgid ""
 "temporary merge of all the visible layers\n"
 "underneath the current layer"
 msgstr ""
+"Pri rozhodovaní, ktorá oblasť bude vyplnená, dočasne\n"
+"zlúčiťvvšetky viditeľné vrstvy pod\n"
+"aktuálnou vrstvou"
 
 #: ../gui/fill.py:226
 msgid "Target:"
@@ -2076,6 +2089,13 @@ msgid ""
 "This program is distributed in the hope that it will be useful, but WITHOUT "
 "ANY WARRANTY. See the COPYING file for more details."
 msgstr ""
+"Tento program je voľný software. Môžete ho redistribuovať a/alebo upravovať "
+"podľa licencie GNU General Public License, tak ako bola publikovaná nadáciou "
+"Free Software Foundation. Požadovaná verzia licencie je 2, alebo (podľa vaej "
+"potreby) akákoľvek novšia.\n"
+"\n"
+"Tento program je distribuovaný v nádeji, že bude užitočný, no BEZ AKEJKOĽVEK "
+"ZÁRUKY. Pozrite súbor „COPYING“ pre viac podrobností."
 
 #: ../gui/meta.py:51
 msgctxt "About dialog: credits: tasks"
@@ -2130,7 +2150,7 @@ msgstr "podpora"
 #: ../gui/meta.py:92
 msgctxt "About dialog: credits: tasks: outreach (social media, ads?)"
 msgid "outreach"
-msgstr ""
+msgstr "marketing"
 
 #: ../gui/meta.py:96
 msgctxt "About dialog: credits: tasks: running or building a community"
@@ -2557,12 +2577,14 @@ msgid ""
 "Unable to write “{filename}”: {err}\n"
 "Do you have enough space left on the device?"
 msgstr ""
+"Nie je možné zapísať súbor „{filename}“: {err}\n"
+"Máte dostatok voľného miesta na zariadení?"
 
 #: ../lib/document.py:1215 ../lib/document.py:1225
 #, python-brace-format
 msgctxt "Document IO: hint templates for user-facing exceptions"
 msgid "Unable to write “{filename}”: {err}"
-msgstr ""
+msgstr "Nie je možné zapísať súbor „{filename}“: {err}"
 
 #: ../lib/document.py:1257
 #, python-brace-format
@@ -2619,6 +2641,10 @@ msgid ""
 "Try saving in PNG format instead, if your machine doesn’t have a lot of "
 "memory. MyPaint’s PNG save function is more efficient."
 msgstr ""
+"Nie je možné uložiť vo formáte JPEG: {original_msg}\n"
+"\n"
+"Ak vaše zariadenie nemá dostatok pamäte RAM, skúste formát PNG. Funkcia "
+"ukladania vo formáte PNG je v programe MyPaint oveľa efektívnejšia."
 
 #: ../lib/document.py:1493
 #, python-brace-format
@@ -2825,7 +2851,7 @@ msgstr "Rozdiel"
 
 #: ../lib/modes.py:82
 msgid "Subtracts the darker color from the lighter of the two."
-msgstr ""
+msgstr "Odpočíta tmavšiu farbu od tej svetlejšej."
 
 #: ../lib/modes.py:84
 msgid "Exclusion"
@@ -3184,6 +3210,9 @@ msgid ""
 "A value of 0 means that the pen is vertical.\n"
 "Negative values mean leftwards tilts."
 msgstr ""
+"Náklon v smere osi X plátna.\n"
+"Nulová hodnota znamená, že pero je zvisle.\n"
+"Záporná hodnota znamená ľavý náklon."
 
 #: ../po/tmp/inktool.glade.h:7
 msgctxt "Inking tool options: point value sliders: labels"
@@ -3197,7 +3226,7 @@ msgstr "Sklon v osi Y:"
 
 #: ../po/tmp/inktool.glade.h:9
 msgid "Tilt in the canvas Y axis"
-msgstr ""
+msgstr "Náklon v Y osi plátna"
 
 #: ../po/tmp/inktool.glade.h:10
 msgctxt "Inking tool options: point value sliders: labels: tooltips"
@@ -3347,6 +3376,8 @@ msgstr "<b>Globálne mapovanie tlaku</b>"
 
 #. Tab label in preferences dialog
 #: ../po/tmp/preferenceswindow.glade.h:27
+#: ../brushsettings-gen.h:53
+#, fuzzy
 msgctxt "Prefs Dialog|"
 msgid "Pressure"
 msgstr "Tlak"
@@ -4219,7 +4250,7 @@ msgstr "Odstráni aktuálnu vrstvu zo zásobníka vrstiev."
 #: ../po/tmp/resources.xml.h:101
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Convert to Normal Painting Layer"
-msgstr ""
+msgstr "Konvertovať na normálnu kresliacu vrstvu"
 
 #: ../po/tmp/resources.xml.h:102
 msgctxt "Accel Editor (descriptions)"
@@ -4227,6 +4258,8 @@ msgid ""
 "Convert the current layer or group to a painting layer in ‘Normal’ mode, "
 "preserving its appearance."
 msgstr ""
+"Skonvertuje aktuálnu vrstvu alebo skupinu na kresliacu vrstvu v „normálnom“ "
+"režime. Vzhľad bude zachovaný."
 
 #: ../po/tmp/resources.xml.h:103
 msgctxt "Menu→Layer→Opacity (labels), Accel Editor (labels)"
@@ -4236,7 +4269,7 @@ msgstr "Zvýšiť krytie vrstvy"
 #: ../po/tmp/resources.xml.h:104
 msgctxt "Accel Editor (descriptions)"
 msgid "Make the layer less transparent."
-msgstr ""
+msgstr "Zníži priehľadnosť vrstvy."
 
 #: ../po/tmp/resources.xml.h:105
 msgctxt "Menu→Layer→Opacity (labels), Accel Editor (labels)"
@@ -4246,7 +4279,7 @@ msgstr "Znížiť krytie vrstvy"
 #: ../po/tmp/resources.xml.h:106
 msgctxt "Accel Editor (descriptions)"
 msgid "Make the layer more transparent."
-msgstr ""
+msgstr "Zvýši priehľadnosť vrstvy."
 
 #: ../po/tmp/resources.xml.h:107
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
@@ -4364,17 +4397,17 @@ msgstr "Vynulovať otočenie"
 #: ../po/tmp/resources.xml.h:129
 msgctxt "Accel Editor (descriptions)"
 msgid "Restore the view’s rotation to 0°"
-msgstr ""
+msgstr "Obnoví otočenie zobrazenia na 0°"
 
 #: ../po/tmp/resources.xml.h:130
 msgctxt "Menu→View→Reset (labels), Accel Editor (labels)"
 msgid "Reset Mirroring"
-msgstr ""
+msgstr "Vynulovať zrkadlenie"
 
 #: ../po/tmp/resources.xml.h:131
 msgctxt "Accel Editor (descriptions)"
 msgid "Turn off mirroring of the view."
-msgstr ""
+msgstr "Vypne zrkadlenie zobrazenia."
 
 #: ../po/tmp/resources.xml.h:132
 msgctxt "Menu→View→Adjust View (labels), Accel Editor (labels)"
@@ -4474,7 +4507,7 @@ msgstr "Vypísať vstupné hodnoty štetca do konzoly"
 #: ../po/tmp/resources.xml.h:151
 msgctxt "Accel Editor (descriptions)"
 msgid "Show the brush engine’s internally generated inputs on the console."
-msgstr ""
+msgstr "Zobrazí interne generované vstupy výkonného jadra štetcov v konzole."
 
 #: ../po/tmp/resources.xml.h:152
 msgctxt "Menu→Help→Debug (labels), Accel Editor (labels)"
@@ -4495,6 +4528,8 @@ msgstr "Bez dvojitého ukladania do zásobníka"
 msgctxt "Accel Editor (descriptions)"
 msgid "Turn off GTK’s double buffering, normally enabled."
 msgstr ""
+"Vypne dvojité ukladanie do vyrovnávacej pamäte nástroja GTK. Obvykle "
+"povolené."
 
 #: ../po/tmp/resources.xml.h:156
 msgctxt "Menu→Brush (labels)"
@@ -4685,7 +4720,7 @@ msgstr "Uložiť náčrtník"
 #: ../po/tmp/resources.xml.h:193
 msgctxt "Accel Editor (descriptions)"
 msgid "Save the scratchpad to its existing file on disk."
-msgstr ""
+msgstr "Uloží náčrtník do jeho existujúceho súboru na disku."
 
 #: ../po/tmp/resources.xml.h:194
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
@@ -4715,7 +4750,7 @@ msgstr "Uložiť náčrtník ako predvolený"
 #: ../po/tmp/resources.xml.h:199
 msgctxt "Accel Editor (descriptions)"
 msgid "Save the scratchpad as the default for ‘New Scratchpad’."
-msgstr ""
+msgstr "Uloží náčrtník ako predvolený „Nový náčrtník“."
 
 #: ../po/tmp/resources.xml.h:200
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
@@ -4725,7 +4760,7 @@ msgstr "Vymazať predvolený náčrtník"
 #: ../po/tmp/resources.xml.h:201
 msgctxt "Accel Editor (descriptions)"
 msgid "Clear the default scratchpad to a blank canvas."
-msgstr ""
+msgstr "Vymaže predvolený náčrtník na prázdne plátno."
 
 #: ../po/tmp/resources.xml.h:202
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
@@ -4736,7 +4771,7 @@ msgstr "Skopírovať hlavné pozadie do náčrtníka"
 msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Copy the background image from the working document into the Scratchpad."
-msgstr ""
+msgstr "Skopíruje pozadie obrázku z pracovného dokumentu do náčrtníku."
 
 #: ../po/tmp/resources.xml.h:204
 msgctxt "Menu (labels)"
@@ -4761,7 +4796,7 @@ msgstr "Pomocník pre klávesové skratky štetcov"
 #: ../po/tmp/resources.xml.h:208
 msgctxt "Accel Editor (descriptions)"
 msgid "Show an explanation of how the shortcut keys work."
-msgstr ""
+msgstr "Zobrazí vysvetlivku k funkčnosti klávesových skratiek."
 
 #: ../po/tmp/resources.xml.h:209
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
@@ -4787,7 +4822,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:213
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Change Color (fast subset)…"
-msgstr ""
+msgstr "Zmeniť farbu (rýchla podskupina)…"
 
 #: ../po/tmp/resources.xml.h:214
 msgctxt "Accel Editor (descriptions)"
@@ -4824,7 +4859,7 @@ msgstr "Pomocník"
 #: ../po/tmp/resources.xml.h:220
 msgctxt "Menu→Help (labels), Accel Editor (labels)"
 msgid "Online Help"
-msgstr ""
+msgstr "Online pomocník"
 
 #: ../po/tmp/resources.xml.h:221
 msgctxt "Accel Editor (descriptions)"
@@ -4839,7 +4874,7 @@ msgstr "O aplikácii MyPaint"
 #: ../po/tmp/resources.xml.h:223
 msgctxt "Accel Editor (descriptions)"
 msgid "Show MyPaint’s license, version number, and credits."
-msgstr ""
+msgstr "Zobrazí licenciu, verziu a poďakovanie programu MyPaint"
 
 #: ../po/tmp/resources.xml.h:224
 msgctxt "Menu→Help (labels)"
@@ -4854,7 +4889,7 @@ msgstr "Vypísať informácie o pretečení pamäte do konzoly (Pomalé!)"
 #: ../po/tmp/resources.xml.h:226
 msgctxt "Accel Editor (descriptions)"
 msgid "Debug memory leaks."
-msgstr ""
+msgstr "Odladí výpadky pamäte."
 
 #: ../po/tmp/resources.xml.h:227
 msgctxt "Menu→Help→Debug (labels), Accel Editor (labels)"
@@ -4864,7 +4899,7 @@ msgstr "Spustiť nástroj na zbieranie odpadu ihneď"
 #: ../po/tmp/resources.xml.h:228
 msgctxt "Accel Editor (descriptions)"
 msgid "Free memory used for Python objects which are no longer in use."
-msgstr ""
+msgstr "Voľná pamäť použitá pre objekty jazyka Python, ktoré sa už nepoužívajú."
 
 #: ../po/tmp/resources.xml.h:229
 msgctxt "Menu→Help→Debug (labels), Accel Editor (labels)"
@@ -4885,6 +4920,8 @@ msgstr "Simulovať pád aplikácie…"
 msgctxt "Accel Editor (descriptions)"
 msgid "Raise a Python exception, to test the crash dialog."
 msgstr ""
+"Vyvolá výnimku jazyka Python, na otestovanie dialógového okna pre pád "
+"aplikácie."
 
 #: ../po/tmp/resources.xml.h:233
 msgctxt "Menu (labels)"
@@ -4929,7 +4966,7 @@ msgstr "Upraviť nastavenia"
 #: ../po/tmp/resources.xml.h:241
 msgctxt "Accel Editor (descriptions)"
 msgid "Edit MyPaint’s global settings."
-msgstr ""
+msgstr "Upraví globálne nastavenia programu MyPaint."
 
 #: ../po/tmp/resources.xml.h:242
 msgctxt "Help→Debug (labels), Accel Editor (labels)"
@@ -5011,7 +5048,7 @@ msgstr "Paleta farieb"
 #: ../po/tmp/resources.xml.h:257
 msgctxt "Accel Editor (descriptions)"
 msgid "Dockable palette color selector."
-msgstr ""
+msgstr "Pripojiteľný nástroj na výber farby palety."
 
 #: ../po/tmp/resources.xml.h:258
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -5071,7 +5108,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:268
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Liquid Wash"
-msgstr ""
+msgstr "Tekuté rozpúšťadlo"
 
 #: ../po/tmp/resources.xml.h:269
 msgctxt "Accel Editor (descriptions)"
@@ -5081,12 +5118,12 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:270
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Concentric Rings"
-msgstr ""
+msgstr "Koncentrické kruhy"
 
 #: ../po/tmp/resources.xml.h:271
 msgctxt "Accel Editor (descriptions)"
 msgid "Dockable color selector with concentric HSV rings."
-msgstr ""
+msgstr "Pripojiteľný nástroj na výber farby s koncetrickými kruhmi HSV."
 
 #: ../po/tmp/resources.xml.h:272
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -5250,7 +5287,7 @@ msgstr "Zobraziť farby prevrátene"
 #: ../po/tmp/resources.xml.h:302
 msgctxt "Accel Editor (descriptions)"
 msgid "Filter colors: inverse video. Black is white and red is cyan."
-msgstr ""
+msgstr "Filtruje farby: obrátené video. Čierna je biela a červená je azúrová."
 
 #: ../po/tmp/resources.xml.h:303
 msgctxt "Menu→View→Display Filter (labels), Accel Editor (labels)"
@@ -5261,7 +5298,7 @@ msgstr "Zobraziť farby so simulovanou necitlivosťou na červenú farbu"
 msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Filter colors to simulate deuteranopia, a common form of color blindness."
-msgstr ""
+msgstr "Filtruje farby na simuláciu deuteranopie, bežnej formy farbosleposti."
 
 #: ../po/tmp/resources.xml.h:305
 msgctxt "Menu→View→Display Filter (labels), Accel Editor (labels)"
@@ -5271,7 +5308,7 @@ msgstr "Zobraziť farby so simulovanou necitlivosťou na zelenú farbu"
 #: ../po/tmp/resources.xml.h:306
 msgctxt "Accel Editor (descriptions)"
 msgid "Filter colors to simulate protanopia, a common form of color blindness."
-msgstr ""
+msgstr "Filtruje farby na simuláciu protanopie, bežnej formy farbosleposti."
 
 #: ../po/tmp/resources.xml.h:307
 msgctxt "Menu→View→Display Filter (labels), Accel Editor (labels)"
@@ -5281,7 +5318,7 @@ msgstr "Zobraziť farby so simulovanou necitlivosťou na modrú farbu"
 #: ../po/tmp/resources.xml.h:308
 msgctxt "Accel Editor (descriptions)"
 msgid "Filter colors to simulate tritanopia, a rare form of color blindness."
-msgstr ""
+msgstr "Filtruje farby na simuláciu tritanopie, ojedinelej formy farbosleposti."
 
 #: ../po/tmp/resources.xml.h:309
 msgctxt "Menu→Edit→Current Mode (labels)"
@@ -5322,7 +5359,7 @@ msgstr "Posúvanie"
 msgctxt "Toolbar (tooltips)"
 msgid "Pan View: move your view of the canvas horizontally or vertically."
 msgstr ""
-"Posúvanie rukou: presunie vaše zobrazenie plátna vodorovne alebo zvisle."
+"Posúvanie rukou: presunie vaše zobrazenie plátna vodorovne, alebo zvisle."
 
 #: ../po/tmp/resources.xml.h:317
 msgctxt "Menu→View (labels), Accel Editor (labels)"
@@ -5332,7 +5369,7 @@ msgstr "Posúvanie rukou"
 #: ../po/tmp/resources.xml.h:318
 msgctxt "Accel Editor (descriptions)"
 msgid "Interactively move your view of the canvas horizontally or vertically."
-msgstr ""
+msgstr "Interaktívne presunie vaše zobrazenie plátna vodorovne, alebo zvisle."
 
 #: ../po/tmp/resources.xml.h:319
 msgctxt "Menu→Edit→Current Mode (labels)"
