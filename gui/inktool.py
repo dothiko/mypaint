@@ -151,6 +151,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
 
+        # Pressure modify with SHIFT-LEFTBUTTON drag
+        self._pressed_index=None
+        self._pressure_mod_mask = Gdk.ModifierType.SHIFT_MASK
     def _reset_nodes(self):
         self.nodes = []  # nodes that met the distance+time criteria
 
@@ -246,6 +249,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._reset_adjust_data()
         self.phase = _Phase.CAPTURE
 
+    def _check_modifing_pressure(self,event):
+        return (self.phase==_Phase.ADJUST and \
+                event.state & self._pressure_mod_mask == self._pressure_mod_mask)
+               #self.current_node_index is not None and \
+
     ## Raw event handling (prelight & zone selection in adjust phase)
 
     def button_press_cb(self, tdw, event):
@@ -253,9 +261,19 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
+
         self._update_zone_and_target(tdw, event.x, event.y)
         self._update_current_node_index()
+
+
         if self.phase == _Phase.ADJUST:
+
+            if self.current_node_index is not None and self._check_modifing_pressure(event):
+                self._pressed_pressure=self.nodes[self.current_node_index].pressure
+                self._pressed_x=event.x
+                self._pressed_y=event.y
+                return False
+
             if self.zone in (_EditZone.REJECT_BUTTON,
                              _EditZone.ACCEPT_BUTTON):
                 button = event.button
@@ -267,6 +285,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 self._start_new_capture_phase(rollback=False)
                 assert self.phase == _Phase.CAPTURE
                 # FALLTHRU: *do* start a drag
+
         elif self.phase == _Phase.CAPTURE:
             # XXX Not sure what to do here.
             # XXX Click to append nodes?
@@ -315,6 +334,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_pressure = 0.0
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
+        # Update pressed position,to culculate distance at mouse-drag-pressure-modify 
+        self._pressed_x=None
+        self._pressed_y=None
         # Supercall: stop current drag
         return super(InkingMode, self).button_release_cb(tdw, event)
 
@@ -323,7 +345,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
-        self._update_zone_and_target(tdw, event.x, event.y)
+
+        if self.current_node_index is not None and \
+            event.state & Gdk.ModifierType.BUTTON1_MASK and \
+            self._check_modifing_pressure(event):
+            self._adjust_pressure_with_motion(tdw,event.x,event.y)
+            return False
+        else:
+            self._update_zone_and_target(tdw, event.x, event.y)
         return super(InkingMode, self).motion_notify_cb(tdw, event)
 
    #def key_press_cb(self, tdw, event):
@@ -387,6 +416,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 self.target_node_index = new_target_node_index
                 if self.target_node_index is not None:
                     self._queue_draw_node(self.target_node_index)
+
         # Update the zone, and assume any change implies a button state
         # change as well (for now...)
         if self.zone != new_zone:
@@ -404,7 +434,27 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if cursor is not self._current_override_cursor:
                 tdw.set_override_cursor(cursor)
                 self._current_override_cursor = cursor
+    
+    def _adjust_pressure_with_motion(self,tdw,x,y):
+        cn=self.nodes[self.current_node_index]
+        x,y=tdw.display_to_model(x, y)
+        cx=x-cn.x
+        cy=y-cn.y
+        cs=math.sqrt(cx*cx + cy*cy)
+        if cs > 0.0:
+            nx=cx/cs
+            ny=cy/cs
+            angle=math.acos(ny) # Getting angle
+            diff=cs/128.0 # 128.0 is not theorical number, it is my feeling
+            if math.pi/4 < angle < math.pi/4+math.pi/2:
+                if nx < 0.0:
+                    diff*=-1
+            elif ny < 0.0:
+                diff*=-1
 
+            self.update_node(self.current_node_index,
+                pressure=self._pressed_pressure + diff)
+            
     ## Redraws
 
     def _queue_draw_buttons(self):
