@@ -1891,7 +1891,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             if issubclass(mode_class, gui.mode.OneshotDragMode):
                 mode = mode_class(ignore_modifiers=True, temporary_activation=False)
             else:
-                mode = mode_class(ignore_modifiers=True)
+                mode = mode_class(ignore_modifiers=True, abrupt_start=True)
             if flip_action.keydown:
                 flip_action.__pressed = True
                 # Change what happens on a key-up after a short while.
