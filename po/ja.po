@@ -5,22 +5,21 @@
 # Olivier Gondouin <popolon@popolon.org> 2009-2010
 # updated 2011-11-10 Popolon <popolon@popolon.org>
 # updated 2011-12-02　a3novy <a3novy@gmail.com>
-#
+# , 2015.
 msgid ""
 msgstr ""
 "Project-Id-Version: MyPaint\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2015-07-11 21:24+0100\n"
-"PO-Revision-Date: 2015-11-26 21:15+0000\n"
-"Last-Translator: Andrew Chadwick <a.t.chadwick@gmail.com>\n"
-"Language-Team: Japanese "
-"<https://hosted.weblate.org/projects/mypaint/mypaint/ja/>\n"
+"POT-Creation-Date: 2015-07-04 18:33+0100\n"
+"PO-Revision-Date: 2015-12-10 23:57+0900\n"
+"Last-Translator: \n"
+"Language-Team: Japanese <kde-i18n-doc@kde.org>\n"
 "Language: ja\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Weblate 2.5-dev\n"
+"X-Generator: Lokalize 1.5\n"
 "X-Poedit-Language: Japanese\n"
 "X-Poedit-Country: JAPAN\n"
 "X-Poedit-SourceCharset: utf-8\n"
@@ -113,7 +112,7 @@ msgstr "キャッシュフォルダを開く…"
 
 #: ../gui/autorecover.py:120
 msgid "Backup Recovery Failed"
-msgstr ""
+msgstr "バックアップの復帰に失敗しました"
 
 #: ../gui/autorecover.py:123
 msgid "Open the Backup’s Folder…"
@@ -122,7 +121,7 @@ msgstr "バックアップ用フォルダを開く…"
 #: ../gui/autorecover.py:130
 #, python-brace-format
 msgid "Recovered file from {iso_datetime}.ora"
-msgstr ""
+msgstr "{iso_datetime}.ora からファイルを復帰しました"
 
 #: ../gui/backgroundwindow.py:51
 msgid "Save as Default"
@@ -189,6 +188,8 @@ msgid "Basic"
 msgstr "基本"
 
 #: ../gui/brusheditor.py:300
+#: ../brushsettings-gen.h:4
+#: ../po/tmp/resources.xml.h:183
 msgctxt "brush settings list: setting group"
 msgid "Opacity"
 msgstr "不透明度"
@@ -200,6 +201,7 @@ msgid "Dabs"
 msgstr "ブラシ描点"
 
 #: ../gui/brusheditor.py:323
+#: ../brushsettings-gen.h:33
 msgctxt "brush settings list: setting group"
 msgid "Smudge"
 msgstr "混色"
@@ -216,6 +218,7 @@ msgid "Tracking"
 msgstr "描線の修正"
 
 #: ../gui/brusheditor.py:359
+#: ../brushsettings-gen.h:57
 msgctxt "brush settings list: setting group"
 msgid "Stroke"
 msgstr "ストローク"
@@ -321,7 +324,7 @@ msgstr "編集"
 
 #: ../gui/brushiconeditor.py:159
 msgid "Begin editing this preview icon"
-msgstr ""
+msgstr "このプレビューアイコンの編集を開始"
 
 #: ../gui/brushiconeditor.py:165
 msgid "Revert"
@@ -329,7 +332,7 @@ msgstr ""
 
 #: ../gui/brushiconeditor.py:167
 msgid "Discard changes, and cancel editing"
-msgstr ""
+msgstr "変更内容を破棄して編集をキャンセル"
 
 #: ../gui/brushiconeditor.py:174
 msgid "Clear"
@@ -337,7 +340,7 @@ msgstr "消去"
 
 #: ../gui/brushiconeditor.py:176
 msgid "Clear the preview icon"
-msgstr ""
+msgstr "プレビューアイコンを消去"
 
 #: ../gui/brushiconeditor.py:182
 msgid "Auto"
@@ -1093,6 +1096,7 @@ msgid "Cursor/puck"
 msgstr ""
 
 #: ../gui/device.py:50
+#: ../brushsettings-gen.h:36
 msgctxt "prefs: device's type label"
 msgid "Eraser"
 msgstr "消しゴム"
@@ -1552,11 +1556,11 @@ msgstr "塗りつぶし"
 
 #: ../gui/fill.py:78
 msgid "Fill areas with color"
-msgstr ""
+msgstr "指定した色で連続した領域を塗りつぶす"
 
 #: ../gui/fill.py:183
 msgid "Tolerance:"
-msgstr ""
+msgstr "あいまいさ:"
 
 #: ../gui/fill.py:185
 msgid ""
@@ -1574,7 +1578,7 @@ msgstr ""
 
 #: ../gui/fill.py:211
 msgid "Sample Merged"
-msgstr ""
+msgstr "統合した内容を参照"
 
 #: ../gui/fill.py:214
 msgid ""
@@ -1627,7 +1631,7 @@ msgstr ""
 
 #: ../gui/framewindow.py:93
 msgid "Edit Frame"
-msgstr ""
+msgstr "フレームを調整"
 
 #: ../gui/framewindow.py:96
 msgid "Adjust the document frame"
@@ -1663,7 +1667,7 @@ msgstr "DPI"
 
 #: ../gui/framewindow.py:458
 msgid "Dots Per Inch (really Pixels Per Inch)"
-msgstr "インチあたりドット数 (実際には、インチあたりピクセル数)"
+msgstr "インチあたりドット数 (ここでは、インチあたりピクセル数)"
 
 #: ../gui/framewindow.py:460
 msgid "Color:"
@@ -1686,9 +1690,8 @@ msgid "Set Frame to Layer"
 msgstr "フレームをレイヤーに合わせる"
 
 #: ../gui/framewindow.py:563
-#, fuzzy
 msgid "Set frame to the extents of the current layer"
-msgstr "選択色を彩度展開"
+msgstr "フレームを現在のレイヤーのサイズに合わせる"
 
 #: ../gui/framewindow.py:565
 msgid "Set Frame to Document"
@@ -1696,7 +1699,7 @@ msgstr "フレームをドキュメントに合わせる"
 
 #: ../gui/framewindow.py:566
 msgid "Set frame to the combination of all layers"
-msgstr ""
+msgstr "全レイヤーが収まるようにフレームを調整"
 
 #: ../gui/framewindow.py:576
 msgid "Trim Layer to Frame"
@@ -1770,7 +1773,7 @@ msgstr "画像をエクスポート..."
 
 #: ../gui/gtkexcepthook.py:170
 msgid "Ignore Error"
-msgstr ""
+msgstr "エラーを無視"
 
 #: ../gui/gtkexcepthook.py:171
 msgid "Quit MyPaint"
@@ -1817,7 +1820,7 @@ msgstr "ペン入れ"
 
 #: ../gui/inktool.py:91
 msgid "Draw, and then adjust smooth lines"
-msgstr ""
+msgstr "なめらかな線を引く・微調整する"
 
 #: ../gui/inputtestwindow.py:30
 msgid "Input Device Test"
@@ -1912,7 +1915,7 @@ msgstr "モード:"
 #: ../gui/layerswindow.py:147
 msgid ""
 "Blending mode: how the current layer combines with the layers underneath it."
-msgstr ""
+msgstr "合成モード: 現在のレイヤーを下のレイヤーとどのように合成するかを指定します。"
 
 #: ../gui/layerswindow.py:171
 msgid "Opacity:"
@@ -1922,7 +1925,7 @@ msgstr "不透明度:"
 msgid ""
 "Layer opacity: how much of the current layer to use. Smaller values make it "
 "more transparent."
-msgstr ""
+msgstr "レイヤー不透明度: 現在のレイヤーを合成する割合です。値が小さいほど透明になります。"
 
 #: ../gui/linemode.py:37
 #, fuzzy
@@ -1974,7 +1977,7 @@ msgstr ""
 
 #: ../gui/linemode.py:215 ../gui/linemode.py:744
 msgid "Lines and Curves"
-msgstr ""
+msgstr "直線と曲線"
 
 #. TRANSLATORS: users should never see this message
 #: ../gui/linemode.py:219
@@ -1983,23 +1986,23 @@ msgstr ""
 
 #: ../gui/linemode.py:747
 msgid "Draw straight lines; Shift adds curves, Ctrl constrains angle"
-msgstr "直線を引きます。Shift でカーブを追加。Ctrl で角度を制限"
+msgstr "直線を引きます。Shift で曲線を追加。Ctrl で角度を制限"
 
 #: ../gui/linemode.py:756
 msgid "Connected Lines"
-msgstr ""
+msgstr "連続線"
 
 #: ../gui/linemode.py:759
 msgid "Draw a sequence of lines; Shift adds curves, Ctrl constrains angle"
-msgstr ""
+msgstr "連続した複数の線を引きます。Shift で曲線を追加。Ctrl で角度を制限"
 
 #: ../gui/linemode.py:768
 msgid "Ellipses and Circles"
-msgstr ""
+msgstr "円"
 
 #: ../gui/linemode.py:771
 msgid "Draw ellipses; Shift rotates, Ctrl constrains ratio/angle"
-msgstr ""
+msgstr "円を描きます。Shift で回転、Ctrl で比率と角度を制限"
 
 #: ../gui/meta.py:30
 msgctxt "About dialog: copyright statement"
@@ -2196,7 +2199,7 @@ msgstr "(表示するものはありません)"
 #: ../gui/symmetry.py:76
 msgctxt "symmetry axis edit mode: instructions shown in statusbar"
 msgid "Place axis"
-msgstr ""
+msgstr "対称軸を設置"
 
 #: ../gui/symmetry.py:80
 msgctxt "symmetry axis edit mode: instructions shown in statusbar"
@@ -3273,6 +3276,8 @@ msgstr ""
 
 #. Tab label in preferences dialog
 #: ../po/tmp/preferenceswindow.glade.h:27
+#: ../brushsettings-gen.h:53
+#, fuzzy
 msgctxt "Prefs Dialog|"
 msgid "Pressure"
 msgstr "筆圧"
@@ -4047,10 +4052,9 @@ msgid "Go one layer down in the layer stack."
 msgstr ""
 
 #: ../po/tmp/resources.xml.h:81
-#, fuzzy
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Painting Layer"
-msgstr "描画"
+msgstr "新しい描画レイヤ"
 
 #: ../po/tmp/resources.xml.h:82
 #, fuzzy
@@ -4067,7 +4071,7 @@ msgstr "レイヤーの選択"
 #: ../po/tmp/resources.xml.h:84
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new vector layer above the current layer, and begin editing it."
-msgstr ""
+msgstr "現在のレイヤの上に新規ベクターレイヤーを作成して、編集を開始します。"
 
 #: ../po/tmp/resources.xml.h:85
 #, fuzzy
@@ -4087,10 +4091,9 @@ msgid "New Painting Layer Below"
 msgstr ""
 
 #: ../po/tmp/resources.xml.h:88
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new painting layer below the current layer."
-msgstr "選択色を彩度展開"
+msgstr "現在のレイヤの下に新規で描画レイヤーを追加します。"
 
 #: ../po/tmp/resources.xml.h:89
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
@@ -4122,18 +4125,17 @@ msgstr "レイヤーの統合"
 #: ../po/tmp/resources.xml.h:94
 msgctxt "Accel Editor (descriptions)"
 msgid "Merge the current layer with the layer beneath it."
-msgstr ""
+msgstr "現在のレイヤを下のレイヤーと統合"
 
 #: ../po/tmp/resources.xml.h:95
-#, fuzzy
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Merge Visible Layers"
-msgstr "レイヤーの統合"
+msgstr "可視レイヤーの統合"
 
 #: ../po/tmp/resources.xml.h:96
 msgctxt "Accel Editor (descriptions)"
 msgid "Consolidate all visible layers, and delete the originals."
-msgstr ""
+msgstr "すべての可視レイヤーを統合し、元のレイヤーを全削除します。"
 
 #: ../po/tmp/resources.xml.h:97
 #, fuzzy
@@ -4144,13 +4146,12 @@ msgstr "レイヤーを表示する"
 #: ../po/tmp/resources.xml.h:98
 msgctxt "Accel Editor (descriptions)"
 msgid "Like ‘Merge Visible Layers’, but doesn’t delete the originals."
-msgstr ""
+msgstr "可視レイヤーを統合したレイヤを作成しますが、元のレイヤは削除せず残します。"
 
 #: ../po/tmp/resources.xml.h:99
-#, fuzzy
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Delete Layer"
-msgstr "レイヤーの選択"
+msgstr "レイヤーを削除"
 
 #: ../po/tmp/resources.xml.h:100
 #, fuzzy
@@ -4161,14 +4162,14 @@ msgstr "現在のファイルを再読み込みします。"
 #: ../po/tmp/resources.xml.h:101
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Convert to Normal Painting Layer"
-msgstr ""
+msgstr "通常の描画レイヤに変換"
 
 #: ../po/tmp/resources.xml.h:102
 msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Convert the current layer or group to a painting layer in ‘Normal’ mode, "
 "preserving its appearance."
-msgstr ""
+msgstr "現在のレイヤもしくはレイヤグループを、見た目は保持したままで合成モード「通常」に変換します。"
 
 #: ../po/tmp/resources.xml.h:103
 #, fuzzy
@@ -4291,7 +4292,7 @@ msgstr "表示領域の回転"
 #: ../po/tmp/resources.xml.h:124
 msgctxt "Accel Editor (descriptions)"
 msgid "Switch between a fitted view and your working location and zoom."
-msgstr ""
+msgstr "画像の表示範囲を、ウィンドウいっぱいに合わせるかどうかで切り替えます。"
 
 #: ../po/tmp/resources.xml.h:125
 msgctxt "Menu→View (labels)"
@@ -4306,7 +4307,7 @@ msgstr "拡大・縮小をリセット"
 #: ../po/tmp/resources.xml.h:127
 msgctxt "Accel Editor (descriptions)"
 msgid "Restore the view’s zoom to its default."
-msgstr ""
+msgstr "表示領域の拡大倍率をデフォルトに戻します。"
 
 #: ../po/tmp/resources.xml.h:128
 msgctxt "Menu→View→Reset (labels), Accel Editor (labels)"
@@ -4316,7 +4317,7 @@ msgstr "回転をリセット"
 #: ../po/tmp/resources.xml.h:129
 msgctxt "Accel Editor (descriptions)"
 msgid "Restore the view’s rotation to 0°"
-msgstr ""
+msgstr "表示領域の回転の角度を０度に戻します"
 
 #: ../po/tmp/resources.xml.h:130
 msgctxt "Menu→View→Reset (labels), Accel Editor (labels)"
@@ -5390,7 +5391,7 @@ msgstr "直線を引く"
 #: ../po/tmp/resources.xml.h:334
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Connected Lines"
-msgstr ""
+msgstr "連結線"
 
 #: ../po/tmp/resources.xml.h:335
 msgctxt "Toolbar (short labels)"
@@ -5400,7 +5401,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:336
 msgctxt "Toolbar (tooltips)"
 msgid "Connected Lines: draw sequences of straight or curved lines."
-msgstr ""
+msgstr "連結線：直線または曲線を連続で描画します。"
 
 #: ../po/tmp/resources.xml.h:337
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
@@ -5410,7 +5411,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:338
 msgctxt "Accel Editor (descriptions)"
 msgid "Draw sequences of straight or curved lines."
-msgstr ""
+msgstr "直線または曲線を連続で描画します。"
 
 #: ../po/tmp/resources.xml.h:339
 msgctxt "Menu→Edit→Current Mode (labels)"
@@ -5420,7 +5421,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:340
 msgctxt "Toolbar (short labels)"
 msgid "Ellipse"
-msgstr ""
+msgstr "楕円"
 
 #: ../po/tmp/resources.xml.h:341
 msgctxt "Toolbar (tooltips)"
@@ -5435,7 +5436,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:343
 msgctxt "Accel Editor (descriptions)"
 msgid "Draw circles and ellipses."
-msgstr ""
+msgstr "円や楕円を描画します。"
 
 #: ../po/tmp/resources.xml.h:344
 msgctxt "Menu→Edit→Current Mode (labels)"
@@ -5451,7 +5452,7 @@ msgstr "インク"
 #: ../po/tmp/resources.xml.h:346
 msgctxt "Toolbar (tooltips)"
 msgid "Inking: draw smooth controlled lines."
-msgstr ""
+msgstr "ペン入れ：制御点で編集できる、滑らかな線で描画します。"
 
 #: ../po/tmp/resources.xml.h:347
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
@@ -5461,7 +5462,7 @@ msgstr "ペン入れ"
 #: ../po/tmp/resources.xml.h:348
 msgctxt "Accel Editor (descriptions)"
 msgid "Draw smooth controlled lines."
-msgstr ""
+msgstr "制御点で編集できる滑らかな線で描画します。"
 
 #: ../po/tmp/resources.xml.h:349
 msgctxt "Menu→Edit→Current Mode (labels)"
@@ -5469,10 +5470,9 @@ msgid "Reposition Layer"
 msgstr "レイヤーの位置を変更"
 
 #: ../po/tmp/resources.xml.h:350
-#, fuzzy
 msgctxt "Toolbar (short labels)"
 msgid "Layer Pos."
-msgstr "レイヤー"
+msgstr "レイヤー位置"
 
 #: ../po/tmp/resources.xml.h:351
 msgctxt "Toolbar (tooltips)"
@@ -5487,7 +5487,7 @@ msgstr "レイヤーの位置を変更"
 #: ../po/tmp/resources.xml.h:353
 msgctxt "Accel Editor (description)"
 msgid "Interactively move the current layer on the canvas."
-msgstr ""
+msgstr "ユーザー操作で現在のレイヤをキャンバス上で動かします。"
 
 #: ../po/tmp/resources.xml.h:354
 msgctxt "Menu→Edit→Current Mode (labels)"
@@ -5497,13 +5497,13 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:355
 msgctxt "Toolbar (short labels)"
 msgid "Frame"
-msgstr "フレーム"
+msgstr "額縁"
 
 #: ../po/tmp/resources.xml.h:356
 msgctxt "Toolbar (tooltips)"
 msgid ""
 "Edit Frame: define a frame around the document to give it a finite size."
-msgstr ""
+msgstr "額縁の編集：画像の周囲に額縁を設定し、画像サイズを有限なものとして限定します。"
 
 #: ../po/tmp/resources.xml.h:357
 msgctxt "Menu→File (labels), Accel Editor (labels)"
@@ -5514,7 +5514,7 @@ msgstr ""
 msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Interactively define a frame around the document to give it a finite size."
-msgstr ""
+msgstr "ユーザー操作で額縁を設定し、画像の範囲を限定します。"
 
 #: ../po/tmp/resources.xml.h:359
 msgctxt "Menu→Edit→Current Mode (labels)"
@@ -5524,12 +5524,12 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:360
 msgctxt "Toolbar (short labels)"
 msgid "Symmetry"
-msgstr ""
+msgstr "左右対称"
 
 #: ../po/tmp/resources.xml.h:361
 msgctxt "Toolbar (tooltips)"
 msgid "Edit Painting Symmetry: adjust the axis used for symmetrical painting."
-msgstr ""
+msgstr "左右対称描画の中心軸の位置を調整します。"
 
 #: ../po/tmp/resources.xml.h:362
 msgctxt "Menu→File (labels), Accel Editor (labels)"
@@ -5539,7 +5539,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:363
 msgctxt "Accel Editor (description)"
 msgid "Interactively adjust the axis used for symmetrical painting."
-msgstr ""
+msgstr "左右対称描画の中心軸をユーザー操作で調整します。"
 
 #: ../po/tmp/resources.xml.h:364
 msgctxt "Menu→Edit→Current Mode (labels)"
@@ -5554,7 +5554,7 @@ msgstr "色を採取"
 #: ../po/tmp/resources.xml.h:366
 msgctxt "Toolbar (tooltips)"
 msgid "Pick Color: set the painting color from screen pixels."
-msgstr ""
+msgstr "色を採取：画面上の画素から描画色を採取して設定します。"
 
 #: ../po/tmp/resources.xml.h:367
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -5564,7 +5564,7 @@ msgstr "色を採取"
 #: ../po/tmp/resources.xml.h:368
 msgctxt "Accel Editor (descriptions)"
 msgid "Set the painting color from screen pixels."
-msgstr ""
+msgstr "画面上の色から描画色を設定します。"
 
 #: ../po/tmp/resources.xml.h:369
 msgctxt "Menu→Edit→Current Mode (labels)"
