@@ -270,8 +270,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
             if self.current_node_index is not None and self._check_modifing_pressure(event):
                 self._pressed_pressure=self.nodes[self.current_node_index].pressure
-                self._pressed_x=event.x
-                self._pressed_y=event.y
+                self._pressed_x,self._pressed_y=tdw.display_to_model(event.x,event.y)
                 return False
 
             if self.zone in (_EditZone.REJECT_BUTTON,
@@ -349,7 +348,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         if self.current_node_index is not None and \
             event.state & Gdk.ModifierType.BUTTON1_MASK and \
             self._check_modifing_pressure(event):
-            self._adjust_pressure_with_motion(tdw,event.x,event.y)
+            self._adjust_pressure_with_motion(
+                    tdw,
+                    event.x,event.y,
+                    (event.state & Gdk.ModifierType.CONTROL_MASK)==Gdk.ModifierType.CONTROL_MASK)
             return False
         else:
             self._update_zone_and_target(tdw, event.x, event.y)
@@ -435,11 +437,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 tdw.set_override_cursor(cursor)
                 self._current_override_cursor = cursor
     
-    def _adjust_pressure_with_motion(self,tdw,x,y):
+    def _adjust_pressure_with_motion(self,tdw,x,y,affect_nearby_nodes):
+        """Adjust pressure of current selected node,it may affects nearby nodes"""
         cn=self.nodes[self.current_node_index]
         x,y=tdw.display_to_model(x, y)
-        cx=x-cn.x
-        cy=y-cn.y
+       #cx=x-cn.x
+       #cy=y-cn.y
+        cx=x-self._pressed_x
+        cy=y-self._pressed_y
         cs=math.sqrt(cx*cx + cy*cy)
         if cs > 0.0:
             nx=cx/cs
@@ -452,8 +457,28 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             elif ny < 0.0:
                 diff*=-1
 
+
             self.update_node(self.current_node_index,
-                pressure=self._pressed_pressure + diff)
+                pressure=cn.pressure + diff)
+               #pressure=self._pressed_pressure + diff)
+            
+            if affect_nearby_nodes:
+                diff/=2
+                idx=self.current_node_index-1
+                if idx > 0:
+                    self.update_node(idx,
+                        pressure=self.nodes[idx].pressure + diff)
+            
+                idx=self.current_node_index+1
+                if idx < len(self.nodes):
+                    self.update_node(idx,
+                        pressure=self.nodes[idx].pressure + diff)
+
+            self._pressed_x=x
+            self._pressed_y=y
+
+
+
             
     ## Redraws
 
