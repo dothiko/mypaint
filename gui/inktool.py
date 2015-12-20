@@ -154,6 +154,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         # Pressure modify with SHIFT-LEFTBUTTON drag
         self._pressed_index=None
         self._pressure_mod_mask = Gdk.ModifierType.SHIFT_MASK
+
+        self._auto_culling=True
+
     def _reset_nodes(self):
         self.nodes = []  # nodes that met the distance+time criteria
 
@@ -250,7 +253,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self.phase = _Phase.CAPTURE
 
     def _check_modifing_pressure(self,event):
-        return (self.phase==_Phase.ADJUST and \
+        return (self.phase==_Phase.ADJUST and 
                 event.state & self._pressure_mod_mask == self._pressure_mod_mask)
                #self.current_node_index is not None and \
 
@@ -268,7 +271,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
         if self.phase == _Phase.ADJUST:
 
-            if self.current_node_index is not None and self._check_modifing_pressure(event):
+            if (self.current_node_index is not None and 
+                event.button == 1 and
+                self._check_modifing_pressure(event)):
+
                 self._pressed_pressure=self.nodes[self.current_node_index].pressure
                 self._pressed_x,self._pressed_y=tdw.display_to_model(event.x,event.y)
                 return False
@@ -667,6 +673,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._reset_adjust_data()
             if len(self.nodes) > 1:
                 self.phase = _Phase.ADJUST
+                if self._auto_culling:
+                    self._cull_nodes(tdw.scale)
                 self._queue_redraw_all_nodes()
                 self._queue_redraw_curve()
                 self._queue_draw_buttons()
@@ -887,13 +895,34 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
         return oldcnt-len(self.nodes)
 
-    def _cull_nodes(self):
+    def _cull_nodes(self,scale):
         """Internal method of cull nodes."""
-        curcnt=len(self.nodes)
-        lastnode=self.nodes[-1]
-        self.nodes=self.nodes[:-1:2]
-        self.nodes.append(lastnode)
-        return curcnt-len(self.nodes)
+        if len(self.nodes) >= 6:
+            curcnt=len(self.nodes)
+            lastnode=self.nodes[-1]
+            self.nodes=self.nodes[:-1:2]
+            self.nodes.append(lastnode)
+
+            # Remove too close nodes
+            curnode=self.nodes[0]
+            i=0
+            threshold=16.0
+            if scale>1.0:
+                threshold/=scale
+
+            while i<len(self.nodes)-1:
+                nextnode=self.nodes[i+1]
+                vx=nextnode.x-curnode.x
+                vy=nextnode.y-curnode.y
+                if math.sqrt(vx*vx + vy*vy) < threshold:
+                    self.nodes.pop(i)
+                else:
+                    i+=1
+                    curnode=nextnode
+
+            return curcnt-len(self.nodes)
+        else:
+            return len(self.nodes)
 
     def _nodes_deletion_operation(self,callable,args):
         """Internal method for delete-related operation of multiple nodes."""
@@ -926,7 +955,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def cull_nodes(self):
         """User interface method of cull nodes."""
-        self._nodes_deletion_operation(self._cull_nodes,())
+        self._nodes_deletion_operation(self._cull_nodes,(self.doc.tdw.scale,))
 
 
 class Overlay (gui.overlays.Overlay):

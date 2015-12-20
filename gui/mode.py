@@ -193,6 +193,10 @@ class InteractionMode (object):
     #: switch to. If the iterable is empty, all modes are possible.
     permitted_switch_actions = ()
 
+    def __init__(self,**kwds):
+        # Workaround to force aburpt_start for all modes.
+        pass
+
     ## Status message info
 
     @classmethod
