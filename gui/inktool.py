@@ -909,6 +909,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             threshold=16.0
             if scale>1.0:
                 threshold/=scale
+            print("scale:%08f / threshold:%08f" % (scale,threshold))
 
             while i<len(self.nodes)-1:
                 nextnode=self.nodes[i+1]
@@ -919,6 +920,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 else:
                     i+=1
                     curnode=nextnode
+
+            if len(self.nodes) <= 2:
+                print("warning:length %d " % len(self.nodes))
 
             return curcnt-len(self.nodes)
         else:
@@ -992,6 +996,7 @@ class Overlay (gui.overlays.Overlay):
         for i, node in enumerate(nodes):
             x, y = self._tdw.model_to_display(node.x, node.y)
             fixed.append(_LayoutNode(x, y))
+
 
         # The reject and accept buttons are connected to different nodes
         # in the stroke by virtual springs.
