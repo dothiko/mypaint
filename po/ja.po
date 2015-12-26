@@ -11,7 +11,7 @@ msgstr ""
 "Project-Id-Version: MyPaint\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2015-07-04 18:33+0100\n"
-"PO-Revision-Date: 2015-12-10 23:57+0900\n"
+"PO-Revision-Date: 2015-12-13 00:51+0900\n"
 "Last-Translator: \n"
 "Language-Team: Japanese <kde-i18n-doc@kde.org>\n"
 "Language: ja\n"
@@ -328,7 +328,7 @@ msgstr "このプレビューアイコンの編集を開始"
 
 #: ../gui/brushiconeditor.py:165
 msgid "Revert"
-msgstr ""
+msgstr "復元"
 
 #: ../gui/brushiconeditor.py:167
 msgid "Discard changes, and cancel editing"
@@ -1291,7 +1291,7 @@ msgstr "やり直す"
 #: ../gui/document.py:818
 #, python-brace-format
 msgid "{button_combination} is {resultant_action}"
-msgstr ""
+msgstr "{button_combination}で{resultant_action}"
 
 #. TRANSLATORS: "With <current-modifiers> held down: <separated-list>"
 #. TRANSLATORS: Action names may contain coordinating conjunctions such
@@ -1305,7 +1305,7 @@ msgstr ""
 #: ../gui/document.py:831
 #, python-brace-format
 msgid "With {modifiers} held down:  {button_actions}."
-msgstr ""
+msgstr "{modifiers} を押しているとき:  {button_actions}"
 
 #: ../gui/document.py:1244
 msgid "Layer Name"
@@ -1475,9 +1475,9 @@ msgid "Really continue?"
 msgstr "続行してもよろしいですか？"
 
 #: ../gui/filehandling.py:234
-#, fuzzy, python-brace-format
+#, python-brace-format, python-brace-format
 msgid "This will discard {abbreviated_time} of unsaved painting"
-msgstr "保存されていない %d 分間の描画は、破棄されます。"
+msgstr "未保存の {abbreviated_time} 間の描画は、破棄されます"
 
 #: ../gui/filehandling.py:243
 msgid "_Save as Scrap"
@@ -1556,7 +1556,7 @@ msgstr "塗りつぶし"
 
 #: ../gui/fill.py:78
 msgid "Fill areas with color"
-msgstr "指定した色で連続した領域を塗りつぶす"
+msgstr "連続した領域を指定した色で塗りつぶす"
 
 #: ../gui/fill.py:183
 msgid "Tolerance:"
@@ -1736,7 +1736,7 @@ msgstr "フリーハンド描画"
 
 #: ../gui/freehand.py:123
 msgid "Paint free-form brush strokes"
-msgstr ""
+msgstr "自由な形状のブラシストロークを描画"
 
 #. TRANSLATORS: Short alias for "Slow position tracking". This is
 #. TRANSLATORS: used on the options panel.
@@ -1990,7 +1990,7 @@ msgstr "直線を引きます。Shift で曲線を追加。Ctrl で角度を制�
 
 #: ../gui/linemode.py:756
 msgid "Connected Lines"
-msgstr "連続線"
+msgstr "連結線"
 
 #: ../gui/linemode.py:759
 msgid "Draw a sequence of lines; Shift adds curves, Ctrl constrains angle"
@@ -2042,7 +2042,7 @@ msgstr "移植性"
 #: ../gui/meta.py:59
 msgctxt "About dialog: credits: tasks"
 msgid "project management"
-msgstr ""
+msgstr "プロジェクトマネージメント"
 
 #: ../gui/meta.py:63
 msgctxt "About dialog: credits: tasks: brush presets and icons"
@@ -2087,7 +2087,7 @@ msgstr ""
 #: ../gui/meta.py:96
 msgctxt "About dialog: credits: tasks: running or building a community"
 msgid "community"
-msgstr ""
+msgstr "コミュニティ"
 
 #: ../gui/meta.py:101
 msgctxt "About dialog: credits: tasks: joiner punctuation"
@@ -2219,7 +2219,7 @@ msgstr "対称軸を編集"
 #: ../gui/symmetry.py:102
 msgctxt "symmetry axis edit mode: mode description (tooltips)"
 msgid "Adjust the painting symmetry axis."
-msgstr ""
+msgstr "対称描画の中心軸を調整します。"
 
 #: ../gui/symmetry.py:307
 msgctxt "symmetry axis options panel: labels"
@@ -2262,7 +2262,7 @@ msgstr "スクラップ切り替え"
 
 #: ../gui/toolbar.py:34
 msgid "Undo and Redo"
-msgstr "元に戻す／やり直す"
+msgstr "元に戻す/やり直す"
 
 #: ../gui/toolbar.py:35
 msgid "Blend Modes"
@@ -2291,11 +2291,11 @@ msgstr "<b>MyPaint</b>"
 
 #: ../gui/viewmanip.py:39
 msgid "Scroll View"
-msgstr ""
+msgstr "表示領域をスクロール"
 
 #: ../gui/viewmanip.py:42
 msgid "Drag the canvas view"
-msgstr ""
+msgstr "表示領域をドラッグして移動"
 
 #: ../gui/viewmanip.py:77
 msgid "Zoom View"
@@ -2303,7 +2303,7 @@ msgstr "表示領域を拡大・縮小"
 
 #: ../gui/viewmanip.py:80
 msgid "Zoom the canvas view"
-msgstr ""
+msgstr "キャンバスの表示領域を拡大・縮小"
 
 #: ../gui/viewmanip.py:119
 msgid "Rotate View"
@@ -2337,7 +2337,7 @@ msgstr ""
 #: ../lib/command.py:279
 #, python-brace-format
 msgid "{seconds:.01f}s of painting with {brush_name}"
-msgstr ""
+msgstr "{brush_name} を使った {seconds:.01f} 秒間の描画"
 
 #: ../lib/command.py:522
 #, fuzzy
@@ -2458,12 +2458,12 @@ msgstr ""
 #, python-brace-format
 msgctxt "Document IO: common error strings: {error_loading_common}"
 msgid "Error loading “{basename}”."
-msgstr "“{basename}” を読み込み中のエラーです。"
+msgstr "\"{basename}\" を読み込み中のエラーです。"
 
 #: ../lib/document.py:74
 msgctxt "Document IO: common error strings: {see_logs}"
 msgid "The logs may have more detail about this error."
-msgstr ""
+msgstr "このエラーについての詳細がログに出力されている場合があります。"
 
 #: ../lib/document.py:183
 msgctxt "Document autosave descriptions: the {ago} string: future"
@@ -2483,6 +2483,9 @@ msgid ""
 "Are you running more than once instance of MyPaint?\n"
 "Close app and wait {cache_update_interval}s to retry."
 msgstr ""
+"キャッシュフォルダが使用中です。\n"
+"MyPaint を複数起動していますか？\n"
+"MyPaint を終了し、{cache_update_interval} 秒後にやり直してください。"
 
 #: ../lib/document.py:203
 #, python-brace-format
@@ -2548,12 +2551,15 @@ msgid ""
 msgstr ""
 
 #: ../lib/document.py:1313
-#, fuzzy, python-brace-format
+#, python-brace-format, python-brace-format
+#, python-brace-format
 msgctxt "Document IO: loading errors"
 msgid ""
 "{error_loading_common}\n"
 "Unknown file format extension: “{ext}”"
-msgstr "%sという拡張子を取り扱うことはできません"
+msgstr ""
+"{error_loading_common}\n"
+"不明な拡張子です: \"{ext}\""
 
 #: ../lib/document.py:1384
 #, python-brace-format
@@ -2579,22 +2585,22 @@ msgstr ""
 #: ../lib/helpers.py:402
 #, python-brace-format
 msgid "{days}d{hours}h"
-msgstr ""
+msgstr "{days} 日 {hours} 時間"
 
 #: ../lib/helpers.py:404
 #, python-brace-format
 msgid "{hours}h{minutes}m"
-msgstr ""
+msgstr "{hours} 時間 {minutes} 分"
 
 #: ../lib/helpers.py:406
 #, python-brace-format
 msgid "{minutes}m{seconds}s"
-msgstr ""
+msgstr "{minutes} 分 {seconds} 秒"
 
 #: ../lib/helpers.py:408
 #, python-brace-format
 msgid "{seconds}s"
-msgstr ""
+msgstr "{seconds} 秒"
 
 #: ../lib/layer/core.py:73 ../lib/layer/data.py:1221
 msgctxt "layer default names"
@@ -2661,7 +2667,7 @@ msgstr "標準"
 
 #: ../lib/modes.py:42
 msgid "The top layer only, without blending colors."
-msgstr ""
+msgstr "色を混ぜることなく、最前面のレイヤーの内容のみを表示します。"
 
 #: ../lib/modes.py:44
 msgid "Multiply"
@@ -2671,7 +2677,7 @@ msgstr "乗算"
 msgid ""
 "Similar to loading two slides into a projector and projecting the combined "
 "result."
-msgstr ""
+msgstr "プロジェクターで、2 枚のスライドを重ねあわせるのに似ています。"
 
 #: ../lib/modes.py:48
 msgid "Screen"
@@ -2681,7 +2687,7 @@ msgstr "スクリーン"
 msgid ""
 "Like shining two separate slide projectors onto a screen simultaneously. "
 "This is the inverse of 'Multiply'."
-msgstr ""
+msgstr "2 台のプロジェクターの出力を同じスクリーン上に重ねあわせるのに似ています。 「乗算」と逆の合成方法です。"
 
 #: ../lib/modes.py:52
 msgid "Overlay"
@@ -2719,6 +2725,7 @@ msgid ""
 "photographic darkroom technique of the same name which is used for improving "
 "contrast in shadows."
 msgstr ""
+"最前面のレイヤーの色を使って、背面のレイヤーの内容を明るくします。シャドウ部のコントラストを高めるための、同名の写真現像技術に似た効果を得られます。"
 
 #: ../lib/modes.py:70
 msgid "Burn"
@@ -2729,7 +2736,7 @@ msgid ""
 "Darkens the backdrop using the top layer. The effect looks similar to the "
 "photographic darkroom technique of the same name which is used for reducing "
 "over-bright highlights."
-msgstr ""
+msgstr "最前面のレイヤーの色を使って、背面のレイヤーの内容を暗くします。ハイライト部の白飛びを抑えるための、同名の写真現像技術に似た効果を得られます。"
 
 #: ../lib/modes.py:75
 msgid "Hard Light"
@@ -2757,11 +2764,11 @@ msgstr ""
 
 #: ../lib/modes.py:84
 msgid "Exclusion"
-msgstr ""
+msgstr "除外"
 
 #: ../lib/modes.py:85
 msgid "Similar to the 'Difference' mode, but lower in contrast."
-msgstr ""
+msgstr "「差分」モードに似ていますが、より低コントラストです。"
 
 #: ../lib/modes.py:88
 msgid "Hue"
@@ -2801,7 +2808,7 @@ msgstr ""
 
 #: ../lib/modes.py:105
 msgid "Plus"
-msgstr ""
+msgstr "加算"
 
 #: ../lib/modes.py:106
 msgid "This layer and its backdrop are simply added together."
@@ -3178,6 +3185,8 @@ msgid ""
 "Z: {scale:.1f}%\n"
 "R: {rotation:+.1f}°"
 msgstr ""
+"拡縮: {scale:.1f}%\n"
+"回転: {rotation:+.1f}°"
 
 #: ../po/tmp/mypaint.glade.h:10
 msgctxt "footer: context picker button: tooltip"
@@ -3228,17 +3237,17 @@ msgstr "200%"
 #: ../po/tmp/preferenceswindow.glade.h:13
 msgctxt "Prefs Dialog|View|Cursors|Freehand Cursor|Type|"
 msgid "Circle with light outline"
-msgstr ""
+msgstr "細い輪郭線の円"
 
 #: ../po/tmp/preferenceswindow.glade.h:14
 msgctxt "Prefs Dialog|View|Cursors|Freehand Cursor|Type|"
 msgid "Circle with medium outline"
-msgstr ""
+msgstr "中間の太さの輪郭線の円"
 
 #: ../po/tmp/preferenceswindow.glade.h:15
 msgctxt "Prefs Dialog|View|Cursors|Freehand Cursor|Type|"
 msgid "Circle with heavy outline"
-msgstr ""
+msgstr "太い輪郭線の円"
 
 #: ../po/tmp/preferenceswindow.glade.h:16
 msgctxt "Prefs Dialog|View|Cursors|Freehand Cursor|Type|"
@@ -3272,7 +3281,7 @@ msgstr "1.0"
 #: ../po/tmp/preferenceswindow.glade.h:25
 msgctxt "Prefs Dialog|Pen Input|"
 msgid "<b>Global Pressure Mapping</b>"
-msgstr ""
+msgstr "<b>グローバル筆圧マッピング</b>"
 
 #. Tab label in preferences dialog
 #: ../po/tmp/preferenceswindow.glade.h:27
@@ -3355,7 +3364,7 @@ msgstr "カラースペース変換:"
 #: ../po/tmp/preferenceswindow.glade.h:43
 msgctxt "Prefs Dialog|Load & Save|Color Management|"
 msgid "Convert to sRGB when loading; mark as sRGB when saving"
-msgstr ""
+msgstr "読み込み時に sRGB に変換し、保存時に sRGB を指定する"
 
 #: ../po/tmp/preferenceswindow.glade.h:44
 msgctxt "Prefs Dialog|Load & Save|Color Management|"
@@ -3393,14 +3402,14 @@ msgstr "<b>自動バックアップ</b>"
 #: ../po/tmp/preferenceswindow.glade.h:52
 msgctxt "Prefs Dialog|Load & Save|Automated Backups|switch label"
 msgid "Back up unsaved work:"
-msgstr ""
+msgstr "未保存のドキュメントをバックアップ:"
 
 #. In seconds. Lowest value is 5, highest is 300 (5 minutes). Only matters when enabled.
 #: ../po/tmp/preferenceswindow.glade.h:54
 msgctxt ""
 "Prefs Dialog|Load & Save|Automated Backups|interval spinbox units suffix"
 msgid "seconds of inactivity"
-msgstr ""
+msgstr "秒間、未操作状態が続いたとき"
 
 #: ../po/tmp/preferenceswindow.glade.h:55
 msgctxt "Prefs Dialog|Load & Save|Automated Backups|switch tooltip"
@@ -3424,12 +3433,11 @@ msgstr "読み込みと保存"
 #: ../po/tmp/preferenceswindow.glade.h:59
 msgctxt "Prefs Dialog|View|"
 msgid "<b>Zoom and Rendering</b>"
-msgstr ""
+msgstr "<b>拡大・縮小とレンダリング</b>"
 
 #: ../po/tmp/preferenceswindow.glade.h:60
-#, fuzzy
 msgid "Default zoom level:"
-msgstr "デフォルト倍率:"
+msgstr "デフォルトの拡大率:"
 
 #: ../po/tmp/preferenceswindow.glade.h:61
 msgctxt "Prefs Dialog|View|"
@@ -3444,17 +3452,17 @@ msgstr "ツールバーアイコンのサイズ:"
 #: ../po/tmp/preferenceswindow.glade.h:63
 msgctxt "Prefs Dialog|View|Interface|"
 msgid "Freehand cursor type:"
-msgstr ""
+msgstr "フリーハンドツールのカーソル形状"
 
 #: ../po/tmp/preferenceswindow.glade.h:64
 msgctxt "Prefs Dialog|View|Interface|"
 msgid "Dark theme variant:"
-msgstr ""
+msgstr "暗い色のテーマを使用:"
 
 #: ../po/tmp/preferenceswindow.glade.h:65
 msgctxt "Prefs Dialog|View|Interface|Dark theme variant|"
 msgid "If available in GTK3 theme (needs restart)"
-msgstr ""
+msgstr "GTK3 テーマで使用可能であれば使用する (要再起動)"
 
 #: ../po/tmp/preferenceswindow.glade.h:66
 msgctxt "Prefs Dialog|View|Interface|Dark theme variant|checkbox tooltip"
@@ -3465,12 +3473,12 @@ msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:67
 msgid "Some of these settings require MyPaint to be restarted."
-msgstr ""
+msgstr "これらの設定の中には、MyPaint の再起動が必要なものがあります。"
 
 #: ../po/tmp/preferenceswindow.glade.h:68
 msgctxt "Prefs Dialog|View|Interface|Icon size|"
 msgid "Large (requires recent GTK3)"
-msgstr ""
+msgstr "大 (最新の GTK3 が必要です)"
 
 #: ../po/tmp/preferenceswindow.glade.h:69
 msgctxt "Prefs Dialog|View|Interface|Icon size|"
@@ -3661,21 +3669,19 @@ msgstr "開く"
 #: ../po/tmp/resources.xml.h:6
 msgctxt "Toolbar (tooltips), Accel Editor (descriptions)"
 msgid "Load a file to work on."
-msgstr ""
+msgstr "ファイルを開き、作業の続きを行います。"
 
 #: ../po/tmp/resources.xml.h:7
-#, fuzzy
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Open Most Recent"
-msgstr "最近編集した画像を開く"
+msgstr "最後に編集した画像を開く"
 
 #: ../po/tmp/resources.xml.h:8
 msgctxt "Accel Editor (descriptions)"
 msgid "Load the file you saved most recently."
-msgstr ""
+msgstr "最後に保存したファイルを開きます。"
 
 #: ../po/tmp/resources.xml.h:9
-#, fuzzy
 msgctxt "Menu→File (labels)"
 msgid "Open Recent"
 msgstr "最近開いた画像"
@@ -3683,12 +3689,12 @@ msgstr "最近開いた画像"
 #: ../po/tmp/resources.xml.h:10
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Revert"
-msgstr ""
+msgstr "復元"
 
 #: ../po/tmp/resources.xml.h:11
 msgctxt "Accel Editor (descriptions)"
 msgid "Reload the file your current work was loaded from."
-msgstr ""
+msgstr "現在のファイルを、開いた時の状態に戻します。"
 
 #: ../po/tmp/resources.xml.h:12
 msgctxt "Menu→File (labels), Accel Editor (labels)"
@@ -3696,10 +3702,9 @@ msgid "Save"
 msgstr "保存"
 
 #: ../po/tmp/resources.xml.h:13
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Save your work to a file."
-msgstr "ファイルに保存"
+msgstr "現在のドキュメントをファイルとして保存します。"
 
 #: ../po/tmp/resources.xml.h:14
 msgctxt "Menu→File (labels), Accel Editor (labels)"
@@ -3707,10 +3712,9 @@ msgid "Save As…"
 msgstr "名前を付けて保存…"
 
 #: ../po/tmp/resources.xml.h:15
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Save your work to a file, assigning it a new name."
-msgstr "名前をつけて保存"
+msgstr "現在のドキュメントを、新しいファイル名を指定して保存します。"
 
 #: ../po/tmp/resources.xml.h:16
 msgctxt "Menu→File (labels), Accel Editor (labels)"
@@ -3756,7 +3760,7 @@ msgstr "次のスクラップファイルを読み込み、現在の画像と置
 #: ../po/tmp/resources.xml.h:24
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Recover File from an Automated Backup…"
-msgstr ""
+msgstr "自動バックアップからファイルを復帰…"
 
 #: ../po/tmp/resources.xml.h:25
 msgctxt "Accel Editor (descriptions)"
@@ -3975,7 +3979,7 @@ msgstr "レイヤーをフレームサイズで切り抜く"
 #: ../po/tmp/resources.xml.h:66
 msgctxt "Accel Editor (descriptions)"
 msgid "Erase parts of the current layer which lie outside the frame."
-msgstr ""
+msgstr "現在のレイヤーの内容のうち、フレーム外にはみ出した部分を消去します。"
 
 #: ../po/tmp/resources.xml.h:67
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
@@ -3988,20 +3992,19 @@ msgid "Copy the current layer’s contents to the clipboard."
 msgstr "現在のレイヤーの内容をクリップボードにコピーします。"
 
 #: ../po/tmp/resources.xml.h:69
-#, fuzzy
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Paste Layer from Clipboard"
-msgstr "クリップボードにコピー"
+msgstr "クリップボードからレイヤーに貼り付け"
 
 #: ../po/tmp/resources.xml.h:70
 msgctxt "Accel Editor (descriptions)"
 msgid "Replaces the current layer with the clipboard’s contents."
-msgstr ""
+msgstr "現在のレイヤーを、クリップボードの内容と置き換えます。"
 
 #: ../po/tmp/resources.xml.h:71
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Edit Layer in External App…"
-msgstr ""
+msgstr "レイヤーを外部アプリケーションで編集…"
 
 #: ../po/tmp/resources.xml.h:72
 msgctxt "Accel Editor (descriptions)"
@@ -4030,10 +4033,9 @@ msgid "Select a layer by picking an object on it."
 msgstr ""
 
 #: ../po/tmp/resources.xml.h:77
-#, fuzzy
 msgctxt "Menu→Layer→Go to Layer (labels), Accel Editor (labels)"
 msgid "Go to Layer Above"
-msgstr "レイヤーの読み込み"
+msgstr "上のレイヤーに移動"
 
 #: ../po/tmp/resources.xml.h:78
 msgctxt "Accel Editor (descriptions)"
@@ -4041,10 +4043,9 @@ msgid "Go one layer up in the layer stack."
 msgstr ""
 
 #: ../po/tmp/resources.xml.h:79
-#, fuzzy
 msgctxt "Menu→Layer→Go to Layer (labels), Accel Editor (labels)"
 msgid "Go to Layer Below"
-msgstr "レイヤーの読み込み"
+msgstr "下のレイヤーに移動"
 
 #: ../po/tmp/resources.xml.h:80
 msgctxt "Accel Editor (descriptions)"
@@ -4054,36 +4055,32 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:81
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Painting Layer"
-msgstr "新しい描画レイヤ"
+msgstr "新しい描画レイヤー"
 
 #: ../po/tmp/resources.xml.h:82
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new painting layer above the current layer."
-msgstr "選択色を彩度展開"
+msgstr "現在のレイヤーの上に新しい描画レイヤーを作成します。"
 
 #: ../po/tmp/resources.xml.h:83
-#, fuzzy
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Vector Layer…"
-msgstr "レイヤーの選択"
+msgstr "新しいベクターレイヤー…"
 
 #: ../po/tmp/resources.xml.h:84
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new vector layer above the current layer, and begin editing it."
-msgstr "現在のレイヤの上に新規ベクターレイヤーを作成して、編集を開始します。"
+msgstr "現在のレイヤーの上に新しいベクターレイヤーを作成して、編集を開始します。"
 
 #: ../po/tmp/resources.xml.h:85
-#, fuzzy
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Layer Group"
-msgstr "新しいグループ..."
+msgstr "新しいレイヤーグループ"
 
 #: ../po/tmp/resources.xml.h:86
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new layer group above the current layer."
-msgstr "現在のファイルを再読み込みします。"
+msgstr "現在のレイヤーの上に新しいレイヤーグループを作成します。"
 
 #: ../po/tmp/resources.xml.h:87
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
@@ -4093,7 +4090,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:88
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new painting layer below the current layer."
-msgstr "現在のレイヤの下に新規で描画レイヤーを追加します。"
+msgstr "現在のレイヤーの下に新しい描画レイヤーを作成します。"
 
 #: ../po/tmp/resources.xml.h:89
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
@@ -4103,7 +4100,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:90
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new vector layer below the current layer, and begin editing it."
-msgstr ""
+msgstr "現在のレイヤーの下に新しいベクターレイヤーを作成して、編集を開始します。"
 
 #: ../po/tmp/resources.xml.h:91
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
@@ -4111,26 +4108,24 @@ msgid "New Layer Group Below"
 msgstr ""
 
 #: ../po/tmp/resources.xml.h:92
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new layer group below the current layer."
-msgstr "現在のファイルを再読み込みします。"
+msgstr "現在のレイヤーの下に新しいレイヤーグループを作成します。"
 
 #: ../po/tmp/resources.xml.h:93
-#, fuzzy
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Merge Layer Down"
-msgstr "レイヤーの統合"
+msgstr "下のレイヤーと統合"
 
 #: ../po/tmp/resources.xml.h:94
 msgctxt "Accel Editor (descriptions)"
 msgid "Merge the current layer with the layer beneath it."
-msgstr "現在のレイヤを下のレイヤーと統合"
+msgstr "現在のレイヤーを下のレイヤーと統合します。"
 
 #: ../po/tmp/resources.xml.h:95
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Merge Visible Layers"
-msgstr "可視レイヤーの統合"
+msgstr "可視レイヤーを統合"
 
 #: ../po/tmp/resources.xml.h:96
 msgctxt "Accel Editor (descriptions)"
@@ -4146,7 +4141,7 @@ msgstr "レイヤーを表示する"
 #: ../po/tmp/resources.xml.h:98
 msgctxt "Accel Editor (descriptions)"
 msgid "Like ‘Merge Visible Layers’, but doesn’t delete the originals."
-msgstr "可視レイヤーを統合したレイヤを作成しますが、元のレイヤは削除せず残します。"
+msgstr "可視レイヤーを統合したレイヤーを作成しますが、元のレイヤーは削除せず残します。"
 
 #: ../po/tmp/resources.xml.h:99
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
@@ -4162,42 +4157,39 @@ msgstr "現在のファイルを再読み込みします。"
 #: ../po/tmp/resources.xml.h:101
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Convert to Normal Painting Layer"
-msgstr "通常の描画レイヤに変換"
+msgstr "標準モードの描画レイヤーに変換"
 
 #: ../po/tmp/resources.xml.h:102
 msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Convert the current layer or group to a painting layer in ‘Normal’ mode, "
 "preserving its appearance."
-msgstr "現在のレイヤもしくはレイヤグループを、見た目は保持したままで合成モード「通常」に変換します。"
+msgstr "現在のレイヤーもしくはレイヤーグループを、見た目は保持したままで合成モード「標準」に変換します。"
 
 #: ../po/tmp/resources.xml.h:103
-#, fuzzy
 msgctxt "Menu→Layer→Opacity (labels), Accel Editor (labels)"
 msgid "Increase Layer’s Opacity"
-msgstr "レイヤーの不透明度を高くする"
+msgstr "レイヤーの不透明度を上げる"
 
 #: ../po/tmp/resources.xml.h:104
 msgctxt "Accel Editor (descriptions)"
 msgid "Make the layer less transparent."
-msgstr ""
+msgstr "レイヤーをより不透明にします。"
 
 #: ../po/tmp/resources.xml.h:105
-#, fuzzy
 msgctxt "Menu→Layer→Opacity (labels), Accel Editor (labels)"
 msgid "Reduce Layer’s Opacity"
-msgstr "レイヤーの不透明度を低くする"
+msgstr "レイヤーの不透明度を下げる"
 
 #: ../po/tmp/resources.xml.h:106
 msgctxt "Accel Editor (descriptions)"
 msgid "Make the layer more transparent."
-msgstr ""
+msgstr "レイヤーをより透明にします。"
 
 #: ../po/tmp/resources.xml.h:107
-#, fuzzy
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Raise Layer"
-msgstr "レイヤーの削除"
+msgstr "レイヤーを前面へ"
 
 #: ../po/tmp/resources.xml.h:108
 msgctxt "Accel Editor (descriptions)"
@@ -4205,10 +4197,9 @@ msgid "Raise the current layer one step in the layer stack."
 msgstr ""
 
 #: ../po/tmp/resources.xml.h:109
-#, fuzzy
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Lower Layer"
-msgstr "レイヤーの読み込み"
+msgstr "レイヤーを背面へ"
 
 #: ../po/tmp/resources.xml.h:110
 msgctxt "Accel Editor (descriptions)"
@@ -4216,28 +4207,24 @@ msgid "Lower the current layer one step in the layer stack."
 msgstr ""
 
 #: ../po/tmp/resources.xml.h:111
-#, fuzzy
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Duplicate Layer"
-msgstr "レイヤーの複製"
+msgstr "レイヤーを複製"
 
 #: ../po/tmp/resources.xml.h:112
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Make an exact clone of the current layer."
-msgstr "選択色を彩度展開"
+msgstr "現在のレイヤーと同じ内容のレイヤーを作成します。"
 
 #: ../po/tmp/resources.xml.h:113
-#, fuzzy
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Rename Layer…"
-msgstr "レイヤーの削除"
+msgstr "レイヤーの名前を変更…"
 
 #: ../po/tmp/resources.xml.h:114
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Enter a new name for the current layer."
-msgstr "現在のファイルを再読み込みします。"
+msgstr "現在のレイヤーに新しい名前を指定します。"
 
 #: ../po/tmp/resources.xml.h:115
 #, fuzzy
@@ -4249,7 +4236,7 @@ msgstr "ロック"
 msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Toggle the current layer’s locked state. Locked layers cannot be modified."
-msgstr ""
+msgstr "現在のレイヤーのロック状態を切り替えます。ロックされたレイヤーは編集できません。"
 
 #: ../po/tmp/resources.xml.h:117
 #, fuzzy
@@ -4284,10 +4271,9 @@ msgid "Reset Zoom, Rotation and Mirroring, and recenter the document."
 msgstr "拡大率、回転、反転表示をリセットし、ドキュメントの表示位置を中央に戻します。"
 
 #: ../po/tmp/resources.xml.h:123
-#, fuzzy
 msgctxt "Menu→View (labels), Accel Editor (labels)"
 msgid "Fit to View"
-msgstr "表示領域の回転"
+msgstr "ビューに合わせる"
 
 #: ../po/tmp/resources.xml.h:124
 msgctxt "Accel Editor (descriptions)"
@@ -4307,7 +4293,7 @@ msgstr "拡大・縮小をリセット"
 #: ../po/tmp/resources.xml.h:127
 msgctxt "Accel Editor (descriptions)"
 msgid "Restore the view’s zoom to its default."
-msgstr "表示領域の拡大倍率をデフォルトに戻します。"
+msgstr "表示領域の拡大率をデフォルトに戻します。"
 
 #: ../po/tmp/resources.xml.h:128
 msgctxt "Menu→View→Reset (labels), Accel Editor (labels)"
@@ -4317,7 +4303,7 @@ msgstr "回転をリセット"
 #: ../po/tmp/resources.xml.h:129
 msgctxt "Accel Editor (descriptions)"
 msgid "Restore the view’s rotation to 0°"
-msgstr "表示領域の回転の角度を０度に戻します"
+msgstr "表示領域の回転の角度を 0 度に戻します"
 
 #: ../po/tmp/resources.xml.h:130
 msgctxt "Menu→View→Reset (labels), Accel Editor (labels)"
@@ -4327,7 +4313,7 @@ msgstr "反転表示を解除"
 #: ../po/tmp/resources.xml.h:131
 msgctxt "Accel Editor (descriptions)"
 msgid "Turn off mirroring of the view."
-msgstr ""
+msgstr "表示の反転を解除します。"
 
 #: ../po/tmp/resources.xml.h:132
 msgctxt "Menu→View→Adjust View (labels), Accel Editor (labels)"
@@ -4335,10 +4321,9 @@ msgid "Zoom In"
 msgstr "拡大"
 
 #: ../po/tmp/resources.xml.h:133
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Increase magnification."
-msgstr "拡大"
+msgstr "拡大率を上げます。"
 
 #: ../po/tmp/resources.xml.h:134
 msgctxt "Menu→View→Adjust View (labels), Accel Editor (labels)"
@@ -4346,10 +4331,9 @@ msgid "Zoom Out"
 msgstr "縮小"
 
 #: ../po/tmp/resources.xml.h:135
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Decrease magnification."
-msgstr "縮小"
+msgstr "拡大率を下げます。"
 
 #: ../po/tmp/resources.xml.h:136
 msgctxt "Menu→View→Adjust View (labels), Accel Editor (labels)"
@@ -4357,10 +4341,9 @@ msgid "Rotate Counterclockwise"
 msgstr "反時計回りに回転"
 
 #: ../po/tmp/resources.xml.h:137
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Rotate the view counterclockwise."
-msgstr "反時計回りに回転"
+msgstr "表示領域を反時計回りに回転します。"
 
 #: ../po/tmp/resources.xml.h:138
 msgctxt "Menu→View→Adjust View (labels), Accel Editor (labels)"
@@ -4368,10 +4351,9 @@ msgid "Rotate Clockwise"
 msgstr "時計回りに回転"
 
 #: ../po/tmp/resources.xml.h:139
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Rotate the view clockwise."
-msgstr "反時計回りに回転"
+msgstr "表示領域を時計回りに回転します。"
 
 #: ../po/tmp/resources.xml.h:140
 msgctxt "Menu→View→Adjust View (labels), Accel Editor (labels)"
@@ -4401,15 +4383,14 @@ msgid "Layer Solo"
 msgstr "現在のレイヤーのみ表示"
 
 #: ../po/tmp/resources.xml.h:145
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Toggle whether only the current layer is shown."
-msgstr "現在のファイルを再読み込みします。"
+msgstr "現在のレイヤーのみ表示するかどうかを切り替えます。"
 
 #: ../po/tmp/resources.xml.h:146
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Symmetrical Painting Active"
-msgstr ""
+msgstr "対称描画を有効化"
 
 #: ../po/tmp/resources.xml.h:147
 msgctxt "Accel Editor (descriptions)"
@@ -4417,10 +4398,9 @@ msgid "Mirror brushstrokes along the axis of symmetry"
 msgstr ""
 
 #: ../po/tmp/resources.xml.h:148
-#, fuzzy
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Frame Enabled"
-msgstr "有効"
+msgstr "フレームを使用"
 
 #: ../po/tmp/resources.xml.h:149
 msgctxt "Accel Editor (descriptions)"
@@ -4428,7 +4408,6 @@ msgid "Toggle visibility of the document frame."
 msgstr "画像フレームの表示/非表示を切り替えます。"
 
 #: ../po/tmp/resources.xml.h:150
-#, fuzzy
 msgctxt "Menu→Help→Debug (labels), Accel Editor (labels)"
 msgid "Print Brush Input Values to Console"
 msgstr "ブラシの入力値をコンソールに表示"
@@ -4450,27 +4429,24 @@ msgid "Show rendering updates on-screen, for debugging."
 msgstr ""
 
 #: ../po/tmp/resources.xml.h:154
-#, fuzzy
 msgctxt "Menu→Help→Debug (labels), Accel Editor (labels)"
 msgid "No Double Buffering"
-msgstr "GTKのダブルバッファリング機能を無効化"
+msgstr "ダブルバッファリングを無効化"
 
 #: ../po/tmp/resources.xml.h:155
 msgctxt "Accel Editor (descriptions)"
 msgid "Turn off GTK’s double buffering, normally enabled."
-msgstr ""
+msgstr "GTK のダブルバッファリング機能を無効化します。通常は有効になっています。"
 
 #: ../po/tmp/resources.xml.h:156
-#, fuzzy
 msgctxt "Menu→Brush (labels)"
 msgid "Paint Mode"
 msgstr "描画モード"
 
 #: ../po/tmp/resources.xml.h:157
-#, fuzzy
 msgctxt "Menu→Brush→Blend Mode (labels), Accel Editor (labels)"
 msgid "Paint Mode: Normal"
-msgstr "通常モード"
+msgstr "描画モード: 通常"
 
 #: ../po/tmp/resources.xml.h:158
 msgctxt "Accel Editor (descriptions)"
@@ -4480,18 +4456,17 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:159
 msgctxt "Menu→Brush→Blend Mode (labels), Accel Editor (labels)"
 msgid "Paint Mode: Eraser"
-msgstr ""
+msgstr "描画モード: 消しゴム"
 
 #: ../po/tmp/resources.xml.h:160
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Erase using the current brush."
-msgstr "消しゴムモード: 現在のブラシでストロークを除去します。"
+msgstr "現在のブラシを消しゴムとして使います。"
 
 #: ../po/tmp/resources.xml.h:161
 msgctxt "Menu→Brush→Blend Mode (labels), Accel Editor (labels)"
 msgid "Paint Mode: Lock Alpha"
-msgstr ""
+msgstr "描画モード: アルファロック"
 
 #: ../po/tmp/resources.xml.h:162
 msgctxt "Accel Editor (descriptions)"
@@ -4501,7 +4476,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:163
 msgctxt "Menu→Brush→Blend Mode (labels), Accel Editor (labels)"
 msgid "Paint Mode: Colorize"
-msgstr ""
+msgstr "描画モード: 彩色"
 
 #: ../po/tmp/resources.xml.h:164
 msgctxt "Accel Editor (descriptions)"
@@ -4679,7 +4654,7 @@ msgstr "作業パレットを元に戻す"
 #: ../po/tmp/resources.xml.h:197
 msgctxt "Accel Editor (descriptions)"
 msgid "Revert the scratchpad to its last saved state."
-msgstr ""
+msgstr "作業パレットを、最後に保存したときの状態に戻します。"
 
 #: ../po/tmp/resources.xml.h:198
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
@@ -5153,10 +5128,9 @@ msgid "Toggle the History panel (recently used brushes and colors)."
 msgstr ""
 
 #: ../po/tmp/resources.xml.h:288
-#, fuzzy
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Recent Brushes & Colors"
-msgstr "最近使用した色"
+msgstr "最近使用したブラシと色"
 
 #: ../po/tmp/resources.xml.h:289
 msgctxt "Accel Editor (descriptions)"
@@ -5324,7 +5298,7 @@ msgstr "表示領域の回転"
 #: ../po/tmp/resources.xml.h:321
 msgctxt "Toolbar (tooltips)"
 msgid "Rotate View: tilt your view of the canvas."
-msgstr ""
+msgstr "表示領域を回転: キャンバスを傾けて表示します。"
 
 #: ../po/tmp/resources.xml.h:322
 msgctxt "Menu→View (labels), Accel Editor (labels)"
@@ -5339,7 +5313,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:324
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Zoom View"
-msgstr "表示を拡大・縮小"
+msgstr "表示領域を拡大・縮小"
 
 #: ../po/tmp/resources.xml.h:325
 #, fuzzy
@@ -5350,12 +5324,12 @@ msgstr "拡大・縮小"
 #: ../po/tmp/resources.xml.h:326
 msgctxt "Toolbar (tooltips)"
 msgid "Zoom View: zoom into or out of the canvas."
-msgstr ""
+msgstr "表示領域を拡大・縮小: キャンバスを拡大・縮小して表示します。"
 
 #: ../po/tmp/resources.xml.h:327
 msgctxt "Menu→View (labels), Accel Editor (labels)"
 msgid "Zoom View"
-msgstr "表示を拡大・縮小"
+msgstr "表示領域を拡大・縮小"
 
 #: ../po/tmp/resources.xml.h:328
 msgctxt "Accel Editor (descriptions)"
@@ -5365,7 +5339,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:329
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Lines and Curves"
-msgstr ""
+msgstr "直線と曲線"
 
 #: ../po/tmp/resources.xml.h:330
 msgctxt "Toolbar (short labels)"
@@ -5375,18 +5349,17 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:331
 msgctxt "Toolbar (tooltips)"
 msgid "Lines and Curves: draw straight or curved lines."
-msgstr ""
+msgstr "直線と曲線: 直線または曲線を描画します。"
 
 #: ../po/tmp/resources.xml.h:332
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Lines and Curves"
-msgstr ""
+msgstr "直線と曲線"
 
 #: ../po/tmp/resources.xml.h:333
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Draw straight or curved lines."
-msgstr "直線を引く"
+msgstr "直線または曲線を描画します。"
 
 #: ../po/tmp/resources.xml.h:334
 msgctxt "Menu→Edit→Current Mode (labels)"
@@ -5401,12 +5374,12 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:336
 msgctxt "Toolbar (tooltips)"
 msgid "Connected Lines: draw sequences of straight or curved lines."
-msgstr "連結線：直線または曲線を連続で描画します。"
+msgstr "連結線: 直線または曲線を連続で描画します。"
 
 #: ../po/tmp/resources.xml.h:337
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Connected Lines"
-msgstr ""
+msgstr "連結線"
 
 #: ../po/tmp/resources.xml.h:338
 msgctxt "Accel Editor (descriptions)"
@@ -5416,7 +5389,7 @@ msgstr "直線または曲線を連続で描画します。"
 #: ../po/tmp/resources.xml.h:339
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Ellipses and Circles"
-msgstr ""
+msgstr "円"
 
 #: ../po/tmp/resources.xml.h:340
 msgctxt "Toolbar (short labels)"
@@ -5431,12 +5404,12 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:342
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Ellipses and Circles"
-msgstr ""
+msgstr "円"
 
 #: ../po/tmp/resources.xml.h:343
 msgctxt "Accel Editor (descriptions)"
 msgid "Draw circles and ellipses."
-msgstr "円や楕円を描画します。"
+msgstr "真円や楕円を描画します。"
 
 #: ../po/tmp/resources.xml.h:344
 msgctxt "Menu→Edit→Current Mode (labels)"
@@ -5452,7 +5425,7 @@ msgstr "インク"
 #: ../po/tmp/resources.xml.h:346
 msgctxt "Toolbar (tooltips)"
 msgid "Inking: draw smooth controlled lines."
-msgstr "ペン入れ：制御点で編集できる、滑らかな線で描画します。"
+msgstr "ペン入れ: 制御点で編集できる、滑らかな線で描画します。"
 
 #: ../po/tmp/resources.xml.h:347
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
@@ -5487,12 +5460,12 @@ msgstr "レイヤーの位置を変更"
 #: ../po/tmp/resources.xml.h:353
 msgctxt "Accel Editor (description)"
 msgid "Interactively move the current layer on the canvas."
-msgstr "ユーザー操作で現在のレイヤをキャンバス上で動かします。"
+msgstr "ユーザー操作で現在のレイヤーをキャンバス上で動かします。"
 
 #: ../po/tmp/resources.xml.h:354
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Edit Frame"
-msgstr ""
+msgstr "額縁の編集"
 
 #: ../po/tmp/resources.xml.h:355
 msgctxt "Toolbar (short labels)"
@@ -5503,12 +5476,12 @@ msgstr "額縁"
 msgctxt "Toolbar (tooltips)"
 msgid ""
 "Edit Frame: define a frame around the document to give it a finite size."
-msgstr "額縁の編集：画像の周囲に額縁を設定し、画像サイズを有限なものとして限定します。"
+msgstr "額縁の編集: 画像の周囲に額縁を設定し、画像サイズを有限なものとして限定します。"
 
 #: ../po/tmp/resources.xml.h:357
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Edit Frame"
-msgstr ""
+msgstr "額縁の編集"
 
 #: ../po/tmp/resources.xml.h:358
 msgctxt "Accel Editor (descriptions)"
@@ -5554,7 +5527,7 @@ msgstr "色を採取"
 #: ../po/tmp/resources.xml.h:366
 msgctxt "Toolbar (tooltips)"
 msgid "Pick Color: set the painting color from screen pixels."
-msgstr "色を採取：画面上の画素から描画色を採取して設定します。"
+msgstr "色を採取: 画面上のピクセルから描画色を採取して設定します。"
 
 #: ../po/tmp/resources.xml.h:367
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -5579,7 +5552,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:371
 msgctxt "Toolbar (tooltips)"
 msgid "Flood Fill: fill an area with color."
-msgstr "塗りつぶし: 指定した色で連続した領域を塗りつぶします。"
+msgstr "塗りつぶし: 連続した領域を指定した色で塗りつぶします。"
 
 #: ../po/tmp/resources.xml.h:372
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
@@ -5589,7 +5562,7 @@ msgstr "塗りつぶし"
 #: ../po/tmp/resources.xml.h:373
 msgctxt "Accel Editor (descriptions)"
 msgid "Fill an area with color."
-msgstr "指定した色で連続した領域を塗りつぶします。"
+msgstr "連続した領域を指定した色で塗りつぶします。"
 
 #~ msgid "Add As New"
 #~ msgstr "新規ブラシとして追加"

@@ -683,6 +683,31 @@ class FileHandler (object):
         else:
             self.save_as_dialog(self.save_file, suggested_filename=current_filename)
 
+    def save_incremental_cb(self,action):
+        if not self.filename:
+            self.save_as_cb(action)
+        else:
+            # Incremental_version is very simular with save_autoincrement_file
+            # but we need immidiately increase version number,than increase char.
+
+            dirparts, fileparts=os.path.split(self.filename)
+            baseparts,ext = os.path.splitext(fileparts)
+            l=re.findall('(.*)_([0-9]+)([a-z])?$',baseparts)
+            if l:
+                prefix,number,version_suffix=l[0]
+            else:
+                prefix=baseparts
+                number=0
+                version_suffix=''
+
+            while True:
+                number=int(number)+1
+                new_filename="%s%s%s_%d%s" % (dirparts,os.path.sep,prefix,number,ext)
+                if not os.path.exists(new_filename):
+                    break
+
+            self.save_file(new_filename)
+
     def save_scratchpad_as_dialog(self, export=False):
         if self.app.scratchpad_filename:
             current_filename = self.app.scratchpad_filename
