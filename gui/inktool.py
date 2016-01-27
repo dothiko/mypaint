@@ -673,8 +673,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._reset_adjust_data()
             if len(self.nodes) > 1:
                 self.phase = _Phase.ADJUST
+                # My addendum of culling nodes
                 if self._auto_culling:
                     self._cull_nodes(tdw.scale)
+                    tdw.queue_draw() # Needs this for full redraw
                 self._queue_redraw_all_nodes()
                 self._queue_redraw_curve()
                 self._queue_draw_buttons()

@@ -126,7 +126,6 @@ Vocabulary
       </child>
       <child>
         <object class="GtkAction" id="SaveIncrementalVersion">
-          <property name="icon-name">mypaint-document-save-incremental-symbolic</property>
           <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save incremental version</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Save your work to a file,with incremental version number.</property>
           <signal name="activate" handler="save_incremental_cb"/>
