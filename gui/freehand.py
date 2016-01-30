@@ -487,11 +487,11 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         # Stabilizer cursor position fetch
         self._set_stabilize_point(event.x, event.y)
         if self._stabilized:
-            pos=self._get_stabilize_point()
+            pos = self._get_stabilize_point()
             if not pos:
                 return
             else:
-                x,y=pos
+                x, y = pos
         else:
             # Extract the raw readings for this event
             x = event.x
@@ -596,22 +596,39 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         # If the eventhack filter caught more than one event, push them
         # onto the motion event queue. Pressures and tilts will be
         # interpolated from surrounding motion-notify events.
-        if not self._stabilized and len(drawstate.evhack_positions) > 1:
+        if len(drawstate.evhack_positions) > 1:
             # Remove the last item: it should be the one corresponding
             # to the current motion-notify-event.
             hx0, hy0, ht0 = drawstate.evhack_positions.pop(-1)
-            # Check that we can use the eventhack data uncorrected
-            if (hx0, hy0, ht0) == (x, y, time):
-                for hx, hy, ht in drawstate.evhack_positions:
-                    hx, hy = tdw.display_to_model(hx, hy)
-                    event_data = (ht, hx, hy, None, None, None)
-                    drawstate.queue_motion(event_data)
+            if self._stabilized:
+                if (hx0, hy0, ht0) == (event.x, event.y, time):
+                    for hx, hy, ht in drawstate.evhack_positions:
+                        self._set_stabilize_point(hx,hy)
+                        pos = self._get_stabilize_point()
+                        if pos:
+                            hx, hy = tdw.display_to_model(pos[0], pos[1])
+                            event_data = (ht, hx, hy, None, None, None)
+                            drawstate.queue_motion(event_data)
+                else:
+                    # FIXME code duplication
+                    logger.warning(
+                        "Final evhack event (%0.2f, %0.2f, %d) doesn't match its "
+                        "corresponding motion-notify-event (%0.2f, %0.2f, %d). "
+                        "This can be ignored if it's just a one-off occurrence.",
+                        hx0, hy0, ht0, event.x, event.y, time)
             else:
-                logger.warning(
-                    "Final evhack event (%0.2f, %0.2f, %d) doesn't match its "
-                    "corresponding motion-notify-event (%0.2f, %0.2f, %d). "
-                    "This can be ignored if it's just a one-off occurrence.",
-                    hx0, hy0, ht0, x, y, time)
+                # Check that we can use the eventhack data uncorrected
+                if (hx0, hy0, ht0) == (x, y, time):
+                    for hx, hy, ht in drawstate.evhack_positions:
+                        hx, hy = tdw.display_to_model(hx, hy)
+                        event_data = (ht, hx, hy, None, None, None)
+                        drawstate.queue_motion(event_data)
+                else:
+                    logger.warning(
+                        "Final evhack event (%0.2f, %0.2f, %d) doesn't match its "
+                        "corresponding motion-notify-event (%0.2f, %0.2f, %d). "
+                        "This can be ignored if it's just a one-off occurrence.",
+                        hx0, hy0, ht0, x, y, time)
         # Reset the eventhack queue
         if len(drawstate.evhack_positions) > 0:
             drawstate.evhack_positions = []

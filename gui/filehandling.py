@@ -621,6 +621,7 @@ class FileHandler (object):
         try:
             if dialog.run() == gtk.RESPONSE_OK:
                 dialog.hide()
+                print dialog.get_filename()
                 self.open_file(dialog.get_filename().decode('utf-8'))
         finally:
             dialog.destroy()
