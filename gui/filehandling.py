@@ -146,6 +146,7 @@ class FileHandler (object):
             )
         )
         ra = app.find_action("OpenRecent")
+        ra.add_filter(rf)
 
         ag = app.builder.get_object('FileActions')
         for action in ag.list_actions():
@@ -687,26 +688,11 @@ class FileHandler (object):
         if not self.filename:
             self.save_as_cb(action)
         else:
-            # Incremental_version is very simular with save_autoincrement_file
-            # but we need immidiately increase version number,than increase char.
-
-            dirparts, fileparts=os.path.split(self.filename)
-            baseparts,ext = os.path.splitext(fileparts)
-            l=re.findall('(.*)_([0-9]+)([a-z])?$',baseparts)
-            if l:
-                prefix,number,version_suffix=l[0]
-            else:
-                prefix=baseparts
-                number=0
-                version_suffix=''
-
-            while True:
-                number=int(number)+1
-                new_filename="%s%s%s_%d%s" % (dirparts,os.path.sep,prefix,number,ext)
-                if not os.path.exists(new_filename):
-                    break
-
-            self.save_file(new_filename)
+            prefix,ext=os.path.splitext(self.filename)
+            number=re.findall(r'_[0-9]+$',prefix)
+            if number:
+                prefix=prefix[:-len(number[0])]
+            self.save_autoincrement_file(None, prefix+"_", main_doc=True, ext=ext)
 
     def save_scratchpad_as_dialog(self, export=False):
         if self.app.scratchpad_filename:
@@ -792,7 +778,7 @@ class FileHandler (object):
         prefix = self.get_scratchpad_prefix()
         self.app.scratchpad_filename = self.save_autoincrement_file(filename, prefix, main_doc=False)
 
-    def save_autoincrement_file(self, filename, prefix, main_doc=True):
+    def save_autoincrement_file(self, filename, prefix, main_doc=True, ext=None):
         # If necessary, create the folder(s) the scraps are stored under
         prefix_dir = os.path.dirname(prefix)
         if not os.path.exists(prefix_dir):
@@ -836,12 +822,19 @@ class FileHandler (object):
                 number = int(res[0])
                 if number > maximum:
                     maximum = number
-            filename = '%s%03d_a' % (prefix, maximum+1)
+            if ext:
+                # I think no need for trailing character for version-save 
+                filename = '%s%03d' % (prefix, maximum+1) 
+            else:
+                filename = '%s%03d_a' % (prefix, maximum+1)
 
         # Add extension
-        cfg = self.app.preferences['saving.default_format']
-        default_saveformat = self.config2saveformat[cfg]
-        filename += self.saveformats[default_saveformat][1]
+        if ext:
+            filename += ext
+        else:
+            cfg = self.app.preferences['saving.default_format']
+            default_saveformat = self.config2saveformat[cfg]
+            filename += self.saveformats[default_saveformat][1]
 
         assert not os.path.exists(filename)
         if main_doc:
