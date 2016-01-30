@@ -129,6 +129,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     _PRESSURE_MOD_MASK = Gdk.ModifierType.SHIFT_MASK # Pressure modifier
     _PRESSURE_WHEEL_STEP = 0.025 # pressure modifying step,for mouse wheel
 
+    _auto_culling = True # auto culling flag
+
     ## Initialization & lifecycle methods
 
     def __init__(self, **kwargs):
@@ -670,6 +672,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._reset_capture_data()
             self._reset_adjust_data()
             if len(self.nodes) > 1:
+                # Auto culling node
+                if self.__class__._auto_culling:
+                    self._cull_nodes(tdw.scale)
+                    tdw.queue_draw() # Needs this for full redraw
                 self.phase = _Phase.ADJUST
                 self._queue_redraw_all_nodes()
                 self._queue_redraw_curve()
@@ -891,13 +897,38 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
         return oldcnt-len(self.nodes)
 
-    def _cull_nodes(self):
+    def _cull_nodes(self, scale):
         """Internal method of cull nodes."""
-        curcnt = len(self.nodes)
-        lastnode = self.nodes[-1]
-        self.nodes = self.nodes[:-1:2]
-        self.nodes.append(lastnode)
-        return curcnt - len(self.nodes)
+        if len(self.nodes) >= 6:
+            curcnt = len(self.nodes)
+            lastnode = self.nodes[-1]
+            self.nodes = self.nodes[:-1:2]
+            self.nodes.append(lastnode)
+
+            # Remove too close nodes
+            curnode = self.nodes[0]
+            i = 0
+            threshold = 16.0
+            if scale > 1.0:
+                threshold /= scale
+            print("scale:%08f / threshold:%08f" % (scale, threshold))
+
+            while i < len(self.nodes) - 1:
+                nextnode = self.nodes[i + 1]
+                vx = nextnode.x - curnode.x
+                vy = nextnode.y - curnode.y
+                if math.sqrt(vx * vx + vy * vy) < threshold:
+                    self.nodes.pop(i)
+                else:
+                    i += 1
+                    curnode=nextnode
+
+            if len(self.nodes) <= 2:
+                print("warning:length %d " % len(self.nodes))
+
+            return curcnt - len(self.nodes)
+        else:
+            return len(self.nodes)
 
     def _nodes_deletion_operation(self, callable, args):
         """Internal method for delete-related operation of multiple nodes."""
@@ -931,7 +962,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def cull_nodes(self):
         """User interface method of cull nodes."""
-        self._nodes_deletion_operation(self._cull_nodes, ())
+        self._nodes_deletion_operation(self._cull_nodes, (self.doc.tdw.scale,))
 
 
 class Overlay (gui.overlays.Overlay):
