@@ -117,7 +117,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
         # Stablizer init
         self._stabilize_init()
-        self._stabilized=False
 
 
     ## Metadata
@@ -486,7 +485,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
         # Stabilizer cursor position fetch
         self._set_stabilize_point(event.x, event.y)
-        if self._stabilized:
+        if self.doc.stabilizer_mode:
             pos = self._get_stabilize_point()
             if not pos:
                 return
@@ -600,7 +599,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             # Remove the last item: it should be the one corresponding
             # to the current motion-notify-event.
             hx0, hy0, ht0 = drawstate.evhack_positions.pop(-1)
-            if self._stabilized:
+            if self.doc.stabilizer_mode:
                 if (hx0, hy0, ht0) == (event.x, event.y, time):
                     for hx, hy, ht in drawstate.evhack_positions:
                         self._set_stabilize_point(hx,hy)
@@ -643,33 +642,31 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                                     priority=self.MOTION_QUEUE_PRIORITY)
             drawstate.motion_processing_cbid = cbid
 
-    def key_press_cb(self, win, tdw, event):
-       #if event.keyval == keysyms.d and not self._stabilized:
-       #    self._stabilize_init()
-        pass
-
-    def key_release_cb(self, win, tdw, event):
-        pass
-       #if self._stabilized:
-       #    self._stabilize_reset()
-        if event.keyval == keysyms.d:
-            if not self._stabilized:
-                print 'init!'
-                self._stabilize_init()
-            else:
-                print 'reset!'
-                self._stabilize_reset()
+   #def key_press_cb(self, win, tdw, event):
+   #   #if event.keyval == keysyms.d and not self._stabilized:
+   #   #    self._stabilize_init()
+   #    pass
+   #
+   #def key_release_cb(self, win, tdw, event):
+   #    pass
+   #   #if self._stabilized:
+   #   #    self._stabilize_reset()
+   #    if event.keyval == keysyms.d:
+   #        if not self._stabilized:
+   #            print 'init!'
+   #            self._stabilize_init()
+   #        else:
+   #            print 'reset!'
+   #            self._stabilize_reset()
 
     ## Stabilize related
     def _stabilize_init(self):
         self._stabilized_index=0
         self._stabilized_cnt=0
-        self._stabilized=True
 
     def _stabilize_reset(self):
         self._stabilized_index=0
         self._stabilized_cnt=0
-        self._stabilized=False
 
     def _set_stabilize_point(self,x,y):
         self._stabilize_src_pos[self._stabilized_index]=(x,y)

@@ -133,6 +133,11 @@
         <menuitem action='BlendModeLockAlpha'/>
         <menuitem action='BlendModeColorize'/>
       </menu>
+      <separator/>
+      <menu action='AssistModeMenu'>
+        <menuitem action='AssistModeNormal'/>
+        <menuitem action='AssistModeStabilizer'/>
+      </menu>
       <!-- Shortcuts for settings -->
       <separator/>
       <menu action='ContextMenu'>

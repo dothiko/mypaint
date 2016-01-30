@@ -814,24 +814,29 @@ Vocabulary
   <!--}}} /BrushModifierActions -->
   <!-- {{{ AssistModifierActions -->
   <child>
-      <object class="GtkActionGroup" id="AssistModifierActions">
-      <child>
-        <object class="GtkToggleAction" id="AssistModeStabilizer">
-          <property name="icon_name">mypaint-stablizer-symbolic</property>
-          <property name="label" translatable="yes" context="Menu→Brush→Assist Mode (labels), Accel Editor (labels)">Assist Mode: Stabilizer</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Apply stroke stabilizer.</property>
-          <signal name="activate" handler="assist_mode_stablizer_cb"/>
-        </object>
-        <accelerator key="d"/>
-      </child>
-      <child>
-        <object class="GtkToggleAction" id="AssistModeNormal">
-          <property name="label" translatable="yes" context="Menu→Brush→Assist Mode (labels), Accel Editor (labels)">Assist Mode: Stabilizer</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Normal stroke.</property>
-          <signal name="activate" handler="assist_mode_normal_cb"/>
-        </object>
-      </child>
-      </object>
+    <object class="GtkActionGroup" id="AssistModifierActions">
+        <child>
+          <object class="GtkAction" id="AssistModeMenu">
+            <property name="label" translatable="yes" context="Menu→Brush (labels)">Assist Mode</property>
+            <!-- NO TOOLTIP: this is a menu -->
+          </object>
+        </child>
+        <child>
+          <object class="GtkToggleAction" id="AssistModeStabilizer">
+            <property name="icon_name">mypaint-stabilizer-symbolic</property>
+            <property name="label" translatable="yes" context="Menu→Brush→Assist Mode (labels), Accel Editor (labels)">Assist Mode: Stabilizer</property>
+            <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Apply stroke stabilizer.</property>
+            <signal name="activate" handler="assist_mode_stabilizer_cb"/>
+          </object>
+        </child>
+        <child>
+          <object class="GtkToggleAction" id="AssistModeNormal">
+            <property name="label" translatable="yes" context="Menu→Brush→Assist Mode (labels), Accel Editor (labels)">Assist Mode: Normal</property>
+            <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Normal stroke.</property>
+            <signal name="activate" handler="assist_mode_normal_cb"/>
+          </object>
+        </child>
+    </object>
   </child>
   <!--}}} /AssistModifierActions -->
   <!--{{{ WindowActions: actions affecting the application window and document view -->

@@ -85,6 +85,9 @@ class CanvasController (object):
         self.modes = gui.mode.ModeStack(self)  #: stack of delegates
         self.modes.default_mode_class = gui.freehand.FreehandMode
         self.modes.default_mode_kwargs = {"abrupt_start": True}
+
+        # for Stablizer
+        self.stabilizer_mode=False
     
     def init_pointer_events(self):
         """Establish TDW event listeners for pointer button presses & drags.
@@ -372,6 +375,11 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         builder = self.app.builder
         self.action_group = builder.get_object('DocumentActions')
         self.modes_action_group = builder.get_object("ModeStackActions")
+
+        # assist mode actions
+        self.assist_action_group = builder.get_object('AssistModifierActions')
+        self.assist_stablizer_action=self.app.find_action("AssistModeStabilizer")
+        self.app.kbm.takeover_action(self.assist_stablizer_action)
 
         # Fine-grained observation of various model objects
         cmdstack = self.model.command_stack
@@ -1989,6 +1997,13 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             # Not every mode has a corresponding action
             if not action.get_active():
                 action.set_active(True)
+
+    ## Assist modifier
+    def assist_mode_stabilizer_cb(self, action):
+        self.stabilizer_mode=action.get_active()
+
+    def assist_mode_normal_cb(self, action):
+        pass
 
     ## External layer editing support
 

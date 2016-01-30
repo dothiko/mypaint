@@ -314,6 +314,7 @@ class KeyboardManager:
         self.actions.append(action)
         self._update_keymap(action.get_accel_path())
 
+
     def _add_custom_attributes(self, action):
         assert not hasattr(action, 'keydown')
         assert not hasattr(action, 'keyup_callback')
