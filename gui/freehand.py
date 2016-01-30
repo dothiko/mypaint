@@ -22,6 +22,7 @@ from gettext import gettext as _
 import gobject
 import gtk
 from gtk import gdk
+from gtk import keysyms
 from libmypaint import brushsettings
 
 import gui.mode
@@ -109,6 +110,14 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         super(FreehandMode, self).__init__(**args)
         self._cursor_hidden_tdws = set()
         self._cursor_hidden = None
+
+        # My addition
+        self._saved_tracking=None
+        self._stablize_init()
+        self._stablized=False
+        self._stablize_max=32
+        self._stablize_src_pos=[None]*self._stablize_max
+
 
     ## Metadata
 
@@ -394,6 +403,13 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             # Hide the cursor if configured to
             self._hide_drawing_cursor(tdw)
 
+           #if event.
+           #if (event.state & gdk.ModifierType.META_MASK)==gdk.ModifierType.META_MASK:
+            if (event.state & gdk.SUPER_MASK)==gdk.SUPER_MASK:
+                self._saved_tracking=tdw.app.brush_adjustment['slow_tracking']
+                tdw.app.brush_adjustment['slow_tracking']=1.0
+
+
             result = True
         return (super(FreehandMode, self).button_press_cb(tdw, event)
                 or result)
@@ -418,6 +434,11 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             self._reinstate_drawing_cursor(tdw)
 
             result = True
+
+        # Stablize
+        self._stablize_reset()
+
+        
         return (super(FreehandMode, self).button_release_cb(tdw, event)
                 or result)
 
@@ -467,9 +488,19 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             if not same_device:
                 tdw.doc.brush.reset()
 
-        # Extract the raw readings for this event
-        x = event.x
-        y = event.y
+        # Stablizer
+        self._set_stablize_point(event.x, event.y)
+        if self._stablized:
+            pos=self._get_stablize_point()
+            if not pos:
+                return
+            else:
+                x,y=pos
+        else:
+            # Extract the raw readings for this event
+            x = event.x
+            y = event.y
+
         time = event.time
         pressure = event.get_axis(gdk.AXIS_PRESSURE)
         xtilt = event.get_axis(gdk.AXIS_XTILT)
@@ -569,7 +600,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         # If the eventhack filter caught more than one event, push them
         # onto the motion event queue. Pressures and tilts will be
         # interpolated from surrounding motion-notify events.
-        if len(drawstate.evhack_positions) > 1:
+        if not self._stablized and len(drawstate.evhack_positions) > 1:
             # Remove the last item: it should be the one corresponding
             # to the current motion-notify-event.
             hx0, hy0, ht0 = drawstate.evhack_positions.pop(-1)
@@ -598,6 +629,59 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             cbid = gobject.idle_add(self._motion_queue_idle_cb, tdw,
                                     priority=self.MOTION_QUEUE_PRIORITY)
             drawstate.motion_processing_cbid = cbid
+
+    def key_press_cb(self, win, tdw, event):
+        if event.keyval == keysyms.d and not self._stablized:
+            print('do-stab!')
+            self._stablize_init()
+       #if event.keyval == keysyms.d and self._saved_tracking==None:
+           #self._saved_tracking=tdw.app.brush_adjustment['slow_tracking']
+           #self._saved_tracking_value=self._saved_tracking.get_value()
+           #self._saved_tracking.set_value(10.0) # 1.0 is too low
+
+    def key_release_cb(self, win, tdw, event):
+        if self._stablized:
+            self._stablize_reset()
+       #if self._saved_tracking:
+       #    self._saved_tracking.set_value(self._saved_tracking_value)
+       #    self._saved_tracking=None
+
+    ## Stablize related
+    def _stablize_init(self):
+        self._stablized_index=0
+        self._stablized_cnt=0
+        self._stablized=True
+
+    def _stablize_reset(self):
+        self._stablized_index=0
+        self._stablized_cnt=0
+        self._stablized=False
+
+    def _set_stablize_point(self,x,y):
+        self._stablize_src_pos[self._stablized_index]=(x,y)
+        self._stablized_index+=1
+        self._stablized_index%=self._stablize_max
+        self._stablized_cnt+=1
+
+    def _get_stablize_point(self):
+        if self._stablized_cnt < self._stablize_max:
+            return None
+
+        ox=0
+        oy=0
+        idx=0
+        while idx < self._stablize_max:
+            cx,cy=self._get_stablize_element(idx)
+            ox+=cx
+            oy+=cy
+            idx+=1
+
+        return (ox/self._stablize_max,oy/self._stablize_max)
+
+    def _get_stablize_element(self,idx):
+        return self._stablize_src_pos[(self._stablized_index + idx) % self._stablize_max]
+    
+        
 
     ## Motion queue processing
 
