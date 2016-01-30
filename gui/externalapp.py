@@ -94,7 +94,8 @@ class OpenWithDialog (Gtk.Dialog):
         default_app = Gio.AppInfo.get_default_for_type(content_type, False)
         default_iter = None
         app_list_store = Gtk.ListStore(object)
-        for app in Gio.AppInfo.get_all_for_type(content_type):
+        apps = Gio.AppInfo.get_all_for_type(content_type)
+        for app in apps:
             if not app.should_show():
                 continue
             row_iter = app_list_store.append([app])

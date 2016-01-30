@@ -9,8 +9,8 @@ msgstr ""
 "Project-Id-Version: 0.7.1-git\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2015-07-11 21:24+0100\n"
-"PO-Revision-Date: 2015-12-19 20:04+0000\n"
-"Last-Translator: Ahyl Tryel <gbriva17@gmail.com>\n"
+"PO-Revision-Date: 2016-01-11 17:41+0000\n"
+"Last-Translator: Adam Magnier <adam@magnier.io>\n"
 "Language-Team: French "
 "<https://hosted.weblate.org/projects/mypaint/mypaint/fr/>\n"
 "Language: fr\n"
@@ -61,7 +61,7 @@ msgstr "Action :"
 
 #: ../gui/accelmap.py:314
 msgid "Path:"
-msgstr "Chemin :"
+msgstr "Chemin:"
 
 #: ../gui/accelmap.py:325
 msgid "Key:"
@@ -192,10 +192,9 @@ msgid "Opacity"
 msgstr "Opacité"
 
 #: ../gui/brusheditor.py:312
-#, fuzzy
 msgctxt "brush settings list: setting group"
 msgid "Dabs"
-msgstr "Tamponner"
+msgstr "Touches de peinture"
 
 #: ../gui/brusheditor.py:323
 msgctxt "brush settings list: setting group"
@@ -428,7 +427,7 @@ msgstr "Cloner"
 #: ../gui/brushselectionwindow.py:196
 msgctxt "brush list context menu"
 msgid "Edit brush settings"
-msgstr "Éditer les réglages de la brosse actuelle"
+msgstr "Éditer les Réglages de la Brosse"
 
 #: ../gui/brushselectionwindow.py:201
 msgctxt "brush list context menu"
@@ -953,7 +952,7 @@ msgstr "Ajouter un emplacement vide"
 #: ../gui/colors/paletteview.py:798
 msgctxt "palette view: context menu"
 msgid "Insert Row"
-msgstr ""
+msgstr "Insérer une Rangée"
 
 #: ../gui/colors/paletteview.py:804
 msgctxt "palette view: context menu"
@@ -1017,17 +1016,17 @@ msgstr "B"
 #: ../gui/colors/sliders.py:56
 msgctxt "color sliders panel: hue/chroma/luma: slider label"
 msgid "H"
-msgstr ""
+msgstr "H"
 
 #: ../gui/colors/sliders.py:60
 msgctxt "color sliders panel: hue/chroma/luma: slider label"
 msgid "C"
-msgstr ""
+msgstr "C"
 
 #: ../gui/colors/sliders.py:64
 msgctxt "color sliders panel: hue/chroma/luma: slider label"
 msgid "Y"
-msgstr ""
+msgstr "Y"
 
 #: ../gui/colors/sliders.py:108
 #, fuzzy
@@ -1036,10 +1035,9 @@ msgid "Component Sliders"
 msgstr "Curseurs de composantes"
 
 #: ../gui/colors/sliders.py:115
-#, fuzzy
 msgctxt "color sliders panel: tab description (in tooltip)"
 msgid "Adjust individual components of the color."
-msgstr "Ajuster les composantes individuelles de la couleur."
+msgstr "Ajuster individuellement les composantes de la couleur."
 
 #: ../gui/colors/sliders.py:160
 msgctxt "color component slider: tooltip"
@@ -1541,7 +1539,7 @@ msgstr ""
 #, python-brace-format
 msgctxt "file handling: during export (statusbar)"
 msgid "Exporting to “{file_basename}”…"
-msgstr ""
+msgstr "Exportation jusque “{file_basename}”…"
 
 #: ../gui/filehandling.py:427
 #, python-brace-format
@@ -1565,13 +1563,13 @@ msgstr "Échec de la sauvegarde de “{file_basename}”."
 #, python-brace-format
 msgctxt "file handling: export success (statusbar)"
 msgid "Exported to “{file_basename}” successfully."
-msgstr ""
+msgstr "Exporté jusque “{file_basename}” avec succés."
 
 #: ../gui/filehandling.py:481
 #, python-brace-format
 msgctxt "file handling: save success (statusbar)"
 msgid "Saved “{file_basename}” successfully."
-msgstr ""
+msgstr "“{file_basename}” sauvegardé avec succès."
 
 #: ../gui/filehandling.py:503 ../gui/filehandling.py:520
 msgid "Open..."
@@ -1717,12 +1715,12 @@ msgstr "<b>Dimension du cadre</b>"
 
 #: ../gui/framewindow.py:534
 msgid "<b>Pixel density</b>"
-msgstr ""
+msgstr "<b>Densité des pixels</b>"
 
 #: ../gui/framewindow.py:562
 #, fuzzy
 msgid "Set Frame to Layer"
-msgstr "Renommer le calque"
+msgstr "Appliquer le Cadre au Calque"
 
 #: ../gui/framewindow.py:563
 #, fuzzy
@@ -1852,7 +1850,7 @@ msgstr ""
 
 #: ../gui/inktool.py:88 ../gui/inktool.py:452
 msgid "Inking"
-msgstr ""
+msgstr "Encrage"
 
 #: ../gui/inktool.py:91
 msgid "Draw, and then adjust smooth lines"
@@ -2360,7 +2358,7 @@ msgstr "Tourner la vue"
 #: ../gui/workspace.py:1211
 #, python-format
 msgid "%s: close tab"
-msgstr ""
+msgstr "%s: Fermer l'onglet"
 
 #: ../gui/workspace.py:1213
 #, python-format
@@ -2470,9 +2468,8 @@ msgid "Set Layer Opacity: %0.1f%%"
 msgstr "Opacité du calque : %0.1f%%"
 
 #: ../lib/command.py:1331
-#, fuzzy
 msgid "Unknown Mode"
-msgstr "Action inconnue"
+msgstr "Mode inconnu"
 
 #: ../lib/command.py:1332
 #, python-format
@@ -2505,6 +2502,8 @@ msgstr "Erreur lors du chargement de “{basename}”."
 msgctxt "Document IO: common error strings: {see_logs}"
 msgid "The logs may have more detail about this error."
 msgstr ""
+"Le journal des erreurs contient peut-être plus d'informations à propos de "
+"cette erreur."
 
 #: ../lib/document.py:183
 msgctxt "Document autosave descriptions: the {ago} string: future"
@@ -3163,7 +3162,7 @@ msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:44
 msgid "Brush Dynamics"
-msgstr ""
+msgstr "Dynamique de la brosse"
 
 #: ../po/tmp/brusheditor.glade.h:45
 #, fuzzy
@@ -3340,7 +3339,7 @@ msgstr "Cercle avec bordure épaisse"
 #: ../po/tmp/preferenceswindow.glade.h:16
 msgctxt "Prefs Dialog|View|Cursors|Freehand Cursor|Type|"
 msgid "Crosshair"
-msgstr ""
+msgstr "Réticule"
 
 #. Graph x-axis label
 #: ../po/tmp/preferenceswindow.glade.h:18
@@ -3399,14 +3398,14 @@ msgid "Devices"
 msgstr "Périphérique :"
 
 #: ../po/tmp/preferenceswindow.glade.h:31
-#, fuzzy
 msgctxt "Prefs Dialog|Button|Pointer Button Mappings|"
 msgid ""
 "• The space bar can be used like Button2.\n"
 "• Some tablet pads' buttons cannot be held down when pressed."
 msgstr ""
-"<small>Espace peut être utilisé comme le bouton 2. Notez que certains pavés "
-"ont des boutons qui ne peuvent rester pressés.</small>"
+"• La barre d'espace peut être utilisé comme Bouton2.\n"
+"• Notez que certaines tablettes ont des boutons qui ne peuvent rester "
+"pressés."
 
 #: ../po/tmp/preferenceswindow.glade.h:33
 msgctxt "Prefs Dialog|Button|"
@@ -3425,7 +3424,6 @@ msgid "<b>Keyboard Mappings</b>"
 msgstr "<b>Assignation des touches du clavier</b>"
 
 #: ../po/tmp/preferenceswindow.glade.h:37
-#, fuzzy
 msgid "Keys"
 msgstr "Touches"
 
@@ -3440,7 +3438,6 @@ msgid "Prefix when saving scraps:"
 msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:40
-#, fuzzy
 msgctxt "Prefs Dialog|Load & Save|"
 msgid "<b>Saving</b>"
 msgstr "<b>Enregistrer</b>"
@@ -3544,7 +3541,7 @@ msgstr "<b>Interface</b>"
 #: ../po/tmp/preferenceswindow.glade.h:62
 msgctxt "Prefs Dialog|View|Interface|"
 msgid "Toolbar icon size:"
-msgstr "Taille de l'icône des outils:"
+msgstr "Taille des icône de la barre d'outils :"
 
 #: ../po/tmp/preferenceswindow.glade.h:63
 msgctxt "Prefs Dialog|View|Interface|"
@@ -3597,7 +3594,7 @@ msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:73
 msgid "When showing transparency:"
-msgstr ""
+msgstr "Quand on voit la transparence:"
 
 #: ../po/tmp/preferenceswindow.glade.h:74
 msgctxt "Prefs Dialog|View|Interface|"
@@ -3666,6 +3663,8 @@ msgid ""
 "The red, green, and blue 'computer monitor' primaries, evenly arranged "
 "around the circle. Green is opposite magenta."
 msgstr ""
+"Le rouge, vert et bleu 'écran d'ordinateur' primaire, sont disposés autour "
+"d'un cercle. Le vert est l'opposé du magenta."
 
 #: ../po/tmp/preferenceswindow.glade.h:91
 #, fuzzy
@@ -3867,12 +3866,13 @@ msgstr "Charger le croquis suivant, remplace l'image actuelle"
 #: ../po/tmp/resources.xml.h:24
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Recover File from an Automated Backup…"
-msgstr ""
+msgstr "Récupére les fichiers d'une sauvegarde automatique…"
 
 #: ../po/tmp/resources.xml.h:25
 msgctxt "Accel Editor (descriptions)"
 msgid "Try to save and resume interrupted unsaved work."
 msgstr ""
+"Essaye de sauvegarder et de reprendre le travail interrompu non sauvegardé."
 
 #: ../po/tmp/resources.xml.h:26
 #, fuzzy
@@ -4891,7 +4891,7 @@ msgstr "Copier le fond vers le carnet de croquis"
 msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Copy the background image from the working document into the Scratchpad."
-msgstr "Copier l'image de fond du document en cours dans le carnet de croquis"
+msgstr "Copier l'image de fond du document en cours dans le carnet de croquis."
 
 #: ../po/tmp/resources.xml.h:204
 msgctxt "Menu (labels)"
@@ -4961,7 +4961,7 @@ msgstr "Plus de Brosses…"
 #: ../po/tmp/resources.xml.h:216
 msgctxt "Accel Editor (descriptions)"
 msgid "Download brushpacks from the MyPaint wiki."
-msgstr "Télécharger des packs de brosses sur le wiki MyPaint"
+msgstr "Télécharger des packs de brosses sur le wiki MyPaint."
 
 #: ../po/tmp/resources.xml.h:217
 #, fuzzy
@@ -5095,7 +5095,7 @@ msgstr "Préférences"
 #: ../po/tmp/resources.xml.h:241
 msgctxt "Accel Editor (descriptions)"
 msgid "Edit MyPaint’s global settings."
-msgstr "Paramètres généraux"
+msgstr "Paramètres généraux."
 
 #: ../po/tmp/resources.xml.h:242
 #, fuzzy
@@ -5150,7 +5150,8 @@ msgstr "Liste des Calques"
 #: ../po/tmp/resources.xml.h:251
 msgctxt "Accel Editor (descriptions)"
 msgid "Toggle the Layers dockpanel (arrange layers, or assign modes)."
-msgstr "Basculer le menu des calques (disposition, ou mode de fusion)"
+msgstr ""
+"Activer/Désactiver le menu des calques (disposition, ou mode de fusion)."
 
 #: ../po/tmp/resources.xml.h:252
 msgctxt "Menu→Layers (labels), Accel Editor (labels)"
@@ -5160,7 +5161,7 @@ msgstr "Afficher la fenêtre des Calques"
 #: ../po/tmp/resources.xml.h:253
 msgctxt "Accel Editor (descriptions)"
 msgid "Reveal the Layers dockpanel (arrange layers, or assign modes)."
-msgstr "Afficher le menu des calques"
+msgstr "Afficher le menu des calques (disposition, ou mode de fusion)."
 
 #: ../po/tmp/resources.xml.h:254
 #, fuzzy
