@@ -84,7 +84,8 @@ class CanvasController (object):
         self.tdw = tdw     #: the TiledDrawWidget being controlled.
         self.modes = gui.mode.ModeStack(self)  #: stack of delegates
         self.modes.default_mode_class = gui.freehand.FreehandMode
-
+        self.modes.default_mode_kwargs = {"abrupt_start": True}
+    
     def init_pointer_events(self):
         """Establish TDW event listeners for pointer button presses & drags.
         """
@@ -1903,7 +1904,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             if issubclass(mode_class, gui.mode.OneshotDragMode):
                 mode = mode_class(ignore_modifiers=True, temporary_activation=False)
             else:
-                mode = mode_class(ignore_modifiers=True, abrupt_start=True)
+                mode = mode_class(ignore_modifiers=True)
             if flip_action.keydown:
                 flip_action.__pressed = True
                 # Change what happens on a key-up after a short while.
