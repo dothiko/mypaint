@@ -432,7 +432,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             result = True
 
         # Stablize
-        self._stabilize_reset()
+       #self._stabilize_reset()
 
         
         return (super(FreehandMode, self).button_release_cb(tdw, event)
@@ -644,12 +644,21 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             drawstate.motion_processing_cbid = cbid
 
     def key_press_cb(self, win, tdw, event):
-        if event.keyval == keysyms.d and not self._stabilized:
-            self._stabilize_init()
+       #if event.keyval == keysyms.d and not self._stabilized:
+       #    self._stabilize_init()
+        pass
 
     def key_release_cb(self, win, tdw, event):
-        if self._stabilized:
-            self._stabilize_reset()
+        pass
+       #if self._stabilized:
+       #    self._stabilize_reset()
+        if event.keyval == keysyms.d:
+            if not self._stabilized:
+                print 'init!'
+                self._stabilize_init()
+            else:
+                print 'reset!'
+                self._stabilize_reset()
 
     ## Stabilize related
     def _stabilize_init(self):
