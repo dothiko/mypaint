@@ -88,7 +88,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         return _(u"Inking")
 
     def get_usage(self):
-        return _(u"Draw, and then adjust smooth lines")
+        return _(u"Draw, and then adjust smooth lines.")
 
     @property
     def inactive_cursor(self):

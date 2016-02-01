@@ -1,9 +1,8 @@
-## MyPaint
+## my custom build of MyPaint
 
-[![Translation Status](https://hosted.weblate.org/widgets/mypaint/mypaint/svg-badge.svg)](https://hosted.weblate.org/engage/mypaint/?utm_source=widget)
-[![Build Status](https://travis-ci.org/mypaint/mypaint.png?branch=master)](https://travis-ci.org/mypaint/mypaint)
-
-MyPaint is a simple drawing and painting program
+About original Mypaint
+----
+Original MyPaint is a simple drawing and painting program
 that works well with Wacom-style graphics tablets.
 Its main features are a highly configurable brush engine, speed,
 and a fullscreen mode which allows artists to
@@ -27,57 +26,26 @@ It makes use of the GTK toolkit, version 3.x.
 The source is maintained using [git](http://www.git-scm.com),
 primarily on Github.
 
-### Getting started
+About my custom build
+----
+This is heavily customized version of the program "MyPaint",
+which is explained above.
+Most customized codes are adhoc, still in testing stage by myself.
 
-MyPaint has an associated library,
-[libmypaint](https://github.com/mypaint/libmypaint),
-which is distributed as a sister project on Github.
-If you fetch the application's source with `git`,
-this dependency will be fetched automatically
-by the commands below as a relative
-[submodule](http://www.git-scm.com/book/en/Git-Tools-Submodules).
-There are several third-party dependencies too:
+Customized features
+----
 
-- scons (>= 2.1.0)
-- pygobject
-- gtk3 (>= 3.10)
-- python (= 2.7) (OSX: python >= 2.7.4)
-- swig
-- numpy
-- pycairo (>= 1.4)
-- libpng
-- lcms2
-- libjson-c (>= 0.11, but the older "libjson" name at ~0.10 will work too)
-- librsvg
+#### save incremental save
+this menu action will add version number to filename automatically and save it.
+if filename has a version number already, such as 'foobar_001.ora',
+this increment it and save as 'foobar_002.ora'
 
-Recommended: a pressure sensitive input device (graphic tablet)
+#### stabilizer
+when this stabilizer button (placed right side of eraser) turned on,
+strokes are much more heavily stabilized 
+than set brush preset "Smooth" value to maximum.
+this would be quite useful when I want to draw extreamly slow and weak stroke.
 
-### Build and Install
-
-All systems differ.
-The basic build documentation is divided by
-broad class of operating system and software distribution.
-
-* [README\_LINUX.md (chiefly Debian-based systems)](README_LINUX.md)
-* [README\_WINDOWS.md (native WIN32/WIN64 using MSYS2)](README_WINDOWS.md)
-* [README\_OSX.md (macports - needs review)](README_OSX.md)
-
-### Contributing
-
-The MyPaint project welcomes and encourages participation by everyone.
-We want our community to be skilled and diverse,
-and we want it to be a community that anybody can feel good about joining.
-No matter who you are or what your background is, we welcome you.
-
-Please note that MyPaint is released with a
-[Contributor Code of Conduct](CODE_OF_CONDUCT.md).
-By participating in this project you agree to abide by its terms.
-
-Please see the file [CONTRIBUTING.md](CONTRIBUTING.md)
-for details of how you can begin contributing.
-
-### Legal info
-
-MyPaint is Free/Libre/Open Source software.
-See [Licenses.md](Licenses.md) for a summary of its licensing.
-A list of contributors can be found in the about dialog.
+#### inktool nodes auto-culling
+when inktool capture phase end,auto-culling is executed,
+to avoid manipulate too many nodes.
