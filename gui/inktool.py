@@ -126,6 +126,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     _OPTIONS_PRESENTER = None   #: Options presenter singleton
 
+    # Pressure oncanvas edit settings
+    _PRESSURE_MOD_MASK = Gdk.ModifierType.SHIFT_MASK # Pressure key modifier
+    _PRESSURE_WHEEL_STEP = 0.025 # pressure modifying step,for mouse wheel
+
     ## Initialization & lifecycle methods
 
     def __init__(self, **kwargs):
@@ -246,8 +250,15 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._reset_adjust_data()
         self.phase = _Phase.CAPTURE
 
-    ## Raw event handling (prelight & zone selection in adjust phase)
+    def _check_modifing_pressure(self,event_state,button_flag):
+        """ Check whether modifing pressure or not """
+        return (self.current_node_index is not None and 
+                button_flag and
+                self.phase == _Phase.ADJUST and 
+                event_state & self.__class__._PRESSURE_MOD_MASK == 
+                self.__class__._PRESSURE_MOD_MASK)
 
+    ## Raw event handling (prelight & zone selection in adjust phase)
     def button_press_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
         current_layer = tdw.doc._layers.current
@@ -256,6 +267,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._update_zone_and_target(tdw, event.x, event.y)
         self._update_current_node_index()
         if self.phase == _Phase.ADJUST:
+
+            if self._check_modifing_pressure(event.state,event.button==1):
+                self._pressed_pressure = \
+                        self.nodes[self.current_node_index].pressure
+                self._pressed_x,self._pressed_y = \
+                        tdw.display_to_model(event.x,event.y)
+                return False
+ 
             if self.zone in (_EditZone.REJECT_BUTTON,
                              _EditZone.ACCEPT_BUTTON):
                 button = event.button
@@ -307,7 +326,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # (otherwise fall through and end any current drag)
         elif self.phase == _Phase.CAPTURE:
             # XXX Not sure what to do here: see above
-            pass
+            # Update options_presenter when capture phase end
+            self.options_presenter.target = (self, None)
         else:
             raise NotImplementedError("Unrecognized zone %r", self.zone)
         # Update workaround state for evdev dropouts
@@ -315,6 +335,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_pressure = 0.0
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
+        # Initialize pressed position as invalid for hold-and-modify
+        self._pressed_x = None
+        self._pressed_y = None
         # Supercall: stop current drag
         return super(InkingMode, self).button_release_cb(tdw, event)
 
@@ -323,7 +346,18 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
-        self._update_zone_and_target(tdw, event.x, event.y)
+
+        if self._check_modifing_pressure(
+                event.state,
+                event.state & Gdk.ModifierType.BUTTON1_MASK):
+            self._adjust_pressure_with_motion(
+                tdw,
+                event.x, event.y,
+                event.state & Gdk.ModifierType.CONTROL_MASK)
+            return False
+        else:
+            self._update_zone_and_target(tdw, event.x, event.y)
+
         return super(InkingMode, self).motion_notify_cb(tdw, event)
 
     def _update_current_node_index(self):
@@ -602,6 +636,22 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
+    def scroll_cb(self, tdw, event):
+        """Handles scroll-wheel events, to adjust pressure."""
+        if self.target_node_index is not None:
+            new_pressure = self.nodes[self.target_node_index].pressure
+
+            if event.direction == Gdk.SCROLL_UP:
+                new_pressure += self.__class__._PRESSURE_WHEEL_STEP
+            elif event.direction == Gdk.SCROLL_DOWN:
+                new_pressure -= self.__class__._PRESSURE_WHEEL_STEP
+
+            self.update_node(self.target_node_index, pressure=new_pressure)
+            self.options_presenter.target = (self, self.target_node_index)
+        else:
+            return super(InkingMode, self).scroll_cb(tdw, event)
+
+
     ## Interrogating events
 
     def _get_event_data(self, tdw, event):
@@ -751,6 +801,44 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_redraw_curve()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
+
+
+    def _adjust_pressure_with_motion(self, tdw, x, y, affect_nearby_nodes):
+        """Adjust pressure of current selected node,
+        and it may affects nearby nodes"""
+        cn = self.nodes[self.current_node_index]
+        x, y = tdw.display_to_model(x, y)
+        cx = x - self._pressed_x
+        cy = y - self._pressed_y
+        cs = math.sqrt(cx * cx + cy * cy)
+        if cs > 0.0:
+            nx = cx / cs
+            ny = cy / cs
+            angle = math.acos(ny)  # Getting angle
+            diff = cs / 128.0  # 128.0 is not theorical number,it's my feeling
+            if math.pi / 4 < angle < math.pi / 4 + math.pi / 2:
+                if nx < 0.0:
+                    diff *= -1
+            elif ny < 0.0:
+                diff *= -1
+
+            self.update_node(self.current_node_index,
+                             pressure=cn.pressure + diff)
+
+            if affect_nearby_nodes:
+                diff /= 2
+                idx = self.current_node_index - 1
+                if idx > 0:
+                    self.update_node(idx,
+                                     pressure=self.nodes[idx].pressure + diff)
+
+                idx = self.current_node_index + 1
+                if idx < len(self.nodes):
+                    self.update_node(idx,
+                                     pressure=self.nodes[idx].pressure + diff)
+
+            self._pressed_x = x
+            self._pressed_y = y
 
 class Overlay (gui.overlays.Overlay):
     """Overlay for an InkingMode's adjustable points"""
