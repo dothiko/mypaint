@@ -1,6 +1,6 @@
-## my custom build of MyPaint
+## my_build branch : my custom build of MyPaint
 
-About original Mypaint
+About original Mypaint : オリジナルのMypaintについて
 ----
 Original MyPaint is a simple drawing and painting program
 that works well with Wacom-style graphics tablets.
@@ -26,26 +26,39 @@ It makes use of the GTK toolkit, version 3.x.
 The source is maintained using [git](http://www.git-scm.com),
 primarily on Github.
 
-About my custom build
+About this my custom build : このカスタムビルドについて
 ----
-This is heavily customized version of the program "MyPaint",
-which is explained above.
+This is heavily customized version of the program "MyPaint".
 Most customized codes are adhoc, still in testing stage by myself.
+I also use this branch as my personal backup. (because private repository needs some money...)
 
-Customized features
+これはかなりカスタマイズされたバージョンのMyPaintです。
+ほとんどのカスタマイズコードはその場しのぎのもので、私自身によるテストを行っている状況です。
+このブランチは個人的なバックアップ用途としても使っています。（プライベートリポジトリはお金がかかるので…）
+
+Customized features : カスタム機能について
 ----
 
-#### save incremental save
-this menu action will add version number to filename automatically and save it.
-if filename has a version number already, such as 'foobar_001.ora',
-this increment it and save as 'foobar_002.ora'
+#### incremental version save : バージョンセーブ機能
+This menu action will add version number to filename automatically and save it.
+If filename has a version number already, such as 'foobar_002.ora',
+this increment it and save as 'foobar_003.ora'
 
-#### stabilizer
-when this stabilizer button (placed right side of eraser) turned on,
+このメニュー機能はファイル名に自動でバージョン番号を付けてセーブします。
+
+既にバージョン番号が付いている場合には、それに従います。
+たとえばfoobar_002.oraだったら、foobar_003.oraとなります。
+
+#### stabilizer : 強い手ブレ補正
+When this stabilizer toggle button (placed right side of eraser) turned on,
 strokes are much more heavily stabilized 
 than set brush preset "Smooth" value to maximum.
-this would be quite useful when I want to draw extreamly slow and weak stroke.
+This would be quite useful when I want to draw extreamly slow and weak stroke.
 
-#### inktool nodes auto-culling
-when inktool capture phase end,auto-culling is executed,
-to avoid manipulate too many nodes.
+消しゴムブラシボタンの横に新設されたトグルボタンを押すことで、
+通常の手ブレ補正を最大にするより強い手ブレ補正がかかります。
+
+#### inktool nodes auto-culling : インクツールの自動間引き
+With this feature,when inktool capture phase end,then auto-culling is executed.
+
+インクツールのキャプチャフェイズが終了すると、自動で間引きが実行されます。
