@@ -1,4 +1,9 @@
-## MyPaint
+## About This branch
+
+this is for testing/brainstorming branch for oncanvas inktool node pressure editing.
+so this branch is not intended to pull request.
+
+## About original MyPaint
 
 [![Translation Status](https://hosted.weblate.org/widgets/mypaint/mypaint/svg-badge.svg)](https://hosted.weblate.org/engage/mypaint/?utm_source=widget)
 [![Build Status](https://travis-ci.org/mypaint/mypaint.png?branch=master)](https://travis-ci.org/mypaint/mypaint)
