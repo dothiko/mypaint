@@ -127,8 +127,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     _OPTIONS_PRESENTER = None   #: Options presenter singleton
 
-    # Pressure oncanvas edit settings
-    _PRESSURE_MOD_MASK = Gdk.ModifierType.SHIFT_MASK # Pressure key modifier
+
+    ## Pressure oncanvas edit settings
+
+    # Pressure editing key modifiers,single node and with nearby nodes.
+    # these can be hard-coded,but we might need some customizability later.
+    _PRESSURE_MOD_MASK = Gdk.ModifierType.SHIFT_MASK 
+    _PRESSURE_NEARBY_MOD_MASK = Gdk.ModifierType.CONTROL_MASK
+
     _PRESSURE_WHEEL_STEP = 0.025 # pressure modifying step,for mouse wheel
 
     ## Initialization & lifecycle methods
@@ -289,6 +295,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # XXX Click to add a 1st & 2nd (=last) node only?
             # XXX  but needs to allow a drag after the 1st one's placed.
             pass
+        elif self.phase == _Phase.ADJUST_PRESSURE:
+            # XXX Not sure what to do here.
+            pass
         else:
             raise NotImplementedError("Unrecognized zone %r", self.zone)
         # Update workaround state for evdev dropouts
@@ -321,8 +330,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     return False
             # (otherwise fall through and end any current drag)
         elif self.phase == _Phase.ADJUST_PRESSURE:
-            # Return to ADJUST phase
-            self.phase = _Phase.ADJUST
+            self.options_presenter.target = (self, self.current_node_index)
         elif self.phase == _Phase.CAPTURE:
             # Update options_presenter when capture phase end
             self.options_presenter.target = (self, None)
@@ -369,43 +377,50 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """Update the zone and target node under a cursor position"""
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone.EMPTY_CANVAS
-        if self.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE) and not self.in_drag:
-            new_target_node_index = None
-            # Test buttons for hits
-            overlay = self._ensure_overlay_for_tdw(tdw)
-            hit_dist = gui.style.FLOATING_BUTTON_RADIUS
-            button_info = [
-                (_EditZone.ACCEPT_BUTTON, overlay.accept_button_pos),
-                (_EditZone.REJECT_BUTTON, overlay.reject_button_pos),
-            ]
-            for btn_zone, btn_pos in button_info:
-                if btn_pos is None:
-                    continue
-                btn_x, btn_y = btn_pos
-                d = math.hypot(btn_x - x, btn_y - y)
-                if d <= hit_dist:
-                    new_target_node_index = None
-                    new_zone = btn_zone
-                    break
-            # Test nodes for a hit, in reverse draw order
-            if new_zone == _EditZone.EMPTY_CANVAS:
-                hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 12
+       #if self.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE) and not self.in_drag:
+        if not self.in_drag:
+            if self.phase == _Phase.ADJUST:
                 new_target_node_index = None
-                for i, node in reversed(list(enumerate(self.nodes))):
-                    node_x, node_y = tdw.model_to_display(node.x, node.y)
-                    d = math.hypot(node_x - x, node_y - y)
-                    if d > hit_dist:
+                # Test buttons for hits
+                overlay = self._ensure_overlay_for_tdw(tdw)
+                hit_dist = gui.style.FLOATING_BUTTON_RADIUS
+                button_info = [
+                    (_EditZone.ACCEPT_BUTTON, overlay.accept_button_pos),
+                    (_EditZone.REJECT_BUTTON, overlay.reject_button_pos),
+                ]
+                for btn_zone, btn_pos in button_info:
+                    if btn_pos is None:
                         continue
-                    new_target_node_index = i
-                    new_zone = _EditZone.CONTROL_NODE
-                    break
-            # Update the prelit node, and draw changes to it
-            if new_target_node_index != self.target_node_index:
-                if self.target_node_index is not None:
-                    self._queue_draw_node(self.target_node_index)
-                self.target_node_index = new_target_node_index
-                if self.target_node_index is not None:
-                    self._queue_draw_node(self.target_node_index)
+                    btn_x, btn_y = btn_pos
+                    d = math.hypot(btn_x - x, btn_y - y)
+                    if d <= hit_dist:
+                        new_target_node_index = None
+                        new_zone = btn_zone
+                        break
+                # Test nodes for a hit, in reverse draw order
+                if new_zone == _EditZone.EMPTY_CANVAS:
+                    hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 12
+                    new_target_node_index = None
+                    for i, node in reversed(list(enumerate(self.nodes))):
+                        node_x, node_y = tdw.model_to_display(node.x, node.y)
+                        d = math.hypot(node_x - x, node_y - y)
+                        if d > hit_dist:
+                            continue
+                        new_target_node_index = i
+                        new_zone = _EditZone.CONTROL_NODE
+                        break
+                # Update the prelit node, and draw changes to it
+                if new_target_node_index != self.target_node_index:
+                    if self.target_node_index is not None:
+                        self._queue_draw_node(self.target_node_index)
+                    self.target_node_index = new_target_node_index
+                    if self.target_node_index is not None:
+                        self._queue_draw_node(self.target_node_index)
+
+        elif self.phase == _Phase.ADJUST_PRESSURE:
+            # Always control node,in pressure editing.
+            new_zone = _EditZone.CONTROL_NODE 
+
         # Update the zone, and assume any change implies a button state
         # change as well (for now...)
         if self.zone != new_zone:
@@ -560,8 +575,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 node = self.nodes[self.target_node_index]
                 self._dragged_node_start_pos = (node.x, node.y)
         elif self.phase == _Phase.ADJUST_PRESSURE:
-            if self.target_node_index is not None:
-                node = self.nodes[self.target_node_index]
+            if self.current_node_index is not None:
+                node = self.nodes[self.current_node_index]
                 self._pressed_pressure = node.pressure
                 self._pressed_x, self._pressed_y = \
                         tdw.display_to_model(event.x, event.y)
@@ -609,11 +624,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 x, y = tdw.display_to_model(disp_x, disp_y)
                 self.update_node(self.target_node_index, x=x, y=y)
         elif self.phase == _Phase.ADJUST_PRESSURE:
-            if self._pressed_pressure >= 0.0:
+            if self._pressed_pressure is not None:
                 self._adjust_pressure_with_motion(
                     tdw,
                     event.x, event.y,
-                    event.state & Gdk.ModifierType.CONTROL_MASK)
+                    event.state & self.__class__._PRESSURE_NEARBY_MOD_MASK)
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -642,6 +657,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._queue_redraw_curve()
             self._queue_draw_buttons()
         elif self.phase == _Phase.ADJUST_PRESSURE:
+            # Return to ADJUST phase.
+            # simple but very important,to ensure entering normal editing.
+            self.phase = _Phase.ADJUST
             self._pressed_pressure = None
             self._queue_redraw_curve()
             self._queue_draw_buttons()
