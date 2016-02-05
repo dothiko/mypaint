@@ -1,4 +1,9 @@
-## my_build branch : my custom build of MyPaint
+## About This branch
+
+this is for testing/brainstorming branch for oncanvas inktool node pressure editing.
+so this branch is not intended to pull request.
+
+## About original MyPaint
 
 About original Mypaint : オリジナルのMypaintについて
 ----

@@ -339,7 +339,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # Autocull feature executed if enabled.
             # inside this method, it checked whether enabled or disabled.
             self._auto_cull_nodes() 
-
             # Update options_presenter when capture phase end
             self.options_presenter.target = (self, None)
         else:
@@ -676,13 +675,17 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def scroll_cb(self, tdw, event):
         """Handles scroll-wheel events, to adjust pressure."""
-        if self.target_node_index is not None:
+        if self.phase == _Phase.ADJUST and self.target_node_index is not None:
             new_pressure = self.nodes[self.target_node_index].pressure
 
             if event.direction == Gdk.SCROLL_UP:
                 new_pressure += self.__class__._PRESSURE_WHEEL_STEP
             elif event.direction == Gdk.SCROLL_DOWN:
                 new_pressure -= self.__class__._PRESSURE_WHEEL_STEP
+            elif event.direction == Gdk.SCROLL_SMOOTH:
+                new_pressure += (self.__class__._PRESSURE_WHEEL_STEP * event.delta_y)
+            else:
+                raise NotImplementedError("Unknown scroll direction %s" % str(event.direction))
 
             self.update_node(self.target_node_index, pressure=new_pressure)
             self.options_presenter.target = (self, self.target_node_index)
@@ -999,7 +1002,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     ## Auto cull feature
     def _auto_cull_nodes(self):
         max = self.doc.app.preferences.get('inktool.autocull', 3)
-        if max > 3:
+        if max > 3 and len(self.nodes) > max:
             # To ensure redraw entire overlay,avoiding glitches.
             self._queue_redraw_curve()
             self._queue_redraw_all_nodes()
@@ -1033,6 +1036,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
             while len(self.nodes) > max:
                 cull_shortest_node()
+
+            if self.current_node_index > len(self.nodes) - 1:
+                self.current_node_index = len(self.nodes) - 1
+
+            if self.target_node_index > len(self.nodes) - 1:
+                self.target_node_index = len(self.nodes) - 1
 
             # Redraws for the changed on-canvas elements
             self._queue_redraw_curve()
