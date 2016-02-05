@@ -137,6 +137,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     _PRESSURE_WHEEL_STEP = 0.025 # pressure modifying step,for mouse wheel
 
+    ## autocull setting is set at application.preference['inktool.autocull']
+
+
     ## Initialization & lifecycle methods
 
     def __init__(self, **kwargs):
@@ -163,6 +166,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_ytilt = 0.0
 
         self._pressed_pressure = None
+
 
     def _reset_nodes(self):
         self.nodes = []  # nodes that met the distance+time criteria
@@ -332,6 +336,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         elif self.phase == _Phase.ADJUST_PRESSURE:
             self.options_presenter.target = (self, self.current_node_index)
         elif self.phase == _Phase.CAPTURE:
+            # Autocull feature executed if enabled.
+            # inside this method, it checked whether enabled or disabled.
+            self._auto_cull_nodes() 
             # Update options_presenter when capture phase end
             self.options_presenter.target = (self, None)
         else:
@@ -668,13 +675,17 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def scroll_cb(self, tdw, event):
         """Handles scroll-wheel events, to adjust pressure."""
-        if self.target_node_index is not None:
+        if self.phase == _Phase.ADJUST and self.target_node_index is not None:
             new_pressure = self.nodes[self.target_node_index].pressure
 
             if event.direction == Gdk.SCROLL_UP:
                 new_pressure += self.__class__._PRESSURE_WHEEL_STEP
             elif event.direction == Gdk.SCROLL_DOWN:
                 new_pressure -= self.__class__._PRESSURE_WHEEL_STEP
+            elif event.direction == Gdk.SCROLL_SMOOTH:
+                new_pressure += (self.__class__._PRESSURE_WHEEL_STEP * event.delta_y)
+            else:
+                raise NotImplementedError("Unknown scroll direction %s" % str(event.direction))
 
             self.update_node(self.target_node_index, pressure=new_pressure)
             self.options_presenter.target = (self, self.target_node_index)
@@ -987,6 +998,49 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def cull_nodes(self):
         """User interface method of cull nodes."""
         self._nodes_deletion_operation(self._cull_nodes, ())
+
+    ## Auto cull feature
+    def _auto_cull_nodes(self):
+        max = self.doc.app.preferences.get('inktool.autocull', 3)
+        if max > 3:
+            # To ensure redraw entire overlay,avoiding glitches.
+            self._queue_redraw_curve()
+            self._queue_redraw_all_nodes()
+            self._queue_draw_buttons()
+
+           #while max*2 < len(self.nodes):
+           #    self.cull_nodes()
+
+            def cull_shortest_node():
+                least_length = -1.0
+                least_idx = -1
+                idx = 1
+                pn = self.nodes[idx - 1]
+                cn = self.nodes[idx]
+                while idx < len(self.nodes) - 1:
+                    nn = self.nodes[idx + 1]
+                    # Get vector length  
+                    # pl = length of between prev node - current node 
+                    # nl = length of between current node - next node 
+                    pl = math.sqrt((cn.x - pn.x)**2 + (cn.y - pn.y)**2)
+                    nl = math.sqrt((nn.x - cn.x)**2 + (nn.y - cn.y)**2)
+                    cur_length = pl + nl
+                    if least_length > cur_length or least_length == -1.0:
+                        least_idx = idx
+                        least_length = cur_length
+                    idx += 1
+                    pn = cn
+                    cn = nn
+                assert least_idx != -1
+                del self.nodes[least_idx]
+
+            while len(self.nodes) > max:
+                cull_shortest_node()
+
+            # Redraws for the changed on-canvas elements
+            self._queue_redraw_curve()
+            self._queue_redraw_all_nodes()
+            self._queue_draw_buttons()
 
 
 class Overlay (gui.overlays.Overlay):
@@ -1304,6 +1358,7 @@ class OptionsPresenter (object):
         self._cull_button = None
         self._updating_ui = False
         self._target = (None, None)
+        self._autocull_scale = None
 
     def _ensure_ui_populated(self):
         if self._options_grid is not None:
@@ -1330,6 +1385,10 @@ class OptionsPresenter (object):
         self._optimize_button.set_sensitive(False)
         self._cull_button = builder.get_object("cull_points_button")
         self._cull_button.set_sensitive(False)
+        self._autocull_adj = builder.get_object("autocull_adj")
+        self._autocull_scale = builder.get_object("autocull_scale")
+        self._autocull_adj.set_value(self._app.preferences.get(
+            "inktool.autocull", 3))
 
     @property
     def widget(self):
@@ -1385,8 +1444,10 @@ class OptionsPresenter (object):
                 self._point_values_grid.set_sensitive(False)
             self._insert_button.set_sensitive(inkmode.can_insert_node(cn_idx))
             self._delete_button.set_sensitive(inkmode.can_delete_node(cn_idx))
-            self._optimize_button.set_sensitive(len(inkmode.nodes)>3)
-            self._cull_button.set_sensitive(len(inkmode.nodes)>2)
+            self._optimize_button.set_sensitive(len(inkmode.nodes) > 3)
+            self._cull_button.set_sensitive(len(inkmode.nodes) > 2)
+            self._autocull_adj.set_value(self._app.preferences.get(
+                "inktool.autocull", 3))
         finally:
             self._updating_ui = False
 
@@ -1435,3 +1496,13 @@ class OptionsPresenter (object):
         inkmode, node_idx = self.target
         if len(inkmode.nodes) > 2:
             inkmode.cull_nodes()
+
+    def _autocull_adj_value_changed_cb(self, adj):
+        if self._updating_ui:
+            return
+        self._app.preferences['inktool.autocull'] = adj.get_value()
+
+    def _autocull_format_value_cb(self, scale, value):
+        if value <= 3:
+            return 'no'
+        return str(int(value))

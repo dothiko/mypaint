@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.16.1 -->
+<!-- Generated with glade 3.18.3 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
+  <object class="GtkAdjustment" id="autocull_adj">
+    <property name="lower">3</property>
+    <property name="upper">32</property>
+    <property name="value">3</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">1</property>
+    <signal name="value-changed" handler="_autocull_adj_value_changed_cb" swapped="no"/>
+  </object>
   <object class="GtkAdjustment" id="dtime_adj">
     <property name="upper">2</property>
     <property name="step_increment">0.10000000000000001</property>
@@ -50,8 +58,6 @@
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">0</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -71,8 +77,6 @@
           <packing>
             <property name="left_attach">1</property>
             <property name="top_attach">0</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -91,8 +95,6 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">1</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -111,8 +113,6 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">2</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -132,8 +132,6 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">1</property>
             <property name="top_attach">1</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -155,8 +153,6 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">1</property>
             <property name="top_attach">2</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -173,8 +169,6 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">3</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -195,8 +189,6 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">1</property>
             <property name="top_attach">3</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -212,7 +204,6 @@ Negative values mean leftwards tilts.</property>
             <property name="left_attach">0</property>
             <property name="top_attach">5</property>
             <property name="width">2</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -227,26 +218,22 @@ Negative values mean leftwards tilts.</property>
             <property name="left_attach">0</property>
             <property name="top_attach">4</property>
             <property name="width">2</property>
-            <property name="height">1</property>
           </packing>
         </child>
       </object>
       <packing>
         <property name="left_attach">0</property>
         <property name="top_attach">0</property>
-        <property name="width">1</property>
-        <property name="height">1</property>
       </packing>
     </child>
     <child>
       <object class="GtkGrid" id="points_editing_grid">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
-        <property name="margin_left">6</property>
-        <property name="margin_right">6</property>
+        <property name="margin_left">4</property>
+        <property name="margin_right">4</property>
         <property name="margin_bottom">6</property>
         <property name="row_homogeneous">True</property>
-        <property name="column_homogeneous">True</property>
         <child>
           <object class="GtkButton" id="simplify_points_button">
             <property name="label" translatable="yes">Simplify Points</property>
@@ -259,8 +246,7 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">0</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
+            <property name="width">2</property>
           </packing>
         </child>
         <child>
@@ -275,16 +261,43 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">1</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
+            <property name="width">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="autocull_label">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="label" translatable="yes">Auto cull:</property>
+          </object>
+          <packing>
+            <property name="left_attach">0</property>
+            <property name="top_attach">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkScale" id="autocull_scale">
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="tooltip_text" translatable="yes">maximum points count,after auto-culling executed.</property>
+            <property name="valign">baseline</property>
+            <property name="hexpand">True</property>
+            <property name="adjustment">autocull_adj</property>
+            <property name="restrict_to_fill_level">False</property>
+            <property name="fill_level">0</property>
+            <property name="round_digits">1</property>
+            <property name="value_pos">right</property>
+            <signal name="format-value" handler="_autocull_format_value_cb" swapped="no"/>
+          </object>
+          <packing>
+            <property name="left_attach">1</property>
+            <property name="top_attach">2</property>
           </packing>
         </child>
       </object>
       <packing>
         <property name="left_attach">0</property>
         <property name="top_attach">1</property>
-        <property name="width">1</property>
-        <property name="height">1</property>
       </packing>
     </child>
   </object>
