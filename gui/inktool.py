@@ -1002,7 +1002,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     ## Auto cull feature
     def _auto_cull_nodes(self):
         max = self.doc.app.preferences.get('inktool.autocull', 3)
-        if max > 3:
+        if max > 3 and len(self.nodes) > max:
             # To ensure redraw entire overlay,avoiding glitches.
             self._queue_redraw_curve()
             self._queue_redraw_all_nodes()
@@ -1036,6 +1036,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
             while len(self.nodes) > max:
                 cull_shortest_node()
+
+            if self.current_node_index > len(self.nodes) - 1:
+                self.current_node_index = len(self.nodes) - 1
+
+            if self.target_node_index > len(self.nodes) - 1:
+                self.target_node_index = len(self.nodes) - 1
 
             # Redraws for the changed on-canvas elements
             self._queue_redraw_curve()
