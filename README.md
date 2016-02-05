@@ -62,3 +62,14 @@ This would be quite useful when I want to draw extreamly slow and weak stroke.
 With this feature,when inktool capture phase end,then auto-culling is executed.
 
 インクツールのキャプチャフェイズが終了すると、自動で間引きが実行されます。
+
+##### currently impremented auto culling algorithm
+search the entire stroke (nodes) and find shortest section,and delete it.
+and repeat it until nodes count equal to 'Autocull' scale widget count.
+
+If that scale widget set to minimum(leftmost),it shows 'no' and autoculling disabled.
+
+現在の実装では、全ノードをスキャンして最も短い区間を探し、その中間のノードを削除します。
+ノードがAutocullスケールウィジェットで設定された個数になるまで、その削除が繰り返されます。
+
+Autocullスケールを左端に設定すると、表示が「no」になり自動間引きは使用しない状態になります。
