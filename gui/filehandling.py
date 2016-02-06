@@ -991,11 +991,18 @@ class FileHandler (object):
         """
         if not rfinfo:
             return False
-        apps = rfinfo.applications
-        if not (apps and "mypaint" in apps):
-            return False
-        return self._uri_is_loadable(rfinfo.uri)
-        # Keep this test in sync with _update_recent_items().
+       #>>>> original
+       #apps = rfinfo.applications
+       #if not (apps and "mypaint" in apps):
+       #    return False
+       #return self._uri_is_loadable(rfinfo.uri)
+       ## Keep this test in sync with _update_recent_items().
+       #<<<< original
+        fnamebase, ext = os.path.splitext(rfinfo.display_name)
+        ext = ext.lower()
+        if ext in self.ext2saveformat:
+            return self._uri_is_loadable(rfinfo.uri)
+        return False
 
     def _uri_is_loadable(self, file_uri):
         """True if a URI is valid to be loaded by MyPaint."""

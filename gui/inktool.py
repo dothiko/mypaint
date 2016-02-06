@@ -336,9 +336,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         elif self.phase == _Phase.ADJUST_PRESSURE:
             self.options_presenter.target = (self, self.current_node_index)
         elif self.phase == _Phase.CAPTURE:
-            # Autocull feature executed if enabled.
-            # inside this method, it checked whether enabled or disabled.
-            self._auto_cull_nodes() 
             # Update options_presenter when capture phase end
             self.options_presenter.target = (self, None)
         else:
@@ -649,6 +646,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # TODO: distance from the end?
             if self.nodes[-1] is not node:
                 self.nodes.append(node)
+
+            # Autocull feature executed if enabled.
+            # inside this method, it checked whether enabled or disabled.
+            self._auto_cull_nodes() 
+
             self._reset_capture_data()
             self._reset_adjust_data()
             if len(self.nodes) > 1:
@@ -999,17 +1001,17 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """User interface method of cull nodes."""
         self._nodes_deletion_operation(self._cull_nodes, ())
 
+
     ## Auto cull feature
     def _auto_cull_nodes(self):
         max = self.doc.app.preferences.get('inktool.autocull', 3)
         if max > 3 and len(self.nodes) > max:
-            # To ensure redraw entire overlay,avoiding glitches.
+            # Call this 3 lines at here,
+            # to ensure redraw entire overlay,avoiding glitches.
             self._queue_redraw_curve()
             self._queue_redraw_all_nodes()
             self._queue_draw_buttons()
 
-           #while max*2 < len(self.nodes):
-           #    self.cull_nodes()
 
             def cull_shortest_node():
                 least_length = -1.0
@@ -1025,6 +1027,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     pl = math.sqrt((cn.x - pn.x)**2 + (cn.y - pn.y)**2)
                     nl = math.sqrt((nn.x - cn.x)**2 + (nn.y - cn.y)**2)
                     cur_length = pl + nl
+
                     if least_length > cur_length or least_length == -1.0:
                         least_idx = idx
                         least_length = cur_length
@@ -1032,10 +1035,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     pn = cn
                     cn = nn
                 assert least_idx != -1
+                print "!from 1 to %d,%d deleted (length:%08f)" % (len(self.nodes)-1,least_idx,least_length)
                 del self.nodes[least_idx]
 
             while len(self.nodes) > max:
                 cull_shortest_node()
+
 
             if self.current_node_index > len(self.nodes) - 1:
                 self.current_node_index = len(self.nodes) - 1
@@ -1047,7 +1052,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._queue_redraw_curve()
             self._queue_redraw_all_nodes()
             self._queue_draw_buttons()
-
+        
 
 class Overlay (gui.overlays.Overlay):
     """Overlay for an InkingMode's adjustable points"""
