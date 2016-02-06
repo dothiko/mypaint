@@ -335,6 +335,8 @@ class Monitor (object):
         old_device = self._last_event_device
         new_device = device
         self._last_event_device = device
+        #!
+        print('device changed')
 
         # small problem with this code: it doesn't work well with brushes that
         # have (eraser not in [1.0, 0.0])
@@ -366,6 +368,8 @@ class Monitor (object):
             # Clone for saving
             old_brush = bm.clone_selected_brush(name=None)
             bm.store_brush_for_device(old_device.name, old_brush)
+            self._app.modemanager_for_device[old_device.name] = \
+                    self._app.doc.modes.top.get_name()
 
         if new_device.source == Gdk.InputSource.MOUSE:
             # Avoid fouling up unrelated devbrushes at stroke end
@@ -382,6 +386,10 @@ class Monitor (object):
                     brush = bm.get_default_brush()
             self._prefs['devbrush.last_used'] = new_device.name
             bm.select_brush(brush)
+            try:
+                print(self._app.modemanager_for_device[new_device.name])
+            except KeyError:
+                print('no such device used - so freehand ')
 
 
 class SettingsEditor (Gtk.Grid):
