@@ -335,8 +335,6 @@ class Monitor (object):
         old_device = self._last_event_device
         new_device = device
         self._last_event_device = device
-        #!
-        print('device changed')
 
         # small problem with this code: it doesn't work well with brushes that
         # have (eraser not in [1.0, 0.0])
@@ -364,17 +362,36 @@ class Monitor (object):
             old_device = self._last_pen_device
 
         bm = self._app.brushmanager
+        doc = self._app.doc
         if old_device:
             # Clone for saving
             old_brush = bm.clone_selected_brush(name=None)
             bm.store_brush_for_device(old_device.name, old_brush)
             self._app.modemanager_for_device[old_device.name] = \
-                    self._app.doc.modes.top.get_name()
+                    doc.modes.top.ACTION_NAME
 
         if new_device.source == Gdk.InputSource.MOUSE:
             # Avoid fouling up unrelated devbrushes at stroke end
             self._prefs.pop('devbrush.last_used', None)
         else:
+            # Changing gui.mode(tool) for device
+            # Place this mode-change codes before brush change.
+            # because if brush were changed prior to mode change,
+            # and there were 'not yet finalized inktool stroke',
+            # finalizing stoke might done by unintentional wrong brush.
+            try:
+                action_name = self._app.modemanager_for_device[new_device.name]
+            except KeyError:
+                action_name = doc.modes.default_mode_class.ACTION_NAME
+
+            if action_name != doc.modes.top.ACTION_NAME:
+                mode_class = gui.mode.ModeRegistry.get_mode_class(action_name)
+                if issubclass(mode_class, gui.mode.OneshotDragMode):
+                    mode = mode_class(ignore_modifiers=True, temporary_activation=False)
+                else:
+                    mode = mode_class(ignore_modifiers=True)
+                doc.modes.context_push(mode)
+
             # Select the brush and update the UI.
             # Use a sane default if there's nothing associated
             # with the device yet.
@@ -386,10 +403,6 @@ class Monitor (object):
                     brush = bm.get_default_brush()
             self._prefs['devbrush.last_used'] = new_device.name
             bm.select_brush(brush)
-            try:
-                print(self._app.modemanager_for_device[new_device.name])
-            except KeyError:
-                print('no such device used - so freehand ')
 
 
 class SettingsEditor (Gtk.Grid):
