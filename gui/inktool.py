@@ -35,6 +35,7 @@ import lib.observable
 ## Class defs
 
 
+
 class _Phase:
     """Enumeration of the states that an InkingMode can be in"""
     CAPTURE = 0
@@ -57,12 +58,79 @@ class _Node (collections.namedtuple("_Node", _NODE_FIELDS)):
     """
 
 
+def _get_scaler(x,y,sx,sy):
+   #return math.sqrt((self.x-base_node.x)**2 + (self.y-base_node.y)**2)
+    return math.hypot(x-sx, y-sy)
+
+def _get_identity_vector(x,y,sx,sy):
+    vx=x-sx
+    vy=y-sy
+   #s = math.sqrt(vx**2 + vy**2)
+    s = math.hypot(vx,vy)
+    return (vx/s,vy/s)
+
+
 class _EditZone:
     """Enumeration of what the pointer is on in the ADJUST phase"""
     EMPTY_CANVAS = 0  #: Nothing, empty space
     CONTROL_NODE = 1  #: Any control node; see target_node_index
     REJECT_BUTTON = 2  #: On-canvas button that abandons the current line
     ACCEPT_BUTTON = 3  #: On-canvas button that commits the current line
+
+
+
+class _CapturePeriodSetting(object):
+    """Capture Period Setting class,to ease for user to customize it"""
+   #BASE_INTERNODE_DISTANCE_MIDDLE = 30   # display pixels
+   #BASE_INTERNODE_DISTANCE_ENDS = 10   # display pixels
+
+   #INTERPOLATION_MAX_SLICE_TIME = 1/200.0   # seconds
+   #INTERPOLATION_MAX_SLICE_DISTANCE = 20   # model pixels
+   #INTERPOLATION_MAX_SLICES = MAX_INTERNODE_DISTANCE_MIDDLE * 5
+
+    @property
+    def internode_distance_middle(self):
+        return 30 * self.factor # display pixels
+
+    @property
+    def internode_distance_ends(self):
+        return 10 * self.factor # display pixels
+
+    @property
+    def max_internode_time(self):
+        return 1/100.0 #1/(100.0 / self.factor) # default MAX TIME is 1/100.0
+
+    @property
+    def min_internode_time(self):
+        return 1/200.0 #1/(200.0 / self.factor) # default MIN TIME is 1/200.0
+
+    # Captured input nodes are then interpolated with a spline.
+    # The code tries to make nice smooth input for the brush engine,
+    # but avoids generating too much work.
+
+    @property
+    def interpolation_max_slices(self):
+        return self.internode_distance_middle * 5
+
+    @property
+    def interpolation_max_slice_distance(self):
+        return 20# * self.factor # model pixels
+
+    @property
+    def interpolation_max_slice_time(self):
+        return 1/200.0 #1/(200.0 / self.factor)
+
+        # In other words, limit to a set number of interpolation slices
+        # per display pixel at the time of stroke capture.
+
+    def __init__(self):
+        self.factor=1.0
+
+    def set_factor(self, value):
+        self.factor = value
+
+
+
 
 
 class InkingMode (gui.mode.ScrollableModeMixin,
@@ -107,21 +175,23 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     ## Class config vars
 
     # Input node capture settings:
-    MAX_INTERNODE_DISTANCE_MIDDLE = 30   # display pixels
-    MAX_INTERNODE_DISTANCE_ENDS = 10   # display pixels
-    MAX_INTERNODE_TIME = 1/100.0   # seconds
+   #MAX_INTERNODE_DISTANCE_MIDDLE = 30   # display pixels
+   #MAX_INTERNODE_DISTANCE_ENDS = 10   # display pixels
+   #MAX_INTERNODE_TIME = 1/100.0   # seconds
 
     # Captured input nodes are then interpolated with a spline.
     # The code tries to make nice smooth input for the brush engine,
     # but avoids generating too much work.
-    INTERPOLATION_MAX_SLICE_TIME = 1/200.0   # seconds
-    INTERPOLATION_MAX_SLICE_DISTANCE = 20   # model pixels
-    INTERPOLATION_MAX_SLICES = MAX_INTERNODE_DISTANCE_MIDDLE * 5
+   #INTERPOLATION_MAX_SLICE_TIME = 1/200.0   # seconds
+   #INTERPOLATION_MAX_SLICE_DISTANCE = 20   # model pixels
+   #INTERPOLATION_MAX_SLICES = MAX_INTERNODE_DISTANCE_MIDDLE * 5
         # In other words, limit to a set number of interpolation slices
         # per display pixel at the time of stroke capture.
 
     # Node value adjustment settings
-    MIN_INTERNODE_TIME = 1/200.0   # seconds (used to manage adjusting)
+   #MIN_INTERNODE_TIME = 1/200.0   # seconds (used to manage adjusting)
+
+    CAPTURE_SETTING = _CapturePeriodSetting()
 
     ## Other class vars
 
@@ -137,7 +207,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     _PRESSURE_WHEEL_STEP = 0.025 # pressure modifying step,for mouse wheel
 
-    ## autocull setting is set at application.preference['inktool.autocull']
 
 
     ## Initialization & lifecycle methods
@@ -166,6 +235,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_ytilt = 0.0
 
         self._pressed_pressure = None
+
 
 
     def _reset_nodes(self):
@@ -507,10 +577,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """Draw the curve segment between the middle two points"""
         last_t_abs = state["t_abs"]
         dtime_p0_p1_real = p1[-1] - p0[-1]
-        steps_t = dtime_p0_p1_real / self.INTERPOLATION_MAX_SLICE_TIME
+        steps_t = dtime_p0_p1_real / self.CAPTURE_SETTING.interpolation_max_slice_time#self.INTERPOLATION_MAX_SLICE_TIME
         dist_p1_p2 = math.hypot(p1[0]-p2[0], p1[1]-p2[1])
-        steps_d = dist_p1_p2 / self.INTERPOLATION_MAX_SLICE_DISTANCE
-        steps_max = float(self.INTERPOLATION_MAX_SLICES)
+        steps_d = dist_p1_p2 / self.CAPTURE_SETTING.interpolation_max_slice_distance #self.INTERPOLATION_MAX_SLICE_DISTANCE
+        steps_max = float(self.CAPTURE_SETTING.interpolation_max_slices)#self.INTERPOLATION_MAX_SLICES)
         steps = math.ceil(min(steps_max, max([2, steps_t, steps_d])))
         for i in xrange(int(steps) + 1):
             t = i / steps
@@ -606,12 +676,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 dy = event.y - self._last_node_evdata[1]
                 dist = math.hypot(dy, dx)
                 dt = event.time - self._last_node_evdata[2]
-                max_dist = self.MAX_INTERNODE_DISTANCE_MIDDLE
+                max_dist = self.CAPTURE_SETTING.internode_distance_middle #MAX_INTERNODE_DISTANCE_MIDDLE
                 if len(self.nodes) < 2:
-                    max_dist = self.MAX_INTERNODE_DISTANCE_ENDS
+                    max_dist = self.CAPTURE_SETTING.internode_distance_ends #MAX_INTERNODE_DISTANCE_ENDS
                 append_node = (
                     dist > max_dist and
-                    dt > self.MAX_INTERNODE_TIME
+                    dt > self.CAPTURE_SETTING.max_internode_time #MAX_INTERNODE_TIME
                 )
             if append_node:
                 self.nodes.append(node)
@@ -645,11 +715,19 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # TODO: maybe rewrite the last node here so it's the right
             # TODO: distance from the end?
             if self.nodes[-1] is not node:
+                # When too close against last captured node,
+                # delete it.
+                d = math.hypot(self.nodes[-1].x - node.x, 
+                        self.nodes[-1].y - node.y)
+                mid_d = tdw.display_to_model(
+                        self.CAPTURE_SETTING.internode_distance_middle, 0)[0]
+                # 'too close' means less than internode_distance_middle / 5
+                if d < mid_d / 5.0:
+                    self._queue_draw_node(len(self.nodes)-1) # To avoid glitch
+                    del self.nodes[-1]
+
                 self.nodes.append(node)
 
-            # Autocull feature executed if enabled.
-            # inside this method, it checked whether enabled or disabled.
-            self._auto_cull_nodes() 
 
             self._reset_capture_data()
             self._reset_adjust_data()
@@ -807,11 +885,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         n0 = self.nodes[i-1]
         n1 = self.nodes[i]
         dtime = n1.time - n0.time
-        dtime = max(dtime, self.MIN_INTERNODE_TIME)
+        dtime = max(dtime, self.CAPTURE_SETTING.min_internode_time)
         return dtime
 
     def set_node_dtime(self, i, dtime):
-        dtime = max(dtime, self.MIN_INTERNODE_TIME)
+        dtime = max(dtime, self.CAPTURE_SETTING.min_internode_time) #!MIN_INTERNODE_TIME)
         nodes = self.nodes
         if not (0 < i < len(nodes)):
             return
@@ -991,6 +1069,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._queue_redraw_all_nodes()
             self._queue_draw_buttons()
 
+    def _queue_all_visual_redraw(self):
+        """Redraw all overlay objects"""
+        self._queue_redraw_curve()
+        self._queue_redraw_all_nodes()
+        self._queue_draw_buttons()
+
     def simplify_nodes(self):
         """User interface method of simplify nodes."""
         # For now, parameter is fixed value.
@@ -1001,57 +1085,55 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """User interface method of cull nodes."""
         self._nodes_deletion_operation(self._cull_nodes, ())
 
+    def average_nodes(self):
+        """Average nodes position.
+        Treat stroke as a sequence of vector,and 
+        average all nodes position,except for first and last.
+        """
+        if len(self.nodes) > 2:
 
-    ## Auto cull feature
-    def _auto_cull_nodes(self):
-        max = self.doc.app.preferences.get('inktool.autocull', 3)
-        if max > 3 and len(self.nodes) > max:
-            # Call this 3 lines at here,
-            # to ensure redraw entire overlay,avoiding glitches.
-            self._queue_redraw_curve()
-            self._queue_redraw_all_nodes()
-            self._queue_draw_buttons()
+            # redraw to erase old nodes
+            self._queue_all_visual_redraw()
 
+            new_nodes = [self.nodes[0]]
+            idx = 1
+            pn = self.nodes[0]
+            cn = self.nodes[idx]
+            while idx < len(self.nodes) - 1:
+                nn = self.nodes[idx+1]
+                avx, avy = _get_identity_vector(cn.x, cn.y,
+                        pn.x, pn.y)
+                bvx, bvy = _get_identity_vector(nn.x, nn.y,
+                        pn.x, pn.y)
+                avx=(avx + bvx) / 2.0
+                avy=(avy + bvy) / 2.0
+                s = math.hypot(cn.x - pn.x, cn.y - pn.y)
+                avx*=s
+                avy*=s
 
-            def cull_shortest_node():
-                least_length = -1.0
-                least_idx = -1
-                idx = 1
-                pn = self.nodes[idx - 1]
-                cn = self.nodes[idx]
-                while idx < len(self.nodes) - 1:
-                    nn = self.nodes[idx + 1]
-                    # Get vector length  
-                    # pl = length of between prev node - current node 
-                    # nl = length of between current node - next node 
-                    pl = math.sqrt((cn.x - pn.x)**2 + (cn.y - pn.y)**2)
-                    nl = math.sqrt((nn.x - cn.x)**2 + (nn.y - cn.y)**2)
-                    cur_length = pl + nl
+                newnode=_Node(
+                        x=avx+pn.x,y=avy+pn.y,
+                        pressure=cn.pressure,
+                        xtilt=cn.xtilt,ytilt=cn.ytilt,
+                        time=cn.time
+                        )
+                new_nodes.append(newnode)
+                pn = cn
+                cn = nn
+                idx += 1
+        
+            new_nodes.append(self.nodes[-1])
+            self.nodes = new_nodes
+            # redraw new nodes
+            self._queue_all_visual_redraw()
 
-                    if least_length > cur_length or least_length == -1.0:
-                        least_idx = idx
-                        least_length = cur_length
-                    idx += 1
-                    pn = cn
-                    cn = nn
-                assert least_idx != -1
-                print "!from 1 to %d,%d deleted (length:%08f)" % (len(self.nodes)-1,least_idx,least_length)
-                del self.nodes[least_idx]
+    def uniform_nodes(self):
+        """uniform nodes space.
+        Treat stroke as a sequence of vector,and 
+        uniform all nodes space,except for first and last.
+        """
+        pass
 
-            while len(self.nodes) > max:
-                cull_shortest_node()
-
-
-            if self.current_node_index > len(self.nodes) - 1:
-                self.current_node_index = len(self.nodes) - 1
-
-            if self.target_node_index > len(self.nodes) - 1:
-                self.target_node_index = len(self.nodes) - 1
-
-            # Redraws for the changed on-canvas elements
-            self._queue_redraw_curve()
-            self._queue_redraw_all_nodes()
-            self._queue_draw_buttons()
         
 
 class Overlay (gui.overlays.Overlay):
@@ -1367,9 +1449,11 @@ class OptionsPresenter (object):
         self._delete_button = None
         self._optimize_button = None
         self._cull_button = None
+        self._average_button = None
+        self._uniform_button = None
+
         self._updating_ui = False
         self._target = (None, None)
-        self._autocull_scale = None
 
     def _ensure_ui_populated(self):
         if self._options_grid is not None:
@@ -1396,10 +1480,12 @@ class OptionsPresenter (object):
         self._optimize_button.set_sensitive(False)
         self._cull_button = builder.get_object("cull_points_button")
         self._cull_button.set_sensitive(False)
-        self._autocull_adj = builder.get_object("autocull_adj")
-        self._autocull_scale = builder.get_object("autocull_scale")
-        self._autocull_adj.set_value(self._app.preferences.get(
-            "inktool.autocull", 3))
+        self._period_adj = builder.get_object("period_adj")
+        self._period_scale = builder.get_object("period_scale")
+        self._period_adj.set_value(self._app.preferences.get(
+            "inktool.capture_period_factor", 1))
+        self._average_button = builder.get_object("average_nodes_button")
+        self._average_button.set_sensitive(False)
 
     @property
     def widget(self):
@@ -1457,10 +1543,11 @@ class OptionsPresenter (object):
             self._delete_button.set_sensitive(inkmode.can_delete_node(cn_idx))
             self._optimize_button.set_sensitive(len(inkmode.nodes) > 3)
             self._cull_button.set_sensitive(len(inkmode.nodes) > 2)
-            self._autocull_adj.set_value(self._app.preferences.get(
-                "inktool.autocull", 3))
+            self._period_adj.set_value(self._app.preferences.get(
+                "inktool.capture_period_factor", 1))
+            self._average_button.set_sensitive(len(inkmode.nodes) > 2)
         finally:
-            self._updating_ui = False
+            self._updating_ui = False                               
 
     def _pressure_adj_value_changed_cb(self, adj):
         if self._updating_ui:
@@ -1508,12 +1595,17 @@ class OptionsPresenter (object):
         if len(inkmode.nodes) > 2:
             inkmode.cull_nodes()
 
-    def _autocull_adj_value_changed_cb(self, adj):
+    def _period_adj_value_changed_cb(self, adj):
         if self._updating_ui:
             return
-        self._app.preferences['inktool.autocull'] = adj.get_value()
+        self._app.preferences['inktool.capture_period_factor'] = adj.get_value()
+        InkingMode.CAPTURE_SETTING.set_factor(adj.get_value())
 
-    def _autocull_format_value_cb(self, scale, value):
-        if value <= 3:
-            return 'no'
-        return str(int(value))
+    def _period_scale_format_value_cb(self, scale, value):
+        return "%.1fx" % value
+
+    def _average_button_clicked_cb(self,button):
+        inkmode, node_idx = self.target
+        if inkmode:
+            inkmode.average_nodes()
+

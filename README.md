@@ -1,5 +1,6 @@
 ## my_build branch : my custom build of MyPaint
 
+
 About original Mypaint : オリジナルのMypaintについて
 ----
 Original MyPaint is a simple drawing and painting program
@@ -59,17 +60,33 @@ This would be quite useful when I want to draw extreamly slow and weak stroke.
 通常の手ブレ補正を最大にするより強い手ブレ補正がかかります。
 
 #### inktool nodes auto-culling : インクツールの自動間引き
-With this feature,when inktool capture phase end,then auto-culling is executed.
+This is obsoluted.
+廃止しました。
 
-インクツールのキャプチャフェイズが終了すると、自動で間引きが実行されます。
+#### inktool node capture sampling period factor setting : インクツールのノードキャプチャサンプリング期間の倍率設定
+with 'Capturing period' scale,you can customize node capturing(sampling) period.
+it is multiple factor to sampling time/length.
 
-##### currently impremented auto culling algorithm
-search the entire stroke (nodes) and find shortest section,and delete it.
-and repeat it until nodes count equal to 'Autocull' scale widget count.
+I create this feature,so obsolute auto-culling.
 
-If that scale widget set to minimum(leftmost),it shows 'no' and autoculling disabled.
+#### inktool - Average points feature : インクツールの制御点を平均化してなだらかにする機能
+'Average points' make stroke points less bumped,smooth curve.
 
-現在の実装では、全ノードをスキャンして最も短い区間を探し、その中間のノードを削除します。
-ノードがAutocullスケールウィジェットで設定された個数になるまで、その削除が繰り返されます。
+#### Per device mode change : デバイスごとのモード変更
+A 'Device' referred to here is, for example, Pen tablet styls,or Pen tablet tail eraser,etc.
 
-Autocullスケールを左端に設定すると、表示が「no」になり自動間引きは使用しない状態になります。
+This feature record the painting 'mode' (not only brush) which used with a device.
+And if a device is activated again,previously recorded mode automatically applied.
+
+for example , this feature should be useful in such a case...
+1. drawing with inktool.finalize it.
+1. oh I failed.I want to erase small part of that stroke!
+1. flip pen stylus, to activate pen eraser.
+1. (without this feature,you will need to change to freehand mode)
+1. erase it
+1. flip pen stylus again.
+1. (without this feature,you need to change inktool again)
+
+
+
+

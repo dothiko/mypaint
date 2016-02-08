@@ -2,19 +2,19 @@
 <!-- Generated with glade 3.18.3 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
-  <object class="GtkAdjustment" id="autocull_adj">
-    <property name="lower">3</property>
-    <property name="upper">32</property>
-    <property name="value">3</property>
-    <property name="step_increment">1</property>
-    <property name="page_increment">1</property>
-    <signal name="value-changed" handler="_autocull_adj_value_changed_cb" swapped="no"/>
-  </object>
   <object class="GtkAdjustment" id="dtime_adj">
     <property name="upper">2</property>
     <property name="step_increment">0.10000000000000001</property>
     <property name="page_increment">0.10000000000000001</property>
     <signal name="value-changed" handler="_dtime_adj_value_changed_cb" swapped="no"/>
+  </object>
+  <object class="GtkAdjustment" id="period_adj">
+    <property name="lower">1</property>
+    <property name="upper">2</property>
+    <property name="value">1</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">1</property>
+    <signal name="value-changed" handler="_period_adj_value_changed_cb" swapped="no"/>
   </object>
   <object class="GtkAdjustment" id="pressure_adj">
     <property name="upper">1</property>
@@ -192,27 +192,39 @@ Negative values mean leftwards tilts.</property>
           </packing>
         </child>
         <child>
-          <object class="GtkButton" id="delete_point_button">
-            <property name="label" translatable="yes" context="Inking tool options: node delete button: label">Delete Point</property>
+          <object class="GtkGrid" id="count_changing_button_grid">
             <property name="visible">True</property>
-            <property name="can_focus">True</property>
-            <property name="receives_default">True</property>
-            <property name="tooltip_text" translatable="yes" context="Inking tool options: node delete button: tooltip">Delete the currently selected point</property>
-            <signal name="clicked" handler="_delete_point_button_clicked_cb" swapped="no"/>
-          </object>
-          <packing>
-            <property name="left_attach">0</property>
-            <property name="top_attach">5</property>
-            <property name="width">2</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkButton" id="insert_point_button">
-            <property name="label" translatable="yes">Insert Point</property>
-            <property name="visible">True</property>
-            <property name="can_focus">True</property>
-            <property name="receives_default">True</property>
-            <signal name="clicked" handler="_insert_point_button_clicked_cb" swapped="no"/>
+            <property name="can_focus">False</property>
+            <property name="column_homogeneous">True</property>
+            <child>
+              <object class="GtkButton" id="insert_point_button">
+                <property name="label" translatable="yes">Insert Point</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="margin_right">3</property>
+                <signal name="clicked" handler="_insert_point_button_clicked_cb" swapped="no"/>
+              </object>
+              <packing>
+                <property name="left_attach">0</property>
+                <property name="top_attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="delete_point_button">
+                <property name="label" translatable="yes" context="Inking tool options: node delete button: label">Delete Point</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="tooltip_text" translatable="yes" context="Inking tool options: node delete button: tooltip">Delete the currently selected point</property>
+                <property name="margin_left">3</property>
+                <signal name="clicked" handler="_delete_point_button_clicked_cb" swapped="no"/>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="top_attach">0</property>
+              </packing>
+            </child>
           </object>
           <packing>
             <property name="left_attach">0</property>
@@ -233,7 +245,6 @@ Negative values mean leftwards tilts.</property>
         <property name="margin_left">4</property>
         <property name="margin_right">4</property>
         <property name="margin_bottom">6</property>
-        <property name="row_homogeneous">True</property>
         <child>
           <object class="GtkButton" id="simplify_points_button">
             <property name="label" translatable="yes">Simplify Points</property>
@@ -265,33 +276,54 @@ Negative values mean leftwards tilts.</property>
           </packing>
         </child>
         <child>
-          <object class="GtkLabel" id="autocull_label">
+          <object class="GtkButton" id="average_nodes_button">
+            <property name="label" translatable="yes">Average Points</property>
             <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="label" translatable="yes">Auto cull:</property>
+            <property name="can_focus">True</property>
+            <property name="receives_default">True</property>
+            <property name="tooltip_text" translatable="yes">Average nodes position following to its vector.As a result, stroke shape might be a little deformed.</property>
+            <signal name="clicked" handler="_average_button_clicked_cb" swapped="no"/>
           </object>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">2</property>
+            <property name="width">2</property>
           </packing>
         </child>
         <child>
-          <object class="GtkScale" id="autocull_scale">
+          <object class="GtkLabel" id="period_label">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="tooltip_text" translatable="yes">Capturing period factor.When capturing stroke,inktool multiply its sampling time/length priod with this value.Default is 1.0x</property>
+            <property name="halign">start</property>
+            <property name="label" translatable="yes">Capture
+Period:</property>
+            <property name="ellipsize">start</property>
+          </object>
+          <packing>
+            <property name="left_attach">0</property>
+            <property name="top_attach">3</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkScale" id="period_scale">
             <property name="visible">True</property>
             <property name="can_focus">True</property>
-            <property name="tooltip_text" translatable="yes">maximum points count,after auto-culling executed.</property>
+            <property name="tooltip_text" translatable="yes">Point capturing period factor. default setting is 1x</property>
             <property name="valign">baseline</property>
+            <property name="margin_left">6</property>
+            <property name="margin_right">6</property>
             <property name="hexpand">True</property>
-            <property name="adjustment">autocull_adj</property>
+            <property name="adjustment">period_adj</property>
             <property name="restrict_to_fill_level">False</property>
             <property name="fill_level">0</property>
             <property name="round_digits">1</property>
             <property name="value_pos">right</property>
-            <signal name="format-value" handler="_autocull_format_value_cb" swapped="no"/>
+            <signal name="format-value" handler="_period_scale_format_value_cb" swapped="no"/>
           </object>
           <packing>
             <property name="left_attach">1</property>
-            <property name="top_attach">2</property>
+            <property name="top_attach">3</property>
           </packing>
         </child>
       </object>
