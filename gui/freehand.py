@@ -455,6 +455,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         available when motion compression is active.
         """
 
+
         # Do nothing if painting is inactivated
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
@@ -469,19 +470,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         if drawstate.event_compression_workaround is None:
             self._add_event_compression_workaround(tdw)
 
-        # If the device has changed and the last pressure value from the
-        # previous device is not equal to 0.0, this can leave a visible
-        # stroke on the layer even if the 'new' device is not pressed on
-        # the tablet and has a pressure axis == 0.0.  Reseting the brush
-        # when the device changes fixes this issue, but there may be a
-        # much more elegant solution that only resets the brush on this
-        # edge-case.
-        same_device = True
-        if tdw.app is not None:
-            device = event.get_source_device()
-            same_device = tdw.app.device_monitor.device_used(device)
-            if not same_device:
-                tdw.doc.brush.reset()
 
         # Stabilizer cursor position fetch
         self._set_stabilize_point(event.x, event.y)
@@ -642,6 +630,10 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                                     priority=self.MOTION_QUEUE_PRIORITY)
             drawstate.motion_processing_cbid = cbid
 
+        # Is there any reasons baseclass callback isn't called in
+        # original code...?
+        # Anyway,we need to detect device change in this version,so call this.
+        return super(FreehandMode, self).motion_notify_cb(tdw, event)
 
     ## Stabilize related
     def _stabilize_init(self):
@@ -677,7 +669,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         return self._stabilize_src_pos[(self._stabilized_index + idx) % self._stabilize_max]
     
         
-
     ## Motion queue processing
 
     def _motion_queue_idle_cb(self, tdw):
@@ -756,6 +747,11 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             widget = FreehandOptionsWidget()
             cls._OPTIONS_WIDGET = widget
         return cls._OPTIONS_WIDGET
+
+    ## Device change callback
+
+    def device_changed_cb(self,tdw):
+        tdw.doc.brush.reset()
 
 
 class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):

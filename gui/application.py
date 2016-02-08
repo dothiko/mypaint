@@ -316,6 +316,8 @@ class Application (object):
         signal_callback_objs.append(self.brushmodifier)
         self.line_mode_settings = linemode.LineModeSettings(self)
 
+        self.modemanager_for_device = {}
+
         # Button press mapping
         self.button_mapping = ButtonMapping()
 

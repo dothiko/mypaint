@@ -325,6 +325,20 @@ class InteractionMode (object):
 
     def motion_notify_cb(self, tdw, event):
         """Handler for ``motion-notify-event``s."""
+
+        # If the device has changed and the last pressure value from the
+        # previous device is not equal to 0.0, this can leave a visible
+        # stroke on the layer even if the 'new' device is not pressed on
+        # the tablet and has a pressure axis == 0.0.  Reseting the brush
+        # when the device changes fixes this issue, but there may be a
+        # much more elegant solution that only resets the brush on this
+        # edge-case.
+        same_device = True
+        if tdw.app is not None:
+            device = event.get_source_device()
+            same_device = tdw.app.device_monitor.device_used(device)
+            if not same_device:
+                self.device_changed_cb(tdw)
         assert not hasattr(super(InteractionMode, self), "motion_notify_cb")
 
     def button_release_cb(self, tdw, event):
@@ -374,6 +388,12 @@ class InteractionMode (object):
     def drag_stop_cb(self, tdw):
         assert not hasattr(super(InteractionMode, self), "drag_stop_cb")
 
+    ## Device sub-API
+    # Defined here to inform a mode that device has changed. 
+
+    def device_changed_cb(self,tdw):
+        assert not hasattr(super(InteractionMode, self), "device_changed_cb")
+
     ## Internal utility functions
 
     def current_modifiers(self):
@@ -402,6 +422,7 @@ class InteractionMode (object):
         win = self.doc.tdw.get_window()
         underwin, x, y, mods = win.get_device_position(dev)
         return x, y
+
 
 
 class ScrollableModeMixin (InteractionMode):
