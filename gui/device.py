@@ -389,10 +389,7 @@ class Monitor (object):
                 if issubclass(mode_class, gui.mode.OneshotDragMode):
                     mode = mode_class(ignore_modifiers=True, temporary_activation=False)
                 else:
-                    try:
-                        mode = mode_class(ignore_modifiers=True, abrupt_start=True)
-                    except TypeError:
-                        mode = mode_class(ignore_modifiers=True)
+                    mode = mode_class(ignore_modifiers=True)
                 doc.modes.context_push(mode)
 
             # Select the brush and update the UI.

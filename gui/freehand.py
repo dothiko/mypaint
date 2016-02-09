@@ -669,6 +669,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         return self._stabilize_src_pos[(self._stabilized_index + idx) % self._stabilize_max]
     
         
+
     ## Motion queue processing
 
     def _motion_queue_idle_cb(self, tdw):
@@ -750,7 +751,10 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
     ## Device change callback
 
-    def device_changed_cb(self,tdw):
+    def device_changed_cb(self, tdw, device):
+        # The brush is already changed according to device
+        # at Monitor.device_used() of device.py.
+        # So simply reset it here.
         tdw.doc.brush.reset()
 
 
