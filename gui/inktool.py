@@ -177,6 +177,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
         # Offsets of selected nodes dragging. 
         # to move entire selected nodes drag motion.
+        # These values are screen(display) coordinate.
         self.drag_offset_x = 0
         self.drag_offset_y = 0
 
@@ -283,6 +284,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 self._start_new_capture_phase(rollback=False)
                 assert self.phase == _Phase.CAPTURE
                 # FALLTHRU: *do* start a drag
+            else:
+                # clicked a node.
+                # currently nothing to do for this.
+                pass
+                
         elif self.phase == _Phase.CAPTURE:
             # XXX Not sure what to do here.
             # XXX Click to append nodes?
@@ -321,7 +327,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     self._update_current_node_index()
                     return False
             else:
-                # clicked node.
+                # clicked node and button released.
 
                 # Add or Remove selected node
                 # when control key is pressed
@@ -331,6 +337,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                         tidx = self.target_node_index
                         if tidx != None:
                             if not tidx in self.selected_nodes:
+                               #if (len(self.selected_nodes) == 0 and 
+                               #        self.current_node_index != None and 
+                               #        self.current_node_index != tidx):
+                               #    self.selected_nodes.append(
+                               #            self.current_node_index)
+
                                 self.selected_nodes.append(tidx)
                             else:
                                 self.selected_nodes.remove(tidx)
@@ -338,7 +350,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     else:
                         # Single node click. node selection cleared.
                         if not self._node_dragged:
-                            self.selected_nodes = []
+                            assert self.current_node_index != None
+                            self.selected_nodes = [self.current_node_index]
 
             # (otherwise fall through and end any current drag)
         elif self.phase == _Phase.CAPTURE:
@@ -626,10 +639,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     x, y = tdw.display_to_model(disp_x, disp_y)
                     self.update_node(self.target_node_index, x=x, y=y)
                 else:
+                    self._queue_draw_selected_nodes()
                     disp_x, disp_y = tdw.model_to_display(x0, y0)
-                    cur_x, cur_y = tdw.display_to_model(event.x, event.y)
-                    self.drag_offset_x = event.x - disp_x
-                    self.drag_offset_y = event.y - disp_y
+                    self.drag_offset_x = event.x - self.start_x
+                    self.drag_offset_y = event.y - self.start_y
                     self._queue_draw_selected_nodes()
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
@@ -658,11 +671,26 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
             # Finalize dragging motion to selected nodes.
             if self._node_dragged:
-                dx, dy = tdw.display_to_model(
-                        self.drag_offset_x, self.drag_offset_y)
+
+                self._queue_draw_selected_nodes() # to ensure erase them
+
+                # To avoid calculation error,
+                # We need to once convert position of a node 
+                # into display coordinate,
+                # and add offset to it.
+                # Then convert it to model coordinate again.
+                #
+                # In contrast,in the method such as 
+                # 'converting offset to model and add it to
+                # node position' will cause calculation error,
+                # it bring us a little shifted position.
                 for idx in self.selected_nodes:
                     cn = self.nodes[idx]
-                    self.nodes[idx] = cn._replace(x=cn.x+dx, y=cn.y+dy)
+                    cx, cy = tdw.model_to_display(cn.x, cn.y)
+                    cx += self.drag_offset_x
+                    cy += self.drag_offset_y
+                    cx, cy = tdw.display_to_model(cx, cy)
+                    self.nodes[idx] = cn._replace(x=cx, y=cy)
                 self._reset_offset_data()
 
             self._dragged_node_start_pos = None
@@ -1083,6 +1111,8 @@ class Overlay (gui.overlays.Overlay):
             if mode.phase == _Phase.ADJUST:
                 if i == mode.current_node_index:
                     color = gui.style.ACTIVE_ITEM_COLOR
+                    x += mode.drag_offset_x
+                    y += mode.drag_offset_y
                 elif i == mode.target_node_index:
                     color = gui.style.PRELIT_ITEM_COLOR
                 elif i in mode.selected_nodes:
