@@ -58,14 +58,10 @@ class _Node (collections.namedtuple("_Node", _NODE_FIELDS)):
     """
 
 
-def _get_scaler(x,y,sx,sy):
-   #return math.sqrt((self.x-base_node.x)**2 + (self.y-base_node.y)**2)
-    return math.hypot(x-sx, y-sy)
 
 def _get_identity_vector(x,y,sx,sy):
     vx=x-sx
     vy=y-sy
-   #s = math.sqrt(vx**2 + vy**2)
     s = math.hypot(vx,vy)
     return (vx/s,vy/s)
 
@@ -254,9 +250,29 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
         # Multiple selected nodes.   
         # This is a index list of node from self.nodes
-        self.selected_nodes=[]  
+        self._reset_selected_nodes()
 
         self._reset_offset_data()
+
+    def _reset_selected_nodes(self,initial_idx=None):
+        """ Resets selected_nodes list and assign
+        initial index,if needed.
+
+        :param initial_idx: initial node index.in most case,
+                            node will manipurate by solo.
+                            it might be inefficient to
+                            generate list each time s solo node
+                            is moved,so use this parameter in such case.
+        """
+
+        if initial_idx == None:
+            self.selected_nodes=[]  
+        elif len(self.selected_nodes) == 0:
+            self.selected_nodes.append(initial_idx)
+        elif len(self.selected_nodes) == 1:
+            self.selected_nodes[0] = initial_idx
+        else:
+            self.selected_nodes = [initial_idx, ]
 
 
     def _reset_offset_data(self):
@@ -366,6 +382,18 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     event.state & self.__class__._PRESSURE_MOD_MASK == 
                     self.__class__._PRESSURE_MOD_MASK):
                 self.phase = _Phase.ADJUST_PRESSURE
+
+                # And do not forget,this can be a node selection.
+                if not self.current_node_index in self.selected_nodes:
+                    # To avoid old selected nodes still lit.
+                    self._queue_draw_selected_nodes() 
+                    self._reset_selected_nodes(self.current_node_index)
+                else:
+                    # The node is already included to self.selected_nodes
+                    pass
+
+                # FALLTHRU: *do* start a drag 
+
             else:
                 if self.zone in (_EditZone.REJECT_BUTTON,
                                  _EditZone.ACCEPT_BUTTON):
@@ -379,8 +407,28 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     # FALLTHRU: *do* start a drag
                 else:
                     # clicked a node.
-                    # currently nothing to do for this.
-                    pass
+
+                    if button == 1:
+                        if (event.state & Gdk.ModifierType.CONTROL_MASK != 
+                                    Gdk.ModifierType.CONTROL_MASK):
+
+                            # If new solo node clicked without holding 
+                            # CONTROL key,then reset all selected nodes.
+                            assert self.current_node_index != None
+
+                            # To avoid old selected nodes still lit.
+                            self._queue_draw_selected_nodes() 
+
+                            self._reset_selected_nodes(self.current_node_index)
+
+                        else:
+                            # Holding CONTROL key = adding or removing a node.
+                            # But it is done at button_release_cb for now,
+                            # nothing is done here.
+                            pass
+
+                    # FALLTHRU: *do* start a drag
+
 
         elif self.phase == _Phase.CAPTURE:
             # XXX Not sure what to do here.
@@ -444,10 +492,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                                 self.selected_nodes.remove(tidx)
 
                     else:
-                        # Single node click. node selection cleared.
-                        if not self._node_dragged:
-                            assert self.current_node_index != None
-                            self.selected_nodes = [self.current_node_index]
+                       ## Single node click. 
+                        print self.selected_nodes
+                        pass
 
             # (otherwise fall through and end any current drag)
         elif self.phase == _Phase.ADJUST_PRESSURE:
@@ -763,8 +810,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if self._pressed_pressure is not None:
                 self._adjust_pressure_with_motion(
                     tdw,
-                    event.x, event.y,
-                    event.state & self.__class__._PRESSURE_NEARBY_MOD_MASK)
+                    event.x, event.y)
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -842,20 +888,25 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def scroll_cb(self, tdw, event):
         """Handles scroll-wheel events, to adjust pressure."""
-        if self.phase == _Phase.ADJUST and self.target_node_index is not None:
-            new_pressure = self.nodes[self.target_node_index].pressure
+        if self.phase == _Phase.ADJUST and len(self.selected_nodes) > 0:
+            for idx in self.selected_nodes:
+                new_pressure = self.nodes[idx].pressure
 
-            if event.direction == Gdk.SCROLL_UP:
-                new_pressure += self.__class__._PRESSURE_WHEEL_STEP
-            elif event.direction == Gdk.SCROLL_DOWN:
-                new_pressure -= self.__class__._PRESSURE_WHEEL_STEP
-            elif event.direction == Gdk.SCROLL_SMOOTH:
-                new_pressure += (self.__class__._PRESSURE_WHEEL_STEP * event.delta_y)
-            else:
-                raise NotImplementedError("Unknown scroll direction %s" % str(event.direction))
+                if event.direction == Gdk.SCROLL_UP:
+                    new_pressure += self.__class__._PRESSURE_WHEEL_STEP
+                elif event.direction == Gdk.SCROLL_DOWN:
+                    new_pressure -= self.__class__._PRESSURE_WHEEL_STEP
+                elif event.direction == Gdk.SCROLL_SMOOTH:
+                    new_pressure += (self.__class__._PRESSURE_WHEEL_STEP * event.delta_y)
+                else:
+                    raise NotImplementedError("Unknown scroll direction %s" % str(event.direction))
 
-            self.update_node(self.target_node_index, pressure=new_pressure)
-            self.options_presenter.target = (self, self.target_node_index)
+                self.nodes[idx]=self.nodes[idx]._replace(pressure=new_pressure)
+
+                if idx == self.target_node_index:
+                    self.options_presenter.target = (self, self.target_node_index)
+
+            self._queue_redraw_curve()
         else:
             return super(InkingMode, self).scroll_cb(tdw, event)
 
@@ -1011,10 +1062,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_draw_buttons()
 
 
-    def _adjust_pressure_with_motion(self, tdw, x, y, affect_nearby_nodes):
+    def _adjust_pressure_with_motion(self, tdw, x, y):
         """Adjust pressure of current selected node,
         and it may affects nearby nodes"""
-        cn = self.nodes[self.current_node_index]
+
         x, y = tdw.display_to_model(x, y)
         cx = x - self._pressed_x
         cy = y - self._pressed_y
@@ -1024,36 +1075,52 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             ny = cy / cs
             angle = math.acos(ny)  # Getting angle
             diff = cs / 128.0  # 128.0 is not theorical number,it's my feeling
+
             if math.pi / 4 < angle < math.pi / 4 + math.pi / 2:
                 if nx < 0.0:
                     diff *= -1
             elif ny < 0.0:
                 diff *= -1
 
-            self.update_node(self.current_node_index,
-                             pressure=cn.pressure + diff)
+            for idx in self.selected_nodes:
+                cn = self.nodes[idx]
+                self.nodes[idx] = cn._replace(pressure = cn.pressure + diff)
 
-            if affect_nearby_nodes:
-                diff /= 2
-                idx = self.current_node_index - 1
-                if idx > 0:
-                    self.update_node(idx,
-                                     pressure=self.nodes[idx].pressure + diff)
-
-                idx = self.current_node_index + 1
-                if idx < len(self.nodes):
-                    self.update_node(idx,
-                                     pressure=self.nodes[idx].pressure + diff)
-
-            self._pressed_x = x
-            self._pressed_y = y
+        self._pressed_x = x
+        self._pressed_y = y
+        self._queue_redraw_curve()
 
     def delete_current_node(self):
-        if self.can_delete_node(self.current_node_index):
-            self.delete_node(self.current_node_index)
+       #if self.can_delete_node(self.current_node_index):
+       #    self.delete_node(self.current_node_index)
+       #
+       #    # FIXME: Quick hack,to avoid indexerror(very rare case)
+       #    self.target_node_index=None
 
-            # FIXME: Quick hack,to avoid indexerror(very rare case)
-            self.target_node_index=None
+        # First of all,queue redraw area.
+        self._queue_draw_buttons()
+        for idx in self.selected_nodes:
+            self._queue_draw_node(idx)
+            
+        # after then,delete it.
+        new_nodes = [self.nodes[0]]
+        for idx in self.selected_nodes:
+            if idx > 0 and idx < len(self.nodes) - 1:
+                new_nodes.append(self.nodes[idx])
+
+                if self.current_node_index == idx:
+                    self.current_node_index = None
+
+                if self.terget_node_index == idx:
+                    self.terget_node_index = None
+
+        new_nodes.append(self.nodes[-1])
+        self.nodes=new_nodes
+
+        # Issue redraws for the changed on-canvas elements
+        self._queue_redraw_curve()
+        self._queue_redraw_all_nodes()
+        self._queue_draw_buttons()
 
     def can_insert_node(self, i):
         return 0 <= i < len(self.nodes)-1
@@ -1179,7 +1246,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """
         if len(self.nodes) > 2:
 
-            # redraw to erase old nodes
+            # Redraw to erase old nodes
             self._queue_all_visual_redraw()
 
             new_nodes = [self.nodes[0]]
@@ -1188,23 +1255,31 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             cn = self.nodes[idx]
             while idx < len(self.nodes) - 1:
                 nn = self.nodes[idx+1]
-                avx, avy = _get_identity_vector(cn.x, cn.y,
-                        pn.x, pn.y)
-                bvx, bvy = _get_identity_vector(nn.x, nn.y,
-                        pn.x, pn.y)
-                avx=(avx + bvx) / 2.0
-                avy=(avy + bvy) / 2.0
-                s = math.hypot(cn.x - pn.x, cn.y - pn.y)
-                avx*=s
-                avy*=s
+                # Limit affected nodes with selection list.
+                # if only one node is selected,
+                # entire nodes are averaged.
+                if (len(self.selected_nodes) < 2 or
+                        idx in self.selected_nodes):
+                    try:
+                        avx, avy = _get_identity_vector(cn.x, cn.y,
+                                pn.x, pn.y)
+                        bvx, bvy = _get_identity_vector(nn.x, nn.y,
+                                pn.x, pn.y)
+                        avx=(avx + bvx) / 2.0
+                        avy=(avy + bvy) / 2.0
+                        s = math.hypot(cn.x - pn.x, cn.y - pn.y)
+                        avx*=s
+                        avy*=s
 
-                newnode=_Node(
-                        x=avx+pn.x,y=avy+pn.y,
-                        pressure=cn.pressure,
-                        xtilt=cn.xtilt,ytilt=cn.ytilt,
-                        time=cn.time
-                        )
-                new_nodes.append(newnode)
+                        new_nodes.append(cn._replace(x=avx+pn.x, y=avy+pn.y))
+
+                    except ZeroDivisionError:
+                        # This means 'two nodes at same place'.
+                        # abort averaging for this node. 
+                        new_nodes.append(cn) 
+                else:
+                    new_nodes.append(cn)
+
                 pn = cn
                 cn = nn
                 idx += 1
