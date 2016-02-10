@@ -86,7 +86,8 @@ PRELIT_ITEM_COLOR = tuple(
         ACTIVE_ITEM_COLOR.interpolate(EDITABLE_ITEM_COLOR, 3)
         )[1]
 
-# Postlight color (for complex modes, when there needs to be a distinction)
-POSTLIT_ITEM_COLOR = tuple(
-        ACTIVE_ITEM_COLOR.interpolate(PRELIT_ITEM_COLOR, 3)
-        )[1]
+# Postlight color (for complex modes, when there needs to be a further 
+# distinction in addition to Prelight color)
+
+POSTLIT_ITEM_COLOR = RGBColor.new_from_hex_str("#C4F10F")
+

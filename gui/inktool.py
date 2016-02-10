@@ -241,6 +241,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def _reset_nodes(self):
         self.nodes = []  # nodes that met the distance+time criteria
 
+
     def _reset_capture_data(self):
         self._last_event_node = None  # node for the last event
         self._last_node_evdata = None  # (xdisp, ydisp, tmilli) for nodes[-1]
@@ -250,6 +251,21 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self.current_node_index = None
         self.target_node_index = None
         self._dragged_node_start_pos = None
+
+        # Multiple selected nodes.   
+        # This is a index list of node from self.nodes
+        self.selected_nodes=[]  
+
+        self._reset_offset_data()
+
+
+    def _reset_offset_data(self):
+
+        # Offsets of selected nodes dragging. 
+        # to move entire selected nodes drag motion.
+        # These values are display coordinate.
+        self.drag_offset_x = 0
+        self.drag_offset_y = 0
 
     def _ensure_overlay_for_tdw(self, tdw):
         overlay = self._overlays.get(tdw)
@@ -361,6 +377,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     self._start_new_capture_phase(rollback=False)
                     assert self.phase == _Phase.CAPTURE
                     # FALLTHRU: *do* start a drag
+                else:
+                    # clicked a node.
+                    # currently nothing to do for this.
+                    pass
 
         elif self.phase == _Phase.CAPTURE:
             # XXX Not sure what to do here.
@@ -402,6 +422,33 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     self._update_zone_and_target(tdw, event.x, event.y)
                     self._update_current_node_index()
                     return False
+            else:
+                # clicked node and button released.
+
+                # Add or Remove selected node
+                # when control key is pressed
+                if event.button == 1:
+                    if event.state & Gdk.ModifierType.CONTROL_MASK:
+
+                        tidx = self.target_node_index
+                        if tidx != None:
+                            if not tidx in self.selected_nodes:
+                               #if (len(self.selected_nodes) == 0 and 
+                               #        self.current_node_index != None and 
+                               #        self.current_node_index != tidx):
+                               #    self.selected_nodes.append(
+                               #            self.current_node_index)
+
+                                self.selected_nodes.append(tidx)
+                            else:
+                                self.selected_nodes.remove(tidx)
+
+                    else:
+                        # Single node click. node selection cleared.
+                        if not self._node_dragged:
+                            assert self.current_node_index != None
+                            self.selected_nodes = [self.current_node_index]
+
             # (otherwise fall through and end any current drag)
         elif self.phase == _Phase.ADJUST_PRESSURE:
             self.options_presenter.target = (self, self.current_node_index)
@@ -535,15 +582,20 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 x, y = pos
                 tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
 
+
     def _queue_draw_node(self, i):
         """Redraws a specific control node on all known view TDWs"""
+        node = self.nodes[i]
         for tdw in self._overlays:
-            node = self.nodes[i]
             x, y = tdw.model_to_display(node.x, node.y)
-            x = math.floor(x)
-            y = math.floor(y)
+            x = math.floor(x) + self.drag_offset_x
+            y = math.floor(y) + self.drag_offset_y
             size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
             tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
+
+    def _queue_draw_selected_nodes(self):
+        for i in self.selected_nodes:
+            self._queue_draw_node(i)
 
     def _queue_redraw_all_nodes(self):
         """Redraws all nodes on all known view TDWs"""
@@ -645,6 +697,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._last_node_evdata = (event.x, event.y, event.time)
             self._last_event_node = node
         elif self.phase == _Phase.ADJUST:
+            self._node_dragged = False
             if self.target_node_index is not None:
                 node = self.nodes[self.target_node_index]
                 self._dragged_node_start_pos = (node.x, node.y)
@@ -691,12 +744,21 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._last_event_node = node
         elif self.phase == _Phase.ADJUST:
             if self._dragged_node_start_pos:
+                self._node_dragged = True
                 x0, y0 = self._dragged_node_start_pos
-                disp_x, disp_y = tdw.model_to_display(x0, y0)
-                disp_x += event.x - self.start_x
-                disp_y += event.y - self.start_y
-                x, y = tdw.display_to_model(disp_x, disp_y)
-                self.update_node(self.target_node_index, x=x, y=y)
+                if len(self.selected_nodes) == 0:
+                    disp_x, disp_y = tdw.model_to_display(x0, y0)
+                    disp_x += event.x - self.start_x
+                    disp_y += event.y - self.start_y
+                    x, y = tdw.display_to_model(disp_x, disp_y)
+                    self.update_node(self.target_node_index, x=x, y=y)
+                else:
+                    self._queue_draw_selected_nodes()
+                    disp_x, disp_y = tdw.model_to_display(x0, y0)
+                    self.drag_offset_x = event.x - self.start_x
+                    self.drag_offset_y = event.y - self.start_y
+                    self._queue_draw_selected_nodes()
+
         elif self.phase == _Phase.ADJUST_PRESSURE:
             if self._pressed_pressure is not None:
                 self._adjust_pressure_with_motion(
@@ -740,6 +802,31 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 self._reset_nodes()
                 tdw.queue_draw()
         elif self.phase == _Phase.ADJUST:
+
+            # Finalize dragging motion to selected nodes.
+            if self._node_dragged:
+
+                self._queue_draw_selected_nodes() # to ensure erase them
+
+                # To avoid calculation error,
+                # We need to once convert position of a node 
+                # into display coordinate,
+                # and add offset to it.
+                # Then convert it to model coordinate again.
+                #
+                # In contrast,in the method such as 
+                # 'converting offset to model and add it to
+                # node position' will cause calculation error,
+                # it bring us a little shifted position.
+                for idx in self.selected_nodes:
+                    cn = self.nodes[idx]
+                    cx, cy = tdw.model_to_display(cn.x, cn.y)
+                    cx += self.drag_offset_x
+                    cy += self.drag_offset_y
+                    cx, cy = tdw.display_to_model(cx, cy)
+                    self.nodes[idx] = cn._replace(x=cx, y=cy)
+                self._reset_offset_data()
+
             self._dragged_node_start_pos = None
             self._queue_redraw_curve()
             self._queue_draw_buttons()
@@ -1279,8 +1366,14 @@ class Overlay (gui.overlays.Overlay):
             if mode.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE):
                 if i == mode.current_node_index:
                     color = gui.style.ACTIVE_ITEM_COLOR
+                    x += mode.drag_offset_x
+                    y += mode.drag_offset_y
                 elif i == mode.target_node_index:
                     color = gui.style.PRELIT_ITEM_COLOR
+                elif i in mode.selected_nodes:
+                    color = gui.style.POSTLIT_ITEM_COLOR
+                    x += mode.drag_offset_x
+                    y += mode.drag_offset_y
             gui.drawutils.render_round_floating_color_chip(
                 cr=cr, x=x, y=y,
                 color=color,
