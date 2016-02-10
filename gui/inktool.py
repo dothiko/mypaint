@@ -167,7 +167,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._dragged_node_start_pos = None
 
         # Multiple selected nodes.   
-        # This is a list of _Node object from self.nodes
+        # This is a index list of node from self.nodes
         self.selected_nodes=[]  
 
         self._reset_offset_data()
@@ -177,7 +177,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
         # Offsets of selected nodes dragging. 
         # to move entire selected nodes drag motion.
-        # These values are screen(display) coordinate.
+        # These values are display coordinate.
         self.drag_offset_x = 0
         self.drag_offset_y = 0
 
