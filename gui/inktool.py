@@ -492,8 +492,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                                 self.selected_nodes.remove(tidx)
 
                     else:
-                       ## Single node click. 
-                        print self.selected_nodes
+                        ## Single node click. 
                         pass
 
             # (otherwise fall through and end any current drag)
@@ -1027,7 +1026,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         return dtime
 
     def set_node_dtime(self, i, dtime):
-        dtime = max(dtime, self.CAPTURE_SETTING.min_internode_time) #!MIN_INTERNODE_TIME)
+        dtime = max(dtime, self.CAPTURE_SETTING.min_internode_time) 
         nodes = self.nodes
         if not (0 < i < len(nodes)):
             return
@@ -1289,12 +1288,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # redraw new nodes
             self._queue_all_visual_redraw()
 
-    def uniform_nodes(self):
-        """uniform nodes space.
-        Treat stroke as a sequence of vector,and 
-        uniform all nodes space,except for first and last.
-        """
-        pass
 
         
 
