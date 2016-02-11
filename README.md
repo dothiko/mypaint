@@ -9,7 +9,7 @@ I also use this branch as my personal backup.
 ほとんどのカスタマイズコードはその場しのぎのもので、私自身によるテストを行っている状況です。
 このブランチは個人的なバックアップ用途としても使っています。
 
-This branch is not intended to pull request. This is purely experimental build.
+This branch is *not* intended to pull request. This is *purely experimental* build.
 
 Customized features : カスタム機能について
 ----
