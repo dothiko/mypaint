@@ -74,8 +74,11 @@ class _EditZone:
     REJECT_BUTTON = 2  #: On-canvas button that abandons the current line
     ACCEPT_BUTTON = 3  #: On-canvas button that commits the current line
 
-class _SelectionArea:
-    """Class for holding selection area."""
+class _SelectionMotion:
+    """Class for holding selection area and motion offset.
+       All position attributes are screen coordinate.
+    """
+
 
     LINE_WIDTH = 2
 
@@ -83,10 +86,10 @@ class _SelectionArea:
         self.reset()
 
     def reset(self):
-        self.sx=None
-        self.sy=None
-        self.ex=None
-        self.ey=None
+        self.sx = 0
+        self.sy = 0
+        self.ex = 0
+        self.ey = 0
         self._prev_rect = None
         self._cur_rect = None
 
@@ -95,23 +98,23 @@ class _SelectionArea:
         self.is_addition = False 
 
     def start(self,x,y):
-        self.sx=x
-        self.sy=y
-        self.ex=x
-        self.ey=y
+        self.sx = x
+        self.sy = y
+        self.ex = x
+        self.ey = y
 
     def drag(self,x,y):
-        self.ex=x
-        self.ey=y
+        self.ex = x
+        self.ey = y
 
-    def _get_sorted_position(self):
+    def get_sorted_position(self):
         sx, ex = (self.sx, self.ex) if self.sx < self.ex else (self.ex, self.sx)
         sy, ey = (self.sy, self.ey) if self.sy < self.ey else (self.ey, self.sy)
         return (sx,sy,ex,ey)
 
     def get_current_rect(self):
         self._prev_rect = self._cur_rect
-        sx, sy, ex, ey = self._get_sorted_position()
+        sx, sy, ex, ey = self.get_sorted_position()
         self._cur_rect = (sx - self.LINE_WIDTH, sy - self.LINE_WIDTH, 
                 ex - sx + self.LINE_WIDTH + 1, 
                 ey - sy + self.LINE_WIDTH + 1)
@@ -124,13 +127,22 @@ class _SelectionArea:
         return self.sx != None 
 
     def is_inside(self, x, y):
-        sx, sy, ex, ey = self._get_sorted_position()
+        """ check whether x,y is inside selected rectangle.
+        this method needs screen coordinate point.
+        """
+        sx, sy, ex, ey = self.get_sorted_position()
         return (x >= sx and x <= ex and y >= sy and y <= ey)
 
     def dbgout(self):
         print ("%.4f,%.4f - %.4f,%.4f" % (self.sx, self.sy, self.ex, self.ey))
 
-
+    def get_model_offset(self,tdw):
+        sx,sy = tdw.display_to_model(self.sx, self.sy)
+        ex,ey = tdw.display_to_model(self.ex, self.ey)
+        return (ex - sx, ey - sy)
+        
+    def get_offset(self):
+        return (self.ex - self.sx, self.ey - self.sy)
 
 
 class _CapturePeriodSetting(object):
@@ -261,10 +273,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     _PRESSURE_WHEEL_STEP = 0.025 # pressure modifying step,for mouse wheel
 
-    ## Selection area
+    ## Selection motion class instance
     #  this can be unique instance in Mypaint app,
     #  so create it as class attribute,for effeciency.
-    selection_area = _SelectionArea()
+    selection_motion = _SelectionMotion()
 
 
 
@@ -315,7 +327,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         # This is a index list of node from self.nodes
         self._reset_selected_nodes()
 
-        self._reset_offset_data()
 
     def _reset_selected_nodes(self,initial_idx=None):
         """ Resets selected_nodes list and assign
@@ -337,14 +348,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         else:
             self.selected_nodes = [initial_idx, ]
 
-
-    def _reset_offset_data(self):
-
-        # Offsets of selected nodes dragging. 
-        # to move entire selected nodes drag motion.
-        # These values are display coordinate.
-        self.drag_offset_x = 0
-        self.drag_offset_y = 0
 
 
 
@@ -470,7 +473,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     if (event.state & Gdk.ModifierType.SHIFT_MASK):
                         # selection box dragging start!!
                         self.phase = _Phase.ADJUST_SELECTING
-                        self.selection_area.start(event.x, event.y)
+                        self.selection_motion.start(event.x, event.y)
                     else:
                         self._start_new_capture_phase(rollback=False)
                         assert self.phase == _Phase.CAPTURE
@@ -712,13 +715,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def _queue_draw_node(self, i):
         """Redraws a specific control node on all known view TDWs"""
         node = self.nodes[i]
+        dx,dy = self.selection_motion.get_offset()
         for tdw in self._overlays:
             x, y = tdw.model_to_display(node.x, node.y)
             x = math.floor(x)
             y = math.floor(y)
             if i in self.selected_nodes:
-                x += self.drag_offset_x
-                y += self.drag_offset_y
+                x += dx
+                y += dy
             size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
             tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
 
@@ -731,16 +735,16 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         for i in xrange(len(self.nodes)):
             self._queue_draw_node(i)
 
-    def _queue_draw_selection_area(self):
+    def _queue_draw_selection_motion(self):
         """Redraws selection area"""
-        area = self.selection_area
+        area = self.selection_motion
         for tdw, overlay in self._overlays.items():
-            prev = self.selection_area.get_previous_rect()
+            prev = self.selection_motion.get_previous_rect()
             if prev:
                 tdw.queue_draw_area(*prev)
 
             tdw.queue_draw_area(
-                    *self.selection_area.get_current_rect())
+                    *self.selection_motion.get_current_rect())
 
 
 
@@ -758,11 +762,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 abrupt=True,
             )
             interp_state = {"t_abs": self.nodes[0].time}
-           #for p_1, p0, p1, p2 in gui.drawutils.spline_iter(self.nodes):
-            offsets = tdw.display_to_model(self.drag_offset_x, self.drag_offset_y)
-            for p_1, p0, p1, p2 in gui.drawutils.spline_iter_2(self.nodes,
-                    self.selected_nodes,
-                    offsets):
+            dx, dy = self.selection_motion.get_model_offset(tdw)
+            for p_1, p0, p1, p2 in gui.drawutils.spline_iter_2(
+                        self.nodes,
+                        self.selected_nodes,
+                        (dx,dy)):
                 self._queue_task(
                     self._draw_curve_segment,
                     model,
@@ -847,6 +851,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if self.target_node_index is not None:
                 node = self.nodes[self.target_node_index]
                 self._dragged_node_start_pos = (node.x, node.y)
+                
+                # Use selection_motion class as offset-information
+                self.selection_motion.start(event.x, event.y)
+
         elif self.phase == _Phase.ADJUST_PRESSURE:
             if self.current_node_index is not None:
                 node = self.nodes[self.current_node_index]
@@ -854,8 +862,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 self._pressed_x, self._pressed_y = \
                         tdw.display_to_model(event.x, event.y)
         elif self.phase == _Phase.ADJUST_SELECTING:
-            self.selection_area.start(event.x, event.y)
-            self.selection_area.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
+            self.selection_motion.start(event.x, event.y)
+            self.selection_motion.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -903,9 +911,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     self.update_node(self.target_node_index, x=x, y=y)
                 else:
                     self._queue_draw_selected_nodes()
-                    disp_x, disp_y = tdw.model_to_display(x0, y0)
-                    self.drag_offset_x = event.x - self.start_x
-                    self.drag_offset_y = event.y - self.start_y
+                    self.selection_motion.drag(event.x, event.y)
                     self._queue_draw_selected_nodes()
 
                 self._queue_redraw_curve()
@@ -916,8 +922,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     tdw,
                     event.x, event.y)
         elif self.phase == _Phase.ADJUST_SELECTING:
-            self.selection_area.drag(event.x, event.y)
-            self._queue_draw_selection_area()
+            self.selection_motion.drag(event.x, event.y)
+            self._queue_draw_selection_motion()
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -961,6 +967,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
                 self._queue_draw_selected_nodes() # to ensure erase them
 
+
                 # To avoid calculation error,
                 # We need to once convert position of a node 
                 # into display coordinate,
@@ -971,14 +978,17 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 # 'converting offset to model and add it to
                 # node position' will cause calculation error,
                 # it bring us a little shifted position.
+                dx, dy = self.selection_motion.get_offset()
+
                 for idx in self.selected_nodes:
                     cn = self.nodes[idx]
                     cx, cy = tdw.model_to_display(cn.x, cn.y)
-                    cx += self.drag_offset_x
-                    cy += self.drag_offset_y
+                    cx += dx
+                    cy += dy
                     cx, cy = tdw.display_to_model(cx, cy)
                     self.nodes[idx] = cn._replace(x=cx, y=cy)
-                self._reset_offset_data()
+
+                self.selection_motion.reset()
 
             self._dragged_node_start_pos = None
             self._queue_redraw_curve()
@@ -994,15 +1004,16 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._queue_draw_buttons()
         elif self.phase == _Phase.ADJUST_SELECTING:
             ## Nodes selection phase
-            self._queue_draw_selection_area()
+            self._queue_draw_selection_motion()
 
             modified = False
-            if not self.selection_area.is_addition:
+            if not self.selection_motion.is_addition:
                 self._reset_selected_nodes()
                 modified = True
 
             for idx,cn in enumerate(self.nodes):
-                if self.selection_area.is_inside(cn.x, cn.y):
+                cx,cy = tdw.model_to_display(cn.x, cn.y)
+                if self.selection_motion.is_inside(cx, cy):
                     if not idx in self.selected_nodes:
                         self.selected_nodes.append(idx)
                         modified = True
@@ -1010,7 +1021,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if modified:
                 self._queue_redraw_all_nodes()
 
-            self.selection_area.reset()
+            self.selection_motion.reset()
             self.phase = _Phase.ADJUST
         else:                      
             raise NotImplementedError("Unknown phase %r" % self.phase)
@@ -1567,6 +1578,7 @@ class Overlay (gui.overlays.Overlay):
         mode = self._inkmode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
+        dx,dy = mode.selection_motion.get_offset()
         for i, node, x, y in self._get_onscreen_nodes():
             color = gui.style.EDITABLE_ITEM_COLOR
             if (mode.phase in 
@@ -1575,14 +1587,14 @@ class Overlay (gui.overlays.Overlay):
                      _Phase.ADJUST_SELECTING)):
                 if i == mode.current_node_index:
                     color = gui.style.ACTIVE_ITEM_COLOR
-                    x += mode.drag_offset_x
-                    y += mode.drag_offset_y
+                    x += dx
+                    y += dy
                 elif i == mode.target_node_index:
                     color = gui.style.PRELIT_ITEM_COLOR
                 elif i in mode.selected_nodes:
                     color = gui.style.POSTLIT_ITEM_COLOR
-                    x += mode.drag_offset_x
-                    y += mode.drag_offset_y
+                    x += dx
+                    y += dy
             gui.drawutils.render_round_floating_color_chip(
                 cr=cr, x=x, y=y,
                 color=color,
@@ -1625,7 +1637,7 @@ class Overlay (gui.overlays.Overlay):
 
         # Selection Rectangle
         if mode.phase == _Phase.ADJUST_SELECTING:
-            area = mode.selection_area
+            area = mode.selection_motion
             cr.save()
             color = gui.style.ACTIVE_ITEM_COLOR
             cr.set_source_rgb(*color.get_rgb())
