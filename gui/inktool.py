@@ -41,6 +41,7 @@ class _Phase:
     CAPTURE = 0
     ADJUST = 1
     ADJUST_PRESSURE = 2
+    ADJUST_SELECTING = 3
 
 
 _NODE_FIELDS = ("x", "y", "pressure", "xtilt", "ytilt", "time")
@@ -72,6 +73,38 @@ class _EditZone:
     CONTROL_NODE = 1  #: Any control node; see target_node_index
     REJECT_BUTTON = 2  #: On-canvas button that abandons the current line
     ACCEPT_BUTTON = 3  #: On-canvas button that commits the current line
+
+class _SelectionArea:
+    """Class for holding selection area."""
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.sx=None
+        self.sy=None
+        self.ex=None
+        self.ey=None
+
+    def start(self,x,y):
+        self.sx=x
+        self.sy=y
+        self.ex=x
+        self.ey=y
+
+    def drag(self,x,y):
+        if x < self.sx:
+            self.sx = x
+        if y < self.sy:
+            self.sy = y
+        if x > self.ex:
+            self.ex = x
+        if y < self.ey:
+            self.ey = y
+
+    def is_enabled(self):
+        return self.sx != None 
+
 
 
 
@@ -203,6 +236,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     _PRESSURE_WHEEL_STEP = 0.025 # pressure modifying step,for mouse wheel
 
+    ## Selection area
+    #  this can be unique instance in Mypaint app,
+    #  so create it as class attribute,for effeciency.
+    selection_area = _SelectionArea()
+
 
 
     ## Initialization & lifecycle methods
@@ -282,6 +320,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         # These values are display coordinate.
         self.drag_offset_x = 0
         self.drag_offset_y = 0
+
+
 
     def _ensure_overlay_for_tdw(self, tdw):
         overlay = self._overlays.get(tdw)
@@ -402,8 +442,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                         return False
                     # FALLTHRU: *do* allow drags to start with other buttons
                 elif self.zone == _EditZone.EMPTY_CANVAS:
-                    self._start_new_capture_phase(rollback=False)
-                    assert self.phase == _Phase.CAPTURE
+                    if (event.state & Gdk.ModifierType.SHIFT_MASK):
+                        # selection box dragging start!!
+                        self.phase = _Phase.ADJUST_SELECTING
+                        self.selection_area.start(event.x, event.y)
+                    else:
+                        self._start_new_capture_phase(rollback=False)
+                        assert self.phase == _Phase.CAPTURE
+
                     # FALLTHRU: *do* start a drag
                 else:
                     # clicked a node.
@@ -441,6 +487,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # XXX  but needs to allow a drag after the 1st one's placed.
             pass
         elif self.phase == _Phase.ADJUST_PRESSURE:
+            # XXX Not sure what to do here.
+            pass
+        elif self.phase == _Phase.ADJUST_SELECTING:
             # XXX Not sure what to do here.
             pass
         else:
@@ -501,6 +550,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # (otherwise fall through and end any current drag)
         elif self.phase == _Phase.ADJUST_PRESSURE:
             self.options_presenter.target = (self, self.current_node_index)
+        elif self.phase == _Phase.ADJUST_SELECTING:
+            # XXX Not sure what to do here.
+            pass
         elif self.phase == _Phase.CAPTURE:
             # Update options_presenter when capture phase end
             self.options_presenter.target = (self, None)
@@ -651,6 +703,17 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         for i in xrange(len(self.nodes)):
             self._queue_draw_node(i)
 
+    def _queue_draw_selection_area(self):
+        """Redraws selection area"""
+        area = self.selection_area
+        for tdw, overlay in self._overlays.items():
+            tdw.queue_draw_area(
+                    area.sx, area.sy,
+                    area.ex - area.sx, 
+                    area.ey - area.sy)
+
+
+
     def _queue_redraw_curve(self):
         """Redraws the entire curve on all known view TDWs"""
         self._stop_task_queue_runner(complete=False)
@@ -665,7 +728,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 abrupt=True,
             )
             interp_state = {"t_abs": self.nodes[0].time}
-            for p_1, p0, p1, p2 in gui.drawutils.spline_iter(self.nodes):
+           #for p_1, p0, p1, p2 in gui.drawutils.spline_iter(self.nodes):
+            offsets = tdw.display_to_model(self.drag_offset_x, self.drag_offset_y)
+            for p_1, p0, p1, p2 in gui.drawutils.spline_iter_2(self.nodes,
+                    self.selected_nodes,
+                    offsets):
                 self._queue_task(
                     self._draw_curve_segment,
                     model,
@@ -756,6 +823,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 self._pressed_pressure = node.pressure
                 self._pressed_x, self._pressed_y = \
                         tdw.display_to_model(event.x, event.y)
+        elif self.phase == _Phase.ADJUST_SELECTING:
+            self.selection_area.start(event.x, event.y)
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -815,6 +884,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 self._adjust_pressure_with_motion(
                     tdw,
                     event.x, event.y)
+        elif self.phase == _Phase.ADJUST_SELECTING:
+            self.selection_area.drag(event.x, event.y)
+            self._queue_draw_selection_area()
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -887,7 +959,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._pressed_pressure = None
             self._queue_redraw_curve()
             self._queue_draw_buttons()
-        else:
+        elif self.phase == _Phase.ADJUST_SELECTING:
+            self._queue_draw_selection_area()
+            self.selection_area.reset()
+            self.phase = _Phase.ADJUST
+        else:                      
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
     def scroll_cb(self, tdw, event):
@@ -1301,6 +1377,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def deselect_all_nodes(self):
         self.selected_nodes = []
         self._queue_redraw_all_nodes()
+
         
 
 class Overlay (gui.overlays.Overlay):
@@ -1443,7 +1520,10 @@ class Overlay (gui.overlays.Overlay):
         alloc = self._tdw.get_allocation()
         for i, node, x, y in self._get_onscreen_nodes():
             color = gui.style.EDITABLE_ITEM_COLOR
-            if mode.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE):
+            if (mode.phase in 
+                    (_Phase.ADJUST, 
+                     _Phase.ADJUST_PRESSURE, 
+                     _Phase.ADJUST_SELECTING)):
                 if i == mode.current_node_index:
                     color = gui.style.ACTIVE_ITEM_COLOR
                     x += mode.drag_offset_x
@@ -1460,7 +1540,10 @@ class Overlay (gui.overlays.Overlay):
                 radius=radius,
             )
         # Buttons
-        if mode.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE) and not mode.in_drag:
+        if (mode.phase in 
+                (_Phase.ADJUST, 
+                 _Phase.ADJUST_PRESSURE) and 
+                not mode.in_drag):
             self.update_button_positions()
             radius = gui.style.FLOATING_BUTTON_RADIUS
             button_info = [
@@ -1492,8 +1575,19 @@ class Overlay (gui.overlays.Overlay):
                 )
 
         # Selection Rectangle
-        if mode.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE):
-            pass
+        if mode.phase == _Phase.ADJUST_SELECTING:
+            area = mode.selection_area
+            cr.save()
+            color = gui.style.ACTIVE_ITEM_COLOR
+            cr.set_source_rgb(*color.get_rgb())
+            cr.set_line_width(2)
+            cr.move_to(area.sx, area.sy)
+            cr.line_to(area.ex, area.sy)
+            cr.line_to(area.ex, area.ey)
+            cr.line_to(area.sx, area.ey)
+            cr.close_path()
+            cr.stroke()
+            cr.restore()
         
 
 class _LayoutNode (object):

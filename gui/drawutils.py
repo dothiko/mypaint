@@ -108,6 +108,37 @@ def spline_iter(tuples, double_first=True, double_last=True):
         cint[3] = array(tuples[-1])
         yield cint
 
+def spline_iter_2(tuples,selected,offset,double_first=True, double_last=True):
+    """Converts an list of control point tuples to interpolatable arrays
+
+    :param list tuples: Sequence of tuples of floats
+    :param bool double_first: Repeat 1st point, putting it in the result
+    :param bool double_last: Repeat last point, putting it in the result
+    :returns: Iterator producing (p-1, p0, p1, p2)
+
+    The resulting sequence of 4-tuples is intended to be fed into
+    spline_4p().  The start and end points are therefore normally
+    doubled, producing a curve that passes through them, along a vector
+    aimed at the second or penultimate point respectively.
+
+    """
+    cint = [None, None, None, None]
+    if double_first:
+        cint[0:3] = cint[1:4]
+        cint[3] = array(tuples[0])
+    for idx,ctrlpt in enumerate(tuples):
+        cint[0:3] = cint[1:4]
+        cint[3] = array(ctrlpt)
+        if idx in selected:
+            cint[3][0] += offset[0]
+            cint[3][1] += offset[1]
+        if not any((a is None) for a in cint):
+            yield cint
+    if double_last:
+        cint[0:3] = cint[1:4]
+        cint[3] = array(tuples[-1])
+        yield cint
+
 
 def _variable_pressure_scribble(w, h, tmult):
     points = _BRUSH_PREVIEW_POINTS
