@@ -760,7 +760,7 @@ Vocabulary
       </child>
       <child>
         <object class="GtkAction" id="AverageNodes">
-          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Average node</property>
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Average nodes</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Average(smooth) nodes and meke stroke less bumpy.</property>
           <signal name="activate" handler="average_nodes_cb"/>
         </object>
