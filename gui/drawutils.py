@@ -112,6 +112,8 @@ def spline_iter_2(tuples,selected,offset,double_first=True, double_last=True):
     """Converts an list of control point tuples to interpolatable arrays
 
     :param list tuples: Sequence of tuples of floats
+    :param list selected: Selected control points index list
+    :param list offset: An Offset for selected points,a tuple of (x,y).
     :param bool double_first: Repeat 1st point, putting it in the result
     :param bool double_last: Repeat last point, putting it in the result
     :returns: Iterator producing (p-1, p0, p1, p2)

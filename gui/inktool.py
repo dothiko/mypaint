@@ -77,6 +77,8 @@ class _EditZone:
 class _SelectionArea:
     """Class for holding selection area."""
 
+    LINE_WIDTH = 2
+
     def __init__(self):
         self.reset()
 
@@ -85,6 +87,12 @@ class _SelectionArea:
         self.sy=None
         self.ex=None
         self.ey=None
+        self._prev_rect = None
+        self._cur_rect = None
+
+        # workaround flag, because drag_stop_cb does not have
+        # event parameter.
+        self.is_addition = False 
 
     def start(self,x,y):
         self.sx=x
@@ -93,17 +101,34 @@ class _SelectionArea:
         self.ey=y
 
     def drag(self,x,y):
-        if x < self.sx:
-            self.sx = x
-        if y < self.sy:
-            self.sy = y
-        if x > self.ex:
-            self.ex = x
-        if y < self.ey:
-            self.ey = y
+        self.ex=x
+        self.ey=y
+
+    def _get_sorted_position(self):
+        sx, ex = (self.sx, self.ex) if self.sx < self.ex else (self.ex, self.sx)
+        sy, ey = (self.sy, self.ey) if self.sy < self.ey else (self.ey, self.sy)
+        return (sx,sy,ex,ey)
+
+    def get_current_rect(self):
+        self._prev_rect = self._cur_rect
+        sx, sy, ex, ey = self._get_sorted_position()
+        self._cur_rect = (sx - self.LINE_WIDTH, sy - self.LINE_WIDTH, 
+                ex - sx + self.LINE_WIDTH + 1, 
+                ey - sy + self.LINE_WIDTH + 1)
+        return self._cur_rect
+
+    def get_previous_rect(self):
+        return self._prev_rect
 
     def is_enabled(self):
         return self.sx != None 
+
+    def is_inside(self, x, y):
+        sx, sy, ex, ey = self._get_sorted_position()
+        return (x >= sx and x <= ex and y >= sy and y <= ey)
+
+    def dbgout(self):
+        print ("%.4f,%.4f - %.4f,%.4f" % (self.sx, self.sy, self.ex, self.ey))
 
 
 
@@ -689,8 +714,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         node = self.nodes[i]
         for tdw in self._overlays:
             x, y = tdw.model_to_display(node.x, node.y)
-            x = math.floor(x) + self.drag_offset_x
-            y = math.floor(y) + self.drag_offset_y
+            x = math.floor(x)
+            y = math.floor(y)
+            if i in self.selected_nodes:
+                x += self.drag_offset_x
+                y += self.drag_offset_y
             size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
             tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
 
@@ -707,10 +735,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """Redraws selection area"""
         area = self.selection_area
         for tdw, overlay in self._overlays.items():
+            prev = self.selection_area.get_previous_rect()
+            if prev:
+                tdw.queue_draw_area(*prev)
+
             tdw.queue_draw_area(
-                    area.sx, area.sy,
-                    area.ex - area.sx, 
-                    area.ey - area.sy)
+                    *self.selection_area.get_current_rect())
 
 
 
@@ -825,6 +855,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                         tdw.display_to_model(event.x, event.y)
         elif self.phase == _Phase.ADJUST_SELECTING:
             self.selection_area.start(event.x, event.y)
+            self.selection_area.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -953,6 +984,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._queue_redraw_curve()
             self._queue_draw_buttons()
         elif self.phase == _Phase.ADJUST_PRESSURE:
+            ## Pressure editing phase end.
+
             # Return to ADJUST phase.
             # simple but very important,to ensure entering normal editing.
             self.phase = _Phase.ADJUST
@@ -960,7 +993,23 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._queue_redraw_curve()
             self._queue_draw_buttons()
         elif self.phase == _Phase.ADJUST_SELECTING:
+            ## Nodes selection phase
             self._queue_draw_selection_area()
+
+            modified = False
+            if not self.selection_area.is_addition:
+                self._reset_selected_nodes()
+                modified = True
+
+            for idx,cn in enumerate(self.nodes):
+                if self.selection_area.is_inside(cn.x, cn.y):
+                    if not idx in self.selected_nodes:
+                        self.selected_nodes.append(idx)
+                        modified = True
+
+            if modified:
+                self._queue_redraw_all_nodes()
+
             self.selection_area.reset()
             self.phase = _Phase.ADJUST
         else:                      
@@ -1581,6 +1630,7 @@ class Overlay (gui.overlays.Overlay):
             color = gui.style.ACTIVE_ITEM_COLOR
             cr.set_source_rgb(*color.get_rgb())
             cr.set_line_width(2)
+            cr.new_path()
             cr.move_to(area.sx, area.sy)
             cr.line_to(area.ex, area.sy)
             cr.line_to(area.ex, area.ey)
@@ -1588,6 +1638,12 @@ class Overlay (gui.overlays.Overlay):
             cr.close_path()
             cr.stroke()
             cr.restore()
+
+           #gui.drawutils.render_round_floating_color_chip(
+           #    cr=cr, x=area.sx-radius, y=area.sy-radius,
+           #    color=color,
+           #    radius=radius,
+           #)
         
 
 class _LayoutNode (object):
