@@ -758,6 +758,27 @@ Vocabulary
           <signal name="activate" handler="cull_nodes_cb"/>
         </object>
       </child>
+      <child>
+        <object class="GtkAction" id="AverageNodes">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Average node</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Average(smooth) nodes and meke stroke less bumpy.</property>
+          <signal name="activate" handler="average_nodes_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="SelectAllNodes">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Select all nodes</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Mark all nodes as selected.</property>
+          <signal name="activate" handler="select_all_nodes_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="DeselectAllNodes">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Deselect all nodes</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Clear selected state of all nodes.</property>
+          <signal name="activate" handler="deselect_all_nodes_cb"/>
+        </object>
+      </child>
       <!-- }}} -->
     </object>
   </child>

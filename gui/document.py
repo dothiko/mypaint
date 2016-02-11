@@ -2053,6 +2053,24 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         mode=self.modes.top
         if getattr(mode, 'cull_nodes', False):
             mode.cull_nodes()
+
+    def average_nodes_cb(self, action):
+        """Callback: average current inktool nodes (from keyboard)"""
+        mode=self.modes.top
+        if getattr(mode, 'average_nodes', False):
+            mode.average_nodes()
+
+    def select_all_nodes_cb(self, action):
+        """Callback: mark all inktool nodes as selected (from keyboard)"""
+        mode=self.modes.top
+        if getattr(mode, 'select_all_nodes', False):
+            mode.select_all_nodes()
+
+    def deselect_all_nodes_cb(self, action):
+        """Callback: clear selected state of all inktool nodes (from keyboard)"""
+        mode=self.modes.top
+        if getattr(mode, 'deselect_all_nodes', False):
+            mode.deselect_all_nodes()
     
 
 

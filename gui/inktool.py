@@ -409,23 +409,26 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     # clicked a node.
 
                     if button == 1:
-                        if (event.state & Gdk.ModifierType.CONTROL_MASK != 
-                                    Gdk.ModifierType.CONTROL_MASK):
-
-                            # If new solo node clicked without holding 
-                            # CONTROL key,then reset all selected nodes.
-                            assert self.current_node_index != None
-
-                            # To avoid old selected nodes still lit.
-                            self._queue_draw_selected_nodes() 
-
-                            self._reset_selected_nodes(self.current_node_index)
-
-                        else:
+                        do_reset = False
+                        if (event.state & Gdk.ModifierType.CONTROL_MASK):
                             # Holding CONTROL key = adding or removing a node.
                             # But it is done at button_release_cb for now,
-                            # nothing is done here.
                             pass
+
+                        else:
+                            # no CONTROL Key holded.
+                            # If new solo node clicked without holding 
+                            # CONTROL key,then reset all selected nodes.
+
+                            assert self.current_node_index != None
+
+                            do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
+                            do_reset |= not (self.current_node_index in self.selected_nodes)
+
+                        if do_reset:
+                            # To avoid old selected nodes still lit.
+                            self._queue_draw_selected_nodes() 
+                            self._reset_selected_nodes(self.current_node_index)
 
                     # FALLTHRU: *do* start a drag
 
@@ -804,6 +807,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     self.drag_offset_x = event.x - self.start_x
                     self.drag_offset_y = event.y - self.start_y
                     self._queue_draw_selected_nodes()
+
+                self._queue_redraw_curve()
 
         elif self.phase == _Phase.ADJUST_PRESSURE:
             if self._pressed_pressure is not None:
@@ -1288,7 +1293,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # redraw new nodes
             self._queue_all_visual_redraw()
 
+    ## Node selection
+    def select_all_nodes(self):
+        self.selected_nodes = range(0, len(self.nodes)-1)
+        self._queue_redraw_all_nodes()
 
+    def deselect_all_nodes(self):
+        self.selected_nodes = []
+        self._queue_redraw_all_nodes()
         
 
 class Overlay (gui.overlays.Overlay):
@@ -1478,6 +1490,11 @@ class Overlay (gui.overlays.Overlay):
                     pixbuf=icon_pixbuf,
                     radius=radius,
                 )
+
+        # Selection Rectangle
+        if mode.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE):
+            pass
+        
 
 class _LayoutNode (object):
     """Vertex/point for the button layout algorithm."""

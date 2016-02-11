@@ -3,11 +3,13 @@
 This is heavily customized version of the program "MyPaint".
 
 Most customized codes are adhoc, still in testing stage by myself.
-I also use this branch as my personal backup. (because private repository needs some money...)
+I also use this branch as my personal backup. 
 
 これはかなりカスタマイズされたバージョンのMyPaintです。
 ほとんどのカスタマイズコードはその場しのぎのもので、私自身によるテストを行っている状況です。
 このブランチは個人的なバックアップ用途としても使っています。
+
+This branch is not intended to pull request. This is purely experimental build.
 
 Customized features : カスタム機能について
 ----
@@ -50,7 +52,7 @@ this feature will affect to multiple selected nodes.
 with 'Capturing period' scale,you can customize node capturing(sampling) period.
 it is multiple factor to sampling time/length.
 
-I create this feature,so obsolute auto-culling.
+I got inspiration for this feature,so obsolute auto-culling.
 
 インクツールのノードのサンプリング期間を倍率指定で広げることが出来ます。倍率を大きくすることで間隔が広がり、形は大まかになりますが、制御点の数が減って編集はしやすくなります。
 場合に応じて使い分けてください。
