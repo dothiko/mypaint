@@ -74,6 +74,7 @@ class _EditZone:
     REJECT_BUTTON = 2  #: On-canvas button that abandons the current line
     ACCEPT_BUTTON = 3  #: On-canvas button that commits the current line
 
+
 class _SelectionMotion:
     """A class of selection area information for InkinkMode.
     This class also used for record dragging motion offset, 
@@ -250,11 +251,18 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     @property
     def active_cursor(self):
-        if self.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE):
+        if self.phase == _Phase.ADJUST:
             if self.zone == _EditZone.CONTROL_NODE:
                 return self._crosshair_cursor
             elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
                 return self._arrow_cursor
+
+        elif self.phase == _Phase.ADJUST_PRESSURE:
+            if self.zone == _EditZone.CONTROL_NODE:
+                return self._cursor_move_nw_se
+
+        elif self.phase == _Phase.ADJUST_SELECTING:
+            return self._crosshair_cursor
         return None
 
     ## Class config vars
@@ -403,6 +411,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._crosshair_cursor = self.doc.app.cursors.get_action_cursor(
             self.ACTION_NAME,
             gui.cursor.Name.CROSSHAIR_OPEN_PRECISE,
+        )
+        self._cursor_move_nw_se = self.doc.app.cursors.get_action_cursor(
+            self.ACTION_NAME,
+            gui.cursor.Name.MOVE_NORTHWEST_OR_SOUTHEAST,
         )
 
     def leave(self, **kwds):
@@ -580,12 +592,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                         tidx = self.target_node_index
                         if tidx != None:
                             if not tidx in self.selected_nodes:
-                               #if (len(self.selected_nodes) == 0 and 
-                               #        self.current_node_index != None and 
-                               #        self.current_node_index != tidx):
-                               #    self.selected_nodes.append(
-                               #            self.current_node_index)
-
                                 self.selected_nodes.append(tidx)
                             else:
                                 self.selected_nodes.remove(tidx)
