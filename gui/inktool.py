@@ -75,8 +75,30 @@ class _EditZone:
     ACCEPT_BUTTON = 3  #: On-canvas button that commits the current line
 
 class _SelectionMotion:
-    """Class for holding selection area and motion offset.
-       All position attributes are screen coordinate.
+    """A class of selection area information for InkinkMode.
+    This class also used for record dragging motion offset, 
+    when move selected nodes.
+
+    All position attributes are screen coordinate.
+
+    ## Why this class created:
+
+    Mainly,to select multiple nodes with rectangle, from GUI.
+
+    And...if canvas has been scrolled,we cannot convert 
+    display coordinate 'offset' to model coordinate.
+    because the origin moved by scrolling,so convert offset of 
+    screen coordination to model should be incorrect.
+    so we need to remember offset start and end position,
+    and convert them into model coord,then calculate offset.
+
+    Under this circumstance, This class also can be used for
+    retaining offset start/end position data,
+    not only selection rectangle.
+
+    ## About instance 
+    The instance of this class should be unique for application,
+    only one instance created as the InkingMode class attribute.
     """
 
 
@@ -132,9 +154,6 @@ class _SelectionMotion:
         """
         sx, sy, ex, ey = self.get_sorted_position()
         return (x >= sx and x <= ex and y >= sy and y <= ey)
-
-    def dbgout(self):
-        print ("%.4f,%.4f - %.4f,%.4f" % (self.sx, self.sy, self.ex, self.ey))
 
     def get_model_offset(self,tdw):
         sx,sy = tdw.display_to_model(self.sx, self.sy)
