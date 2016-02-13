@@ -749,13 +749,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             cls._OPTIONS_WIDGET = widget
         return cls._OPTIONS_WIDGET
 
-    ## Device change callback
-
-    def device_changed_cb(self, tdw, device):
-        # The brush is already changed according to device
-        # at Monitor.device_used() of device.py.
-        # So simply reset it here.
-        tdw.doc.brush.reset()
 
 
 class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):

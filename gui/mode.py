@@ -331,7 +331,7 @@ class InteractionMode (object):
             device = event.get_source_device()
             same_device = tdw.app.device_monitor.device_used(device)
             if not same_device:
-                self.device_changed_cb(tdw, device)
+                tdw.doc.brush.reset()
 
         assert not hasattr(super(InteractionMode, self), "motion_notify_cb")
 
