@@ -761,14 +761,14 @@ Vocabulary
       <child>
         <object class="GtkAction" id="AverageNodes">
           <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Average nodes</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Average(smooth) nodes and meke stroke less bumpy.</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Average(smooth) nodes and make stroke less bumpy.</property>
           <signal name="activate" handler="average_nodes_cb"/>
         </object>
       </child>
       <child>
         <object class="GtkAction" id="SelectAllNodes">
           <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Select all nodes</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Mark all nodes as selected.</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Mark all InkingMode nodes as selected.</property>
           <signal name="activate" handler="select_all_nodes_cb"/>
         </object>
       </child>

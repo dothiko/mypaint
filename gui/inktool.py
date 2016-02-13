@@ -76,7 +76,7 @@ class _EditZone:
 
 
 class _SelectionMotion:
-    """A class of selection area information for InkinkMode.
+    """A class of selection area information for InkingMode.
     This class also used for record dragging motion offset, 
     when move selected nodes.
 
