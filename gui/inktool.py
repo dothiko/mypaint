@@ -139,8 +139,8 @@ class _SelectionMotion:
         self._prev_rect = self._cur_rect
         sx, sy, ex, ey = self.get_sorted_position()
         self._cur_rect = (sx - self.LINE_WIDTH, sy - self.LINE_WIDTH, 
-                ex - sx + self.LINE_WIDTH + 1, 
-                ey - sy + self.LINE_WIDTH + 1)
+                ex - sx + self.LINE_WIDTH + 2, 
+                ey - sy + self.LINE_WIDTH + 2)
         return self._cur_rect
 
     def get_previous_rect(self):
@@ -599,6 +599,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     else:
                         ## Single node click. 
                         pass
+
+                    ## fall throgh
+
+                self._update_zone_and_target(tdw, event.x, event.y)
 
             # (otherwise fall through and end any current drag)
         elif self.phase == _Phase.ADJUST_PRESSURE:
@@ -1269,18 +1273,19 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             
         # after then,delete it.
         new_nodes = [self.nodes[0]]
-        for idx in self.selected_nodes:
-            if idx > 0 and idx < len(self.nodes) - 1:
-                new_nodes.append(self.nodes[idx])
-
+        for idx,cn in enumerate(self.nodes):
+            if idx in self.selected_nodes:
                 if self.current_node_index == idx:
                     self.current_node_index = None
 
-                if self.terget_node_index == idx:
-                    self.terget_node_index = None
+                if self.target_node_index == idx:
+                    self.target_node_index = None
+            else:
+                new_nodes.append(self.nodes[idx])
 
         new_nodes.append(self.nodes[-1])
-        self.nodes=new_nodes
+        self.nodes = new_nodes
+        self._reset_selected_nodes()
 
         # Issue redraws for the changed on-canvas elements
         self._queue_redraw_curve()
@@ -1456,7 +1461,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     ## Node selection
     def select_all_nodes(self):
-        self.selected_nodes = range(0, len(self.nodes)-1)
+        self.selected_nodes = range(0, len(self.nodes))
         self._queue_redraw_all_nodes()
 
     def deselect_all_nodes(self):
@@ -1612,14 +1617,16 @@ class Overlay (gui.overlays.Overlay):
                      _Phase.ADJUST_SELECTING)):
                 if i == mode.current_node_index:
                     color = gui.style.ACTIVE_ITEM_COLOR
-                    x += dx
-                    y += dy
+                    if mode.phase == _Phase.ADJUST:
+                        x += dx
+                        y += dy
                 elif i == mode.target_node_index:
                     color = gui.style.PRELIT_ITEM_COLOR
                 elif i in mode.selected_nodes:
                     color = gui.style.POSTLIT_ITEM_COLOR
-                    x += dx
-                    y += dy
+                    if mode.phase == _Phase.ADJUST:
+                        x += dx
+                        y += dy
             gui.drawutils.render_round_floating_color_chip(
                 cr=cr, x=x, y=y,
                 color=color,
@@ -1675,13 +1682,6 @@ class Overlay (gui.overlays.Overlay):
             cr.close_path()
             cr.stroke()
             cr.restore()
-
-           #gui.drawutils.render_round_floating_color_chip(
-           #    cr=cr, x=area.sx-radius, y=area.sy-radius,
-           #    color=color,
-           #    radius=radius,
-           #)
-        
 
 class _LayoutNode (object):
     """Vertex/point for the button layout algorithm."""

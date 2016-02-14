@@ -112,6 +112,11 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         self._cursor_hidden_tdws = set()
         self._cursor_hidden = None
 
+        # Assistant
+        
+        # need this,because attribute error raise in initial 
+        # state.
+        self.assist = None 
 
     ## Metadata
 
@@ -181,6 +186,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             self.last_good_raw_pressure = 0.0
             self.last_good_raw_xtilt = 0.0
             self.last_good_raw_ytilt = 0.0
+
 
         def queue_motion(self, event_data):
             """Append one raw motion event to the motion queue
@@ -265,6 +271,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
     def leave(self, **kwds):
         """Leave freehand mode"""
+        if self.assist:
+            self.assist.reset()
         self._reset_drawing_state()
         self._reinstate_drawing_cursor(tdw=None)
         super(FreehandMode, self).leave(**kwds)
@@ -427,7 +435,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             result = True
 
         # Stablize
-        self.assist.reset()
+       #self.assist.reset()  # comment out for non-abrupt-like glitch
 
         
         return (super(FreehandMode, self).button_release_cb(tdw, event)
@@ -466,20 +474,20 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         if drawstate.event_compression_workaround is None:
             self._add_event_compression_workaround(tdw)
 
+        # Extract the raw readings for this event
+        x = event.x
+        y = event.y
 
-        # Stabilizer cursor position fetch
-        self.assist = self.doc.app.get_assistant()
-        self.assist.fetch(event.x, event.y)
-        if self.doc.stabilizer_mode:
-            pos = self.assist.get_current()
-            if not pos:
-                return
-            else:
-                x, y = pos
-        else:
-            # Extract the raw readings for this event
-            x = event.x
-            y = event.y
+        # Stabilizer cursor position fetch & apply
+        self.assist = tdw.app.get_assistant()
+        if self.assist:
+            self.assist.fetch(event.x, event.y)
+            if self.doc.stabilizer_mode:
+                pos = self.assist.get_current()
+                if not pos:
+                    return super(FreehandMode, self).motion_notify_cb(tdw, event)
+                else:
+                    x, y = pos
 
         time = event.time
         pressure = event.get_axis(gdk.AXIS_PRESSURE)

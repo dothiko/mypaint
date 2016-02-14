@@ -510,7 +510,7 @@ class Application (object):
             # so provide a Ctrl-based equivalent for all alt actions.
             'input.button_mapping': {
                 # Note that space is treated as a fake Button2
-                '<Shift>Button1':          'StraightMode',
+               #'<Shift>Button1':          'StraightMode',
                 '<Control>Button1':        'ColorPickMode',
                 '<Alt>Button1':            'ColorPickMode',
                 'Button2':                 'PanViewMode',
