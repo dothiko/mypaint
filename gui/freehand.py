@@ -103,9 +103,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
     # gives us, but position them at the x and y that Xi2 gave us.
     # Pressure and tilt fidelities matter less than positional accuracy.
 
-    # Stablizer ring buffer
-    _stabilize_max = 32
-    _stabilize_src_pos = [None] * _stabilize_max 
 
     ## Initialization
 
@@ -114,9 +111,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         super(FreehandMode, self).__init__(**args)
         self._cursor_hidden_tdws = set()
         self._cursor_hidden = None
-
-        # Stablizer init
-        self._stabilize_init()
 
 
     ## Metadata
@@ -380,6 +374,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
     def button_press_cb(self, tdw, event):
         result = False
         current_layer = tdw.doc.layer_stack.current
+
+
         if (current_layer.get_paintable() and event.button == 1
                 and event.type == gdk.BUTTON_PRESS):
             # Single button press
@@ -431,7 +427,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             result = True
 
         # Stablize
-       #self._stabilize_reset()
+        self.assist.reset()
 
         
         return (super(FreehandMode, self).button_release_cb(tdw, event)
@@ -472,9 +468,10 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
 
         # Stabilizer cursor position fetch
-        self._set_stabilize_point(event.x, event.y)
+        self.assist = self.doc.app.get_assistant()
+        self.assist.fetch(event.x, event.y)
         if self.doc.stabilizer_mode:
-            pos = self._get_stabilize_point()
+            pos = self.assist.get_current()
             if not pos:
                 return
             else:
@@ -590,8 +587,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             if self.doc.stabilizer_mode:
                 if (hx0, hy0, ht0) == (event.x, event.y, time):
                     for hx, hy, ht in drawstate.evhack_positions:
-                        self._set_stabilize_point(hx,hy)
-                        pos = self._get_stabilize_point()
+                        self.assist.fetch(hx,hy)
+                        pos = self.assist.get_current()
                         if pos:
                             hx, hy = tdw.display_to_model(pos[0], pos[1])
                             event_data = (ht, hx, hy, None, None, None)
@@ -635,40 +632,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         # Anyway,we need to detect device change in this version,so call this.
         return super(FreehandMode, self).motion_notify_cb(tdw, event)
 
-    ## Stabilize related
-    def _stabilize_init(self):
-        self._stabilized_index=0
-        self._stabilized_cnt=0
-
-    def _stabilize_reset(self):
-        self._stabilized_index=0
-        self._stabilized_cnt=0
-
-    def _set_stabilize_point(self,x,y):
-        self._stabilize_src_pos[self._stabilized_index]=(x,y)
-        self._stabilized_index+=1
-        self._stabilized_index%=self._stabilize_max
-        self._stabilized_cnt+=1
-
-    def _get_stabilize_point(self):
-        if self._stabilized_cnt < self._stabilize_max:
-            return None
-
-        ox=0
-        oy=0
-        idx=0
-        while idx < self._stabilize_max:
-            cx,cy=self._get_stabilize_element(idx)
-            ox+=cx
-            oy+=cy
-            idx+=1
-
-        return (ox/self._stabilize_max,oy/self._stabilize_max)
-
-    def _get_stabilize_element(self,idx):
-        return self._stabilize_src_pos[(self._stabilized_index + idx) % self._stabilize_max]
-    
-        
 
     ## Motion queue processing
 

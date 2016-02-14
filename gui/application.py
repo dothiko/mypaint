@@ -90,7 +90,7 @@ import gui.factoryaction  # registration only
 import gui.autorecover
 import lib.xml
 import gui.profiling
-
+import assist
 
 ## Utility methods
 
@@ -375,6 +375,9 @@ class Application (object):
         # Show main UI.
         self.drawWindow.show_all()
         GObject.idle_add(self._at_application_start, filenames, fullscreen)
+
+        # Create application unique assist object
+        self._assist = assist.Stabilizer()
 
     def _at_application_start(self, filenames, fullscreen):
         col = self.brush_color_manager.get_color()
@@ -802,6 +805,12 @@ class Application (object):
     def crash_program_cb(self, action):
         """Tests exception handling."""
         raise Exception("This is a crash caused by the user.")
+
+
+    ## Assistant
+    def get_assistant(self):
+        """ Get current assistant.if it disabled,'None' returned."""
+        return self._assist
 
 
 class PixbufDirectory (object):
