@@ -142,7 +142,7 @@ class _SelectionMotion:
         c_area = self.get_sorted_position()
         csx, csy, cex, cey = c_area
 
-        if c_area != self.prev_area:
+        if c_area != self._prev_area:
             prev_area = self._prev_area # Store previous area here
                                         # Because it is overwritten now
             self._prev_area = c_area
@@ -595,22 +595,19 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     self._update_current_node_index()
                     return False
             else:
-                # clicked node and button released.
-
+                # Clicked node and button released.
                 # Add or Remove selected node
                 # when control key is pressed
                 if event.button == 1:
                     if event.state & Gdk.ModifierType.CONTROL_MASK:
-
                         tidx = self.target_node_index
                         if tidx != None:
                             if not tidx in self.selected_nodes:
                                 self.selected_nodes.append(tidx)
                             else:
                                 self.selected_nodes.remove(tidx)
-
                     else:
-                        ## Single node click. 
+                        # Single node click. 
                         pass
 
                     ## fall throgh
@@ -669,7 +666,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """Update the zone and target node under a cursor position"""
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone.EMPTY_CANVAS
-       #if self.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE) and not self.in_drag:
         if not self.in_drag:
             if self.phase == _Phase.ADJUST:
                 new_target_node_index = None
@@ -781,12 +777,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """Redraws selection area"""
         area = self.selection_motion
         for tdw, overlay in self._overlays.items():
-           #prev = self.selection_motion.get_update_rect()
-           #if prev:
-           #    tdw.queue_draw_area(*prev)
-           #
-           #tdw.queue_draw_area(
-           #        *self.selection_motion.get_current_rect())
             tdw.queue_draw_area(
                     *self.selection_motion.get_update_rect())
 
@@ -908,6 +898,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         elif self.phase == _Phase.ADJUST_SELECTING:
             self.selection_motion.start(event.x, event.y)
             self.selection_motion.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
+            self._queue_draw_buttons() # To erase button!
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -1065,6 +1056,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if modified:
                 self._queue_redraw_all_nodes()
 
+            self._queue_draw_buttons() # buttons erased while selecting
             self.selection_motion.reset()
             self.phase = _Phase.ADJUST
         else:                      
@@ -1275,11 +1267,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_redraw_curve()
 
     def delete_current_node(self):
-       #if self.can_delete_node(self.current_node_index):
-       #    self.delete_node(self.current_node_index)
-       #
-       #    # FIXME: Quick hack,to avoid indexerror(very rare case)
-       #    self.target_node_index=None
 
         # First of all,queue redraw area.
         self._queue_draw_buttons()
@@ -1756,15 +1743,10 @@ class Overlay (gui.overlays.Overlay):
             cr.set_source_rgb(*color.get_rgb())
             cr.set_line_width(2)
             cr.new_path()
-           #cr.move_to(area.sx, area.sy)
-           #cr.line_to(area.ex, area.sy)
-           #cr.line_to(area.ex, area.ey)
-           #cr.line_to(area.sx, area.ey)
-            sx, sy, ex, ey = area.get_sorted_position()
-            cr.move_to(sx, sy)
-            cr.line_to(ex, sy)
-            cr.line_to(ex, ey)
-            cr.line_to(sx, ey)
+            cr.move_to(area.sx, area.sy)
+            cr.line_to(area.ex, area.sy)
+            cr.line_to(area.ex, area.ey)
+            cr.line_to(area.sx, area.ey)
             cr.close_path()
             cr.stroke()
             cr.restore()
