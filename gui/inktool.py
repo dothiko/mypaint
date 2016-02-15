@@ -113,8 +113,7 @@ class _SelectionMotion:
         self.sy = 0
         self.ex = 0
         self.ey = 0
-        self._prev_rect = None
-        self._cur_rect = None
+        self._prev_area = None
 
         # workaround flag, because drag_stop_cb does not have
         # event parameter.
@@ -131,20 +130,34 @@ class _SelectionMotion:
         self.ey = y
 
     def get_sorted_position(self):
-        sx, ex = (self.sx, self.ex) if self.sx < self.ex else (self.ex, self.sx)
-        sy, ey = (self.sy, self.ey) if self.sy < self.ey else (self.ey, self.sy)
-        return (sx,sy,ex,ey)
+        return (min(self.sx, self.ex),
+                min(self.sy, self.ey),
+                max(self.sx, self.ex),
+                max(self.sy, self.ey))
 
-    def get_current_rect(self):
-        self._prev_rect = self._cur_rect
-        sx, sy, ex, ey = self.get_sorted_position()
-        self._cur_rect = (sx - self.LINE_WIDTH, sy - self.LINE_WIDTH, 
-                ex - sx + self.LINE_WIDTH + 2, 
-                ey - sy + self.LINE_WIDTH + 2)
-        return self._cur_rect
 
-    def get_previous_rect(self):
-        return self._prev_rect
+    def get_update_rect(self):
+        """Get update 'rect' for update(erase) tdw"""
+
+        c_area = self.get_sorted_position()
+        csx, csy, cex, cey = c_area
+
+        if c_area != self.prev_area:
+            prev_area = self._prev_area # Store previous area here
+                                        # Because it is overwritten now
+            self._prev_area = c_area
+
+            if prev_area:
+                psx, psy, pex, pey = prev_area
+                csx = min(csx, psx)
+                csy = min(csy, psy)
+                cex = max(cex, pex)
+                cey = max(cey, pey)
+
+        return (csx - self.LINE_WIDTH,
+                csy - self.LINE_WIDTH,
+                (cex - csx + 1) + self.LINE_WIDTH * 2,
+                (cey - csy + 1) + self.LINE_WIDTH * 2)
 
     def is_enabled(self):
         return self.sx != None 
@@ -768,12 +781,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """Redraws selection area"""
         area = self.selection_motion
         for tdw, overlay in self._overlays.items():
-            prev = self.selection_motion.get_previous_rect()
-            if prev:
-                tdw.queue_draw_area(*prev)
-
+           #prev = self.selection_motion.get_update_rect()
+           #if prev:
+           #    tdw.queue_draw_area(*prev)
+           #
+           #tdw.queue_draw_area(
+           #        *self.selection_motion.get_current_rect())
             tdw.queue_draw_area(
-                    *self.selection_motion.get_current_rect())
+                    *self.selection_motion.get_update_rect())
 
 
 
@@ -1741,10 +1756,15 @@ class Overlay (gui.overlays.Overlay):
             cr.set_source_rgb(*color.get_rgb())
             cr.set_line_width(2)
             cr.new_path()
-            cr.move_to(area.sx, area.sy)
-            cr.line_to(area.ex, area.sy)
-            cr.line_to(area.ex, area.ey)
-            cr.line_to(area.sx, area.ey)
+           #cr.move_to(area.sx, area.sy)
+           #cr.line_to(area.ex, area.sy)
+           #cr.line_to(area.ex, area.ey)
+           #cr.line_to(area.sx, area.ey)
+            sx, sy, ex, ey = area.get_sorted_position()
+            cr.move_to(sx, sy)
+            cr.line_to(ex, sy)
+            cr.line_to(ex, ey)
+            cr.line_to(sx, ey)
             cr.close_path()
             cr.stroke()
             cr.restore()
