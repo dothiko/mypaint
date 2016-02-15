@@ -1,11 +1,10 @@
 # This file is part of MyPaint.
-# Copyright (C) 2008-2013 by Martin Renold <martinxyz@gmx.ch>
+# Copyright (C) 2016 dothiko<dothiko@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 
-"""Freehand drawing modes"""
 
 ## Imports
 
@@ -26,14 +25,6 @@ from gtk import keysyms
 
 ## Module settings
 
-# Which workarounds to allow for motion event compression
-EVCOMPRESSION_WORKAROUND_ALLOW_DISABLE_VIA_API = True
-EVCOMPRESSION_WORKAROUND_ALLOW_EVHACK_FILTER = True
-
-# Consts for the style of workaround in use
-EVCOMPRESSION_WORKAROUND_DISABLE_VIA_API = 1
-EVCOMPRESSION_WORKAROUND_EVHACK_FILTER = 2
-EVCOMPRESSION_WORKAROUND_NONE = 999
 
 
 ## Class defs
