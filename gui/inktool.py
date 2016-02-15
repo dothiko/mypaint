@@ -1413,17 +1413,22 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
 
     ## nodes average
-    def _average_nodes(self, callback):
-        """Commonized version of average nodes method.
-        this method processes common 
-        and average should be done in callback. 
+    def average_nodes_angle(self):
+        """Average nodes angle.
+        Treat stroke as a sequence of vector,and 
+        average all nodes angle,except for first and last.
 
-        :param callback: callable which accepts arguments
-                         (prev-node,current-node,next-node)
-                         and returns new node.
-                         when callback fail,exception raised.
+        The meaning of 'angle' referred here is, 
+        for example,there is 3 nodes in order of A,B and C,
+
+            __ -- B ---___
+        A --              --C
+
+        when 'average angle of B',it means
+        'To half the angle of between A-B and A-C'
 
         """
+
         if len(self.nodes) > 2:
 
             # Redraw to erase old nodes
@@ -1441,7 +1446,18 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 if (len(self.selected_nodes) < 2 or
                         idx in self.selected_nodes):
                     try:
-                        new_nodes.append(callback(pn, cn, nn))
+                        # avx, avy is identity vector of current-prev node
+                        # bvx, bvy is identity vector of next-prev node
+                        avx, avy = _get_identity_vector(cn.x, cn.y,
+                                pn.x, pn.y)
+                        bvx, bvy = _get_identity_vector(nn.x, nn.y,
+                                pn.x, pn.y)
+                        avx=(avx + bvx) / 2.0
+                        avy=(avy + bvy) / 2.0
+                        s = math.hypot(cn.x - pn.x, cn.y - pn.y)
+                        avx*=s
+                        avy*=s
+                        new_nodes.append(cn._replace(x=avx+pn.x, y=avy+pn.y))
                     except ZeroDivisionError:
                         # This means 'two nodes at same place'.
                         # abort averaging for this node. 
@@ -1458,73 +1474,69 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # redraw new nodes
             self._queue_all_visual_redraw()
 
-    def average_nodes_angle(self):
-        """Average nodes angle.
-        Treat stroke as a sequence of vector,and 
-        average all nodes angle,except for first and last.
-
-        The meaning of 'angle' referred here is, 
-        for example,there is 3 nodes in order of A,B and C,
-
-            __ -- B ---___
-        A --              --C
-
-        when 'average angle of B',it means
-        'To half the angle of between A-B and A-C'
-
-        """
-
-        ## local function to average nodes from angle
-        def callback_angle(pn, cn, nn):
-            # avx, avy is identity vector of current-prev node
-            # bvx, bvy is identity vector of next-prev node
-            avx, avy = _get_identity_vector(cn.x, cn.y,
-                    pn.x, pn.y)
-            bvx, bvy = _get_identity_vector(nn.x, nn.y,
-                    pn.x, pn.y)
-            avx=(avx + bvx) / 2.0
-            avy=(avy + bvy) / 2.0
-            s = math.hypot(cn.x - pn.x, cn.y - pn.y)
-            avx*=s
-            avy*=s
-            return cn._replace(x=avx+pn.x, y=avy+pn.y)
-
-        self._average_nodes(callback_angle)
-
     def average_nodes_distance(self):
         """Average nodes distance.
         Treat stroke as a sequence of vector,and 
         average(to half) all nodes distance,
         except for first and last.
+
+        this method affects entire self.nodes,
+        regardless of how many nodes selected.
         """
 
-        ## local function to average nodes from distance
-        def callback_distance(pn, cn, nn):
-            # avx, avy is identity vector of current-prev node
-            avx, avy = _get_identity_vector(cn.x, cn.y,
-                    pn.x, pn.y)
-            # bvx, bvy is identity vector of next-current node
-            bvx, bvy = _get_identity_vector(cn.x, cn.y,
-                    nn.x, nn.y)
+        if len(self.nodes) > 2:
 
-            # len_c is the scalar(length) of current-prev node
-            # len_n is next-prev node
-            len_c = math.hypot(cn.x - pn.x, cn.y - pn.y)
-            len_n = math.hypot(cn.x - nn.x, cn.y - nn.y)
-            len_half = (len_c + len_n) / 2.0
+            # Redraw to erase old nodes
+            self._queue_all_visual_redraw()
 
-            if len_c > len_half:
-                avx = avx * len_half + pn.x
-                avy = avy * len_half + pn.y
-            else:
-                # recycle avx & avy
-                # to commonize code
-                avx = bvx * len_half + nn.x
-                avy = bvy * len_half + nn.y
+            # get entire vector length
+            entire_length = 0
+            for idx,cn in enumerate(self.nodes[:-1]):
+                nn = self.nodes[idx+1]
+                entire_length += math.hypot(cn.x - nn.x, cn.y - nn.y)
 
-            return cn._replace(x=avx, y=avy)
+            segment_length = entire_length / (len(self.nodes) - 1)
+            new_nodes = [self.nodes[0],]
 
-        self._average_nodes(callback_distance)
+            # creating entire new nodes list.
+            cur_segment = segment_length
+            sidx = 1 # source node idx,it is not equal to idx.
+            for idx,cn in enumerate(self.nodes[:-1]):
+                nn = self.nodes[idx+1]  
+                cur_length = math.hypot(cn.x - nn.x, cn.y - nn.y)
+
+                if cur_segment == cur_length:
+                    # it is rare,next node completely fit
+                    # to segment.
+                    new_nodes.append(self.nodes[sidx])
+                    sidx += 1
+                    cur_segment = segment_length
+                elif cur_segment < cur_length:
+                    # segment end.need for adding a node.
+                    try:
+                        avx, avy = _get_identity_vector(nn.x, nn.y,
+                                cn.x, cn.y)
+                        avx *= cur_segment
+                        avy *= cur_segment
+                        new_nodes.append(self.nodes[sidx]._replace(
+                            x=avx+cn.x, y=avy+cn.y))
+                        cur_segment = segment_length - (cur_length - cur_segment)
+                        sidx += 1
+                    except ZeroDivisionError:
+                        # this means 'current length is 0'.
+                        # so ignore.
+                        pass
+                else:
+                    # segment continues
+                    cur_segment -= cur_length
+
+            assert sidx == len(self.nodes) - 1
+
+            new_nodes.append(self.nodes[-1])
+            self.nodes = new_nodes
+                    
+            # redraw new nodes
+            self._queue_all_visual_redraw()
 
 
     ## Node selection

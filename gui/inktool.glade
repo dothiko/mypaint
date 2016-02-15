@@ -332,7 +332,8 @@ Period:</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">True</property>
-            <property name="tooltip_text" translatable="yes">Average the node(s) distance between the next node.As a result, stroke shape might be a little deformed.</property>
+            <property name="tooltip_text" translatable="yes">Average the node(s) distance between the next node.As a result, stroke shape might be a little deformed.
+This feature always affects entire nodes,regardless of how many nodes selected.</property>
             <signal name="clicked" handler="_average_distance_clicked_cb" swapped="no"/>
           </object>
           <packing>
