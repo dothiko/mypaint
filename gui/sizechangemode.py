@@ -98,7 +98,8 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         self.app = None
         self._cursor = gdk.Cursor(gdk.CursorType.BLANK_CURSOR)
         self._overlays = {}  # keyed by tdw
-        self.cursor_radius = 0.0
+        self.start_drag = False
+       #self.cursor_radius = 0.0
        #self.idle_srcid = None
 
     ## InteractionMode/DragMode implementation
@@ -121,6 +122,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
             self._discard_overlays()
 
     def leave(self, **kwds):
+        print 'leave'
         if not self._is_active():
             self._discard_overlays()
         return super(SizechangeMode, self).leave(**kwds)
@@ -151,13 +153,13 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         r += 0.5
         return r
 
-    def set_cursor(self,tdw):
-        radius = self.get_cursor_radius(tdw)
-        self._cursor = gui.cursor.get_brush_cursor(radius, gui.cursor.BRUSH_CURSOR_STYLE_NORMAL, self.app.preferences)
-        tdw.get_window().set_cursor(self._cursor)
+   #def set_cursor(self,tdw):
+   #    radius = self.get_cursor_radius(tdw)
+   #    self._cursor = gui.cursor.get_brush_cursor(radius, gui.cursor.BRUSH_CURSOR_STYLE_NORMAL, self.app.preferences)
+   #    tdw.get_window().set_cursor(self._cursor)
 
     def drag_start_cb(self, tdw, event):
-        super(SizechangeMode, self).drag_start_cb(tdw, event)
+        self._ensure_overlay_for_tdw(tdw)
         self._queue_draw_brush() # erase previous 
 
         self.pressed_x, self.pressed_y = \
@@ -165,46 +167,59 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         if self.base_x == None:
             self.base_x = self.pressed_x
             self.base_y = self.pressed_y
-        self.cursor_radius = self.get_cursor_radius(tdw)
+      # self.cursor_radius = self.get_cursor_radius(tdw)
         self._queue_draw_brush()
+        self.start_drag = True
+        super(SizechangeMode, self).drag_start_cb(tdw, event)
 
     def drag_update_cb(self, tdw, event, dx, dy):
 
         self._ensure_overlay_for_tdw(tdw)
+        if self.start_drag:
+            dx, dy = tdw.display_to_model(event.x, event.y)
+            cx = dx - self.pressed_x
+            cy = dy - self.pressed_y
+            cs = math.hypot(cx, cy)
+            if cs > 0.0:
+                nx = cx / cs
+                ny = cy / cs
+                angle = math.acos(ny)  # Getting angle
+               #diff = cs / 1000.0  # 128.0 is not theorical number,it's my feeling
+                diff = 0.1  # test
 
-        dx, dy = tdw.display_to_model(event.x, event.y)
-        cx = dx - self.pressed_x
-        cy = dy - self.pressed_y
-        cs = math.sqrt(cx * cx + cy * cy)
-        if cs > 0.0:
-            nx = cx / cs
-            ny = cy / cs
-            angle = math.acos(ny)  # Getting angle
-            diff = cs / 1000.0  # 128.0 is not theorical number,it's my feeling
-            diff = 0.1  # test
-
-            if math.pi / 4 < angle < math.pi / 4 + math.pi / 2:
-                if nx < 0.0:
+                if math.pi / 4 < angle < math.pi / 4 + math.pi / 2:
+                    if nx < 0.0:
+                        diff *= -1
+                elif ny < 0.0:
                     diff *= -1
-            elif ny < 0.0:
-                diff *= -1
 
 
-            self._queue_draw_brush()
-            adj = self.app.brush_adjustment['radius_logarithmic']
-            adj.set_value(adj.get_value() + diff)
-            self.cursor_radius = self.get_cursor_radius(tdw)
-            self._queue_draw_brush()
+                self._queue_draw_brush()
+                adj = self.app.brush_adjustment['radius_logarithmic']
+                adj.set_value(adj.get_value() + diff)
+               #self.cursor_radius = self.get_cursor_radius(tdw)
+                self._queue_draw_brush()
+
+                # refresh pressed position
+                self.pressed_x = dx
+                self.pressed_y = dy
 
         return super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
 
     def drag_stop_cb(self, tdw):
-        self._queue_draw_brush()
+        self._ensure_overlay_for_tdw(tdw)
+        if self.start_drag:
+            self._queue_draw_brush()
+        self.start_drag = False
         return super(SizechangeMode, self).drag_stop_cb(tdw)
 
-    def _drag_idle_cb(self):
-        # Updates the on-screen line during drags.
-        pass
+
+   #def key_release_cb(self, win, tdw, event):
+   #    pass
+
+   #def _drag_idle_cb(self):
+   #    # Updates the on-screen line during drags.
+   #    pass
 
     ## Overlays
     #  taken from gui/inktool.py
@@ -228,11 +243,17 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         space = 2
         for tdw, overlay in self._overlays.items():
             if self.base_x != None:
-                sx, sy = tdw.display_to_model(self.base_x, self.base_y)
-                areasize = self.cursor_radius*2 + space*2 +1
+                cur_radius = self.get_cursor_radius(tdw)
+                sx, sy = tdw.model_to_display(self.base_x, self.base_y)
+               #areasize = self.cursor_radius*2 + space*2 +1
+               #tdw.queue_draw_area(
+               #        sx - self.cursor_radius - space,  
+               #        sy - self.cursor_radius - space,
+               #        areasize, areasize)
+                areasize = cur_radius*2 + space*2 +1
                 tdw.queue_draw_area(
-                        sx - self.cursor_radius - space, 
-                        sy - self.cursor_radius - space,
+                        sx - cur_radius - space,  
+                        sy - cur_radius - space,
                         areasize, areasize)
 
 class _Overlay (gui.overlays.Overlay):
@@ -246,16 +267,17 @@ class _Overlay (gui.overlays.Overlay):
     def paint(self, cr):
         """Draw brush size to the screen"""
 
-        if self._sizemode.cursor_radius > 0:
-            cr.save()
-            color = gui.style.ACTIVE_ITEM_COLOR
-            cr.set_source_rgb(0, 0, 0)#*color.get_rgb())
-            cr.set_line_width(1)
-            cr.arc( self._sizemode.base_x,
-                    self._sizemode.base_y,
-                    self._sizemode.cursor_radius,
-                    0.0,
-                    2*math.pi)
-            cr.stroke()
-            cr.restore()
+        cr.save()
+        color = gui.style.ACTIVE_ITEM_COLOR
+        cr.set_source_rgb(0, 0, 0)#*color.get_rgb())
+        sx, sy = self._tdw.model_to_display(
+                self._sizemode.base_x, 
+                self._sizemode.base_y)
+        cr.set_line_width(1)
+        cr.arc( sx, sy,
+                self._sizemode.get_cursor_radius(self._tdw),
+                0.0,
+                2*math.pi)
+        cr.stroke()
+        cr.restore()
 

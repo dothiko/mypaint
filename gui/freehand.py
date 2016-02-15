@@ -478,7 +478,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         x = event.x
         y = event.y
 
-        # Stabilizer cursor position fetch & apply
+        # Stabilizer event position fetch & apply
         self.assist = tdw.app.get_assistant()
         if self.assist:
             self.assist.fetch(event.x, event.y)
