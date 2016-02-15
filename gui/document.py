@@ -2037,37 +2037,43 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
 
     ## Inking tool node manipulation
     def delete_current_node_cb(self, action):
-        """Callback: delete currently selected node (from keyboard)"""
+        """Callback: delete currently selected node"""
         mode=self.modes.top
         if getattr(mode, 'delete_current_node', False):
             mode.delete_current_node()
     
     def simplify_nodes_cb(self, action):
-        """Callback: simplify current inktool stroke (from keyboard)"""
+        """Callback: simplify current inktool stroke"""
         mode=self.modes.top
         if getattr(mode, 'simplify_nodes', False):
             mode.simplify_nodes()
     
     def cull_nodes_cb(self, action):
-        """Callback: cull current inktool nodes (from keyboard)"""
+        """Callback: cull current inktool nodes"""
         mode=self.modes.top
         if getattr(mode, 'cull_nodes', False):
             mode.cull_nodes()
 
-    def average_nodes_cb(self, action):
-        """Callback: average current inktool nodes (from keyboard)"""
+    def average_nodes_angle_cb(self, action):
+        """Callback: average current inktool nodes angle"""
         mode=self.modes.top
-        if getattr(mode, 'average_nodes', False):
-            mode.average_nodes()
+        if getattr(mode, 'average_nodes_angle', False):
+            mode.average_nodes_angle()
+
+    def average_nodes_distance_cb(self, action):
+        """Callback: average current inktool nodes distance"""
+        mode=self.modes.top
+        if getattr(mode, 'average_nodes_distance', False):
+            mode.average_nodes_distance()
 
     def select_all_nodes_cb(self, action):
-        """Callback: mark all inktool nodes as selected (from keyboard)"""
+        """Callback: mark all inktool nodes as selected"""
         mode=self.modes.top
         if getattr(mode, 'select_all_nodes', False):
             mode.select_all_nodes()
 
     def deselect_all_nodes_cb(self, action):
-        """Callback: clear selected state of all inktool nodes (from keyboard)"""
+        """Callback: clear selected state of all inktool nodes"""
         mode=self.modes.top
         if getattr(mode, 'deselect_all_nodes', False):
             mode.deselect_all_nodes()

@@ -759,10 +759,17 @@ Vocabulary
         </object>
       </child>
       <child>
-        <object class="GtkAction" id="AverageNodes">
-          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Average nodes</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Average(smooth) nodes and make stroke less bumpy.</property>
-          <signal name="activate" handler="average_nodes_cb"/>
+        <object class="GtkAction" id="AverageNodesAngle">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Average nodes angle</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Average(smooth) nodes angle and make stroke less bumpy.</property>
+          <signal name="activate" handler="average_nodes_angle_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="AverageNodesDistance">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Average nodes distance</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Average(smooth) nodes distance and make stroke more loose.</property>
+          <signal name="activate" handler="average_nodes_distance_cb"/>
         </object>
       </child>
       <child>

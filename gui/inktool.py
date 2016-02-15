@@ -1409,10 +1409,18 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """User interface method of cull nodes."""
         self._nodes_deletion_operation(self._cull_nodes, ())
 
-    def average_nodes(self):
-        """Average nodes position.
-        Treat stroke as a sequence of vector,and 
-        average all nodes position,except for first and last.
+
+    ## nodes average
+    def _average_nodes(self, callback):
+        """Commonized version of average nodes method.
+        this method processes common 
+        and average should be done in callback. 
+
+        :param callback: callable which accepts arguments
+                         (prev-node,current-node,next-node)
+                         and returns new node.
+                         when callback fail,exception raised.
+
         """
         if len(self.nodes) > 2:
 
@@ -1431,18 +1439,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 if (len(self.selected_nodes) < 2 or
                         idx in self.selected_nodes):
                     try:
-                        avx, avy = _get_identity_vector(cn.x, cn.y,
-                                pn.x, pn.y)
-                        bvx, bvy = _get_identity_vector(nn.x, nn.y,
-                                pn.x, pn.y)
-                        avx=(avx + bvx) / 2.0
-                        avy=(avy + bvy) / 2.0
-                        s = math.hypot(cn.x - pn.x, cn.y - pn.y)
-                        avx*=s
-                        avy*=s
-
-                        new_nodes.append(cn._replace(x=avx+pn.x, y=avy+pn.y))
-
+                        new_nodes.append(callback(pn, cn, nn))
                     except ZeroDivisionError:
                         # This means 'two nodes at same place'.
                         # abort averaging for this node. 
@@ -1458,6 +1455,75 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self.nodes = new_nodes
             # redraw new nodes
             self._queue_all_visual_redraw()
+
+    def average_nodes_angle(self):
+        """Average nodes angle.
+        Treat stroke as a sequence of vector,and 
+        average all nodes angle,except for first and last.
+
+        The meaning of 'angle' referred here is, 
+        for example,there is 3 nodes in order of A,B and C,
+
+            __ -- B ---___
+        A --              --C
+
+        when 'average angle of B',it means
+        'To half the angle of between A-B and A-C'
+
+        """
+
+        ## local function to average nodes from angle
+        def callback_angle(pn, cn, nn):
+            # avx, avy is identity vector of current-prev node
+            # bvx, bvy is identity vector of next-prev node
+            avx, avy = _get_identity_vector(cn.x, cn.y,
+                    pn.x, pn.y)
+            bvx, bvy = _get_identity_vector(nn.x, nn.y,
+                    pn.x, pn.y)
+            avx=(avx + bvx) / 2.0
+            avy=(avy + bvy) / 2.0
+            s = math.hypot(cn.x - pn.x, cn.y - pn.y)
+            avx*=s
+            avy*=s
+            return cn._replace(x=avx+pn.x, y=avy+pn.y)
+
+        self._average_nodes(callback_angle)
+
+    def average_nodes_distance(self):
+        """Average nodes distance.
+        Treat stroke as a sequence of vector,and 
+        average(to half) all nodes distance,
+        except for first and last.
+        """
+
+        ## local function to average nodes from distance
+        def callback_distance(pn, cn, nn):
+            # avx, avy is identity vector of current-prev node
+            avx, avy = _get_identity_vector(cn.x, cn.y,
+                    pn.x, pn.y)
+            # bvx, bvy is identity vector of next-current node
+            bvx, bvy = _get_identity_vector(cn.x, cn.y,
+                    nn.x, nn.y)
+
+            # len_c is the scalar(length) of current-prev node
+            # len_n is next-prev node
+            len_c = math.hypot(cn.x - pn.x, cn.y - pn.y)
+            len_n = math.hypot(cn.x - nn.x, cn.y - nn.y)
+            len_half = (len_c + len_n) / 2.0
+
+            if len_c > len_half:
+                avx = avx * len_half + pn.x
+                avy = avy * len_half + pn.y
+            else:
+                # recycle avx & avy
+                # to commonize code
+                avx = bvx * len_half + nn.x
+                avy = bvy * len_half + nn.y
+
+            return cn._replace(x=avx, y=avy)
+
+        self._average_nodes(callback_distance)
+
 
     ## Node selection
     def select_all_nodes(self):
@@ -1849,8 +1915,10 @@ class OptionsPresenter (object):
         self._period_scale = builder.get_object("period_scale")
         self._period_adj.set_value(self._app.preferences.get(
             "inktool.capture_period_factor", 1))
-        self._average_button = builder.get_object("average_nodes_button")
-        self._average_button.set_sensitive(False)
+        self._average_angle_button = builder.get_object("average_angle_button")
+        self._average_angle_button.set_sensitive(False)
+        self._average_distance_button = builder.get_object("average_distance_button")
+        self._average_distance_button.set_sensitive(False)
 
     @property
     def widget(self):
@@ -1910,7 +1978,8 @@ class OptionsPresenter (object):
             self._cull_button.set_sensitive(len(inkmode.nodes) > 2)
             self._period_adj.set_value(self._app.preferences.get(
                 "inktool.capture_period_factor", 1))
-            self._average_button.set_sensitive(len(inkmode.nodes) > 2)
+            self._average_angle_button.set_sensitive(len(inkmode.nodes) > 2)
+            self._average_distance_button.set_sensitive(len(inkmode.nodes) > 2)
         finally:
             self._updating_ui = False                               
 
@@ -1969,8 +2038,14 @@ class OptionsPresenter (object):
     def _period_scale_format_value_cb(self, scale, value):
         return "%.1fx" % value
 
-    def _average_button_clicked_cb(self,button):
+    def _average_angle_clicked_cb(self,button):
         inkmode, node_idx = self.target
         if inkmode:
-            inkmode.average_nodes()
+            inkmode.average_nodes_angle()
+
+    def _average_distance_clicked_cb(self,button):
+        inkmode, node_idx = self.target
+        if inkmode:
+            inkmode.average_nodes_distance()
+
 
