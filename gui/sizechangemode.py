@@ -37,7 +37,7 @@ import gui.overlays
 
 class SizechangeMode(gui.mode.ScrollableModeMixin,
                     gui.mode.BrushworkModeMixin,
-                    gui.mode.DragMode):
+                    gui.mode.OneshotDragMode):
     """Oncanvas brush Size change mode"""
 
     ## Class constants
@@ -59,12 +59,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
 
     @property
     def active_cursor(self):
-        return self._cursor
-       #cursor_name = gui.cursor.Name.PENCIL
-       #return self.doc.app.cursors.get_action_cursor(
-       #    self.ACTION_NAME,
-       #    cursor_name
-       #)
+        return self._cursor  # Completely blank cursor
     
     @classmethod
     def get_name(cls):
@@ -75,15 +70,8 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
 
     @property
     def inactive_cursor(self):
-        return self._cursor
+        return self._cursor  # Completely blank cursor
 
-   #@property
-   #def inactive_cursor(self):
-   #    cursor_name = gui.cursor.Name.CROSSHAIR_OPEN_PRECISE
-   #    return self.doc.app.cursors.get_action_cursor(
-   #        self.ACTION_NAME,
-   #        cursor_name
-   #    )
 
     unmodified_persist = True
     permitted_switch_actions = set(
@@ -99,32 +87,22 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         self._cursor = gdk.Cursor(gdk.CursorType.BLANK_CURSOR)
         self._overlays = {}  # keyed by tdw
         self.start_drag = False
-       #self.cursor_radius = 0.0
-       #self.idle_srcid = None
 
     ## InteractionMode/DragMode implementation
 
     def enter(self, doc, **kwds):
         """Enter the mode.
-
-        If modifiers are held when the mode is entered, the mode is a oneshot
-        mode and is popped from the mode stack automatically at the end of the
-        drag. Without modifiers, line modes may be continued, and some
-        subclasses offer additional options for adjusting control points.
-
         """
         super(SizechangeMode, self).enter(doc, **kwds)
         self.app = self.doc.app
-        rootstack = self.doc.model.layer_stack
         self.base_x = None
-       #self._update_cursors()
         if not self._is_active():
             self._discard_overlays()
 
     def leave(self, **kwds):
-        print 'leave'
         if not self._is_active():
             self._discard_overlays()
+
         return super(SizechangeMode, self).leave(**kwds)
 
     def _is_active(self):
@@ -133,14 +111,6 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
                 return True
         return False
 
-   #def _update_cursors(self, *_ignored):
-   #    pass
-   #    if self.in_drag:
-   #        return   # defer update to the end of the drag
-   #    layer = self.doc.model.layer_stack.current
-   #    self._line_possible = (layer.get_paintable() and
-   #                           layer.visible and not layer.locked)
-   #    self.doc.tdw.set_override_cursor(self._cursor)
 
     def get_cursor_radius(self,tdw):
         #FIXME nearly Code duplication from 
@@ -153,21 +123,20 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         r += 0.5
         return r
 
-   #def set_cursor(self,tdw):
-   #    radius = self.get_cursor_radius(tdw)
-   #    self._cursor = gui.cursor.get_brush_cursor(radius, gui.cursor.BRUSH_CURSOR_STYLE_NORMAL, self.app.preferences)
-   #    tdw.get_window().set_cursor(self._cursor)
 
     def drag_start_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
-        self._queue_draw_brush() # erase previous 
+        self._queue_draw_brush() # erase previous brush circle
 
         self.pressed_x, self.pressed_y = \
                 tdw.display_to_model(event.x, event.y)
         if self.base_x == None:
             self.base_x = self.pressed_x
             self.base_y = self.pressed_y
-      # self.cursor_radius = self.get_cursor_radius(tdw)
+            # getting returning point of cursor
+            disp = gdk.Display.get_default()
+            screen, self.start_screen_x , self.start_screen_y ,mod = \
+                    disp.get_pointer()
         self._queue_draw_brush()
         self.start_drag = True
         super(SizechangeMode, self).drag_start_cb(tdw, event)
@@ -184,8 +153,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
                 nx = cx / cs
                 ny = cy / cs
                 angle = math.acos(ny)  # Getting angle
-               #diff = cs / 1000.0  # 128.0 is not theorical number,it's my feeling
-                diff = 0.1  # test
+                diff = cs / 200.0  # 200.0 is not theorical number,it's my feeling
 
                 if math.pi / 4 < angle < math.pi / 4 + math.pi / 2:
                     if nx < 0.0:
@@ -197,7 +165,6 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
                 self._queue_draw_brush()
                 adj = self.app.brush_adjustment['radius_logarithmic']
                 adj.set_value(adj.get_value() + diff)
-               #self.cursor_radius = self.get_cursor_radius(tdw)
                 self._queue_draw_brush()
 
                 # refresh pressed position
@@ -211,18 +178,16 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         if self.start_drag:
             self._queue_draw_brush()
         self.start_drag = False
+
+        # return cursor to staring point.
+        d=tdw.get_display()
+        d.warp_pointer(d.get_default_screen(),self.start_screen_x,self.start_screen_y)
         return super(SizechangeMode, self).drag_stop_cb(tdw)
 
 
-   #def key_release_cb(self, win, tdw, event):
-   #    pass
-
-   #def _drag_idle_cb(self):
-   #    # Updates the on-screen line during drags.
-   #    pass
 
     ## Overlays
-    #  taken from gui/inktool.py
+    #  FIXME: mostly copied from gui/inktool.py
     #  should I make it something mixin?
     
     def _ensure_overlay_for_tdw(self, tdw):
@@ -240,16 +205,12 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         self._overlays.clear()
 
     def _queue_draw_brush(self):
-        space = 2
+        space = 2 # I'm unsure why this number brought good result.
+                  # might be line width * 2?
         for tdw, overlay in self._overlays.items():
             if self.base_x != None:
                 cur_radius = self.get_cursor_radius(tdw)
                 sx, sy = tdw.model_to_display(self.base_x, self.base_y)
-               #areasize = self.cursor_radius*2 + space*2 +1
-               #tdw.queue_draw_area(
-               #        sx - self.cursor_radius - space,  
-               #        sy - self.cursor_radius - space,
-               #        areasize, areasize)
                 areasize = cur_radius*2 + space*2 +1
                 tdw.queue_draw_area(
                         sx - cur_radius - space,  
@@ -269,7 +230,7 @@ class _Overlay (gui.overlays.Overlay):
 
         cr.save()
         color = gui.style.ACTIVE_ITEM_COLOR
-        cr.set_source_rgb(0, 0, 0)#*color.get_rgb())
+        cr.set_source_rgb(0, 0, 0)
         sx, sy = self._tdw.model_to_display(
                 self._sizemode.base_x, 
                 self._sizemode.base_y)
