@@ -91,6 +91,7 @@ import gui.autorecover
 import lib.xml
 import gui.profiling
 import assist
+import sizechangemode
 
 ## Utility methods
 
@@ -510,7 +511,7 @@ class Application (object):
             # so provide a Ctrl-based equivalent for all alt actions.
             'input.button_mapping': {
                 # Note that space is treated as a fake Button2
-               #'<Shift>Button1':          'StraightMode',
+                '<Shift>Button1':          'StraightMode',
                 '<Control>Button1':        'ColorPickMode',
                 '<Alt>Button1':            'ColorPickMode',
                 'Button2':                 'PanViewMode',
@@ -546,6 +547,7 @@ class Application (object):
             # old config file; users who never assigned any buttons would
             # end up with Ctrl-Click color picker broken after upgrade
             self.preferences["input.button_mapping"] = DEFAULT_CONFIG["input.button_mapping"]
+
 
     def add_action_group(self, ag):
         self.ui_manager.insert_action_group(ag, -1)
