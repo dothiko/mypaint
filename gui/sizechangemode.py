@@ -6,7 +6,7 @@
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 
-# NOTE: This file based on linemode.py
+# NOTE: This file based on linemode.py ,freehand.py, inktool.py
 
 
 
@@ -42,7 +42,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
 
     ## Class constants
 
-    ACTION_NAME = "SizechangeMode"
+    ACTION_NAME = "OncanvasSizeMode"
 
     _OPTIONS_WIDGET = None
 
@@ -63,10 +63,10 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
     
     @classmethod
     def get_name(cls):
-        return _(u"Size changer")
+        return _(u"On-canvas brush size changer")
 
     def get_usage(self):
-        return _(u"Change brush size.when move to up/left,size decreased.down/right,size increased.")
+        return _(u"Change brush size on canvas.when drag toward up/left,size is decreased.down/right for increasing.vertical movement changes size largely.")
 
     @property
     def inactive_cursor(self):
@@ -86,7 +86,6 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         self.app = None
         self._cursor = gdk.Cursor(gdk.CursorType.BLANK_CURSOR)
         self._overlays = {}  # keyed by tdw
-        self.start_drag = False
 
     ## InteractionMode/DragMode implementation
 
@@ -133,53 +132,70 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         if self.base_x == None:
             self.base_x = self.pressed_x
             self.base_y = self.pressed_y
-            # getting returning point of cursor
+            # getting returning point of cursor,in screen coordinate
             disp = gdk.Display.get_default()
             screen, self.start_screen_x , self.start_screen_y ,mod = \
                     disp.get_pointer()
         self._queue_draw_brush()
-        self.start_drag = True
         super(SizechangeMode, self).drag_start_cb(tdw, event)
 
     def drag_update_cb(self, tdw, event, dx, dy):
 
         self._ensure_overlay_for_tdw(tdw)
-        if self.start_drag:
-            dx, dy = tdw.display_to_model(event.x, event.y)
-            cx = dx - self.pressed_x
-            cy = dy - self.pressed_y
-            cs = math.hypot(cx, cy)
-            if cs > 0.0:
-                nx = cx / cs
-                ny = cy / cs
-                angle = math.acos(ny)  # Getting angle
-                diff = cs / 200.0  # 200.0 is not theorical number,it's my feeling
+        mx, my = tdw.display_to_model(event.x, event.y)
+        cx = mx - self.pressed_x
+        cy = my - self.pressed_y
+        cs = math.hypot(cx, cy)
+        if cs > 0.0:
+            # Getting angle against straight vertical identity vector.
+            # That straight vector is (0.0 , 1.0),so it is downward.
+            nx = cx / cs # normalized x
+            ny = cy / cs # normalized y
+            angle = math.acos(ny)  
+            
 
-                if math.pi / 4 < angle < math.pi / 4 + math.pi / 2:
-                    if nx < 0.0:
-                        diff *= -1
-                elif ny < 0.0:
-                    diff *= -1
+            # direction 0 = up, 1 = right, 2 = left 3 = down
+            if angle < math.pi * 0.25:
+                direction = 3
+            elif angle < math.pi * 0.75:
+                direction = 2
+            else:
+                direction = 0
 
+            if nx > 0.0 and direction == 2:
+                direction = 1
 
-                self._queue_draw_brush()
-                adj = self.app.brush_adjustment['radius_logarithmic']
-                adj.set_value(adj.get_value() + diff)
-                self._queue_draw_brush()
+            # setting differencial of size.
+            # 400.0 is not theorical number,it's my feeling
+            diff = cs / 400.0  
 
-                # refresh pressed position
-                self.pressed_x = dx
-                self.pressed_y = dy
+            if direction == 0:
+                # decrease 
+                diff *= -1.0 
+            elif direction == 2:
+                # large decrease for side-motion
+                diff *= -2.0 
+            elif direction == 1:
+                # large increase for side-motion
+                diff *= 2.0 
 
-        return super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
+            self._queue_draw_brush()
+            adj = self.app.brush_adjustment['radius_logarithmic']
+            adj.set_value(adj.get_value() + diff)
+            self._queue_draw_brush()
+
+            # refresh pressed position
+            self.pressed_x = mx
+            self.pressed_y = my
+
+        return super(SizechangeMode, self).drag_update_cb(tdw, event, mx, my)
 
     def drag_stop_cb(self, tdw):
         self._ensure_overlay_for_tdw(tdw)
-        if self.start_drag:
-            self._queue_draw_brush()
+        self._queue_draw_brush()
         self.start_drag = False
 
-        # return cursor to staring point.
+        # return cursor to starting point.
         d=tdw.get_display()
         d.warp_pointer(d.get_default_screen(),self.start_screen_x,self.start_screen_y)
         return super(SizechangeMode, self).drag_stop_cb(tdw)
@@ -188,7 +204,8 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
 
     ## Overlays
     #  FIXME: mostly copied from gui/inktool.py
-    #  should I make it something mixin?
+    #  Would it be better there is something mixin?
+    #  (OverlayedMixin??)
     
     def _ensure_overlay_for_tdw(self, tdw):
         overlay = self._overlays.get(tdw)
@@ -217,6 +234,16 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
                         sy - cur_radius - space,
                         areasize, areasize)
 
+    ## Mode options
+
+    def get_options_widget(self):
+        """Get the (class singleton) options widget"""
+        cls = self.__class__
+        if cls._OPTIONS_WIDGET is None:
+            widget = _SizeChangerOptionWidget()
+            cls._OPTIONS_WIDGET = widget
+        return cls._OPTIONS_WIDGET
+
 class _Overlay (gui.overlays.Overlay):
     """Overlay for an SizechangeMode's brushsize"""
 
@@ -241,4 +268,26 @@ class _Overlay (gui.overlays.Overlay):
                 2*math.pi)
         cr.stroke()
         cr.restore()
+
+class _SizeChangerOptionWidget(gui.mode.PaintingModeOptionsWidgetBase):
+    """ Because OncanvasSizeMode use from dragging + modifier
+    combination, thus this option widget mostly unoperatable.
+    but I think user would feel some 'reliability' when there are 
+    value displaying scale and label.
+    """
+
+    def __init__(self):
+        # Overwrite self._COMMON_SETTINGS
+        # to use(show) only 'radius_logarithmic' scale.
+        for cname, text in self._COMMON_SETTINGS:
+            if cname == 'radius_logarithmic':
+                self._COMMON_SETTINGS = [ (cname, text) ]
+                break
+        
+        # And then,call superclass method
+        super(_SizeChangerOptionWidget, self).__init__()
+
+    def init_reset_widgets(self, row):
+        """To cancel creating 'reset setting' button"""
+        pass
 

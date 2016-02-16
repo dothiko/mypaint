@@ -1789,18 +1789,20 @@ Vocabulary
       <!-- }}} -->
       <!-- {{{ Resizing Brush radio and flip actions -->
       <child>
-        <object class="GtkRadioAction" id="SizechangeMode">
-          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">Brush Size Change</property>
-          <property name="short-label" translatable="yes" context="Toolbar (short labels)">Brushsize</property>
-          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Brush size change: pointer-drag brush size changer.</property>
-          <property name="group">SizechangeMode</property>
+        <object class="GtkRadioAction" id="OncanvasSizeMode">
+          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">On-Canvas Brush Size Changer</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">Brushsize adj.</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">On-canvas brush size change: change brush size with dragging a pointing device on canvas.</property>
+          <property name="icon-name">mypaint-size-change-symbolic</property>
+          <property name="group">OncanvasSizeMode</property>
           <property name="value">12</property>
         </object>
       </child>
       <child>
-        <object class="GtkAction" id="FlipSizechangeMode">
-          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">Brush Size Change</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Change brush size with pointer drag.</property>
+        <object class="GtkAction" id="FlipOncanvasSizeMode">
+          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">On-Canvas Brush Size Changer</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">change brush size with dragging a pointing device on canvas.</property>
+          <property name="icon-name">mypaint-size-change-symbolic</property>
           <signal name="activate" handler="mode_flip_action_activated_cb"/>
         </object>
       </child>
