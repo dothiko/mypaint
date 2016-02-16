@@ -249,6 +249,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         ])
     )
 
+
     ## Metadata methods
 
     @classmethod
@@ -277,6 +278,18 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         elif self.phase == _Phase.ADJUST_SELECTING:
             return self._crosshair_cursor
         return None
+
+    ## Override action
+    permitted_switch_actions = None   
+    _enable_switch_actions = set()   # Any action is permitted,for now.
+    _disable_switch_actions = ('no-any-mode',)   # Any action is permitted,for now.
+    @classmethod
+    def enable_switch_actions(cls, flag):
+        if flag:
+            cls.permitted_switch_actions = cls._enable_switch_actions
+        else:
+            cls.permitted_switch_actions = cls._disable_switch_actions
+        
 
     ## Class config vars
 
@@ -346,6 +359,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_ytilt = 0.0
 
         self._pressed_pressure = None
+
+        
 
 
 
@@ -430,11 +445,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             gui.cursor.Name.MOVE_NORTHWEST_OR_SOUTHEAST,
         )
 
+        InkingMode.enable_switch_actions(True)
+
     def leave(self, **kwds):
         """Leaves the mode: called by `ModeStack.pop()` etc."""
         if not self._is_active():
             self._discard_overlays()
         self._stop_task_queue_runner(complete=True)
+        InkingMode.enable_switch_actions(False)
         super(InkingMode, self).leave(**kwds)  # supercall will commit
 
     def checkpoint(self, flush=True, **kwargs):
@@ -476,6 +494,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._reset_capture_data()
         self._reset_adjust_data()
         self.phase = _Phase.CAPTURE
+        InkingMode.enable_switch_actions(True)
 
 
     ## Raw event handling (prelight & zone selection in adjust phase)
@@ -557,7 +576,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # XXX  but how to stop that and enter the adjust phase?
             # XXX Click to add a 1st & 2nd (=last) node only?
             # XXX  but needs to allow a drag after the 1st one's placed.
-            pass
+            pass    
         elif self.phase == _Phase.ADJUST_PRESSURE:
             # XXX Not sure what to do here.
             pass
@@ -572,13 +591,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
         # Supercall: start drags etc
-        return super(InkingMode, self).button_press_cb(tdw, event)
+        return super(InkingMode, self).button_press_cb(tdw, event) 
 
     def button_release_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
+
         if self.phase == _Phase.ADJUST:
             if self._click_info:
                 button0, zone0 = self._click_info
@@ -875,11 +895,19 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._reset_nodes()
             self._reset_capture_data()
             self._reset_adjust_data()
-            node = self._get_event_data(tdw, event)
-            self.nodes.append(node)
-            self._queue_draw_node(0)
-            self._last_node_evdata = (event.x, event.y, event.time)
-            self._last_event_node = node
+
+            if event.state != 0:
+                # To activate some mode override
+                InkingMode.enable_switch_actions(True)
+                self._last_event_node = None
+                super(InkingMode, self).drag_start_cb(tdw, event)
+            else:
+                node = self._get_event_data(tdw, event)
+                self.nodes.append(node)
+                self._queue_draw_node(0)
+                self._last_node_evdata = (event.x, event.y, event.time)
+                self._last_event_node = node
+
         elif self.phase == _Phase.ADJUST:
             self._node_dragged = False
             if self.target_node_index is not None:
@@ -905,35 +933,39 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def drag_update_cb(self, tdw, event, dx, dy):
         self._ensure_overlay_for_tdw(tdw)
         if self.phase == _Phase.CAPTURE:
-            node = self._get_event_data(tdw, event)
-            evdata = (event.x, event.y, event.time)
-            if not self._last_node_evdata: # e.g. after an undo while dragging
-                append_node = True
-            elif evdata == self._last_node_evdata:
-                logger.debug(
-                    "Capture: ignored successive events "
-                    "with identical position and time: %r",
-                    evdata,
-                )
-                append_node = False
+            if self._last_event_node:
+                node = self._get_event_data(tdw, event)
+                evdata = (event.x, event.y, event.time)
+                if not self._last_node_evdata: # e.g. after an undo while dragging
+                    append_node = True
+                elif evdata == self._last_node_evdata:
+                    logger.debug(
+                        "Capture: ignored successive events "
+                        "with identical position and time: %r",
+                        evdata,
+                    )
+                    append_node = False
+                else:
+                    dx = event.x - self._last_node_evdata[0]
+                    dy = event.y - self._last_node_evdata[1]
+                    dist = math.hypot(dy, dx)
+                    dt = event.time - self._last_node_evdata[2]
+                    max_dist = self.CAPTURE_SETTING.internode_distance_middle #MAX_INTERNODE_DISTANCE_MIDDLE
+                    if len(self.nodes) < 2:
+                        max_dist = self.CAPTURE_SETTING.internode_distance_ends #MAX_INTERNODE_DISTANCE_ENDS
+                    append_node = (
+                        dist > max_dist and
+                        dt > self.CAPTURE_SETTING.max_internode_time #MAX_INTERNODE_TIME
+                    )
+                if append_node:
+                    self.nodes.append(node)
+                    self._queue_draw_node(len(self.nodes)-1)
+                    self._queue_redraw_curve()
+                    self._last_node_evdata = evdata
+                self._last_event_node = node
             else:
-                dx = event.x - self._last_node_evdata[0]
-                dy = event.y - self._last_node_evdata[1]
-                dist = math.hypot(dy, dx)
-                dt = event.time - self._last_node_evdata[2]
-                max_dist = self.CAPTURE_SETTING.internode_distance_middle #MAX_INTERNODE_DISTANCE_MIDDLE
-                if len(self.nodes) < 2:
-                    max_dist = self.CAPTURE_SETTING.internode_distance_ends #MAX_INTERNODE_DISTANCE_ENDS
-                append_node = (
-                    dist > max_dist and
-                    dt > self.CAPTURE_SETTING.max_internode_time #MAX_INTERNODE_TIME
-                )
-            if append_node:
-                self.nodes.append(node)
-                self._queue_draw_node(len(self.nodes)-1)
-                self._queue_redraw_curve()
-                self._last_node_evdata = evdata
-            self._last_event_node = node
+                super(InkingMode, self).drag_update_cb(tdw, event, dx, dy)
+
         elif self.phase == _Phase.ADJUST:
             if self._dragged_node_start_pos:
                 self._node_dragged = True
@@ -965,8 +997,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def drag_stop_cb(self, tdw):
         self._ensure_overlay_for_tdw(tdw)
         if self.phase == _Phase.CAPTURE:
-            if not self.nodes:
-                return
+
+            if not self.nodes or self._last_event_node == None:
+                return super(InkingMode, self).drag_stop_cb(tdw)
+            else:
+                InkingMode.enable_switch_actions(False)
+
             node = self._last_event_node
             # TODO: maybe rewrite the last node here so it's the right
             # TODO: distance from the end?
