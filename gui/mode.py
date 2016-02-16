@@ -382,20 +382,6 @@ class InteractionMode (object):
     def drag_stop_cb(self, tdw):
         assert not hasattr(super(InteractionMode, self), "drag_stop_cb")
 
-    ## Device sub-API
-    # Defined here to inform a mode that device has changed. 
-
-    def device_changed_cb(self, tdw, device):
-        """ device changed notify callback
-        
-        :param Gdk.Device device: the device newly incoming (to canvas)
-        
-        you can get the brush which associated with the device from
-        application.brushmanager.store_brush_for_device()
-        and the mode associated with the device from
-        application.modemanager_for_device[] (dictionary object)
-        """
-        assert not hasattr(super(InteractionMode, self), "device_changed_cb")
 
     ## Internal utility functions
 
