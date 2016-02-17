@@ -808,11 +808,17 @@ class Application (object):
         """Tests exception handling."""
         raise Exception("This is a crash caused by the user.")
 
+    #--------------------------------------------------
+    ### My local addtion
 
     ## Assistant
     def get_assistant(self):
         """ Get current assistant.if it disabled,'None' returned."""
         return self._assist
+
+    ## Menu callbacks
+    def mylocal_resetdocksizes_cb(self,action):
+        self.workspace.mylocal_reset_dock_size()
 
 
 class PixbufDirectory (object):

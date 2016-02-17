@@ -25,7 +25,7 @@ import re
 import logging
 logger = logging.getLogger('mypaint')
 
-print("*** THIS IS MY BUILD ***")
+
 ## Logging classes
 
 class ColorFormatter (logging.Formatter):

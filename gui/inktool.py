@@ -1836,7 +1836,7 @@ class Overlay (gui.overlays.Overlay):
                 cr.line_to(area.sx, area.ey)
                 cr.close_path()
                 cr.stroke()
-                cr.set_dash( (3.0,3.0) )
+                cr.set_dash( (3.0, ) )
             cr.restore()
 
 class _LayoutNode (object):

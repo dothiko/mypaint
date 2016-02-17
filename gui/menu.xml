@@ -303,6 +303,10 @@
       <menuitem action="BrushIconEditorWindow"/>
       <separator/>
       <menuitem action="PreferencesWindow"/>
+      <!-- my local menu starts. -->
+      <separator/>
+      <menuitem action="ResetDockSizes"/>
+      <!-- my local menu end. -->
     </menu>
     <menu action='HelpMenu'>
       <menuitem action='OnlineHelpIndex'/>

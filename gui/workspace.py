@@ -294,6 +294,7 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
         self.autohide_enabled = layout.get("autohide", True)
         self._initial_layout = layout
 
+
     def get_layout(self):
         """Returns a layout definition dict for the workspace
 
@@ -361,6 +362,7 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
                 win.stack.workspace = None
                 GLib.idle_add(win.destroy)
 
+
     def _map_cb(self, widget):
         assert self.get_realized()
         logger.debug("Completing layout (mapped)")
@@ -391,6 +393,9 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
         # Toolstacks are responsible for their groups' positions
         for stack in self._get_tool_stacks():
             stack._complete_initial_layout()
+
+        # my local codes
+        self.mylocal_save_dock_info()
 
     ## Canvas widget
 
@@ -979,6 +984,29 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
         notebook = page.get_parent()
         notebook.update_tool_widget_ui(widget)
 
+    ## My local method
+    def mylocal_save_dock_info(self):
+        layouts = []
+        for stack in self._get_tool_stacks():
+            layouts.append(stack.get_layout(save_object = True))
+        self.mylocal_saved_layouts = layouts
+
+    def mylocal_reset_dock_size(self):
+        for c_stack_desc in self.mylocal_saved_layouts:
+            c_stack = c_stack_desc['this_stack']
+            w = c_stack_desc['w']
+            h = c_stack_desc['h']
+            if w > 1 and h > 1:
+                c_stack.set_size_request(w, h)
+
+            group_descs = c_stack_desc['groups']
+            for c_group_desc in group_descs:
+                nb = c_group_desc['this_nb']
+                try:
+                    nb.set_size_request(c_group_desc['w'], c_group_desc['h'])
+                except KeyError:
+                    pass
+
 
 class ToolStack (Gtk.EventBox):
     """Vertical stack of tool widget groups
@@ -1486,8 +1514,10 @@ class ToolStack (Gtk.EventBox):
             nb_parent._initial_divider_position = group_h
         return num_groups_added
 
-    def get_layout(self):
+    def get_layout(self, save_object=False):
         """Returns a description of the current layout using simple types
+
+        :param save_object: save object into layout.this is *my local*
 
         :rtype: dict
 
@@ -1502,6 +1532,9 @@ class ToolStack (Gtk.EventBox):
                 tool_widget = page.get_child()
                 tool_desc = factory.identify(tool_widget)
                 if tool_desc:
+                    ## my-local code
+                    if save_object:
+                        tool_desc += (tool_widget, ) # the last element is widget!
                     tool_descs.append(tool_desc)
             active_page = nb.get_current_page()
             group_desc = {"tools": tool_descs, "active_page": active_page}
@@ -1511,14 +1544,25 @@ class ToolStack (Gtk.EventBox):
                 if width is not None and height is not None:
                     group_desc["w"] = max(width, 1)
                     group_desc["h"] = max(height, 1)
+
+            ## my-local code
+            if save_object:
+                group_desc['this_nb'] = nb
+
             group_descs.append(group_desc)
         stack_desc = {"groups": group_descs}
+        ## my-local code
+        if save_object:
+            stack_desc['this_stack'] = self
+
         if group_descs:
             width = self.get_allocated_width()
             height = self.get_allocated_height()
             if width is not None and height is not None:
                 stack_desc["w"] = max(width, 1)
                 stack_desc["h"] = max(height, 1)
+
+
         return stack_desc
 
     ## Initial layout (post-realize)
@@ -2006,6 +2050,8 @@ class ToolStackWindow (Gtk.Window):
                 title += unicode(title_suffix)
             logger.debug(u"Renamed floating window title to \"%s\"", title)
             self.set_title(title)
+
+
 
 
 ## Convenience base classes for implementing tool widgets
