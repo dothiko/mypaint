@@ -34,6 +34,7 @@ from lib.gettext import gettext as _
 from lib.gettext import ngettext
 from lib.gettext import C_
 import lib.glib
+import lib.xml
 
 
 ## Save format consts
@@ -239,10 +240,15 @@ class FileHandler (object):
     filename = property(get_filename, set_filename)
 
     def init_save_dialog(self):
-        dialog = gtk.FileChooserDialog(_("Save..."), self.app.drawWindow,
-                                       gtk.FILE_CHOOSER_ACTION_SAVE,
-                                       (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
-                                        gtk.STOCK_SAVE, gtk.RESPONSE_OK))
+        dialog = gtk.FileChooserDialog(
+            C_("Dialogs: Save As...", u"Save"),
+            self.app.drawWindow,
+            gtk.FILE_CHOOSER_ACTION_SAVE,
+            (
+                gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+                gtk.STOCK_SAVE, gtk.RESPONSE_OK,
+            ),
+        )
         self.save_dialog = dialog
         dialog.set_default_response(gtk.RESPONSE_OK)
         dialog.set_do_overwrite_confirmation(True)
@@ -276,64 +282,176 @@ class FileHandler (object):
                 if ext is not None:
                     _dialog_set_filename(dialog, filename+ext)
 
-    def confirm_destructive_action(self, title=_('Confirm'),
-                                   question=_('Really continue?')):
-        """Asks the user to confirm an action that might lose work
+    def confirm_destructive_action(self, title=None, confirm=None,
+                                   offer_save=True):
+        """Asks the user to confirm an action that might lose work.
 
-        :param title: Dialog title
-        :param question: Question to ask the user
-        :rtype bool:
-        :returns: true if the user chose to destroy their work
+        :param unicode title: Short question to ask the user.
+        :param unicode confirm: Imperative verb for the "do it" button.
+        :param bool offer_save: Set False to turn off the save checkbox.
+        :rtype: bool
+        :returns: True if the user allows the destructive action
 
-        This method doesn't bother asking if there are fewer than a handful of
-        seconds of unsaved work. By default, that's 1 second, but the
-        build-time and runtime debugging flags make this period longer to allow
-        faster develop and test cycles.
+        Phrase the title question tersely.
+        In English/source, use title case for it, and with a question mark.
+        Good examples are “Really Quit?”,
+        or “Delete Everything?”.
+        The title should always tell the user
+        what destructive action is about to take place.
+        If it is not specified, a default title is used.
+
+        Use a single, specific, imperative verb for the confirm string.
+        It should reflect the title question.
+        This is used for the primary confirmation button, if specified.
+        See the GNOME HIG for further guidelines on what to use here.
+
+        This method doesn't bother asking
+        if there's less than a handful of seconds of unsaved work.
+        By default, that's 1 second.
+        The build-time and runtime debugging flags
+        make this period longer
+        to allow more convenient development and testing.
+
+        Ref: https://developer.gnome.org/hig/stable/dialogs.html.en
+
         """
+        if title is None:
+            title = C_(
+                "Destructive action confirm dialog: "
+                "fallback title (normally overridden)",
+                "Really Continue?"
+            )
+
+        # Get an accurate assesment of how much change is unsaved.
         self.doc.model.sync_pending_changes()
         t = self.doc.model.unsaved_painting_time
 
+        # This used to be 30, but see https://gna.org/bugs/?17955
+        # Then 8 by default, but Twitter users hate that too.
         t_bother = 1
         if mypaintlib.heavy_debug:
             t_bother += 7
         if os.environ.get("MYPAINT_DEBUG", False):
             t_bother += 7
-        # This used to be 30, but see https://gna.org/bugs/?17955
-        # Then 8 by default, but Twitter users hate that too.
         logger.debug("Destructive action don't-bother period is %ds", t_bother)
         if t < t_bother:
             return True
 
-        #TRANSLATORS: Abbreviated string is an already translated time
-        #TRANSLATORS: period abbreviation, like "6m42s", or "103s".
-        unsaved_str = _(
-            u"This will discard {abbreviated_time} of unsaved painting"
-        ).format(
-            abbreviated_time = helpers.fmt_time_period_abbr(t),
+        # Custom response codes.
+        # The default ones are all negative ints.
+        save1st_response_code = 1
+        continue_response_code = 2
+
+        # Dialog setup.
+        d = gtk.MessageDialog(
+            title = title,
+            parent = self.app.drawWindow,
+            type = gtk.MessageType.QUESTION,
+            flags = gtk.DialogFlags.MODAL,
         )
-        d = gtk.Dialog(title, self.app.drawWindow, gtk.DIALOG_MODAL)
 
-        b = d.add_button(gtk.STOCK_DISCARD, gtk.RESPONSE_OK)
-        b.set_image(gtk.image_new_from_stock(gtk.STOCK_DELETE, gtk.ICON_SIZE_BUTTON))
-        d.add_button(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL)
-        b = d.add_button(_("_Save as Scrap"), gtk.RESPONSE_APPLY)
-        b.set_image(gtk.image_new_from_stock(gtk.STOCK_SAVE, gtk.ICON_SIZE_BUTTON))
+        # Translated strings for things
+        cancel_btn_text = C_(
+            "Destructive action confirm dialog: cancel button",
+            u"_Cancel",
+        )
+        save_to_scraps_first_text = C_(
+            "Destructive action confirm dialog: save checkbox",
+            u"_Save to Scraps first",
+        )
+        if not confirm:
+            continue_btn_text = C_(
+                "Destructive action confirm dialog: "
+                "fallback continue button (normally overridden)",
+                u"Co_ntinue",
+            )
+        else:
+            continue_btn_text = confirm
 
+        # Button setup. Cancel first, continue at end.
+        d.add_button(cancel_btn_text, gtk.RESPONSE_CANCEL)
+        d.add_button(continue_btn_text, continue_response_code)
+
+        # Explanatory message.
+        if self.filename:
+            file_basename = os.path.basename(self.filename)
+        else:
+            file_basename = None
+        warning_msg_tmpl = C_(
+            "Destructive action confirm dialog: warning message",
+            u"You risk losing {abbreviated_time} of unsaved painting. "
+        )
+        markup_tmpl = warning_msg_tmpl
+        d.set_markup(markup_tmpl.format(
+            abbreviated_time = lib.xml.escape(helpers.fmt_time_period_abbr(t)),
+            current_file_name = lib.xml.escape(file_basename),
+        ))
+
+        # Checkbox for saving
+        if offer_save:
+            save1st_text = save_to_scraps_first_text
+            save1st_cb = gtk.CheckButton.new_with_mnemonic(save1st_text)
+            save1st_cb.set_hexpand(False)
+            save1st_cb.set_halign(gtk.Align.END)
+            save1st_cb.set_vexpand(False)
+            save1st_cb.set_margin_top(12)
+            save1st_cb.set_margin_bottom(12)
+            save1st_cb.set_margin_start(12)
+            save1st_cb.set_margin_end(12)
+            save1st_cb.set_can_focus(False)  # set back again in show handler
+            d.connect(
+                "show",
+                self._destructive_action_dialog_show_cb,
+                save1st_cb,
+            )
+            save1st_cb.connect(
+                "toggled",
+                self._destructive_action_dialog_save1st_toggled_cb,
+                d,
+            )
+            vbox = d.get_content_area()
+            vbox.set_spacing(0)
+            vbox.set_margin_top(12)
+            vbox.pack_start(save1st_cb, expand=False, fill=True)
+
+        # Get a response and handle it.
         d.set_default_response(gtk.RESPONSE_CANCEL)
-        l = gtk.Label()
-        l.set_markup("<b>%s</b>\n\n%s" % (question, unsaved_str))
-        l.set_padding(10, 10)
-        l.show()
-        d.vbox.pack_start(l)
-        response = d.run()
+        response_code = d.run()
         d.destroy()
-        if response == gtk.RESPONSE_APPLY:
-            self.save_scrap_cb(None)
+        if response_code == continue_response_code:
+            logger.debug("Destructive action confirmed")
+            if offer_save and save1st_cb.get_active():
+                logger.info("Saving current canvas as a new scrap")
+                self.save_scrap_cb(None)
             return True
-        return response == gtk.RESPONSE_OK
+        else:
+            logger.debug("Destructive action cancelled")
+            return False
+
+    def _destructive_action_dialog_show_cb(self, dialog, checkbox):
+        checkbox.show_all()
+        checkbox.set_can_focus(True)
+
+    def _destructive_action_dialog_save1st_toggled_cb(self, checkbox, dialog):
+        # Choosing to save locks you into a particular course of action.
+        # Hopefully this isn't too strange.
+        # Escape will still work.
+        cancel_allowed = not checkbox.get_active()
+        cancel_btn = dialog.get_widget_for_response(gtk.RESPONSE_CANCEL)
+        cancel_btn.set_sensitive(cancel_allowed)
 
     def new_cb(self, action):
-        if not self.confirm_destructive_action():
+        ok_to_start_new_doc = self.confirm_destructive_action(
+            title = C_(
+                u'File→New: confirm dialog: title question',
+                u"New Canvas?",
+            ),
+            confirm = C_(
+                u'File→New: confirm dialog: continue button',
+                u"_New Canvas",
+            ),
+        )
+        if not ok_to_start_new_doc:
             return
         self.doc.reset_background()
         self.doc.model.clear()
@@ -592,12 +710,30 @@ class FileHandler (object):
         return dialog
 
     def open_cb(self, action):
-        if not self.confirm_destructive_action():
+        ok_to_open = self.app.filehandler.confirm_destructive_action(
+            title = C_(
+                u'File→Open: confirm dialog: title question',
+                u"Open File?",
+            ),
+            confirm = C_(
+                u'File→Open: confirm dialog: continue button',
+                u"_Open…",
+            ),
+        )
+        if not ok_to_open:
             return
-        dialog = gtk.FileChooserDialog(_("Open..."), self.app.drawWindow,
-                                       gtk.FILE_CHOOSER_ACTION_OPEN,
-                                       (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
-                                        gtk.STOCK_OPEN, gtk.RESPONSE_OK))
+        dialog = gtk.FileChooserDialog(
+            title = C_(
+                u'File→Open: file chooser dialog: title',
+                u"Open File",
+            ),
+            parent = self.app.drawWindow,
+            action = gtk.FILE_CHOOSER_ACTION_OPEN,
+            buttons = [
+                gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
+                gtk.STOCK_OPEN, gtk.RESPONSE_OK,
+            ]
+        )
         dialog.set_default_response(gtk.RESPONSE_OK)
 
         preview = gtk.Image()
@@ -920,17 +1056,39 @@ class FileHandler (object):
 
     def open_recent_cb(self, action):
         """Callback for RecentAction"""
-        if not self.confirm_destructive_action():
-            return
         uri = action.get_current_uri()
         fn, _h = lib.glib.filename_from_uri(uri)
+        ok_to_open = self.app.filehandler.confirm_destructive_action(
+            title = C_(
+                u'File→Open Recent→* confirm dialog: title',
+                u"Open File?"
+            ),
+            confirm = C_(
+                u'File→Open Recent→* confirm dialog: continue button',
+                u"_Open"
+            ),
+        )
+        if not ok_to_open:
+            return
         self.open_file(fn)
 
     def open_last_cb(self, action):
         """Callback to open the last file"""
         if not self._recent_items:
             return
-        if not self.confirm_destructive_action():
+        ok_to_open = self.app.filehandler.confirm_destructive_action(
+            title = C_(
+                u'File→Open Most Recent confirm dialog: '
+                u'title',
+                u"Open Most Recent File?",
+            ),
+            confirm = C_(
+                u'File→Open Most Recent→* confirm dialog: '
+                u'continue button',
+                u"_Open"
+            ),
+        )
+        if not ok_to_open:
             return
         uri = self._recent_items.pop().get_uri()
         fn, _h = lib.glib.filename_from_uri(uri)
@@ -943,25 +1101,59 @@ class FileHandler (object):
                 (self.get_scrap_prefix() + '[0-9]*')
             self.app.message_dialog(msg, gtk.MESSAGE_WARNING)
             return
-        if not self.confirm_destructive_action():
-            return
         next = action.get_name() == 'NextScrap'
-
         if next:
+            dialog_title = C_(
+                u'File→Open Next/Prev Scrap confirm dialog: '
+                u'title',
+                u"Open Next Scrap?"
+            )
             idx = 0
+            delta = 1
         else:
+            dialog_title = C_(
+                u'File→Open Next/Prev Scrap confirm dialog: '
+                u'title',
+                u"Open Previous Scrap?"
+            )
             idx = -1
+            delta = -1
+        ok_to_open = self.app.filehandler.confirm_destructive_action(
+            title = dialog_title,
+            confirm = C_(
+                u'File→Open Next/Prev Scrap confirm dialog: '
+                u'continue button',
+                u"_Open"
+            ),
+        )
+        if not ok_to_open:
+            return
         for i, group in enumerate(groups):
             if self.active_scrap_filename in group:
-                if next:
-                    idx = i + 1
-                else:
-                    idx = i - 1
+                idx = i + delta
         filename = groups[idx % len(groups)][-1]
         self.open_file(filename)
 
     def reload_cb(self, action):
-        if self.filename and self.confirm_destructive_action():
+        if not self.filename:
+            self.app.show_transient_message(C_(
+                u'File→Revert: status message: canvas has no filename yet',
+                u"Cannot revert: canvas has not been saved to a file yet.",
+            ))
+            return
+        ok_to_reload = self.app.filehandler.confirm_destructive_action(
+            title = C_(
+                u'File→Revert confirm dialog: '
+                u'title',
+                u"Revert Changes?",
+            ),
+            confirm = C_(
+                u'File→Revert confirm dialog: '
+                u'continue button',
+                u"_Revert"
+            ),
+        )
+        if ok_to_reload:
             self.open_file(self.filename)
 
     def delete_scratchpads(self, filenames):

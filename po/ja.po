@@ -11,8 +11,8 @@ msgstr ""
 "Project-Id-Version: MyPaint\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2015-07-04 18:33+0100\n"
-"PO-Revision-Date: 2016-01-16 00:15+0900\n"
-"Last-Translator: tou omiya <tokyogeometry@gmail.com>\n"
+"PO-Revision-Date: 2016-02-13 23:05+0000\n"
+"Last-Translator: dothiko <dothiko@gmail.com>\n"
 "Language-Team: Japanese "
 "<https://hosted.weblate.org/projects/mypaint/mypaint/ja/>\n"
 "Language: ja\n"
@@ -20,7 +20,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Poedit 1.8.5\n"
+"X-Generator: Weblate 2.5-dev\n"
 "X-Poedit-Language: Japanese\n"
 "X-Poedit-Country: JAPAN\n"
 "X-Poedit-SourceCharset: utf-8\n"
@@ -58,7 +58,7 @@ msgstr "キーの組み合わせ"
 #: ../gui/accelmap.py:270
 #, python-format
 msgid "Edit Key for '%s'"
-msgstr ""
+msgstr "'%s'にキーを割り当てる"
 
 #: ../gui/accelmap.py:301 ../gui/buttonmap.py:493
 msgid "Action:"
@@ -66,7 +66,7 @@ msgstr "アクション:"
 
 #: ../gui/accelmap.py:314
 msgid "Path:"
-msgstr ""
+msgstr "パス:"
 
 #: ../gui/accelmap.py:325
 msgid "Key:"
@@ -146,12 +146,11 @@ msgstr "色をパターンに追加"
 
 #: ../gui/backgroundwindow.py:255
 msgid "One or more backgrounds could not be loaded"
-msgstr "1 つまたはそれ以上の背景を読み込むことができませんでした"
+msgstr "1つ以上の背景を読込むことができませんでした"
 
 #: ../gui/backgroundwindow.py:256
-#, fuzzy
 msgid "Error loading backgrounds"
-msgstr "読み込み時にエラーが発生しました：　エラー内容＝「%s」"
+msgstr "背景読み込み時にエラーが発生しました"
 
 #: ../gui/backgroundwindow.py:257
 msgid ""
@@ -166,7 +165,7 @@ msgstr "Gdk-Pixbuf が \"{filename}\" の読み込みに失敗し、エラー \"
 #: ../gui/backgroundwindow.py:369
 #, python-brace-format
 msgid "{filename} has zero size (w={w}, h={h})"
-msgstr ""
+msgstr "ファイル{filename}は面積がありません(幅：{w}, 高さ:{h})"
 
 #: ../gui/brusheditor.py:80
 msgctxt "brush settings editor: subwindow title"
@@ -176,7 +175,7 @@ msgstr "ブラシ設定エディター"
 #: ../gui/brusheditor.py:264
 msgctxt "brush settings list: brush metadata texts group"
 msgid "About"
-msgstr ""
+msgstr "このブラシについて"
 
 #: ../gui/brusheditor.py:275
 msgctxt "brush settings list: setting group"
@@ -196,7 +195,6 @@ msgid "Opacity"
 msgstr "不透明度"
 
 #: ../gui/brusheditor.py:312
-#, fuzzy
 msgctxt "brush settings list: setting group"
 msgid "Dabs"
 msgstr "ブラシ描点"
@@ -297,6 +295,8 @@ msgid ""
 "<b>%s</b>\n"
 "<small>Select a valid brush first</small>"
 msgstr ""
+"<b>%s</b>\n"
+"<small>まずは有効なブラシを選んでください</small>"
 
 #: ../gui/brushiconeditor.py:80
 #, python-format
@@ -313,6 +313,8 @@ msgid ""
 "<b>%s</b> (editing)\n"
 "<small>Paint with any brush or color</small>"
 msgstr ""
+"<b>%s</b> (editing)\n"
+"<small>ワークスペースからお好みのブラシや色を選べます</small>"
 
 #: ../gui/brushiconeditor.py:86
 #, python-format
@@ -320,6 +322,8 @@ msgid ""
 "<b>%s</b>\n"
 "<small>Click ‘Edit’ to make changes to the icon</small>"
 msgstr ""
+"<b>%s</b>\n"
+"<small>アイコンを描き換えるには編集ボタンを押してください</small>"
 
 #: ../gui/brushiconeditor.py:157
 msgid "Edit"
@@ -544,17 +548,16 @@ msgstr "ボタン"
 
 #: ../gui/buttonmap.py:311
 msgid "Add a new binding"
-msgstr ""
+msgstr "機能の割り当てを追加"
 
 #: ../gui/buttonmap.py:319
-#, fuzzy
 msgid "Remove the current binding"
-msgstr "現在のファイルを再読み込みします。"
+msgstr "機能の割り当てを削除"
 
 #: ../gui/buttonmap.py:470
 #, python-format
 msgid "Edit binding for '%s'"
-msgstr ""
+msgstr "'%s'への割り当てを編集"
 
 #: ../gui/buttonmap.py:504
 #, fuzzy
@@ -565,18 +568,18 @@ msgstr "ボタン"
 msgid ""
 "Hold down modifier keys, and press a button over this text to set a new "
 "binding."
-msgstr ""
+msgstr "修飾キーを押したまま、機能に割り当てたいボタンをこの文章の上で押すことで割り当てを設定します。"
 
 #: ../gui/buttonmap.py:559
 #, python-brace-format
 msgid ""
 "{button} cannot be bound without modifier keys (its meaning is fixed, sorry)"
-msgstr ""
+msgstr "{button}は修飾キー無しに割り当てることはできません。 (申し訳ありませんが、固定機能という事です)"
 
 #: ../gui/buttonmap.py:574
 #, python-brace-format
 msgid "{button_combination} is already bound to the action '{action_name}'"
-msgstr ""
+msgstr "{button_combination} は既にアクション '{action_name}' に割り当てられています"
 
 #: ../gui/colorpicker.py:71
 msgid "Pick Color"
@@ -584,7 +587,7 @@ msgstr "色を採取"
 
 #: ../gui/colorpicker.py:74
 msgid "Set the color used for painting"
-msgstr ""
+msgstr "描画色を取得します"
 
 #: ../gui/colors/adjbases.py:707
 msgid "Color details"
@@ -592,13 +595,15 @@ msgstr "色の詳細"
 
 #: ../gui/colors/adjbases.py:831
 msgid "Current brush color, and the color most recently used for painting"
-msgstr ""
+msgstr "現在の描画色、そして先ほど描画に使った色です"
 
 #: ../gui/colors/hcywheel.py:48
+#, fuzzy
 msgctxt "Online help pages"
 msgid ""
 "https://github.com/mypaint/mypaint/wiki/v1.2-HCY-Wheel-and-Gamut-Mask-Editor"
 msgstr ""
+"https://github.com/mypaint/mypaint/wiki/v1.2-HCY-Wheel-and-Gamut-Mask-Editor"
 
 #: ../gui/colors/hcywheel.py:86
 msgctxt "Color Wheels: activity toggle: action title"
@@ -608,12 +613,12 @@ msgstr "色域マスク有効"
 #: ../gui/colors/hcywheel.py:90
 msgctxt "Color Wheels: activity toggle: action tooltip"
 msgid "Limit your palette for specific moods using a gamut mask."
-msgstr ""
+msgstr "色域マスクを用いてパレットを特定の色調に限定します。"
 
 #: ../gui/colors/hcywheel.py:355
 msgctxt "HCY Color Wheel: tooltip"
 msgid "HCY hue and chroma."
-msgstr ""
+msgstr "HCY色空間での色相と彩度。"
 
 #: ../gui/colors/hcywheel.py:411
 msgctxt "HCY Mask Editor Wheel: tooltip"
@@ -625,60 +630,60 @@ msgstr "色域マスクエディター。中央部分をクリックすると、
 #: ../gui/colors/hcywheel.py:893
 msgctxt "HCY Gamut Mask template name"
 msgid "Atmospheric Triad"
-msgstr ""
+msgstr "雰囲気の三色配色"
 
 #: ../gui/colors/hcywheel.py:897
 msgctxt "HCY Gamut Mask template description"
 msgid ""
 "Moody and subjective, defined by one dominant primary and two primaries "
 "which are less intense."
-msgstr ""
+msgstr "一つの支配色とそれより少し褪せた二つの主要色で構成される、暗い雰囲気で主観色的な配色です。"
 
 #: ../gui/colors/hcywheel.py:905
 msgctxt "HCY Gamut Mask template name"
 msgid "Shifted Triad"
-msgstr ""
+msgstr "偏移した三色配色"
 
 #: ../gui/colors/hcywheel.py:909
 msgctxt "HCY Gamut Mask template description"
 msgid "Weighted more strongly towards the dominant color."
-msgstr ""
+msgstr "支配色を通常より重視して強めた配色です。"
 
 #: ../gui/colors/hcywheel.py:920
 msgctxt "HCY Gamut Mask template name"
 msgid "Complementary"
-msgstr "補色"
+msgstr "補色配色"
 
 #: ../gui/colors/hcywheel.py:924
 msgctxt "HCY Gamut Mask template description"
 msgid ""
 "Contrasting opposites, balanced by having central neutrals between them on "
 "the color wheel."
-msgstr ""
+msgstr "頂点が補色の位置で対極に離れますが、中間色がカラーホイールの中央と一致するため、非常に安定した配色です。"
 
 #: ../gui/colors/hcywheel.py:940
 msgctxt "HCY Gamut Mask template name"
 msgid "Mood and Accent"
-msgstr ""
+msgstr "雰囲気とアクセントの配色"
 
 #: ../gui/colors/hcywheel.py:944
 msgctxt "HCY Gamut Mask template description"
 msgid ""
 "One main range of colors, with a complementary accent for variation and "
 "highlights."
-msgstr ""
+msgstr "ある色に偏った大きな領域と、それに対して補色となる、アクセントとしての小さな色の領域で構成された配色です。"
 
 #: ../gui/colors/hcywheel.py:953
 msgctxt "HCY Gamut Mask template name"
 msgid "Split Complementary"
-msgstr "分岐補色"
+msgstr "分裂補色配色"
 
 #: ../gui/colors/hcywheel.py:957
 msgctxt "HCY Gamut Mask template description"
 msgid ""
 "Two analogous colors and a complement to them, with no secondary colors "
 "between them."
-msgstr ""
+msgstr "ある色と、それに対して補色となる色から左右の類似色相に分裂させた二色からなる配色です。三色配色と異なり二次色は存在しません。"
 
 #: ../gui/colors/hcywheel.py:969
 msgctxt "HCY Gamut Mask new-from-template dialog: window title"
@@ -750,7 +755,7 @@ msgctxt "HCY Wheel color adjuster page: description for tooltips etc."
 msgid ""
 "Set the color using cylindrical hue/chroma/luma space. The circular slices "
 "are equiluminant."
-msgstr ""
+msgstr "色相/彩度/輝度により円筒を模した色空間を使い、色を選択します。表示される円はその断面で、中は同一の輝度となります。"
 
 #. Tooltip mappings, indexed by whatever the slider currently represents
 #: ../gui/colors/hsvcube.py:37 ../gui/colors/hsvsquare.py:129
@@ -766,38 +771,36 @@ msgid "HSV Value"
 msgstr "HSV 明度"
 
 #: ../gui/colors/hsvcube.py:40 ../gui/colors/hsvsquare.py:130
-#, fuzzy
 msgid "HSV Saturation and Value"
-msgstr "彩度と明度を変更"
+msgstr "HSV 彩度と明度"
 
 #: ../gui/colors/hsvcube.py:41
 msgid "HSV Hue and Value"
-msgstr ""
+msgstr "HSV 色相と明度"
 
 #: ../gui/colors/hsvcube.py:42 ../gui/colors/hsvwheel.py:33
 msgid "HSV Hue and Saturation"
-msgstr ""
+msgstr "HSV 色相と彩度"
 
 #: ../gui/colors/hsvcube.py:54
 msgid "Rotate cube (show different axes)"
-msgstr ""
+msgstr "回転（違う軸にする）"
 
 #: ../gui/colors/hsvcube.py:74
 msgid "HSV Cube"
-msgstr ""
+msgstr "HSV 色立方体"
 
 #: ../gui/colors/hsvcube.py:78
 msgid "An HSV cube which can be rotated to show different planar slices."
-msgstr ""
+msgstr "HSV色立方体を回転させて、それぞれの面の色空間を表示できます。"
 
 #: ../gui/colors/hsvsquare.py:57
-#, fuzzy
 msgid "HSV Square"
-msgstr "４色調和"
+msgstr "HSV 正方形"
 
 #: ../gui/colors/hsvsquare.py:61
 msgid "An HSV Square which can be rotated to show different hues."
-msgstr ""
+msgstr "HSV正方形では、カラーホイールを回転させて異なる色相を選択できます。"
 
 #: ../gui/colors/hsvtriangle.py:47
 msgid "HSV Triangle"
@@ -812,9 +815,8 @@ msgid "HSV Wheel"
 msgstr "HSV ホイール"
 
 #: ../gui/colors/hsvwheel.py:93
-#, fuzzy
 msgid "Saturation and Value color changer."
-msgstr "彩度と明度を変更"
+msgstr "彩度と明度によって色を変更します。"
 
 #: ../gui/colors/paletteview.py:72
 msgctxt "palette panel: properties button tooltip"
@@ -829,7 +831,7 @@ msgstr "パレット"
 #: ../gui/colors/paletteview.py:87
 msgctxt "palette panel tab tooltip description"
 msgid "Set the color from a loadable, editable palette."
-msgstr ""
+msgstr "読み込みと編集が可能なパレットから、色を選択できます。"
 
 #: ../gui/colors/paletteview.py:113
 msgctxt "palette editor dialog: palette name entry"
@@ -918,6 +920,8 @@ msgid ""
 "Drop colors here,\n"
 "drag them to organize."
 msgstr ""
+"パレット(カラースウォッチ)です。\n"
+"ドラッグ&ドロップで色の配置を編集できます。"
 
 #: ../gui/colors/paletteview.py:704
 msgctxt "palette view"
@@ -1056,51 +1060,50 @@ msgstr "HCY 色相"
 #: ../gui/colors/sliders.py:262
 msgctxt "color component slider: tooltip"
 msgid "HCY Chroma"
-msgstr ""
+msgstr "HCY 彩度"
 
 #: ../gui/colors/sliders.py:275
 msgctxt "color component slider: tooltip"
 msgid "HCY Luma (Y')"
-msgstr ""
+msgstr "HCY 輝度 (Y')"
 
 #: ../gui/colortools.py:148
 msgctxt "color changer dock panels: tab tooltip title"
 msgid "Liquid Wash"
-msgstr ""
+msgstr "リキッドウォッシュ"
 
 #: ../gui/colortools.py:152
 msgctxt "color changer dock panels: tab tooltip description"
 msgid "Change color using a liquid-like wash of nearby colors."
-msgstr ""
+msgstr "現在の描画色と色相環の近傍色を、水彩のウォッシュ技法のように混ぜた中から選択します。"
 
 #: ../gui/colortools.py:162
 msgctxt "color changer dock panels: tab tooltip title"
 msgid "Concentric Rings"
-msgstr ""
+msgstr "同心環"
 
 #: ../gui/colortools.py:166
 msgctxt "color changer dock panels: tab tooltip description"
 msgid "Change color using concentric HSV rings."
-msgstr ""
+msgstr "外周から色相・彩度・明度の順に並んだ同心環で色を選択します。"
 
 #: ../gui/colortools.py:176
 msgctxt "color changer dock panels: tab tooltip title"
 msgid "Crossed Bowl"
-msgstr ""
+msgstr "十字とボウル"
 
 #: ../gui/colortools.py:180
 msgctxt "color changer dock panels: tab tooltip description"
 msgid "Change color with HSV ramps crossing a radial bowl of color."
-msgstr ""
+msgstr "放射状の色のお椀(ボウル）と、その上を横断するHSVランプから色を選択します。"
 
 #: ../gui/device.py:46
 msgctxt "prefs: device's type label"
 msgid "Cursor/puck"
-msgstr ""
+msgstr "レンズカーソル(デジタイザー)"
 
 #: ../gui/device.py:50
 #: ../brushsettings-gen.h:36
-#, fuzzy
 msgctxt "prefs: device's type label"
 msgid "Eraser"
 msgstr "消しゴム"
@@ -1133,22 +1136,22 @@ msgstr "タッチスクリーン"
 #: ../gui/device.py:90
 msgctxt "device settings: allowed usage"
 msgid "Ignore"
-msgstr ""
+msgstr "無視"
 
 #: ../gui/device.py:94
 msgctxt "device settings: allowed usage"
 msgid "Any Task"
-msgstr ""
+msgstr "全用途"
 
 #: ../gui/device.py:98
 msgctxt "device settings: allowed usage"
 msgid "Non-painting tasks"
-msgstr ""
+msgstr "描画以外"
 
 #: ../gui/device.py:102
 msgctxt "device settings: allowed usage"
 msgid "Navigation only"
-msgstr ""
+msgstr "ナビゲーションのみ"
 
 #: ../gui/device.py:127
 msgctxt "device settings: unmodified scroll action"
@@ -1168,22 +1171,22 @@ msgstr "デバイス"
 #: ../gui/device.py:419
 msgctxt "prefs: devices table: column header"
 msgid "Axes"
-msgstr ""
+msgstr "軸数"
 
 #: ../gui/device.py:433
 msgctxt "prefs: devices table: column header"
 msgid "Type"
-msgstr ""
+msgstr "種類"
 
 #: ../gui/device.py:456
 msgctxt "prefs: devices table: column header"
 msgid "Use for..."
-msgstr ""
+msgstr "用途は..."
 
 #: ../gui/device.py:486
 msgctxt "prefs: devices table: column header"
 msgid "Scroll..."
-msgstr ""
+msgstr "スクロール機能は..."
 
 #: ../gui/dialogs.py:67 ../gui/externalapp.py:120 ../gui/layers.py:364
 msgid "Name"
@@ -1254,12 +1257,12 @@ msgstr "<b>本当にパッケージ「%s」をインポートしますか？</b>
 #: ../gui/document.py:436
 #, python-format
 msgid "Load brush settings from shortcut slot %d"
-msgstr ""
+msgstr "ブラシ設定をショートカットスロット%dから読み込みます"
 
 #: ../gui/document.py:437
 #, python-format
 msgid "Store brush settings in shortcut slot %d"
-msgstr ""
+msgstr "ブラシ設定をショートカットスロット %dへ保存します"
 
 #: ../gui/document.py:438
 #, python-format
@@ -1304,12 +1307,12 @@ msgstr "{button_combination}で{resultant_action}"
 #. TRANSLATORS: than normal looks good here.
 #: ../gui/document.py:830
 msgid ";  "
-msgstr ""
+msgstr ";  "
 
 #: ../gui/document.py:831
 #, python-brace-format
 msgid "With {modifiers} held down:  {button_actions}."
-msgstr "{modifiers} を押しているとき:  {button_actions}"
+msgstr "{modifiers} を押しているとき： {button_actions}。"
 
 #: ../gui/document.py:1244
 msgid "Layer Name"
@@ -1403,18 +1406,19 @@ msgid ""
 "MyPaint needs to edit a file of type “{type_name}” ({content_type}). What "
 "application should it use?"
 msgstr ""
+"このレイヤの外部編集には、ファイル形式 “{type_name}” "
+"({content_type})を編集できるアプリケーションが必要です。どのアプリケーションを使いますか？"
 
 #: ../gui/externalapp.py:50
 #, python-brace-format
 msgid ""
 "What application should MyPaint use for editing files of type "
 "“{type_name}” ({content_type})?"
-msgstr ""
+msgstr "MyPaintでファイル形式“{type_name}” ({content_type})を編集するのに、どのアプリケーションを使用しますか？"
 
 #: ../gui/externalapp.py:56
-#, fuzzy
 msgid "Open With..."
-msgstr "開く..."
+msgstr "他のアプリケーションで編集..."
 
 #: ../gui/externalapp.py:107
 msgid "Icon"
@@ -1565,21 +1569,21 @@ msgstr "連続した領域を指定した色で塗りつぶす"
 
 #: ../gui/fill.py:183
 msgid "Tolerance:"
-msgstr "あいまいさ:"
+msgstr "許容範囲:"
 
 #: ../gui/fill.py:185
 msgid ""
 "How much pixel colors are allowed to vary from the start\n"
 "before Flood Fill will refuse to fill them"
-msgstr ""
+msgstr "塗りつぶす時に、対象となるピクセルと同じ色とみなされる許容範囲の値を設定します"
 
 #: ../gui/fill.py:205
 msgid "Source:"
-msgstr ""
+msgstr "参照元："
 
 #: ../gui/fill.py:206
 msgid "Which visible layers should be filled"
-msgstr ""
+msgstr "塗りつぶし範囲を決める参照元を指定します"
 
 #: ../gui/fill.py:211
 msgid "Sample Merged"
@@ -1597,21 +1601,23 @@ msgstr ""
 
 #: ../gui/fill.py:226
 msgid "Target:"
-msgstr ""
+msgstr "対象："
 
 #: ../gui/fill.py:227
 msgid "Where the output should go"
-msgstr "出力先"
+msgstr "塗りつぶした結果がどこに出力されるかを変更できます"
 
 #: ../gui/fill.py:232
 msgid "New Layer (once)"
-msgstr ""
+msgstr "新規レイヤ生成（一回だけ)"
 
 #: ../gui/fill.py:235
 msgid ""
 "Create a new layer with the results of the fill.\n"
 "This is turned off automatically after use."
 msgstr ""
+"塗りつぶし結果の画像で新規レイヤを作成します。\n"
+"使った後は自動でチェックが外されます。"
 
 #: ../gui/fill.py:245 ../gui/mode.py:605
 msgid "Reset"
@@ -1715,7 +1721,7 @@ msgstr "レイヤーをフレームサイズで切り抜く"
 
 #: ../gui/framewindow.py:577
 msgid "Trim parts of the current layer which lie outside the frame"
-msgstr ""
+msgstr "現在のレイヤーからフレームの外に出た部分を切り取ります"
 
 #: ../gui/framewindow.py:583
 msgid "Enabled"
@@ -1768,16 +1774,17 @@ msgid ""
 "Please tell the developers about this using the issue tracker if no-one else "
 "has reported it yet."
 msgstr ""
+"このエラーを無視して作業を続ける事も可能ですが、今すぐ画像を保存したほうがいいと思われます。\n"
+"まだ誰も開発者にこのエラーを報告していなければ、「イシュー・トラッカー」（問題を追跡する仕組みです）を使って知らせてくださると幸いです。"
 
 #: ../gui/gtkexcepthook.py:166
 msgid "Search Tracker..."
-msgstr ""
+msgstr "トラッカーを検索..."
 
 #. only development and prereleases
 #: ../gui/gtkexcepthook.py:168
-#, fuzzy
 msgid "Report..."
-msgstr "画像をエクスポート..."
+msgstr "エラーを報告..."
 
 #: ../gui/gtkexcepthook.py:170
 msgid "Ignore Error"
@@ -1821,6 +1828,29 @@ msgid ""
 "            #### Traceback\n"
 "        "
 msgstr ""
+"            #### Description / 概要\n"
+"\n"
+"            概要の所に、レポートとして簡潔で分かりやすい\n"
+"            題名を付けてください。\n"
+"            可能ならば、次のような書式、\n"
+"            \"{問題の起こる機能}: {何が失敗したか}\"\n"
+"            を使ってください。\n"
+"            その後、この文章を、バグについての詳細な説明で\n"
+"            置き換えてください。\n"
+"            問題発生時のスクリーンショットやビデオがあれば、\n"
+"            とても参考になります！\n"
+"            開発者の殆どは英語圏の人達なので\n"
+"            英語でレポートしていただければ有り難いです。\n"
+"\n"
+"            #### Steps to reproduce / 再現方法について\n"
+"\n"
+"            エラーメッセージが現れた時、あなたが何をしていたか\n"
+"            を教えてください。\n"
+"            可能ならば、バグを再現する方法を、順序立てて\n"
+"            説明してくださると、なお有り難いです。\n"
+"\n"
+"            #### Traceback\n"
+"        "
 
 #: ../gui/inktool.py:88 ../gui/inktool.py:452
 msgid "Inking"
@@ -1873,7 +1903,7 @@ msgstr "現在のレイヤーを移動"
 #: ../gui/layers.py:35
 #, python-brace-format
 msgid "{default_name} at {path}"
-msgstr ""
+msgstr "{path}の{default_name}"
 
 #: ../gui/layers.py:353
 msgid "Type"
@@ -1893,7 +1923,7 @@ msgstr "レイヤー"
 
 #: ../gui/layerswindow.py:78
 msgid "Arrange layers and assign effects"
-msgstr ""
+msgstr "レイヤーを管理したり、様々な効果を指定できます"
 
 #. TRANSLATORS: tooltip for the opacity slider (text)
 #: ../gui/layerswindow.py:84
@@ -1909,7 +1939,7 @@ msgstr "レイヤーの並び替え..."
 #: ../gui/layerswindow.py:92
 msgid ""
 "Move layer in stack (dropping into a regular layer will create a new group)"
-msgstr ""
+msgstr "レイヤーの並び替え（通常のレイヤーにドロップすると新しいグループを作ります）"
 
 #: ../gui/layerswindow.py:131
 msgid "Layer"
@@ -1935,13 +1965,12 @@ msgid ""
 msgstr "レイヤー不透明度: 現在のレイヤーを合成する割合です。値が小さいほど透明になります。"
 
 #: ../gui/linemode.py:37
-#, fuzzy
 msgid "Entrance Pressure"
-msgstr "入力デバイスの筆圧"
+msgstr "始点の筆圧"
 
 #: ../gui/linemode.py:38
 msgid "Stroke entrance pressure for line tools"
-msgstr ""
+msgstr "直線・曲線ツールの始点の筆圧"
 
 #: ../gui/linemode.py:39
 #, fuzzy
@@ -1950,7 +1979,7 @@ msgstr "入力デバイスの筆圧"
 
 #: ../gui/linemode.py:40
 msgid "Mid-Stroke pressure for line tools"
-msgstr ""
+msgstr "直線・曲線ツールの中央の筆圧"
 
 #: ../gui/linemode.py:41
 #, fuzzy
@@ -1959,16 +1988,15 @@ msgstr "筆圧"
 
 #: ../gui/linemode.py:42
 msgid "Stroke exit pressure for line tools"
-msgstr ""
+msgstr "直線・曲線ツールの終点の筆圧"
 
 #: ../gui/linemode.py:43
 msgid "Head"
 msgstr "入り"
 
 #: ../gui/linemode.py:44
-#, fuzzy
 msgid "Stroke lead-in end"
-msgstr "残留期間"
+msgstr "「入り」の残留期間"
 
 #: ../gui/linemode.py:45
 msgid "Tail"
@@ -1976,11 +2004,11 @@ msgstr "抜き"
 
 #: ../gui/linemode.py:46
 msgid "Stroke trail-off beginning"
-msgstr ""
+msgstr "「抜き」の開始点"
 
 #: ../gui/linemode.py:169
 msgid "Pressure variation..."
-msgstr ""
+msgstr "筆圧の変動グラフ..."
 
 #: ../gui/linemode.py:215 ../gui/linemode.py:744
 msgid "Lines and Curves"
@@ -1989,7 +2017,7 @@ msgstr "直線と曲線"
 #. TRANSLATORS: users should never see this message
 #: ../gui/linemode.py:219
 msgid "Generic line/curve mode"
-msgstr ""
+msgstr "通常の直線や曲線を描画します"
 
 #: ../gui/linemode.py:747
 msgid "Draw straight lines; Shift adds curves, Ctrl constrains angle"
@@ -2084,12 +2112,12 @@ msgstr "ドキュメンテーション"
 #: ../gui/meta.py:88
 msgctxt "About dialog: credits: tasks: user support"
 msgid "support"
-msgstr ""
+msgstr "サポート"
 
 #: ../gui/meta.py:92
 msgctxt "About dialog: credits: tasks: outreach (social media, ads?)"
 msgid "outreach"
-msgstr ""
+msgstr "広報"
 
 #: ../gui/meta.py:96
 msgctxt "About dialog: credits: tasks: running or building a community"
@@ -2099,12 +2127,12 @@ msgstr "コミュニティ"
 #: ../gui/meta.py:101
 msgctxt "About dialog: credits: tasks: joiner punctuation"
 msgid ", "
-msgstr ""
+msgstr ", "
 
 #: ../gui/meta.py:163
 msgctxt "About dialog: credits: translator credits (your name(s) here!)"
 msgid "translator-credits"
-msgstr ""
+msgstr "翻訳者"
 
 #. TRANSLATORS: "Brush radius" for the options panel. Short.
 #: ../gui/mode.py:562
@@ -2156,7 +2184,7 @@ msgstr "ズーム: %.01f%%"
 #: ../gui/picker.py:457
 msgctxt "context picker: statusbar text during grab"
 msgid "Pick brushstroke settings, stroke color, and layer…"
-msgstr ""
+msgstr "ブラシストロークの設定、ストロークの色、そして描画されているレイヤーを取り込みます…"
 
 #: ../gui/picker.py:495
 msgctxt "color picker: statusbar text during grab"
@@ -2189,7 +2217,7 @@ msgstr "作業パレット"
 
 #: ../gui/scratchwindow.py:38
 msgid "Mix colors and make sketches on separate scrap pages"
-msgstr ""
+msgstr "色を混ぜたりスケッチを描いたりするスクラップ帳です"
 
 #: ../gui/spinbox.py:32
 msgid "Previous item"
@@ -2252,7 +2280,7 @@ msgstr "アルファ:"
 #: ../gui/symmetry.py:352
 msgctxt "symmetry axis options panel: axis position dialog: window title"
 msgid "Axis Position"
-msgstr ""
+msgstr "中心軸の位置"
 
 #: ../gui/symmetry.py:424
 msgctxt "symmetry axis options panel: axis active checkbox"
@@ -2323,12 +2351,12 @@ msgstr "キャンバスの表示領域を回転"
 #: ../gui/workspace.py:1211
 #, python-format
 msgid "%s: close tab"
-msgstr ""
+msgstr "%s: タブを閉じる"
 
 #: ../gui/workspace.py:1213
 #, python-format
 msgid "%s: edit properties"
-msgstr ""
+msgstr "%s: プロパティを編集"
 
 #: ../lib/command.py:158
 msgid "Unknown Command"
@@ -2336,7 +2364,7 @@ msgstr "不明なコマンド"
 
 #: ../lib/command.py:272
 msgid "Undefined (command not started yet)"
-msgstr ""
+msgstr "未定義 (コマンドはまだ開始されていません）"
 
 #. TRANSLATORS: A short time spent painting / making brushwork.
 #. TRANSLATORS: This can correspond to zero or more touches of
@@ -2383,7 +2411,7 @@ msgstr "レイヤーの合成モードの変更"
 #: ../lib/command.py:797
 #, python-brace-format
 msgid "Add {layer_default_name}"
-msgstr ""
+msgstr "{layer_default_name} を追加"
 
 #: ../lib/command.py:820
 msgid "Remove Layer"
@@ -2473,12 +2501,12 @@ msgstr "このエラーについての詳細がログに出力されている場
 #: ../lib/document.py:183
 msgctxt "Document autosave descriptions: the {ago} string: future"
 msgid "from now"
-msgstr ""
+msgstr "後"
 
 #: ../lib/document.py:188
 msgctxt "Document autosave descriptions: the {ago} string: past"
 msgid "ago"
-msgstr ""
+msgstr "前"
 
 #: ../lib/document.py:196
 #, python-brace-format
@@ -2496,7 +2524,7 @@ msgstr ""
 #, python-brace-format
 msgctxt "Document autosave descriptions"
 msgid "Incomplete backup updated {last_modified_time} {ago}"
-msgstr ""
+msgstr "未完了のバックアップ ： {last_modified_time} {ago}に更新"
 
 #: ../lib/document.py:208
 #, python-brace-format
@@ -2507,22 +2535,25 @@ msgid ""
 "num_layers}\n"
 "Contains {unsaved_time} of unsaved painting."
 msgstr ""
+"{last_modified_time} {ago}のバックアップの更新\n"
+"サイズ: {autosave.width}×{autosave.height} ピクセル, レイヤ数: {autosave.num_layers}\n"
+"未保存の {unsaved_time}回の描画を含みます。"
 
 #: ../lib/document.py:1209
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgctxt "Document IO: hint templates for user-facing exceptions"
 msgid ""
 "Unable to write “{filename}”: {err}\n"
 "Do you have enough space left on the device?"
 msgstr ""
-"%sを保存することができませんでした\n"
+"“{filename}”を保存することができませんでした  : {err}\n"
 "十分なディスクの空き容量が残されていますか？"
 
 #: ../lib/document.py:1215 ../lib/document.py:1225
 #, python-brace-format
 msgctxt "Document IO: hint templates for user-facing exceptions"
 msgid "Unable to write “{filename}”: {err}"
-msgstr ""
+msgstr "“{filename}”を書き込めませんでした : {err}"
 
 #: ../lib/document.py:1257
 #, python-brace-format
@@ -2554,6 +2585,11 @@ msgid ""
 "\n"
 "{see_logs}"
 msgstr ""
+"{error_loading_common}\n"
+"\n"
+"原因: {reason}\n"
+"\n"
+"{see_logs}"
 
 #: ../lib/document.py:1313
 #, python-brace-format, python-brace-format
@@ -2590,6 +2626,11 @@ msgid ""
 "\n"
 "{see_logs}"
 msgstr ""
+"自動バックアップからの復活に失敗しました。\n"
+"\n"
+"原因: {reason}\n"
+"\n"
+"{see_logs}"
 
 #: ../lib/helpers.py:402
 #, python-brace-format
@@ -2620,12 +2661,12 @@ msgstr "レイヤー"
 #, python-format
 msgctxt "layer unique names: template (leave untranslated if unsure)"
 msgid "%(name)s %(number)d"
-msgstr ""
+msgstr "%(name)s %(number)d"
 
 #: ../lib/layer/core.py:89
 msgctxt "layer unique names: match regex (leave untranslated if unsure)"
 msgid "^(.*?)\\s*(\\d+)$"
-msgstr ""
+msgstr "^(.*?)\\s*(\\d+)$"
 
 #: ../lib/layer/data.py:1107
 msgctxt "layer default names"
@@ -2650,25 +2691,25 @@ msgstr "グループ"
 #: ../lib/layer/tree.py:53
 msgctxt "layer default names"
 msgid "Placeholder"
-msgstr ""
+msgstr "プレースホルダ"
 
 #: ../lib/layer/tree.py:92
 msgctxt "layer default names"
 msgid "Root"
-msgstr ""
+msgstr "ルートレイヤー"
 
 #: ../lib/layer/tree.py:1684 ../lib/layer/tree.py:1738
 msgctxt "layer default names: joiner punctuation for merged layers"
 msgid ", "
-msgstr ""
+msgstr ", "
 
 #: ../lib/modes.py:36
 msgid "Pass-through"
-msgstr ""
+msgstr "通過"
 
 #: ../lib/modes.py:37
 msgid "Group contents apply directly to the group's backdrop"
-msgstr ""
+msgstr "レイヤグループの内容とモードがグループ内で終わらず、下の背景まで通過して直接適用されます"
 
 #: ../lib/modes.py:41
 msgid "Normal"
@@ -2706,7 +2747,7 @@ msgstr "オーバーレイ"
 msgid ""
 "Overlays the backdrop with the top layer, preserving the backdrop's "
 "highlights and shadows. This is the inverse of 'Hard Light'."
-msgstr ""
+msgstr "背景のハイライトと影を保持しつつ、色を重ね合わせます。これは「ハードライト」の逆です。"
 
 #: ../lib/modes.py:57
 msgid "Darken"
@@ -2714,7 +2755,7 @@ msgstr "暗くする"
 
 #: ../lib/modes.py:58
 msgid "The top layer is used where it is darker than the backdrop."
-msgstr ""
+msgstr "背景より暗い部分だけを使って色を上書きします。"
 
 #: ../lib/modes.py:61
 msgid "Lighten"
@@ -2722,7 +2763,7 @@ msgstr "明るくする"
 
 #: ../lib/modes.py:62
 msgid "The top layer is used where it is lighter than the backdrop."
-msgstr ""
+msgstr "背景より明るい部分だけを使って色を上書きします。"
 
 #: ../lib/modes.py:65
 msgid "Dodge"
@@ -2753,7 +2794,7 @@ msgstr "ハードライト"
 
 #: ../lib/modes.py:76
 msgid "Similar to shining a harsh spotlight onto the backdrop."
-msgstr ""
+msgstr "背景の上に強く輝くスポットライトを当てるのに似ています。"
 
 #: ../lib/modes.py:78
 msgid "Soft Light"
@@ -2761,7 +2802,7 @@ msgstr "ソフトライト"
 
 #: ../lib/modes.py:79
 msgid "Like shining a diffuse spotlight onto the backdrop."
-msgstr ""
+msgstr "背景に柔らかい分散光のスポットライトを当てるのに似ています。"
 
 #: ../lib/modes.py:81
 msgid "Difference"
@@ -2769,7 +2810,7 @@ msgstr "差分"
 
 #: ../lib/modes.py:82
 msgid "Subtracts the darker color from the lighter of the two."
-msgstr ""
+msgstr "二つのレイヤの色のうち、明るい方の色から暗い方の色を減算します。"
 
 #: ../lib/modes.py:84
 msgid "Exclusion"
@@ -2787,7 +2828,7 @@ msgstr "色相"
 msgid ""
 "Combines the hue of the top layer with the saturation and luminosity of the "
 "backdrop."
-msgstr ""
+msgstr "上のレイヤからは色相を、下のレイヤからは彩度と輝度を取り出して合成します。"
 
 #: ../lib/modes.py:92
 msgid "Saturation"
@@ -2797,13 +2838,13 @@ msgstr "彩度"
 msgid ""
 "Applies the saturation of the top layer's colors to the hue and luminosity "
 "of the backdrop."
-msgstr ""
+msgstr "上のレイヤからは彩度を、下のレイヤからは色相と輝度を取り出して合成します。"
 
 #: ../lib/modes.py:97
 msgid ""
 "Applies the hue and saturation of the top layer to the luminosity of the "
 "backdrop."
-msgstr ""
+msgstr "上のレイヤから色相と彩度を取り出し、下のレイヤからは輝度を取り出して合成します。"
 
 #: ../lib/modes.py:100
 msgid "Luminosity"
@@ -2813,7 +2854,7 @@ msgstr "輝度"
 msgid ""
 "Applies the luminosity of the top layer to the hue and saturation of the "
 "backdrop."
-msgstr ""
+msgstr "上のレイヤからは輝度を取り出し、下のレイヤからは色相と彩度を取り出して合成します。"
 
 #: ../lib/modes.py:105
 msgid "Plus"
@@ -2821,27 +2862,27 @@ msgstr "加算"
 
 #: ../lib/modes.py:106
 msgid "This layer and its backdrop are simply added together."
-msgstr ""
+msgstr "上のレイヤと下のレイヤを単純に加算します。"
 
 #: ../lib/modes.py:108
 msgid "Destination In"
-msgstr ""
+msgstr "不透明部分で背景を透過"
 
 #: ../lib/modes.py:109
 msgid ""
 "Uses the backdrop only where this layer covers it. Everything else is "
 "ignored."
-msgstr ""
+msgstr "このレイヤの不透明部分の下にある背景だけを使い、他のすべては無視して透明化します。"
 
 #: ../lib/modes.py:112
 msgid "Destination Out"
-msgstr ""
+msgstr "透明部分で背景を透過"
 
 #: ../lib/modes.py:113
 msgid ""
 "Uses the backdrop only where this layer doesn't cover it. Everything else is "
 "ignored."
-msgstr ""
+msgstr "このレイヤの透明部分の下にある背景だけを使い、他の全ては無視して透明化します。"
 
 #: ../lib/modes.py:116
 msgid "Source Atop"
@@ -2851,7 +2892,7 @@ msgstr "背面レイヤーの不透明部分に上書き"
 msgid ""
 "Source which overlaps the destination, replaces the destination. Destination "
 "is placed elsewhere."
-msgstr ""
+msgstr "このレイヤと背面レイヤーとの不透明部分が重なっている部分だけを上書きします。背面レイヤーのその他の部分はそのまま表示されます。"
 
 #: ../lib/modes.py:120
 msgid "Destination Atop"
@@ -2861,14 +2902,14 @@ msgstr "不透明部分に背面レイヤーで上書き"
 msgid ""
 "Destination which overlaps the source replaces the source. Source is placed "
 "elsewhere."
-msgstr ""
+msgstr "このレイヤと背面レイヤーの不透明部分が重なっている場所だけを、背面レイヤーまで透過します。このレイヤのその他の部分はそのまま表示されます。"
 
 #: ../lib/pixbufsurface.py:35
 msgctxt "user-facing error texts"
 msgid ""
 "Unable to construct a vital internal object. Your system may not have enough "
 "memory to perform this operation."
-msgstr ""
+msgstr "重要な内部オブジェクトを生成出来ませんでした。この作業を実行するにはシステムのメモリーが不足しているかもしれません。"
 
 #: ../lib/surface.py:325
 #, python-brace-format
@@ -2879,26 +2920,30 @@ msgid ""
 "Reason: {err}\n"
 "Target folder: “{dirname}”."
 msgstr ""
+"書き込みに失敗しました “{basename}”.\n"
+"\n"
+"原因: {err}\n"
+"出力先のフォルダー: “{dirname}”."
 
 #: ../lib/tiledsurface.py:542
 #, python-format
 msgid "PNG reader failed: %s"
-msgstr ""
+msgstr "PNGファイルの読み込みに失敗: %s"
 
 #: ../po/tmp/autorecover.glade.h:1
 msgid "Recover interrupted work?"
-msgstr ""
+msgstr "中断した作業を再開しますか？"
 
 #. Recover in the sense or retreival or salvage from a backup file; Save in the sense of saving it to disk immediately you click this button.
 #: ../po/tmp/autorecover.glade.h:3
 msgctxt "Autosave Recovery dialog|"
 msgid "_Recover and Save..."
-msgstr ""
+msgstr "バックアップから保存(_R)..."
 
 #: ../po/tmp/autorecover.glade.h:4
 msgctxt "Autosave Recovery dialog|Recover and Save|"
 msgid "Save this backup to disk, then continue working on it."
-msgstr ""
+msgstr "バックアップされていたファイルを復活させてディスクに保存し、作業を続けます。"
 
 #: ../po/tmp/autorecover.glade.h:5
 msgctxt "Autosave Recovery dialog|"
@@ -2908,7 +2953,7 @@ msgstr "今は無視する(_I)"
 #: ../po/tmp/autorecover.glade.h:6
 msgctxt "Autosave Recovery dialog|Cancel button|"
 msgid "Start work on a new canvas. These backups will be retained."
-msgstr ""
+msgstr "新しいキャンバスで作業を始めます。これらのバックアップは別の場所で保持されます。"
 
 #: ../po/tmp/autorecover.glade.h:7
 msgctxt "Autosave Recovery dialog|"
@@ -2916,6 +2961,8 @@ msgid ""
 "MyPaint crashed with unsaved work, but it made backups. You can recover a "
 "file now, or leave it till you start MyPaint again."
 msgstr ""
+"作業を保存しないうちにMyPaintが異常終了しました。しかし、その時のバックアップは存在します。バックアップからファイルを復活させるか、MyPaintを"
+"再起動するまで放置することができます。"
 
 #: ../po/tmp/autorecover.glade.h:8
 msgid "Thumbnail"
@@ -2926,9 +2973,8 @@ msgid "Description"
 msgstr "説明"
 
 #: ../po/tmp/brusheditor.glade.h:1
-#, fuzzy
 msgid "Copy to New"
-msgstr "%s のコピー"
+msgstr "コピーを新規作成"
 
 #: ../po/tmp/brusheditor.glade.h:2
 #, fuzzy
@@ -2959,7 +3005,7 @@ msgstr "このブラシをディスクから削除"
 
 #: ../po/tmp/brusheditor.glade.h:9
 msgid "Live update"
-msgstr ""
+msgstr "すぐに反映"
 
 #: ../po/tmp/brusheditor.glade.h:10
 #, fuzzy
@@ -2990,13 +3036,13 @@ msgstr "説明:"
 #: ../po/tmp/brusheditor.glade.h:17
 msgctxt "brush editor|metadata settings|labels for widgets|tooltips|"
 msgid "Brush developer's notes"
-msgstr ""
+msgstr "ブラシ作成者による説明"
 
 #. Notes for developers
 #: ../po/tmp/brusheditor.glade.h:19
 msgctxt "brush editor|metadata settings|labels|"
 msgid "Notes:"
-msgstr ""
+msgstr "詳細:"
 
 #. field label (non-editable)
 #: ../po/tmp/brusheditor.glade.h:21
@@ -3006,27 +3052,28 @@ msgstr "設定名:"
 #: ../po/tmp/brusheditor.glade.h:22
 msgid ""
 "Starting value for this brush setting. The brush dynamics below act on this."
-msgstr ""
+msgstr "この設定における基本値です。以下のブラシダイナミクスはこの値に基づきます。"
 
 #. field label
 #: ../po/tmp/brusheditor.glade.h:24
-#, fuzzy
 msgid "Base value:"
-msgstr "基本となる値"
+msgstr "基本となる値:"
 
 #: ../po/tmp/brusheditor.glade.h:25
 msgid "Reset the base value to its default"
-msgstr ""
+msgstr "基本値をデフォルトに戻します"
 
 #: ../po/tmp/brusheditor.glade.h:26
 msgid "Reset this input to have no effect on the setting"
-msgstr ""
+msgstr "この入力を、基本値に影響を与えない値に戻します"
 
 #: ../po/tmp/brusheditor.glade.h:27
 msgid ""
 "Minimum value for the output axis.\n"
 "This can be set using the main slider for {dname}."
 msgstr ""
+"この出力軸の最小値です.\n"
+"これはメインスライダー {dname} を使って設定できます。"
 
 #: ../po/tmp/brusheditor.glade.h:29
 msgid "<ymin>"
@@ -3037,6 +3084,8 @@ msgid ""
 "Maximum value for the output axis.\n"
 "This can be set using the main slider for {dname}."
 msgstr ""
+"この出力軸の最大値です。\n"
+"これはメインスライダー {dname} を使って設定できます。"
 
 #: ../po/tmp/brusheditor.glade.h:32
 msgid "<ymax>"
@@ -3052,17 +3101,19 @@ msgstr "入力"
 
 #: ../po/tmp/brusheditor.glade.h:35
 msgid "Adjusts the maximum value"
-msgstr ""
+msgstr "最大値を変更"
 
 #: ../po/tmp/brusheditor.glade.h:36
 msgid "Adjusts the minimum value"
-msgstr ""
+msgstr "最小値を変更"
 
 #: ../po/tmp/brusheditor.glade.h:37
 msgid ""
 "Minimum value for the input axis.\n"
 "Use the popup scale to adjust this."
 msgstr ""
+"この入力軸の最小値です。\n"
+"変更するには、横のアイコンをクリックして出るポップアップスケールを使います。"
 
 #: ../po/tmp/brusheditor.glade.h:39
 msgid "<xmin>"
@@ -3073,6 +3124,8 @@ msgid ""
 "Maximum value for the input axis.\n"
 "Use the popup scale to adjust this."
 msgstr ""
+"この入力軸の最大値です。\n"
+"変更するには、横のアイコンをクリックして出るポップアップスケールを使います。"
 
 #: ../po/tmp/brusheditor.glade.h:42
 msgid "<xmax>"
@@ -3080,7 +3133,7 @@ msgstr "<xmax>"
 
 #: ../po/tmp/brusheditor.glade.h:43
 msgid "Variation of the base value by stylus input and other criteria"
-msgstr ""
+msgstr "スタイラスの入力や動きなどによる基本値の変動"
 
 #: ../po/tmp/brusheditor.glade.h:44
 msgid "Brush Dynamics"
@@ -3097,7 +3150,7 @@ msgstr "設定を編集"
 
 #: ../po/tmp/brusheditor.glade.h:47
 msgid "Adjust this input mapping in detail"
-msgstr ""
+msgstr "この入力のマッピングを詳細に編集"
 
 #: ../po/tmp/brusheditor.glade.h:48
 msgid "{tooltip}"
@@ -3117,7 +3170,7 @@ msgstr "ファイルを開いて現在の画像と置き換えます"
 #: ../po/tmp/inktool.glade.h:2
 msgctxt "Inking tool options: point value sliders: labels"
 msgid "Press:"
-msgstr "筆圧:"
+msgstr "太さ:"
 
 #. The meaning of negative values is *not* affected by text direction.&#10;The widget's RTL/LTR layout, however, *is* affected.&#10;The value (and signs) *is* shown.
 #: ../po/tmp/inktool.glade.h:4
@@ -3148,7 +3201,7 @@ msgstr "キャンバスの Y 軸方向における傾き"
 #: ../po/tmp/inktool.glade.h:10
 msgctxt "Inking tool options: point value sliders: labels: tooltips"
 msgid "Time since the previous point, in seconds"
-msgstr ""
+msgstr "前の制御点からの経過時間(秒)"
 
 #: ../po/tmp/inktool.glade.h:11
 msgctxt "Inking tool options: point value sliders: labels"
@@ -3200,7 +3253,7 @@ msgstr ""
 #: ../po/tmp/mypaint.glade.h:10
 msgctxt "footer: context picker button: tooltip"
 msgid "Pick brushstroke settings, stroke color, and layer"
-msgstr ""
+msgstr "ストロークのブラシ設定や色、そして描かれているレイヤを採取します"
 
 #: ../po/tmp/preferenceswindow.glade.h:1
 msgctxt "Prefs Dialog|Saving|Save Formats and Locations|Default|"
@@ -3304,13 +3357,12 @@ msgctxt "Prefs Dialog|Devices|"
 msgid ""
 "Here you can restrict pointing devices to specific tasks on the canvas, or "
 "have them ignored completely if they glitch your drawing."
-msgstr ""
+msgstr "ここでは特定のデバイスに対してのキャンバス上の振る舞いを制限したり、あるいは使用において問題がある場合、完全に無視させることができます。"
 
 #: ../po/tmp/preferenceswindow.glade.h:29
-#, fuzzy
 msgctxt "Prefs Dialog|Button|"
 msgid "<b>Device Usage</b>"
-msgstr "<b>入力デバイス</b>"
+msgstr "<b>入力デバイスの使用方法</b>"
 
 #: ../po/tmp/preferenceswindow.glade.h:30
 msgid "Devices"
@@ -3322,12 +3374,13 @@ msgid ""
 "• The space bar can be used like Button2.\n"
 "• Some tablet pads' buttons cannot be held down when pressed."
 msgstr ""
+"• スペースキーは第２ボタンのように振る舞うことが出来ます。\n"
+"• パッドボタンを押し続けても押下状態を継続できないタブレットも存在します。."
 
 #: ../po/tmp/preferenceswindow.glade.h:33
-#, fuzzy
 msgctxt "Prefs Dialog|Button|"
 msgid "<b>Pointer Button Mappings</b>"
-msgstr "<b>ペンとマウス ボタンの機能設定</b>"
+msgstr "<b>ペンやマウスのボタン機能の設定</b>"
 
 #. Tab label in preferences dialog
 #: ../po/tmp/preferenceswindow.glade.h:35
@@ -3386,11 +3439,17 @@ msgid ""
 "monitors. If you know your display is radically different from this, use the "
 "\"no automatic conversions or tagging\" setting instead."
 msgstr ""
+"<i>広色域</i>の情報を含む画像は、MyPaintに読み込まれた時にsRGBに変換されます。 "
+"MyPaintが保存する時には、他のプログラムが正しく処理できるようにヒントが付加されます。\n"
+"\n"
+"これは、使用されているディスプレイが、Web標準であり、控えめに考えてもほとんどのPCモニターが使用していると考えられる「sRGB色空間」かそれに近い色空"
+"間でキャリブレーションされていることを前提としています。もしsRGBと大幅に異なるディスプレイを使っている場合は、「自動変換やタグ付けをしない」 "
+"設定を使ってください."
 
 #: ../po/tmp/preferenceswindow.glade.h:47
 msgctxt "Prefs Dialog|Load & Save|Color Management|"
 msgid "No automatic conversions or tagging"
-msgstr ""
+msgstr "自動変換やタグ付けをしない"
 
 #: ../po/tmp/preferenceswindow.glade.h:48
 msgctxt "Prefs Dialog|Load & Save|Color Management|"
@@ -3401,6 +3460,8 @@ msgid ""
 "This is MyPaint's old behaviour, and can be used as a stopgap for non-sRGB "
 "working."
 msgstr ""
+"読み込み時に色空間の変換をせず、保存時にもカラーマネジメント情報を付加しません。\n"
+"これはMyPaintの古い挙動と同一で、非sRGB環境での作業に場当たり的に対応するのに使えます。"
 
 #: ../po/tmp/preferenceswindow.glade.h:51
 msgctxt "Prefs Dialog|Load & Save|"
@@ -3426,6 +3487,8 @@ msgid ""
 "the program crashes, you'll have a chance to restore what you were working "
 "on."
 msgstr ""
+"作品をMyPaintのディスクキャッシュ領域に、非同期で自動的に増分バックアップします。もしプログラムが異常終了した場合、その時行っていた作業を復活させる"
+"チャンスがあります。"
 
 #: ../po/tmp/preferenceswindow.glade.h:56
 msgctxt "Prefs Dialog|Load & Save|Automated Backups|interval label"
@@ -3477,7 +3540,7 @@ msgctxt "Prefs Dialog|View|Interface|Dark theme variant|checkbox tooltip"
 msgid ""
 "Use a light-on-dark theme variant, when it's supported by the GTK theme. "
 "This is generally sensible for image editors and media viewers."
-msgstr ""
+msgstr "GTKテーマで使用可能な場合、暗い色が基調で明るい文字のテーマを使用します。これは画像を扱うプログラムやビュワーでは通常、賢明な対応です。"
 
 #: ../po/tmp/preferenceswindow.glade.h:67
 msgid "Some of these settings require MyPaint to be restarted."
@@ -3496,7 +3559,7 @@ msgstr "小"
 #: ../po/tmp/preferenceswindow.glade.h:70
 msgctxt "Prefs Dialog|View|Zoom|"
 msgid "Use a real checkerboard pattern"
-msgstr ""
+msgstr "常に同一サイズの市松模様を使用する"
 
 #: ../po/tmp/preferenceswindow.glade.h:71
 msgctxt "Prefs Dialog|View|Zoom|"
@@ -3504,6 +3567,8 @@ msgid ""
 "Draw a real checkerboard pattern to show transparency.\n"
 "This slows down the display, but can be less confusing."
 msgstr ""
+"透明部分を表示するのに、キャンバスの拡大縮小に関わらず同一サイズの市松模様で表現します。\n"
+"表示が若干遅くなるかもしれませんが、絵の模様と透明部分を混乱することは減るでしょう。"
 
 #: ../po/tmp/preferenceswindow.glade.h:73
 msgid "When showing transparency:"
@@ -3512,13 +3577,13 @@ msgstr "透明部分の表示方法:"
 #: ../po/tmp/preferenceswindow.glade.h:74
 msgctxt "Prefs Dialog|View|Interface|"
 msgid "Handle smooth scrolling events:"
-msgstr ""
+msgstr "スムーズスクロールを使用する："
 
 #: ../po/tmp/preferenceswindow.glade.h:75
 msgctxt ""
 "Prefs Dialog|View|Interface|Handle smooth scrolling events|checkbox label"
 msgid "When devices send them (needs restart)"
-msgstr ""
+msgstr "デバイスが送ってきた場合に使用（再起動が必要）"
 
 #: ../po/tmp/preferenceswindow.glade.h:76
 msgctxt ""
@@ -3534,6 +3599,11 @@ msgid ""
 "Scrolling to pan the view needs this setting to be turned on, and for your "
 "device to be configured to send bidirectional scroll events."
 msgstr ""
+"スムーズスクロール機能はジェスチャやホイールでのスクロールをステップ単位より滑らかにします。しかしながら、タッチパッドには便利でも、マウスのスクロールホイ"
+"ールを使用している場合は苛立たしいこともあります。\n"
+"もしスムーズスクロールを使用している場合でも、スクロールと同時にシフトキーを押している間はステップ単位に戻すことができます。\n"
+"スクロール機能をビューの表示位置変更に使用する場合は、このオプションをチェックする必要があり、またデバイス側も双方向スクロールが出来るよう設定しておく必要"
+"があります。"
 
 #: ../po/tmp/preferenceswindow.glade.h:81
 msgid "Hide cursor while painting"
@@ -3551,35 +3621,38 @@ msgid ""
 "The set of colors to show as primary on disk-style color wheels.\n"
 "Different traditions have different color harmonies."
 msgstr ""
+"カラーホイール上で原色として使われる色の組み合わせです。\n"
+"それぞれの伝統ごとに異なる色彩調和を持ちます。"
 
 #. Arrangement of MyPaint's custom colour wheels
 #: ../po/tmp/preferenceswindow.glade.h:87
 msgctxt "Prefs Dialog|Color|Color Wheel|"
 msgid "Primaries are:"
-msgstr ""
+msgstr "原色の組み合わせ："
 
 #: ../po/tmp/preferenceswindow.glade.h:88
 msgctxt "Prefs Dialog|Color|Color Wheel|Primaries|"
 msgid "Standard digital Red/Green/Blue"
-msgstr ""
+msgstr "デジタルでは標準的な赤/緑/青"
 
 #: ../po/tmp/preferenceswindow.glade.h:89
 msgid ""
 "The red, green, and blue &apos;computer monitor&apos; primaries, evenly "
 "arranged around the circle. Green is opposite magenta."
 msgstr ""
+"&apos;コンピュータのモニタ&apos;の信号に使われている赤、緑、青を、均等にホイール上に並べたものです。緑の反対側がマゼンタになります。"
 
 #: ../po/tmp/preferenceswindow.glade.h:90
 msgctxt "Prefs Dialog|Color|Color Wheel|Primaries|RGB|"
 msgid ""
 "The red, green, and blue 'computer monitor' primaries, evenly arranged "
 "around the circle. Green is opposite magenta."
-msgstr ""
+msgstr "'コンピュータのモニタ'の信号に使われている赤、緑、青を、均等にホイール上に並べたものです。緑の反対側がマゼンタになります。"
 
 #: ../po/tmp/preferenceswindow.glade.h:91
 msgctxt "Prefs Dialog|Color|Color Wheel|Primaries|"
 msgid "Traditional artist's Red/Yellow/Blue"
-msgstr ""
+msgstr "伝統的な芸術家の赤/黄/青"
 
 #: ../po/tmp/preferenceswindow.glade.h:92
 msgid ""
@@ -3587,6 +3660,8 @@ msgid ""
 "since the 18th century, approximated with pure display colors evenly "
 "arranged around the circle. Green is opposite red."
 msgstr ""
+"18世紀から多くの芸術家に使われている赤/黄/青の伝統的な配置のホイールです。純粋な表示色に近似され、均等にホイール上に配置されています。緑の反対側は赤で"
+"す。"
 
 #: ../po/tmp/preferenceswindow.glade.h:93
 msgctxt "Prefs Dialog|Color|Color Wheel|Primaries|RYB|"
@@ -3595,12 +3670,13 @@ msgid ""
 "since the 18th century, approximated with pure display colors evenly "
 "arranged around the circle. Green is opposite red."
 msgstr ""
+"18世紀から多くの芸術家に使われている赤/黄/青の伝統的な配置のホイールです。純粋な表示色に近似され、均等にホイール上に配置されています。緑の反対側は赤で"
+"す。"
 
 #: ../po/tmp/preferenceswindow.glade.h:94
-#, fuzzy
 msgctxt "Prefs Dialog|Color|Color Wheel|Primaries|"
 msgid "Red-Green and Blue-Yellow opponent pairs"
-msgstr "RGBを変更"
+msgstr "赤-緑と青-黄の反対色のペア"
 
 #: ../po/tmp/preferenceswindow.glade.h:95
 msgid ""
@@ -3610,6 +3686,9 @@ msgid ""
 "and yellow is opposite blue. CIECAM02 and NCS present a similar model. Here "
 "we use pure display red, yellow etc. as the four primaries."
 msgstr ""
+"四つの&apos;心理学的原色&apos; もしくは &apos;独自の色相&apos; "
+"を用いる反対色過程色説での原色を(拙速に)近似し、それらを四方点における反対の色として配置したホイールです。赤は緑の反対側であり、黄は青の反対側です。 "
+"CIECAM02とNCSは、同様のモデルを提示します。ここでは、4原色として純粋な赤、黄などを使用します。"
 
 #: ../po/tmp/preferenceswindow.glade.h:96
 msgctxt "Prefs Dialog|Color|Color Wheel|Primaries|RYGB|"
@@ -3620,6 +3699,9 @@ msgid ""
 "blue. CIECAM02 and NCS present a similar model. Here we use pure display "
 "red, yellow etc. as the four primaries."
 msgstr ""
+"四つの '心理学的原色' もしくは '独自の色相' "
+"を用いる反対色過程色説での原色を(拙速に)近似し、それらを四方点における反対の色として配置したホイールです。赤は緑の反対側であり、黄は青の反対側です。 "
+"CIECAM02とNCSは、同様のモデルを提示します。ここでは、4原色として純粋な赤、黄などを使用します。"
 
 #. Options affecting color wheels
 #: ../po/tmp/preferenceswindow.glade.h:98
@@ -3730,7 +3812,7 @@ msgstr "エクスポート…"
 
 #: ../po/tmp/resources.xml.h:17
 msgid "Export your work to a file, but keep working on the same file."
-msgstr ""
+msgstr "作品を別のファイルにエクスポートしますが、作業は今までと同じファイルで継続します。"
 
 #: ../po/tmp/resources.xml.h:18
 msgctxt "Menu→File (labels), Accel Editor (labels)"
@@ -3740,7 +3822,7 @@ msgstr "スクラップとして保存"
 #: ../po/tmp/resources.xml.h:19
 msgctxt "Accel Editor (descriptions)"
 msgid "Save to a new scrap file, or save a new revision if already a scrap."
-msgstr ""
+msgstr "新しいスクラップファイルとして保存するか、もし既にスクラップで保存されているならば新しいリビジョンのスクラップにします。"
 
 #: ../po/tmp/resources.xml.h:20
 msgctxt "Menu→File (labels), Accel Editor (labels)"
@@ -3772,7 +3854,7 @@ msgstr "自動バックアップからファイルを復帰…"
 #: ../po/tmp/resources.xml.h:25
 msgctxt "Accel Editor (descriptions)"
 msgid "Try to save and resume interrupted unsaved work."
-msgstr ""
+msgstr "中断され保存されていない作品に対し、再開もしくは保存を試みます。"
 
 #: ../po/tmp/resources.xml.h:26
 msgctxt "Menu→Brush (label)"
@@ -3790,10 +3872,9 @@ msgid "List of brush groups."
 msgstr "ブラシグループの一覧です。"
 
 #: ../po/tmp/resources.xml.h:29
-#, fuzzy
 msgctxt "Toolbar (label)"
 msgid "Color Adjusters"
-msgstr "色の詳細"
+msgstr "カラーセレクター"
 
 #: ../po/tmp/resources.xml.h:30
 msgctxt "Toolbar (short labels)"
@@ -3803,7 +3884,7 @@ msgstr "色"
 #: ../po/tmp/resources.xml.h:31
 msgctxt "Toolbar (tooltips)"
 msgid "Available color adjusters."
-msgstr ""
+msgstr "使用可能なカラーセレクターの一覧です。"
 
 #: ../po/tmp/resources.xml.h:32
 msgctxt "Menu→Layer→Properties (label)"
@@ -3863,7 +3944,7 @@ msgstr "使用中のブラシをより透明にします。"
 #: ../po/tmp/resources.xml.h:43
 msgctxt "Menu→Color→Adjust Color (labels), Accel Editor (labels)"
 msgid "Lighten Painting Color"
-msgstr ""
+msgstr "描画色を明るく"
 
 #: ../po/tmp/resources.xml.h:44
 #, fuzzy
@@ -3874,7 +3955,7 @@ msgstr "ファイルを開いて現在の画像と置き換えます"
 #: ../po/tmp/resources.xml.h:45
 msgctxt "Menu→Color→Adjust Color (labels), Accel Editor (labels)"
 msgid "Darken Painting Color"
-msgstr ""
+msgstr "描画色を暗く"
 
 #: ../po/tmp/resources.xml.h:46
 #, fuzzy
@@ -3901,7 +3982,7 @@ msgstr "色相を時計回りに変更"
 #: ../po/tmp/resources.xml.h:50
 msgctxt "Accel Editor (descriptions)"
 msgid "Rotate the painting color’s hue clockwise on the color wheel."
-msgstr ""
+msgstr "描画色の色相をカラーホイール上で時計回りに回転させます。"
 
 #: ../po/tmp/resources.xml.h:51
 msgctxt "Menu→Color→Adjust Color (labels), Accel Editor (labels)"
@@ -3911,7 +3992,7 @@ msgstr "彩度を上げる"
 #: ../po/tmp/resources.xml.h:52
 msgctxt "Accel Editor (descriptions)"
 msgid "Make the painting color more saturated (more colorful, purer)."
-msgstr ""
+msgstr "描画色の彩度を高めます（よりカラフルに、原色に近づきます）。"
 
 #: ../po/tmp/resources.xml.h:53
 msgctxt "Menu→Color→Adjust Color (labels), Accel Editor (labels)"
@@ -3921,7 +4002,7 @@ msgstr "彩度を下げる"
 #: ../po/tmp/resources.xml.h:54
 msgctxt "Accel Editor (descriptions)"
 msgid "Make the painting color less saturated (grayer)."
-msgstr ""
+msgstr "描画色の彩度を落とします（灰色に近づきます）。"
 
 #: ../po/tmp/resources.xml.h:55
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
@@ -3929,44 +4010,41 @@ msgid "Reload Brush Settings"
 msgstr "ブラシ設定を再読み込み"
 
 #: ../po/tmp/resources.xml.h:56
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Restore all brush settings to the current brush’s saved values."
-msgstr "ブラシの設定を既定値に戻します。"
+msgstr "ブラシの設定を登録時の既定値に戻します。"
 
 #: ../po/tmp/resources.xml.h:57
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
 msgid "Pick Stroke and Layer"
-msgstr ""
+msgstr "ストロークとレイヤを採取"
 
 #: ../po/tmp/resources.xml.h:58
 msgctxt "Accel Editor (descriptions)"
 msgid "Pick a brushstroke from the canvas: restores brush, color, and layer."
-msgstr ""
+msgstr "キャンバスからブラシストロークを採取し、ブラシと色を戻し、描画されているレイヤへ移動します。"
 
 #: ../po/tmp/resources.xml.h:59
 msgctxt "Menu→Brush→Shortcut Keys (labels), Accel Editor (labels)"
 msgid "Brush Shortcut Keys Restore Color"
-msgstr ""
+msgstr "ブラシショートカットキーは色も復元する"
 
 #: ../po/tmp/resources.xml.h:60
 msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Toggle whether restoring the brush from a shortcut key also restores the "
 "saved color."
-msgstr ""
+msgstr "ブラシショートカットキーでブラシを切り替えた際、色も登録時のものに戻すように振る舞うかどうかを切り替えます。"
 
 #: ../po/tmp/resources.xml.h:61
-#, fuzzy
 msgctxt "Menu→Brush→Shortcut Keys (labels), Accel Editor (labels)"
 msgid "Save Brush to Most Recent Shortcut Key"
-msgstr "直前に復元されたブラシを保存します。"
+msgstr "直前に使用されたブラシショートカットに保存"
 
 #: ../po/tmp/resources.xml.h:62
-#, fuzzy
 msgctxt "Accel Editor (descriptions)"
 msgid "Save brush settings to the most recently used shortcut key."
-msgstr "直前に復元されたブラシを保存します。"
+msgstr "直前に使用されたブラシショートカットキーに、現在のブラシと色を保存します。"
 
 #: ../po/tmp/resources.xml.h:63
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
@@ -4036,7 +4114,7 @@ msgstr "カーソル位置にあるレイヤーに移動"
 #: ../po/tmp/resources.xml.h:76
 msgctxt "Accel Editor (descriptions)"
 msgid "Select a layer by picking an object on it."
-msgstr ""
+msgstr "カーソル位置にあるピクセルが属しているレイヤーを選択します。"
 
 #: ../po/tmp/resources.xml.h:77
 msgctxt "Menu→Layer→Go to Layer (labels), Accel Editor (labels)"
@@ -4046,7 +4124,7 @@ msgstr "上のレイヤーに移動"
 #: ../po/tmp/resources.xml.h:78
 msgctxt "Accel Editor (descriptions)"
 msgid "Go one layer up in the layer stack."
-msgstr ""
+msgstr "レイヤースタックにおける一つ上のレイヤーに移動します。"
 
 #: ../po/tmp/resources.xml.h:79
 msgctxt "Menu→Layer→Go to Layer (labels), Accel Editor (labels)"
@@ -4056,7 +4134,7 @@ msgstr "下のレイヤーに移動"
 #: ../po/tmp/resources.xml.h:80
 msgctxt "Accel Editor (descriptions)"
 msgid "Go one layer down in the layer stack."
-msgstr ""
+msgstr "レイヤースタックにおける一つ下のレイヤーに移動します。"
 
 #: ../po/tmp/resources.xml.h:81
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
@@ -4091,7 +4169,7 @@ msgstr "現在のレイヤーの上に新しいレイヤーグループを作成
 #: ../po/tmp/resources.xml.h:87
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Painting Layer Below"
-msgstr ""
+msgstr "下に新しいレイヤーを作成"
 
 #: ../po/tmp/resources.xml.h:88
 msgctxt "Accel Editor (descriptions)"
@@ -4101,7 +4179,7 @@ msgstr "現在のレイヤーの下に新しい描画レイヤーを作成しま
 #: ../po/tmp/resources.xml.h:89
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Vector Layer Below…"
-msgstr ""
+msgstr "下に新しいレイヤーを作成…"
 
 #: ../po/tmp/resources.xml.h:90
 msgctxt "Accel Editor (descriptions)"
@@ -4111,7 +4189,7 @@ msgstr "現在のレイヤーの下に新しいベクターレイヤーを作成
 #: ../po/tmp/resources.xml.h:91
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Layer Group Below"
-msgstr ""
+msgstr "下に新しいレイヤーグループを作成"
 
 #: ../po/tmp/resources.xml.h:92
 msgctxt "Accel Editor (descriptions)"
@@ -4252,7 +4330,7 @@ msgstr "レイヤーを表示する"
 #: ../po/tmp/resources.xml.h:118
 msgctxt "Accel Editor (descriptions)"
 msgid "Toggle the current layer’s visibility state, making it hidden."
-msgstr ""
+msgstr "現在のレイヤの可視状態を切り替えます。"
 
 #: ../po/tmp/resources.xml.h:119
 msgctxt "Menu→View (labels), Accel Editor (labels)"
@@ -4418,7 +4496,7 @@ msgstr "ブラシの入力値をコンソールに表示"
 #: ../po/tmp/resources.xml.h:151
 msgctxt "Accel Editor (descriptions)"
 msgid "Show the brush engine’s internally generated inputs on the console."
-msgstr ""
+msgstr "ブラシエンジンで内部生成された入力値をコンソールに出力します。"
 
 #: ../po/tmp/resources.xml.h:152
 #, fuzzy
@@ -4429,7 +4507,7 @@ msgstr "描画を視覚的に表示"
 #: ../po/tmp/resources.xml.h:153
 msgctxt "Accel Editor (descriptions)"
 msgid "Show rendering updates on-screen, for debugging."
-msgstr ""
+msgstr "デバッグ用に、レンダリングで更新される部分をスクリーンに表示します。"
 
 #: ../po/tmp/resources.xml.h:154
 msgctxt "Menu→Help→Debug (labels), Accel Editor (labels)"
@@ -4454,7 +4532,7 @@ msgstr "描画モード: 通常"
 #: ../po/tmp/resources.xml.h:158
 msgctxt "Accel Editor (descriptions)"
 msgid "Apply color normally when painting."
-msgstr ""
+msgstr "色を普通に描画します。"
 
 #: ../po/tmp/resources.xml.h:159
 msgctxt "Menu→Brush→Blend Mode (labels), Accel Editor (labels)"
@@ -4474,7 +4552,7 @@ msgstr "描画モード: アルファロック"
 #: ../po/tmp/resources.xml.h:162
 msgctxt "Accel Editor (descriptions)"
 msgid "Applying the brush doesn't change the layer’s opacity."
-msgstr ""
+msgstr "レイヤの透明部分を保持したまま描画します。"
 
 #: ../po/tmp/resources.xml.h:163
 msgctxt "Menu→Brush→Blend Mode (labels), Accel Editor (labels)"
@@ -4485,7 +4563,7 @@ msgstr "描画モード: 彩色"
 msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Apply color to the current layer without affecting its brightness or opacity."
-msgstr ""
+msgstr "現在のレイヤーに対し明るさと透明部分を保持したまま色を塗ります。"
 
 #: ../po/tmp/resources.xml.h:165
 msgctxt "Menu (labels)"
@@ -4532,10 +4610,9 @@ msgstr "色の履歴"
 #: ../po/tmp/resources.xml.h:173
 msgctxt "Accel Editor (descriptions)"
 msgid "Pop up a timeline of recent colors under the cursor."
-msgstr ""
+msgstr "カーソル直下に最近使った色の一覧をポップアップします。"
 
 #: ../po/tmp/resources.xml.h:174
-#, fuzzy
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Color Details Dialog"
 msgstr "色の詳細"
@@ -4543,7 +4620,7 @@ msgstr "色の詳細"
 #: ../po/tmp/resources.xml.h:175
 msgctxt "Accel Editor (descriptions)"
 msgid "Show a color details dialog with text entry."
-msgstr ""
+msgstr "Webカラーの表示欄付きで色の詳細を示すダイアログを表示します。"
 
 #: ../po/tmp/resources.xml.h:176
 msgctxt "Menu→Color"
@@ -4553,7 +4630,7 @@ msgstr "パレットの次の色"
 #: ../po/tmp/resources.xml.h:177
 msgctxt "Accel Editor (descriptions)"
 msgid "Set painting color to the next color in the palette."
-msgstr ""
+msgstr "現在のパレットにおける次の色を描画色に設定します。"
 
 #: ../po/tmp/resources.xml.h:178
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -4563,7 +4640,7 @@ msgstr "パレットの前の色"
 #: ../po/tmp/resources.xml.h:179
 msgctxt "Accel Editor (descriptions)"
 msgid "Set painting color to the previous color in the palette."
-msgstr ""
+msgstr "現在のパレットにおける前の色を描画色に設定します。"
 
 #: ../po/tmp/resources.xml.h:180
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -4573,7 +4650,7 @@ msgstr "色をパレットに追加"
 #: ../po/tmp/resources.xml.h:181
 msgctxt "Accel Editor (descriptions)"
 msgid "Append the current painting color to the palette."
-msgstr ""
+msgstr "現在の描画色をパレットに追加します。"
 
 #: ../po/tmp/resources.xml.h:182
 msgctxt "Menu (labels)"
@@ -4614,7 +4691,7 @@ msgstr "新規の作業パレット"
 #: ../po/tmp/resources.xml.h:189
 msgctxt "Accel Editor (descriptions)"
 msgid "Load the default scratchpad as a new scratchpad canvas."
-msgstr ""
+msgstr "新しい作業パレットとしてデフォルトの作業パレットを読み込みます。"
 
 #: ../po/tmp/resources.xml.h:190
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
@@ -4624,7 +4701,7 @@ msgstr "作業パレットを開く…"
 #: ../po/tmp/resources.xml.h:191
 msgctxt "Accel Editor (descriptions)"
 msgid "Load an image file on disk into the scratchpad."
-msgstr ""
+msgstr "作業パレットにディスク上のファイルを読み込みます。"
 
 #: ../po/tmp/resources.xml.h:192
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
@@ -4634,7 +4711,7 @@ msgstr "作業パレットを保存"
 #: ../po/tmp/resources.xml.h:193
 msgctxt "Accel Editor (descriptions)"
 msgid "Save the scratchpad to its existing file on disk."
-msgstr ""
+msgstr "作業パレットをディスク上の元ファイルに書き込みます。"
 
 #: ../po/tmp/resources.xml.h:194
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
@@ -4644,7 +4721,7 @@ msgstr "作業パレットをエクスポート…"
 #: ../po/tmp/resources.xml.h:195
 msgctxt "Accel Editor (descriptions)"
 msgid "Export the scratchpad to disk, under a file name of your choice."
-msgstr ""
+msgstr "ファイル名を選択して作業パレットをエクスポートします。"
 
 #: ../po/tmp/resources.xml.h:196
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
@@ -4664,7 +4741,7 @@ msgstr "デフォルトの作業パレットとして保存"
 #: ../po/tmp/resources.xml.h:199
 msgctxt "Accel Editor (descriptions)"
 msgid "Save the scratchpad as the default for ‘New Scratchpad’."
-msgstr ""
+msgstr "新規の作業パレットの元絵となるデフォルトの作業パレットとして保存します。"
 
 #: ../po/tmp/resources.xml.h:200
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
@@ -4686,7 +4763,7 @@ msgstr "背景を作業パレットにコピー"
 msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Copy the background image from the working document into the Scratchpad."
-msgstr ""
+msgstr "現在のキャンバスの作品の背景を作業パレットにコピーします。"
 
 #: ../po/tmp/resources.xml.h:204
 msgctxt "Menu (labels)"
@@ -4712,7 +4789,7 @@ msgstr "ショートカット"
 #: ../po/tmp/resources.xml.h:208
 msgctxt "Accel Editor (descriptions)"
 msgid "Show an explanation of how the shortcut keys work."
-msgstr ""
+msgstr "ショートカット・キーの機能の説明を表示します。"
 
 #: ../po/tmp/resources.xml.h:209
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
@@ -4722,7 +4799,7 @@ msgstr "ブラシを変更…"
 #: ../po/tmp/resources.xml.h:210
 msgctxt "Accel Editor (descriptions)"
 msgid "Pop up a brush changer under the cursor."
-msgstr ""
+msgstr "カーソル位置でブラシ変更ダイアログを呼び出します。"
 
 #: ../po/tmp/resources.xml.h:211
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -4733,20 +4810,19 @@ msgstr "色を変更…"
 msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Pop up a color changer under the cursor, with all color selectors listed."
-msgstr ""
+msgstr "カーソル位置にフル機能の色選択ダイアログを表示します。"
 
 #: ../po/tmp/resources.xml.h:213
-#, fuzzy
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Change Color (fast subset)…"
-msgstr "色を変更"
+msgstr "色を変更 (簡略版)…"
 
 #: ../po/tmp/resources.xml.h:214
 msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Pop up a color changer under the cursor, with only single-click selectors "
 "listed."
-msgstr ""
+msgstr "カーソル位置にシングルクリック版の色選択ダイアログを表示します。"
 
 #: ../po/tmp/resources.xml.h:215
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
@@ -4756,7 +4832,7 @@ msgstr "追加のブラシを入手…"
 #: ../po/tmp/resources.xml.h:216
 msgctxt "Accel Editor (descriptions)"
 msgid "Download brushpacks from the MyPaint wiki."
-msgstr ""
+msgstr "MyPaintウィキからブラシパックをダウンロードします。"
 
 #: ../po/tmp/resources.xml.h:217
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
@@ -4781,7 +4857,7 @@ msgstr "オンラインヘルプ"
 #: ../po/tmp/resources.xml.h:221
 msgctxt "Accel Editor (descriptions)"
 msgid "Go to MyPaint’s documentation wiki."
-msgstr ""
+msgstr "オンラインヘルプを開きます。"
 
 #: ../po/tmp/resources.xml.h:222
 msgctxt "Menu→Help (labels), Accel Editor (labels)"
@@ -4816,7 +4892,7 @@ msgstr "ガベージコレクタを今すぐ実行"
 #: ../po/tmp/resources.xml.h:228
 msgctxt "Accel Editor (descriptions)"
 msgid "Free memory used for Python objects which are no longer in use."
-msgstr ""
+msgstr "Pythonオブジェクトが占有している、もう使用することのないメモリ領域を開放します。"
 
 #: ../po/tmp/resources.xml.h:229
 msgctxt "Menu→Help→Debug (labels), Accel Editor (labels)"
@@ -4836,7 +4912,7 @@ msgstr "クラッシュ状態を再現…"
 #: ../po/tmp/resources.xml.h:232
 msgctxt "Accel Editor (descriptions)"
 msgid "Raise a Python exception, to test the crash dialog."
-msgstr ""
+msgstr "クラッシュ報告ダイアログをテストするために例外を故意に発生します。"
 
 #: ../po/tmp/resources.xml.h:233
 msgctxt "Menu (labels)"
@@ -4882,7 +4958,7 @@ msgstr "設定を編集"
 #: ../po/tmp/resources.xml.h:241
 msgctxt "Accel Editor (descriptions)"
 msgid "Edit MyPaint’s global settings."
-msgstr ""
+msgstr "MyPaint全体の設定を行います。"
 
 #: ../po/tmp/resources.xml.h:242
 msgctxt "Help→Debug (labels), Accel Editor (labels)"
@@ -4892,7 +4968,7 @@ msgstr "入力デバイスをテスト"
 #: ../po/tmp/resources.xml.h:243
 msgctxt "Accel Editor (descriptions)"
 msgid "Show a dialog which captures all events your input devices send."
-msgstr ""
+msgstr "入力デバイスが送信してくるすべてのイベントを捕捉するダイアログを表示します。"
 
 #: ../po/tmp/resources.xml.h:244
 #, fuzzy
@@ -4903,7 +4979,7 @@ msgstr "背景"
 #: ../po/tmp/resources.xml.h:245
 msgctxt "Accel Editor (descriptions)"
 msgid "Change the background paper texture."
-msgstr ""
+msgstr "背景のテクスチャを変更します。"
 
 #: ../po/tmp/resources.xml.h:246
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
@@ -4934,7 +5010,7 @@ msgstr "レイヤーパネル"
 #: ../po/tmp/resources.xml.h:251
 msgctxt "Accel Editor (descriptions)"
 msgid "Toggle the Layers dockpanel (arrange layers, or assign modes)."
-msgstr ""
+msgstr "レイヤーパネルをトグルします（レイヤーを配列したり、モードを指定するものです）。"
 
 #: ../po/tmp/resources.xml.h:252
 msgctxt "Menu→Layers (labels), Accel Editor (labels)"
@@ -4944,7 +5020,7 @@ msgstr "レイヤーパネルを表示"
 #: ../po/tmp/resources.xml.h:253
 msgctxt "Accel Editor (descriptions)"
 msgid "Reveal the Layers dockpanel (arrange layers, or assign modes)."
-msgstr ""
+msgstr "レイヤーパネルを表示します（レイヤーを配列したり、モードを指定するものです）。"
 
 #: ../po/tmp/resources.xml.h:254
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -4956,7 +5032,7 @@ msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Dockable cylindrical hue/chroma/luma color selector. The circular slices are "
 "equiluminant."
-msgstr ""
+msgstr "ドッキング可能な、色相/彩度/輝度の色空間を円筒で模したカラーセレクターです。円の内部(円筒の断面)は同一の輝度となります。"
 
 #: ../po/tmp/resources.xml.h:256
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -4986,7 +5062,7 @@ msgstr "HSV 三角形"
 #: ../po/tmp/resources.xml.h:261
 msgctxt "Accel Editor (descriptions)"
 msgid "Dockable color selector: the old GTK color triangle."
-msgstr ""
+msgstr "旧式なGTKのカラートライアングルのドッキング可能なカラーセレクターです。"
 
 #: ../po/tmp/resources.xml.h:262
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -4998,7 +5074,7 @@ msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Dockable color selector: HSV cube which can be rotated to show different "
 "planar slices."
-msgstr ""
+msgstr "HSVを立方体で表現し、面ごとに回転させることのできる、ドッキング可能なカラーセレクターです。"
 
 #: ../po/tmp/resources.xml.h:264
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -5010,7 +5086,7 @@ msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Dockable color selector: HSV square which can be rotated to show different "
 "hues."
-msgstr ""
+msgstr "HSVを中央の彩度・明度を示す正方形と色相のホイールで表現した、ドッキング可能なカラーセレクターです。"
 
 #: ../po/tmp/resources.xml.h:266
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -5030,7 +5106,7 @@ msgstr "リキッドウォッシュ"
 #: ../po/tmp/resources.xml.h:269
 msgctxt "Accel Editor (descriptions)"
 msgid "Dockable color selector showing a liquid-like wash of nearby colors."
-msgstr ""
+msgstr "近傍色と水彩のウォッシュ技法のように混ぜて表示する、ドッキング可能なカラーセレクターです。"
 
 #: ../po/tmp/resources.xml.h:270
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -5040,7 +5116,7 @@ msgstr "同心円"
 #: ../po/tmp/resources.xml.h:271
 msgctxt "Accel Editor (descriptions)"
 msgid "Dockable color selector with concentric HSV rings."
-msgstr ""
+msgstr "HSVの同心環で色を選択する、ドッキング可能なカラーセレクターです。"
 
 #: ../po/tmp/resources.xml.h:272
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
@@ -5050,7 +5126,7 @@ msgstr "十字とボウル"
 #: ../po/tmp/resources.xml.h:273
 msgctxt "Accel Editor (descriptions)"
 msgid "Dockable color selector with HSV ramps crossing a radial bowl of color."
-msgstr ""
+msgstr "放射状の色のボウルと、その上を横断するHSVランプから色を選択する、ドッキング可能なカラーセレクターです。"
 
 #: ../po/tmp/resources.xml.h:274
 msgctxt "Menu→Window (labels), Accel Editor (labels)"
@@ -5155,7 +5231,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:294
 msgctxt "Menu→View→Feedback (labels), Accel Editor (labels)"
 msgid "Show Last Painting Position"
-msgstr ""
+msgstr "最後の描画位置を表示"
 
 #: ../po/tmp/resources.xml.h:295
 msgctxt "Accel Editor (descriptions)"
@@ -5301,7 +5377,7 @@ msgstr "表示領域を回転"
 #: ../po/tmp/resources.xml.h:323
 msgctxt "Accel Editor (descriptions)"
 msgid "Interactively rotate your view of the canvas."
-msgstr ""
+msgstr "好みの角度にキャンバスを回転させます。"
 
 #: ../po/tmp/resources.xml.h:324
 msgctxt "Menu→Edit→Current Mode (labels)"
@@ -5336,7 +5412,7 @@ msgstr "直線と曲線"
 #: ../po/tmp/resources.xml.h:330
 msgctxt "Toolbar (short labels)"
 msgid "Lines"
-msgstr ""
+msgstr "直線"
 
 #: ../po/tmp/resources.xml.h:331
 msgctxt "Toolbar (tooltips)"
@@ -5361,7 +5437,7 @@ msgstr "連結線"
 #: ../po/tmp/resources.xml.h:335
 msgctxt "Toolbar (short labels)"
 msgid "Conn. Lines"
-msgstr ""
+msgstr "連結線"
 
 #: ../po/tmp/resources.xml.h:336
 msgctxt "Toolbar (tooltips)"
@@ -5483,27 +5559,27 @@ msgstr "画像の周囲にユーザー操作でフレームを設定し、画像
 #: ../po/tmp/resources.xml.h:359
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Edit Painting Symmetry"
-msgstr ""
+msgstr "対称軸を編集"
 
 #: ../po/tmp/resources.xml.h:360
 msgctxt "Toolbar (short labels)"
 msgid "Symmetry"
-msgstr "左右対称"
+msgstr "対称"
 
 #: ../po/tmp/resources.xml.h:361
 msgctxt "Toolbar (tooltips)"
 msgid "Edit Painting Symmetry: adjust the axis used for symmetrical painting."
-msgstr "左右対称描画の中心軸の位置を調整します。"
+msgstr "対称描画の中心軸の位置を調整します。"
 
 #: ../po/tmp/resources.xml.h:362
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Edit Painting Symmetry"
-msgstr ""
+msgstr "対称軸を編集"
 
 #: ../po/tmp/resources.xml.h:363
 msgctxt "Accel Editor (description)"
 msgid "Interactively adjust the axis used for symmetrical painting."
-msgstr "左右対称描画の中心軸をユーザー操作で調整します。"
+msgstr "対称描画の中心軸をユーザー操作で調整します。"
 
 #: ../po/tmp/resources.xml.h:364
 msgctxt "Menu→Edit→Current Mode (labels)"
@@ -5538,7 +5614,7 @@ msgstr "塗りつぶし"
 #: ../po/tmp/resources.xml.h:370
 msgctxt "Toolbar (short labels)"
 msgid "Fill"
-msgstr ""
+msgstr "塗りつぶし"
 
 #: ../po/tmp/resources.xml.h:371
 msgctxt "Toolbar (tooltips)"

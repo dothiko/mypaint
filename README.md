@@ -150,3 +150,9 @@ It makes use of the GTK toolkit, version 3.x.
 The source is maintained using [git](http://www.git-scm.com),
 primarily on Github.
 
+### Legal info
+
+MyPaint is Free/Libre/Open Source software.
+See [Licenses.md](Licenses.md) for a summary of its licensing.
+A list of contributors can be found in the about dialog.
+
