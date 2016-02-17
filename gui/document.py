@@ -2066,6 +2066,12 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         if getattr(mode, 'average_nodes_distance', False):
             mode.average_nodes_distance()
 
+    def average_nodes_pressure_cb(self, action):
+        """Callback: average current inktool nodes distance"""
+        mode=self.modes.top
+        if getattr(mode, 'average_nodes_pressure', False):
+            mode.average_nodes_pressure()
+
     def select_all_nodes_cb(self, action):
         """Callback: mark all inktool nodes as selected"""
         mode=self.modes.top

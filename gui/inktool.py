@@ -898,9 +898,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
             if event.state != 0:
                 # To activate some mode override
-                InkingMode.enable_switch_actions(True)
                 self._last_event_node = None
-                super(InkingMode, self).drag_start_cb(tdw, event)
+                return super(InkingMode, self).drag_start_cb(tdw, event)
             else:
                 node = self._get_event_data(tdw, event)
                 self.nodes.append(node)
@@ -1000,8 +999,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
             if not self.nodes or self._last_event_node == None:
                 return super(InkingMode, self).drag_stop_cb(tdw)
-            else:
-                InkingMode.enable_switch_actions(False)
 
             node = self._last_event_node
             # TODO: maybe rewrite the last node here so it's the right
@@ -1025,6 +1022,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._reset_adjust_data()
             if len(self.nodes) > 1:
                 self.phase = _Phase.ADJUST
+                InkingMode.enable_switch_actions(False)
                 self._queue_redraw_all_nodes()
                 self._queue_redraw_curve()
                 self._queue_draw_buttons()
@@ -1463,6 +1461,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         when 'average angle of B',it means
         'To half the angle of between A-B and A-C'
 
+        This method affects to selected nodes,
+        but when the only one node is selected,
+        entire nodes (except for the first and last) affected.
         """
 
         if len(self.nodes) > 2:
@@ -1573,6 +1574,37 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     
             # redraw new nodes
             self._queue_all_visual_redraw()
+
+    def average_nodes_pressure(self):
+        """Average nodes pressure.
+
+        This method affects to selected nodes,
+        but when the only one node is selected,
+        entire nodes (except for the first and last) affected.
+        """
+
+        if len(self.nodes) > 2:
+
+            new_nodes = []
+
+            for idx,cn in enumerate(self.nodes):
+                if (idx > 0 and idx < len(self.nodes) - 1 and
+                        (len(self.selected_nodes) <= 1 or 
+                            idx in self.selected_nodes) ):
+                    pn = self.nodes[idx-1]
+                    nn = self.nodes[idx+1]
+
+                    new_pressure = (pn.pressure +
+                                    cn.pressure +
+                                    nn.pressure) / 3.0
+
+                    cn = cn._replace(pressure = new_pressure)
+
+                new_nodes.append(cn)
+
+            self.nodes = new_nodes
+            self._queue_redraw_curve()
+
 
 
     ## Node selection
@@ -1930,8 +1962,9 @@ class OptionsPresenter (object):
         self._delete_button = None
         self._optimize_button = None
         self._cull_button = None
-        self._average_button = None
-        self._uniform_button = None
+        self._average_angle_button = None
+        self._average_distance_button = None
+        self._average_pressure_button = None
 
         self._updating_ui = False
         self._target = (None, None)
@@ -1969,6 +2002,8 @@ class OptionsPresenter (object):
         self._average_angle_button.set_sensitive(False)
         self._average_distance_button = builder.get_object("average_distance_button")
         self._average_distance_button.set_sensitive(False)
+        self._average_pressure_button = builder.get_object("average_pressure_button")
+        self._average_pressure_button.set_sensitive(False)
 
     @property
     def widget(self):
@@ -2030,6 +2065,7 @@ class OptionsPresenter (object):
                 "inktool.capture_period_factor", 1))
             self._average_angle_button.set_sensitive(len(inkmode.nodes) > 2)
             self._average_distance_button.set_sensitive(len(inkmode.nodes) > 2)
+            self._average_pressure_button.set_sensitive(len(inkmode.nodes) > 2)
         finally:
             self._updating_ui = False                               
 
@@ -2098,4 +2134,8 @@ class OptionsPresenter (object):
         if inkmode:
             inkmode.average_nodes_distance()
 
+    def _average_pressure_clicked_cb(self,button):
+        inkmode, node_idx = self.target
+        if inkmode:
+            inkmode.average_nodes_pressure()
 

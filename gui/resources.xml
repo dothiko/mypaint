@@ -773,6 +773,13 @@ Vocabulary
         </object>
       </child>
       <child>
+        <object class="GtkAction" id="AverageNodesPressure">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Average nodes distance</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Average(smooth) nodes pressure.</property>
+          <signal name="activate" handler="average_nodes_pressure_cb"/>
+        </object>
+      </child>
+      <child>
         <object class="GtkAction" id="SelectAllNodes">
           <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Select all nodes</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Mark all InkingMode nodes as selected.</property>

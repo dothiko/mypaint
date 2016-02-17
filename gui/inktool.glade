@@ -291,6 +291,22 @@ Negative values mean leftwards tilts.</property>
           </packing>
         </child>
         <child>
+          <object class="GtkButton" id="average_distance_button">
+            <property name="label" translatable="yes">Average Distance</property>
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="receives_default">True</property>
+            <property name="tooltip_text" translatable="yes">Average the node(s) distance between the next node.As a result, stroke shape might be a little deformed.
+This feature always affects entire nodes,regardless of how many nodes selected.</property>
+            <signal name="clicked" handler="_average_distance_clicked_cb" swapped="no"/>
+          </object>
+          <packing>
+            <property name="left_attach">0</property>
+            <property name="top_attach">3</property>
+            <property name="width">2</property>
+          </packing>
+        </child>
+        <child>
           <object class="GtkLabel" id="period_label">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
@@ -302,7 +318,7 @@ Period:</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
-            <property name="top_attach">4</property>
+            <property name="top_attach">5</property>
           </packing>
         </child>
         <child>
@@ -323,22 +339,21 @@ Period:</property>
           </object>
           <packing>
             <property name="left_attach">1</property>
-            <property name="top_attach">4</property>
+            <property name="top_attach">5</property>
           </packing>
         </child>
         <child>
-          <object class="GtkButton" id="average_distance_button">
-            <property name="label" translatable="yes">Average Distance</property>
+          <object class="GtkButton" id="average_pressure_button">
+            <property name="label" translatable="yes">Average Pressure</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">True</property>
-            <property name="tooltip_text" translatable="yes">Average the node(s) distance between the next node.As a result, stroke shape might be a little deformed.
-This feature always affects entire nodes,regardless of how many nodes selected.</property>
-            <signal name="clicked" handler="_average_distance_clicked_cb" swapped="no"/>
+            <property name="tooltip_text" translatable="yes">Average pressure of selected nodes.</property>
+            <signal name="clicked" handler="_average_pressure_clicked_cb" swapped="no"/>
           </object>
           <packing>
             <property name="left_attach">0</property>
-            <property name="top_attach">3</property>
+            <property name="top_attach">4</property>
             <property name="width">2</property>
           </packing>
         </child>
