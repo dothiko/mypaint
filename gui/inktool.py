@@ -80,7 +80,7 @@ class _SelectionMotion:
     This class also used for record dragging motion offset, 
     when move selected nodes.
 
-    All position attributes are screen coordinate.
+    All position attributes are model coordinate.
 
     ## Why this class created:
 
@@ -136,11 +136,13 @@ class _SelectionMotion:
                 max(self.sy, self.ey))
 
 
-    def get_update_rect(self):
+    def get_update_rect(self,tdw):
         """Get update 'rect' for update(erase) tdw"""
 
         c_area = self.get_sorted_position()
-        csx, csy, cex, cey = c_area
+       #csx, csy, cex, cey = c_area
+        csx, csy = tdw.model_to_display(c_area[0], c_area[1])
+        cex, cey = tdw.model_to_display(c_area[2], c_area[3])
 
         if c_area != self._prev_area:
             prev_area = self._prev_area # Store previous area here
@@ -153,6 +155,7 @@ class _SelectionMotion:
                 csy = min(csy, psy)
                 cex = max(cex, pex)
                 cey = max(cey, pey)
+
 
         return (csx - self.LINE_WIDTH,
                 csy - self.LINE_WIDTH,
@@ -169,10 +172,17 @@ class _SelectionMotion:
         sx, sy, ex, ey = self.get_sorted_position()
         return (x >= sx and x <= ex and y >= sy and y <= ey)
 
-    def get_model_offset(self,tdw):
-        sx,sy = tdw.display_to_model(self.sx, self.sy)
-        ex,ey = tdw.display_to_model(self.ex, self.ey)
+    def get_display_offset(self,tdw):
+        sx, sy, ex, ey = self.get_display_area(tdw)
         return (ex - sx, ey - sy)
+
+    def get_model_offset(self):
+        return (self.ex - self.sx, self.ey - self.sy)
+
+    def get_display_area(self,tdw):
+        sx,sy = tdw.model_to_display(self.sx, self.sy)
+        ex,ey = tdw.model_to_display(self.ex, self.ey)
+        return (sx, sy, ex, ey)
         
     def get_offset(self):
         return (self.ex - self.sx, self.ey - self.sy)
@@ -532,7 +542,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 
                 if self.zone in (_EditZone.REJECT_BUTTON,
                                  _EditZone.ACCEPT_BUTTON):
-                    if button == 1 and event.type == Gdk.EventType.BUTTON_PRESS:
+                    if (button == 1 and 
+                            event.type == Gdk.EventType.BUTTON_PRESS):
                         self._click_info = (button, self.zone)
                         return False
                     # FALLTHRU: *do* allow drags to start with other buttons
@@ -540,7 +551,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     if (event.state & Gdk.ModifierType.SHIFT_MASK):
                         # selection box dragging start!!
                         self.phase = _Phase.ADJUST_SELECTING
-                        self.selection_motion.start(event.x, event.y)
+                        self.selection_motion.start(
+                                *tdw.display_to_model(event.x, event.y))
                     else:
                         self._start_new_capture_phase(rollback=False)
                         assert self.phase == _Phase.CAPTURE
@@ -779,14 +791,15 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def _queue_draw_node(self, i):
         """Redraws a specific control node on all known view TDWs"""
         node = self.nodes[i]
-        dx,dy = self.selection_motion.get_offset()
+        dx,dy = self.selection_motion.get_model_offset()
         for tdw in self._overlays:
-            x, y = tdw.model_to_display(node.x, node.y)
+            if i in self.selected_nodes:
+                x, y = tdw.model_to_display(
+                        node.x + dx, node.y + dy)
+            else:
+                x, y = tdw.model_to_display(node.x, node.y)
             x = math.floor(x)
             y = math.floor(y)
-            if i in self.selected_nodes:
-                x += dx
-                y += dy
             size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
             tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
 
@@ -804,7 +817,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         area = self.selection_motion
         for tdw, overlay in self._overlays.items():
             tdw.queue_draw_area(
-                    *self.selection_motion.get_update_rect())
+                    *self.selection_motion.get_update_rect(tdw))
 
 
 
@@ -822,7 +835,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 abrupt=True,
             )
             interp_state = {"t_abs": self.nodes[0].time}
-            dx, dy = self.selection_motion.get_model_offset(tdw)
+            dx, dy = self.selection_motion.get_model_offset()
             for p_1, p0, p1, p2 in gui.drawutils.spline_iter_2(
                         self.nodes,
                         self.selected_nodes,
@@ -897,6 +910,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def drag_start_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
+        dx, dy = tdw.display_to_model(event.x, event.y)
         if self.phase == _Phase.CAPTURE:
             self._reset_nodes()
             self._reset_capture_data()
@@ -920,16 +934,16 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 self._dragged_node_start_pos = (node.x, node.y)
                 
                 # Use selection_motion class as offset-information
-                self.selection_motion.start(event.x, event.y)
+                self.selection_motion.start(dx, dy)
 
         elif self.phase == _Phase.ADJUST_PRESSURE:
             if self.current_node_index is not None:
                 node = self.nodes[self.current_node_index]
                 self._pressed_pressure = node.pressure
                 self._pressed_x, self._pressed_y = \
-                        tdw.display_to_model(event.x, event.y)
+                        tdw.display_to_model(dx, dy)
         elif self.phase == _Phase.ADJUST_SELECTING:
-            self.selection_motion.start(event.x, event.y)
+            self.selection_motion.start(dx, dy)
             self.selection_motion.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
             self._queue_draw_buttons() # To erase button!
         else:
@@ -937,6 +951,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def drag_update_cb(self, tdw, event, dx, dy):
         self._ensure_overlay_for_tdw(tdw)
+        mx, my = tdw.display_to_model(event.x ,event.y)
         if self.phase == _Phase.CAPTURE:
             if self._last_event_node:
                 node = self._get_event_data(tdw, event)
@@ -983,18 +998,16 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     self.update_node(self.target_node_index, x=x, y=y)
                 else:
                     self._queue_draw_selected_nodes()
-                    self.selection_motion.drag(event.x, event.y)
+                    self.selection_motion.drag(mx, my)
                     self._queue_draw_selected_nodes()
 
                 self._queue_redraw_curve()
 
         elif self.phase == _Phase.ADJUST_PRESSURE:
             if self._pressed_pressure is not None:
-                self._adjust_pressure_with_motion(
-                    tdw,
-                    event.x, event.y)
+                self._adjust_pressure_with_motion(mx, my)
         elif self.phase == _Phase.ADJUST_SELECTING:
-            self.selection_motion.drag(event.x, event.y)
+            self.selection_motion.drag(mx, my)
             self._queue_draw_selection_motion()
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
@@ -1053,15 +1066,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 # 'converting offset to model and add it to
                 # node position' will cause calculation error,
                 # it bring us a little shifted position.
-                dx, dy = self.selection_motion.get_offset()
+                dx, dy = self.selection_motion.get_model_offset()
 
                 for idx in self.selected_nodes:
                     cn = self.nodes[idx]
-                    cx, cy = tdw.model_to_display(cn.x, cn.y)
-                    cx += dx
-                    cy += dy
-                    cx, cy = tdw.display_to_model(cx, cy)
-                    self.nodes[idx] = cn._replace(x=cx, y=cy)
+                    self.nodes[idx] = cn._replace(x=cn.x + dx, y=cn.y + dy)
 
                 self.selection_motion.reset()
 
@@ -1087,8 +1096,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 modified = True
 
             for idx,cn in enumerate(self.nodes):
-                cx,cy = tdw.model_to_display(cn.x, cn.y)
-                if self.selection_motion.is_inside(cx, cy):
+                if self.selection_motion.is_inside(cn.x, cn.y):
                     if not idx in self.selected_nodes:
                         self.selected_nodes.append(idx)
                         modified = True
@@ -1278,11 +1286,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_draw_buttons()
 
 
-    def _adjust_pressure_with_motion(self, tdw, x, y):
+    def _adjust_pressure_with_motion(self, x, y):
         """Adjust pressure of current selected node,
-        and it may affects nearby nodes"""
+        and it may affects nearby nodes
+        
+        :param x: currently dragging posisiton,in model coord.
+        :param y: currently dragging posisiton,in model coord.
+        """
 
-        x, y = tdw.display_to_model(x, y)
         cx = x - self._pressed_x
         cy = y - self._pressed_y
         cs = math.sqrt(cx * cx + cy * cy)
@@ -1763,7 +1774,7 @@ class Overlay (gui.overlays.Overlay):
         mode = self._inkmode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
-        dx,dy = mode.selection_motion.get_offset()
+        dx,dy = mode.selection_motion.get_display_offset(self._tdw)
         for i, node, x, y in self._get_onscreen_nodes():
             color = gui.style.EDITABLE_ITEM_COLOR
             if (mode.phase in 
@@ -1824,16 +1835,16 @@ class Overlay (gui.overlays.Overlay):
 
         # Selection Rectangle
         if mode.phase == _Phase.ADJUST_SELECTING:
-            area = mode.selection_motion
+            sx, sy, ex, ey = mode.selection_motion.get_display_area(self._tdw)
             cr.save()
             for color in ( (0,0,0) , (1,1,1) ):
                 cr.set_source_rgb(*color)
                 cr.set_line_width(1)
                 cr.new_path()
-                cr.move_to(area.sx, area.sy)
-                cr.line_to(area.ex, area.sy)
-                cr.line_to(area.ex, area.ey)
-                cr.line_to(area.sx, area.ey)
+                cr.move_to(sx, sy)
+                cr.line_to(ex, sy)
+                cr.line_to(ex, ey)
+                cr.line_to(sx, ey)
                 cr.close_path()
                 cr.stroke()
                 cr.set_dash( (3.0, ) )
