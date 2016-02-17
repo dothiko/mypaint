@@ -990,8 +990,6 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
         self.mylocal_saved_layouts = layouts
 
     def mylocal_reset_dock_size(self):
-       #print('now:')
-       #self.mylocal_save_dock_info()
         for stack_info in self.mylocal_saved_layouts:
             for pane_desc in stack_info:
                 cw = pane_desc['paned']
@@ -1874,17 +1872,6 @@ class ToolStack (Gtk.EventBox):
 
         walk_children(self.get_children())
 
-       #for widget in self.get_children():
-       #    if isinstance(widget, Gtk.Paned):
-       #        cur_info = {}
-       #        cur_info['paned'] = widget
-       #        cur_info['pos'] = widget.get_position()
-       #        paned_descs.append(cur_info)
-       #    elif isinstance(widget, Gtk.Notebook):
-       #        pass
-       #    else:
-       #        pass
-        print paned_descs
         return paned_descs
 
 class ToolStackWindow (Gtk.Window):
