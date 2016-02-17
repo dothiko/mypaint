@@ -512,6 +512,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     self.phase == _Phase.ADJUST and 
                     event.state & self.__class__._PRESSURE_MOD_MASK == 
                     self.__class__._PRESSURE_MOD_MASK):
+                
+                # Entering On-canvas Pressure Adjustment Phase!
                 self.phase = _Phase.ADJUST_PRESSURE
 
                 # And do not forget,this can be a node selection.
@@ -526,6 +528,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 # FALLTHRU: *do* start a drag 
 
             else:
+                # Normal ADJUST Phase.
+                
                 if self.zone in (_EditZone.REJECT_BUTTON,
                                  _EditZone.ACCEPT_BUTTON):
                     if button == 1 and event.type == Gdk.EventType.BUTTON_PRESS:
@@ -626,6 +630,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                                 self.selected_nodes.append(tidx)
                             else:
                                 self.selected_nodes.remove(tidx)
+                                self.target_node_index = None
+                                self.current_node_index = None
                     else:
                         # Single node click. 
                         pass
@@ -1480,7 +1486,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 # Limit affected nodes with selection list.
                 # if only one node is selected,
                 # entire nodes are averaged.
-                if (len(self.selected_nodes) < 2 or
+                if (len(self.selected_nodes) == 0 or
                         idx in self.selected_nodes):
                     try:
                         # avx, avy is identity vector of current-prev node
@@ -1589,7 +1595,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
             for idx,cn in enumerate(self.nodes):
                 if (idx > 0 and idx < len(self.nodes) - 1 and
-                        (len(self.selected_nodes) <= 1 or 
+                        (len(self.selected_nodes) == 0 or 
                             idx in self.selected_nodes) ):
                     pn = self.nodes[idx-1]
                     nn = self.nodes[idx+1]
