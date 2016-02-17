@@ -1594,9 +1594,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     pn = self.nodes[idx-1]
                     nn = self.nodes[idx+1]
 
-                    new_pressure = (pn.pressure +
-                                    cn.pressure +
-                                    nn.pressure) / 3.0
+                    # not simple average,weighted one
+                    new_pressure = (pn.pressure * 0.25 +
+                                    cn.pressure * 0.5 +
+                                    nn.pressure * 0.25) 
 
                     cn = cn._replace(pressure = new_pressure)
 
