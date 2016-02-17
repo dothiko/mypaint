@@ -1826,16 +1826,17 @@ class Overlay (gui.overlays.Overlay):
         if mode.phase == _Phase.ADJUST_SELECTING:
             area = mode.selection_motion
             cr.save()
-            color = gui.style.ACTIVE_ITEM_COLOR
-            cr.set_source_rgb(*color.get_rgb())
-            cr.set_line_width(2)
-            cr.new_path()
-            cr.move_to(area.sx, area.sy)
-            cr.line_to(area.ex, area.sy)
-            cr.line_to(area.ex, area.ey)
-            cr.line_to(area.sx, area.ey)
-            cr.close_path()
-            cr.stroke()
+            for color in ( (0,0,0) , (1,1,1) ):
+                cr.set_source_rgb(*color)
+                cr.set_line_width(1)
+                cr.new_path()
+                cr.move_to(area.sx, area.sy)
+                cr.line_to(area.ex, area.sy)
+                cr.line_to(area.ex, area.ey)
+                cr.line_to(area.sx, area.ey)
+                cr.close_path()
+                cr.stroke()
+                cr.set_dash( (3.0,3.0) )
             cr.restore()
 
 class _LayoutNode (object):
