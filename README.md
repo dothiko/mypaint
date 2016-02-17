@@ -13,6 +13,17 @@ This branch is *not* intended to pull request. This is *purely experimental* bui
 
 Customized features : カスタム機能について
 ----
+#### On-Canvas Size Change Mode : オンキャンバスのブラシサイズ変更
+
+You can bind to modifier-key + mouse/stylus button to brush size change now.
+
+it is configured from 'Preference' dialog -> Buttons Tab.then add the mode 'On-canvas Size Change',and bind modifier + button it.
+
+As a default, Shift + Button1 is binded to linemode.You can change this into Brush size change.
+
+With This feature,you can use Krita-like oncanvas brush size change on MyPaint!!
+
+Kritaライクなキャンバス上でのブラシサイズ変更を可能にします。
 
 #### incremental version save : バージョンセーブ機能
 This menu action will add version number to filename automatically and save it.
@@ -48,6 +59,13 @@ this feature will affect to multiple selected nodes.
 
 選択されたノード（複数可）をシフトキーを押しながらドラッグすると、それらのノードの筆圧を変更できます。
 
+#### inktool - now supports Button-binded actions at CAPTURE phase.
+
+At only CAPTURE phase,inktool supports Button-binded actions now.
+this is mainly for Oncanvas-size-change mode.
+
+オンキャンバスでのブラシサイズ変更を念頭に、インクツールがキャプチャフェーズのみはボタンにバインドされたアクションを適用できるようになりました。
+
 #### inktool - node capture sampling period factor setting : インクツールのノードキャプチャサンプリング期間の倍率設定
 with 'Capturing period' scale,you can customize node capturing(sampling) period.
 it is multiple factor to sampling time/length.
@@ -58,9 +76,14 @@ I got inspiration for this feature,so obsolute auto-culling.
 場合に応じて使い分けてください。
 
 #### inktool - Average points feature : インクツールの制御点を平均化してなだらかにする機能
-'Average points' make stroke points less bumped,smooth curve.
 
-制御点の位置を平均化することでなだらかにします。
+ * 'Average Angle' make stroke points less bumped,smooth curve.this feature is multiple-selected-nodes aware.
+ * 'Average Distance' make stroke points spaces even.this feature always affects to entire nodes.
+ * 'Average Pressure' make nodes pressure smoother.this feature is multiple-selected-nodes aware.
+
+ * 'Average Angle'は、制御点の角度を平均化することでなだらかにします。これは複数選択されているノードに限定することができます。一つしかノードが選ばれていない時は、全体に影響します。
+ * 'Average Distance'は、制御点間の距離を均等にします。これは常にノード全体に影響します。
+ * 'Average Pressure'は、制御点の筆圧を加重平均化します。
 
 #### inktool - Select multiple nodes : インクツールの制御点を複数選択可能に
 you can select multiple nodes with holding CONTROL key and click nodes.
