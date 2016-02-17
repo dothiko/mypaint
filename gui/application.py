@@ -417,6 +417,9 @@ class Application (object):
             autosave_recovery = gui.autorecover.Presenter(self)
             autosave_recovery.run(startup=True)
 
+        # my local codes
+        self.workspace.mylocal_save_dock_info()
+
     def save_settings(self):
         """Saves the current settings to persistent storage."""
         self.brushmanager.save_brushes_for_devices()

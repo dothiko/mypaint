@@ -394,8 +394,6 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
         for stack in self._get_tool_stacks():
             stack._complete_initial_layout()
 
-        # my local codes
-        self.mylocal_save_dock_info()
 
     ## Canvas widget
 
@@ -988,24 +986,16 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
     def mylocal_save_dock_info(self):
         layouts = []
         for stack in self._get_tool_stacks():
-            layouts.append(stack.get_layout(save_object = True))
+            layouts.append(stack.get_paned_layout())
         self.mylocal_saved_layouts = layouts
 
     def mylocal_reset_dock_size(self):
-        for c_stack_desc in self.mylocal_saved_layouts:
-            c_stack = c_stack_desc['this_stack']
-            w = c_stack_desc['w']
-            h = c_stack_desc['h']
-            if w > 1 and h > 1:
-                c_stack.set_size_request(w, h)
-
-            group_descs = c_stack_desc['groups']
-            for c_group_desc in group_descs:
-                nb = c_group_desc['this_nb']
-                try:
-                    nb.set_size_request(c_group_desc['w'], c_group_desc['h'])
-                except KeyError:
-                    pass
+       #print('now:')
+       #self.mylocal_save_dock_info()
+        for stack_info in self.mylocal_saved_layouts:
+            for pane_desc in stack_info:
+                cw = pane_desc['paned']
+                cw.set_position(pane_desc['pos'])
 
 
 class ToolStack (Gtk.EventBox):
@@ -1514,10 +1504,8 @@ class ToolStack (Gtk.EventBox):
             nb_parent._initial_divider_position = group_h
         return num_groups_added
 
-    def get_layout(self, save_object=False):
+    def get_layout(self):
         """Returns a description of the current layout using simple types
-
-        :param save_object: save object into layout.this is *my local*
 
         :rtype: dict
 
@@ -1532,9 +1520,6 @@ class ToolStack (Gtk.EventBox):
                 tool_widget = page.get_child()
                 tool_desc = factory.identify(tool_widget)
                 if tool_desc:
-                    ## my-local code
-                    if save_object:
-                        tool_desc += (tool_widget, ) # the last element is widget!
                     tool_descs.append(tool_desc)
             active_page = nb.get_current_page()
             group_desc = {"tools": tool_descs, "active_page": active_page}
@@ -1545,15 +1530,9 @@ class ToolStack (Gtk.EventBox):
                     group_desc["w"] = max(width, 1)
                     group_desc["h"] = max(height, 1)
 
-            ## my-local code
-            if save_object:
-                group_desc['this_nb'] = nb
 
             group_descs.append(group_desc)
         stack_desc = {"groups": group_descs}
-        ## my-local code
-        if save_object:
-            stack_desc['this_stack'] = self
 
         if group_descs:
             width = self.get_allocated_width()
@@ -1866,6 +1845,47 @@ class ToolStack (Gtk.EventBox):
                 page_titles.append(title)
         toplevel.update_title(page_titles)
 
+    # my local methods
+    #
+
+    def get_paned_layout(self):
+        """Returns a description of the current layout using simple types
+
+        :param save_object: save object into layout.this is *my local*
+
+        :rtype: dict
+
+        See `build_from_layout()` for details of the dict which is returned.
+
+        """
+        paned_descs = []
+        def walk_children(widgets):
+            for widget in widgets:
+                if isinstance(widget, Gtk.Paned):
+                    cur_info = {}
+                    cur_info['paned'] = widget
+                    cur_info['pos'] = widget.get_position()
+                    paned_descs.append(cur_info)
+                    walk_children(widget)
+                elif isinstance(widget, Gtk.Notebook):
+                    pass
+                else:
+                    pass
+
+        walk_children(self.get_children())
+
+       #for widget in self.get_children():
+       #    if isinstance(widget, Gtk.Paned):
+       #        cur_info = {}
+       #        cur_info['paned'] = widget
+       #        cur_info['pos'] = widget.get_position()
+       #        paned_descs.append(cur_info)
+       #    elif isinstance(widget, Gtk.Notebook):
+       #        pass
+       #    else:
+       #        pass
+        print paned_descs
+        return paned_descs
 
 class ToolStackWindow (Gtk.Window):
     """A floating utility window containing a single `ToolStack`"""
