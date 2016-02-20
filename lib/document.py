@@ -302,6 +302,8 @@ class Document (object):
         # And begin in a known state
         self.clear()
 
+        self._as_project = False
+
     def __repr__(self):
         bbox = self.get_bbox()
         nlayers = len(list(self.layer_stack.deepenumerate()))
@@ -457,20 +459,21 @@ class Document (object):
         if the autosave writes are in progress.
 
         """
-        assert not self._painting_only
-        if not self._autosave_dirty: return
-        if self._autosave_processor.has_work(): return
-        if self._autosave_countdown_id: return
-        if not self._autosave_backups: return
-        interval = lib.helpers.clamp(self.autosave_interval, 5, 300)
-        self._autosave_countdown_id = GLib.timeout_add_seconds(
-            interval = interval,
-            function = self._autosave_countdown_cb,
-        )
-        logger.debug(
-            "autosave_countdown: autosave will run in %ds",
-            self.autosave_interval,
-        )
+        if not self._as_project:
+            assert not self._painting_only
+            if not self._autosave_dirty: return
+            if self._autosave_processor.has_work(): return
+            if self._autosave_countdown_id: return
+            if not self._autosave_backups: return
+            interval = lib.helpers.clamp(self.autosave_interval, 5, 300)
+            self._autosave_countdown_id = GLib.timeout_add_seconds(
+                interval = interval,
+                function = self._autosave_countdown_cb,
+            )
+            logger.debug(
+                "autosave_countdown: autosave will run in %ds",
+                self.autosave_interval,
+            )
 
     def _stop_autosave_countdown(self):
         """Stop any existing countdown to an automatic backup"""
@@ -1262,13 +1265,37 @@ class Document (object):
             "filename": filename,
             "basename": os.path.basename(filename),
         }
+
+        ext = None
+        self._as_project = False
         if not os.path.isfile(filename):
-            msg = C_(
-                "Document IO: loading errors",
-                u"{error_loading_common}\n"
-                u"The file does not exist."
-            ).format(**error_kwargs)
-            raise FileHandlingError(msg)
+            # filename is not file.
+            # But it might be oradir...
+            dirname = "%s%s" % (filename, os.path.sep)
+            xmlname = "%sstack.xml" % dirname
+            if (os.path.exists(xmlname) and
+                    os.path.exists("%smimetype" % dirname) and
+                    os.path.exists("%sThumbnails" % dirname) and
+                    os.path.exists("%sdata" % dirname) ):
+                # It might be oradir!
+                with open(xmlname, 'rt') as ifp:
+                    elem = ET.fromstring(ifp.read())
+                    # ElementTree cannot get 'xmlns' namespace attr
+                    # so substitute frame-active attribute for it.
+                    # (But 'lxml' can do this..?)
+                    if ('{http://mypaint.org/ns/openraster}frame-active' in 
+                            elem.attrib):
+                        ext = "project"
+                        kwargs['elem'] = elem
+
+            if ext == None:
+                msg = C_(
+                    "Document IO: loading errors",
+                    u"{error_loading_common}\n"
+                    u"The file does not exist."
+                ).format(**error_kwargs)
+                raise FileHandlingError(msg)
+
         if not os.access(filename, os.R_OK):
             msg = C_(
                 "Document IO: loading errors",
@@ -1277,8 +1304,11 @@ class Document (object):
                 u"to open this file."
             ).format(**error_kwargs)
             raise FileHandlingError(msg)
-        junk, ext = os.path.splitext(filename)
-        ext = ext.lower().replace('.', '')
+
+        if not ext:
+            junk, ext = os.path.splitext(filename)
+            ext = ext.lower().replace('.', '')
+
         load_method_name = 'load_' + ext
         load_method = getattr(self, load_method_name, self._unsupported)
         logger.info(
@@ -1474,6 +1504,46 @@ class Document (object):
         orazip.close()
 
         logger.info('%.3fs load_ora total', time.time() - t0)
+
+    def load_project(self, dirname,feedback_cb=None,**kwargs):
+        """ load a directory as a project
+        """
+        assert os.path.isdir(dirname)
+        app_cache_dir = get_app_cache_root()
+        self._stop_cache_updater()
+        self._stop_autosave_writes()
+        self.clear(new_cache=False)
+
+        self._as_project = True
+
+        try:
+            self._load_from_openraster_dir(
+                dirname,
+                app_cache_dir,
+                feedback_cb=feedback_cb,
+                retain_autosave_info=False,
+            )
+        except Exception as e:
+            # Assign a valid *new* cache dir before bailing out.
+            assert self._cache_dir is None
+            self.clear(new_cache=True)
+            # Log, and tell the user about it
+            logger.exception("Failed to load project from %r", dirname)
+            tmpl = C_(
+                "Document project: restoring: errors",
+                u"Failed to load work from an project directory.\n\n"
+                u"Reason: {reason}\n\n"
+                u"{see_logs}"
+            )
+            raise FileHandlingError(
+                tmpl.format(
+                    reason = unicode(e),
+                    see_logs = _ERROR_SEE_LOGS_LINE,
+                ),
+                investigate_dir = dirname,
+            )
+        else:
+            self._cache_dir = app_cache_dir
 
     def resume_from_autosave(self, autosave_dir, feedback_cb=None):
         """Resume using an autosave dir (and its parent cache dir)"""

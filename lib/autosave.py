@@ -112,3 +112,20 @@ class Autosaveable:
         https://tavianator.com/2014/06/the-visitor-pattern-in-python/)
 
         """
+
+
+    @property
+    def as_project(self):
+        """
+        load a directory as a project.then,auto-save feature disabled,
+        only used its fast-saving feature.
+        """
+        try:
+            return self.__as_project
+        except AttributeError:
+            self.__as_project = False
+            return self.__as_project
+
+    @as_project.setter
+    def as_project(self, flag):
+        self.__as_project = flag

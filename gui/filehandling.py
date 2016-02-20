@@ -710,6 +710,16 @@ class FileHandler (object):
         return dialog
 
     def open_cb(self, action):
+        self._open_internal(gtk.FILE_CHOOSER_ACTION_OPEN,
+                self.update_preview_cb,
+                self.file_filters)
+
+    def open_project_cb(self, action):
+        self._open_internal(gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
+                None,
+                None)
+
+    def _open_internal(self, dialog_action, preview_cb, filters):
         ok_to_open = self.app.filehandler.confirm_destructive_action(
             title = C_(
                 u'File→Open: confirm dialog: title question',
@@ -728,7 +738,7 @@ class FileHandler (object):
                 u"Open File",
             ),
             parent = self.app.drawWindow,
-            action = gtk.FILE_CHOOSER_ACTION_OPEN,
+            action = dialog_action,
             buttons = [
                 gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
                 gtk.STOCK_OPEN, gtk.RESPONSE_OK,
@@ -736,11 +746,13 @@ class FileHandler (object):
         )
         dialog.set_default_response(gtk.RESPONSE_OK)
 
-        preview = gtk.Image()
-        dialog.set_preview_widget(preview)
-        dialog.connect("update-preview", self.update_preview_cb, preview)
+        if preview_cb:
+            preview = gtk.Image()
+            dialog.set_preview_widget(preview)
+            dialog.connect("update-preview", preview_cb, preview)
 
-        _add_filters_to_dialog(self.file_filters, dialog)
+        if filters:
+            _add_filters_to_dialog(self.file_filters, dialog)
 
         if self.filename:
             dialog.set_filename(self.filename)
@@ -760,6 +772,7 @@ class FileHandler (object):
                 self.open_file(dialog.get_filename().decode('utf-8'))
         finally:
             dialog.destroy()
+
 
     def open_scratchpad_dialog(self):
         dialog = gtk.FileChooserDialog(_("Open Scratchpad..."), self.app.drawWindow,
