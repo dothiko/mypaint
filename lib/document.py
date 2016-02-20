@@ -284,6 +284,11 @@ class Document (object):
         self._autosave_processor = None
         self._autosave_countdown_id = None
         self._autosave_dirty = False
+
+        # Project flag.place here to avoid exception
+        # from _command_stack_updated_cb
+        self._as_project = False
+
         if not painting_only:
             self._autosave_processor = lib.idletask.Processor()
             self.command_stack.stack_updated += self._command_stack_updated_cb
@@ -302,7 +307,6 @@ class Document (object):
         # And begin in a known state
         self.clear()
 
-        self._as_project = False
 
     def __repr__(self):
         bbox = self.get_bbox()
@@ -492,7 +496,7 @@ class Document (object):
 
     ## Queued autosave writes: low priority & chunked
 
-    def _queue_autosave_writes(self):
+    def _queue_autosave_writes(self,dirname=None):
         """Add autosaved backup tasks to the background processor
 
         These tasks consist of nicely chunked writes for all layers
@@ -508,7 +512,10 @@ class Document (object):
         assert not self._painting_only
         assert not self._autosave_processor.has_work()
         assert self._autosave_dirty
-        oradir = os.path.join(self._cache_dir, CACHE_DOC_AUTOSAVE_SUBDIR)
+        if dirname:
+            oradir = dirname
+        else:
+            oradir = os.path.join(self._cache_dir, CACHE_DOC_AUTOSAVE_SUBDIR)
         datadir = os.path.join(oradir, "data")
         if not os.path.exists(datadir):
             logger.debug("autosave: creating %r...", datadir)
@@ -644,7 +651,7 @@ class Document (object):
 
     def _command_stack_updated_cb(self, cmdstack):
         assert not self._painting_only
-        if not self.autosave_backups: return
+        if not (self.autosave_backups or self._as_project): return
         self._autosave_dirty = True
         self._restart_autosave_countdown()
         logger.debug("autosave: updates detected, doc marked autosave-dirty")
@@ -1207,8 +1214,11 @@ class Document (object):
         ``save_*()`` method is chosen to perform the save.
         """
         self.sync_pending_changes()
-        junk, ext = os.path.splitext(filename)
-        ext = ext.lower().replace('.', '')
+        if not self._as_project:
+            junk, ext = os.path.splitext(filename)
+            ext = ext.lower().replace('.', '')
+        else:
+            ext = 'project'
         save = getattr(self, 'save_' + ext, self._unsupported)
         result = None
         try:
@@ -1504,6 +1514,21 @@ class Document (object):
         orazip.close()
 
         logger.info('%.3fs load_ora total', time.time() - t0)
+
+    def save_project(self, dirname, options=None, **kwargs):
+        """ save current document as a project
+        """
+        self._queue_autosave_writes(dirname)
+
+    def save_project_as(self, dirname,new_dirname, options=None, **kwargs):
+        """ save current document as a project,as new named.
+        most parts of this method is from _queue_autosave_writes
+        """
+        # [TODO] copy entire file-directory structure asynchronously
+        pass 
+
+        # And then,overwrite it.
+        self._queue_autosave_writes(new_dirname)
 
     def load_project(self, dirname,feedback_cb=None,**kwargs):
         """ load a directory as a project
