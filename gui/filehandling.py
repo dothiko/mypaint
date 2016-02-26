@@ -701,6 +701,25 @@ class FileHandler (object):
                 #TODO display "no preview available" image?
                 file_chooser.set_preview_widget_active(False)
 
+    def update_project_preview_cb(self, file_chooser, preview):
+        """Project-Save specialized version of update_preview_cb()
+        """
+        filename = file_chooser.get_preview_filename()
+        if filename:
+            thumbname = os.path.join(filename,'Thumbnails','thumbnail.png').decode('utf-8')
+            if os.path.exists(thumbname):
+                pixbuf = helpers.freedesktop_thumbnail(thumbname)
+                if pixbuf:
+                    # if pixbuf is smaller than 256px in width, copy it onto a transparent 256x256 pixbuf
+                    pixbuf = helpers.pixbuf_thumbnail(pixbuf, 256, 256, True)
+                    preview.set_from_pixbuf(pixbuf)
+                    file_chooser.set_preview_widget_active(True)
+                    return
+
+        #TODO display "no preview available" image?
+        file_chooser.set_preview_widget_active(False)
+    
+                
     def get_open_dialog(self, filename=None, start_in_folder=None, file_filters=[]):
         dialog = gtk.FileChooserDialog(_("Open..."), self.app.drawWindow,
                                        gtk.FILE_CHOOSER_ACTION_OPEN,
@@ -723,7 +742,7 @@ class FileHandler (object):
 
     def open_project_cb(self, action):
         self._open_internal(gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
-                None,
+                self.update_project_preview_cb,
                 None)
 
     def _open_internal(self, dialog_action, preview_cb, filters):
