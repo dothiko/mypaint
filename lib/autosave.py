@@ -18,6 +18,8 @@ class Autosaveable:
     """Mixin and abstract base for auto-saveable structures"""
 
     __metaclass__ = abc.ABCMeta
+    
+    ignore_nonexistence = False
 
     @property
     def autosave_dirty(self):
@@ -113,19 +115,29 @@ class Autosaveable:
 
         """
 
-
-    @property
-    def as_project(self):
+    
+    def is_must_save(self, filepath):
+        """ Checking whether this file should saved(encoded) or not.
+        if this method return False,the file is not saved,but copied later.
         """
-        load a directory as a project.then,auto-save feature disabled,
-        only used its fast-saving feature.
+        return (self.__autosave_dirty or 
+                not (Autosaveable.ignore_nonexistence or os.path.exists(filepath))
+               )
+               
+    @property
+    def src(self):
+        """Read-only property.This is previously recorded filename, in data/ dir.
+        This property is for referring from project-save related functionality.
+        
+        self._src is set at derived class internally.
+        so, there is no setter property.
+        
+        This property is copy of 'src' value of layer tag in stack.xml.
+        It should be related path,something like
+        'data/foobar-blablabla-bla.png'
         """
         try:
-            return self.__as_project
+            return self._src
         except AttributeError:
-            self.__as_project = False
-            return self.__as_project
-
-    @as_project.setter
-    def as_project(self, flag):
-        self.__as_project = flag
+            return None
+    

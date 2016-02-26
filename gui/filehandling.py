@@ -239,11 +239,15 @@ class FileHandler (object):
 
     filename = property(get_filename, set_filename)
 
-    def init_save_dialog(self):
+    def init_save_dialog(self, chooser_flag = gtk.FILE_CHOOSER_ACTION_SAVE, with_format_widget=True):
+        """
+        Init save dialog as self.save_dialog
+        This attribute might be referred from other modules.
+        """
         dialog = gtk.FileChooserDialog(
             C_("Dialogs: Save As...", u"Save"),
             self.app.drawWindow,
-            gtk.FILE_CHOOSER_ACTION_SAVE,
+            chooser_flag,
             (
                 gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
                 gtk.STOCK_SAVE, gtk.RESPONSE_OK,
@@ -252,22 +256,25 @@ class FileHandler (object):
         self.save_dialog = dialog
         dialog.set_default_response(gtk.RESPONSE_OK)
         dialog.set_do_overwrite_confirmation(True)
-        _add_filters_to_dialog(self.file_filters, dialog)
 
         # Add widget for selecting save format
-        box = gtk.HBox()
-        label = gtk.Label(_('Format to save as:'))
-        label.set_alignment(0.0, 0.0)
-        combo = self.saveformat_combo = gtk.ComboBoxText()
-        for name, ext, opt in self.saveformats.itervalues():
-            combo.append_text(name)
-        combo.set_active(0)
-        combo.connect('changed', self.selected_save_format_changed_cb)
-        box.pack_start(label)
-        box.pack_start(combo, expand=False)
-        dialog.set_extra_widget(box)
+        if with_format_widget:
+            _add_filters_to_dialog(self.file_filters, dialog)
+            box = gtk.HBox()
+            label = gtk.Label(_('Format to save as:'))
+            label.set_alignment(0.0, 0.0)
+            combo = self.saveformat_combo = gtk.ComboBoxText()
+            for name, ext, opt in self.saveformats.itervalues():
+                combo.append_text(name)
+            combo.set_active(0)
+            combo.connect('changed', self.selected_save_format_changed_cb)
+            box.pack_start(label)
+            box.pack_start(combo, expand=False)
+            dialog.set_extra_widget(box)
+        else:
+            self.saveformat_combo = None            
         dialog.show_all()
-
+        
     def selected_save_format_changed_cb(self, widget):
         """When the user changes the selected format to save as in the dialog,
         change the extension of the filename (if existing) immediately."""
@@ -833,6 +840,46 @@ class FileHandler (object):
         else:
             self.save_as_dialog(self.save_file, suggested_filename=current_filename)
 
+    def save_as_project_cb(self, action):
+        
+        if self.filename:
+            current_dirname = os.path.dirname(self.filename)
+        else:
+            current_dirname = ''
+            # choose the most recent save folder
+            self._update_recent_items()
+            for item in reversed(self._recent_items):
+                uri = item.get_uri()
+                fn, _h = lib.glib.filename_from_uri(uri)
+                dn = os.path.dirname(fn)
+                if os.path.isdir(dn):
+                    current_dirname = dn
+                    break
+                    
+        # With creating save dialog prior to self.save_as_dialog(),
+        # we can use customized version of dialog.
+        # this dialog should be destoroyed in self.save_as_dialog().
+        self.init_save_dialog(
+            gtk.FILE_CHOOSER_ACTION_CREATE_FOLDER | gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
+            False
+            )
+            
+        junk, ext = os.path.splitext(self.filename)
+        
+
+        if ext != "":
+            # This means 'export as project directory'
+            # but... we have nothing to do for this. for now.
+            self.save_as_dialog(
+                self.save_file, 
+                start_in_folder=current_dirname)
+            # export flag is for exporting other filetype.
+            # exporting as directory is not for this flag.
+        else:
+            self.save_as_dialog(
+                self.save_file, 
+                start_in_folder=current_dirname)
+                    
     def save_scratchpad_as_dialog(self, export=False):
         if self.app.scratchpad_filename:
             current_filename = self.app.scratchpad_filename
@@ -840,11 +887,13 @@ class FileHandler (object):
             current_filename = ''
 
         self.save_as_dialog(self.save_scratchpad, suggested_filename=current_filename, export=export)
-
+        
     def save_as_dialog(self, save_method_reference, suggested_filename=None, start_in_folder=None, export=False, **options):
+        
         if not self.save_dialog:
             self.init_save_dialog()
         dialog = self.save_dialog
+                   
         # Set the filename in the dialog
         if suggested_filename:
             _dialog_set_filename(dialog, suggested_filename)
@@ -862,42 +911,57 @@ class FileHandler (object):
                     continue
                 filename = filename.decode('utf-8')
                 name, ext = os.path.splitext(filename)
-                saveformat = self.saveformat_combo.get_active()
+                if self.saveformat_combo:
+                    saveformat = self.saveformat_combo.get_active()
 
-                # If no explicitly selected format, use the extension to figure it out
-                if saveformat == SAVE_FORMAT_ANY:
-                    cfg = self.app.preferences['saving.default_format']
-                    default_saveformat = self.config2saveformat[cfg]
-                    if ext:
-                        try:
-                            saveformat, mime = self.ext2saveformat[ext]
-                        except KeyError:
+                    # If no explicitly selected format, use the extension to figure it out
+                    if saveformat == SAVE_FORMAT_ANY:
+                        cfg = self.app.preferences['saving.default_format']
+                        default_saveformat = self.config2saveformat[cfg]
+                        if ext:
+                            try:
+                                saveformat, mime = self.ext2saveformat[ext]
+                            except KeyError:
+                                saveformat = default_saveformat
+                        else:
                             saveformat = default_saveformat
-                    else:
-                        saveformat = default_saveformat
-
-                # if saveformat isn't a key, it must be SAVE_FORMAT_PNGAUTO.
-                desc, ext_format, options = self.saveformats.get(saveformat,
-                    ("", ext, {'alpha': None}))
-                #
-                if ext:
-                    if ext_format != ext:
-                        # Minor ugliness: if the user types '.png' but
-                        # leaves the default .ora filter selected, we
-                        # use the default options instead of those
-                        # above. However, they are the same at the moment.
-                        options = {}
-                    assert(filename)
-                    dialog.hide()
+                            
+                    # if saveformat isn't a key, it must be SAVE_FORMAT_PNGAUTO.
+                    desc, ext_format, options = self.saveformats.get(saveformat,
+                        ("", ext, {'alpha': None}))
+                    #
+                    if ext:
+                        if ext_format != ext:
+                            # Minor ugliness: if the user types '.png' but
+                            # leaves the default .ora filter selected, we
+                            # use the default options instead of those
+                            # above. However, they are the same at the moment.
+                            options = {}
+                        assert(filename)
+                        dialog.hide()
+                        if export:
+                            # Do not change working file
+                            save_method_reference(filename, True, **options)
+                        else:
+                            save_method_reference(filename, **options)
+                        break
+                    
+                    ## If we get extension successfully,loop end above 'break'
+                    ## Otherwise,fall-through
+                    
+                else:
+                    # this is for 'project' save.
+                    filename = name   
                     if export:
                         # Do not change working file
                         save_method_reference(filename, True, **options)
                     else:
                         save_method_reference(filename, **options)
                     break
-
+                     
+                     
                 filename = name + ext_format
-
+                
                 # trigger overwrite confirmation for the modified filename
                 _dialog_set_filename(dialog, filename)
                 dialog.response(gtk.RESPONSE_OK)
@@ -907,6 +971,7 @@ class FileHandler (object):
             dialog.destroy()  # avoid GTK crash: https://gna.org/bugs/?17902
             self.save_dialog = None
 
+            
     def save_scrap_cb(self, action):
         filename = self.filename
         prefix = self.get_scrap_prefix()

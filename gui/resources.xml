@@ -84,7 +84,6 @@ Vocabulary
           <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Load a directory as a project to work on.</property>
           <signal name="activate" handler="open_project_cb"/>
         </object>
-        <accelerator key="o" modifiers="GDK_CONTROL_MASK"/>
       </child>
       <child>
         <object class="GtkAction" id="OpenLast">
@@ -132,6 +131,13 @@ Vocabulary
           <signal name="activate" handler="save_as_cb"/>
         </object>
         <accelerator key="s" modifiers="GDK_CONTROL_MASK | GDK_SHIFT_MASK"/>
+      </child>
+      <child>
+        <object class="GtkAction" id="SaveAsProject">
+          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save As Project</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current work as a project directory, with assigning it a new name.</property>
+          <signal name="activate" handler="save_as_project_cb"/>
+        </object>
       </child>
       <child>
         <object class="GtkAction" id="Export">
