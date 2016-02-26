@@ -78,6 +78,14 @@ Vocabulary
         <accelerator key="o" modifiers="GDK_CONTROL_MASK"/>
       </child>
       <child>
+        <object class="GtkAction" id="OpenProject">
+          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Open Project</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">Open Project</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Load a directory as a project to work on.</property>
+          <signal name="activate" handler="open_project_cb"/>
+        </object>
+      </child>
+      <child>
         <object class="GtkAction" id="OpenLast">
           <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Open Most Recent</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Load the file you saved most recently.</property>
@@ -131,6 +139,13 @@ Vocabulary
           <signal name="activate" handler="save_incremental_cb"/>
         </object>
         <accelerator key="s" modifiers="GDK_CONTROL_MASK | GDK_MOD1_MASK"/>
+      </child>
+      <child>
+        <object class="GtkAction" id="SaveAsProject">
+          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save As Project</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current work as a project directory, with assigning it a new name.</property>
+          <signal name="activate" handler="save_as_project_cb"/>
+        </object>
       </child>
       <child>
         <object class="GtkAction" id="Export">

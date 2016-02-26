@@ -112,3 +112,21 @@ class Autosaveable:
         https://tavianator.com/2014/06/the-visitor-pattern-in-python/)
 
         """
+
+    @property
+    def src(self):
+        """Read-only property.This is previously recorded filename, in data/ dir.
+        This property is for referring from project-save related functionality.
+        
+        self._src is set at derived class internally.
+        so, there is no setter property.
+        
+        This property is copy of 'src' value of layer tag in stack.xml.
+        It should be related path,something like
+        'data/foobar-blablabla-bla.png'
+        """
+        try:
+            return self._src
+        except AttributeError:
+            return None
+    

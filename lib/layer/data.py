@@ -213,6 +213,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
         src_rootname, src_ext = os.path.splitext(src)
         src_rootname = os.path.basename(src_rootname)
         src_ext = src_ext.lower()
+        self._src = src # To refer from project-type save functionality.
         x += int(attrs.get('x', 0))
         y += int(attrs.get('y', 0))
         logger.debug(
@@ -423,11 +424,17 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
         # mypaint-specific attribute name. If/when OpenRaster
         # standardizes looped layer data, that code should be moved
         # here.
-
-        png_basename = self.autosave_uuid + ".png"
+        
+        if self.src != None:
+            png_basename = os.path.basename(self.src)
+        else:
+            png_basename = self.autosave_uuid + ".png"
+            
         png_relpath = os.path.join("data", png_basename)
         png_path = os.path.join(oradir, png_relpath)
         png_bbox = self._surface.looped and bbox or tuple(self.get_bbox())
+        # Use new autosavable property "must_save" to check whether 
+        # save must done or not
         if self.autosave_dirty or not os.path.exists(png_path):
             task = tiledsurface.PNGFileUpdateTask(
                 surface = self._surface,
@@ -438,6 +445,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
             )
             taskproc.add_work(task)
             self.autosave_dirty = False
+            
         # Calculate appropriate offsets
         png_x, png_y = png_bbox[0:2]
         ref_x, ref_y = bbox[0:2]
@@ -449,7 +457,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
         elem = self._get_stackxml_element("layer", x, y)
         elem.attrib["src"] = png_relpath
         return elem
-
+        
     @staticmethod
     def _make_refname(prefix, path, suffix, sep='-'):
         """Internal: standardized filename for something wiith a path"""
@@ -734,8 +742,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         y = self._y - ref_y
         elem = self._get_stackxml_element("layer", x, y)
         # Pick a suitable name to store under.
-        self._ensure_valid_working_file()
-        src_path = unicode(self._workfile)
+        src_path = self.workfilename
         src_rootname, src_ext = os.path.splitext(src_path)
         src_ext = src_ext.lower()
         storename = self._make_refname("layer", path, src_ext)
@@ -754,14 +761,17 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         y = self._y - ref_y
         elem = self._get_stackxml_element("layer", x, y)
         # Pick a suitable name to store under.
-        self._ensure_valid_working_file()
-        src_path = unicode(self._workfile)
+        src_path = self.workfilename
         src_rootname, src_ext = os.path.splitext(src_path)
         src_ext = src_ext.lower()
         src_fp = open(src_path, "rb")
-        final_basename = self.autosave_uuid + src_ext
+        if self.src != None:
+            final_basename = os.path.basename(self.src)
+        else:
+            final_basename = self.autosave_uuid + src_ext
         final_relpath = os.path.join("data", final_basename)
         final_path = os.path.join(oradir, final_relpath)
+        
         if self.autosave_dirty or not os.path.exists(final_path):
             final_dir = os.path.join(oradir, "data")
             tmp_fp = tempfile.NamedTemporaryFile(
@@ -783,6 +793,14 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         manifest.add(final_relpath)
         elem.attrib["src"] = unicode(final_relpath)
         return elem
+
+    @property
+    def workfilename(self):
+        """ To get (valid) workfile name 
+        even from outside this module.
+        """
+        self._ensure_valid_working_file()
+        return unicode(self._workfile)      
 
     ## Editing via external apps
 
@@ -1048,7 +1066,10 @@ class BackgroundLayer (SurfaceBackedLayer):
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
         """Queues the layer for auto-saving"""
         # Arrange for the tile PNG to be rewritten, if necessary
-        tilepng_basename = self.autosave_uuid + "-tile.png"
+        if self.src != None:
+            tilepng_basename = os.path.basename(self.src)
+        else:
+            tilepng_basename = self.autosave_uuid + "-tile.png"
         tilepng_relpath = os.path.join("data", tilepng_basename)
         manifest.add(tilepng_relpath)
         x0, y0 = bbox[0:2]
@@ -1516,7 +1537,12 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
         """Queues the layer for auto-saving"""
-        dat_basename = u"%s-strokemap.dat" % (self.autosave_uuid,)
+        if self.src != None:
+            basename, ext = os.path.splitext(os.path.basename(self.src))
+            dat_basename = u"%s-strokemap.dat" % basename
+        else:
+            dat_basename = u"%s-strokemap.dat" % (self.autosave_uuid,)
+            
         dat_relpath = os.path.join("data", dat_basename)
         dat_path = os.path.join(oradir, dat_relpath)
         # Have to do this before the supercall because that will clear

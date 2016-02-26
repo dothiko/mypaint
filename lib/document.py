@@ -51,6 +51,7 @@ import lib.idletask
 from lib.gettext import C_
 import lib.xml
 import lib.glib
+import lib.autosave
 
 
 ## Module constants
@@ -284,9 +285,13 @@ class Document (object):
         self._autosave_processor = None
         self._autosave_countdown_id = None
         self._autosave_dirty = False
+
+        # Project flag.place here to avoid exception
+        # from _command_stack_updated_cb
+        self._as_project = False
+
         if not painting_only:
             self._autosave_processor = lib.idletask.Processor()
-            self.command_stack.stack_updated += self._command_stack_updated_cb
             self.effective_bbox_changed += self._effective_bbox_changed_cb
 
         # Optional page area and resolution information
@@ -301,6 +306,7 @@ class Document (object):
 
         # And begin in a known state
         self.clear()
+
 
     def __repr__(self):
         bbox = self.get_bbox()
@@ -457,20 +463,21 @@ class Document (object):
         if the autosave writes are in progress.
 
         """
-        assert not self._painting_only
-        if not self._autosave_dirty: return
-        if self._autosave_processor.has_work(): return
-        if self._autosave_countdown_id: return
-        if not self._autosave_backups: return
-        interval = lib.helpers.clamp(self.autosave_interval, 5, 300)
-        self._autosave_countdown_id = GLib.timeout_add_seconds(
-            interval = interval,
-            function = self._autosave_countdown_cb,
-        )
-        logger.debug(
-            "autosave_countdown: autosave will run in %ds",
-            self.autosave_interval,
-        )
+        if not self._as_project:
+            assert not self._painting_only
+            if not self._autosave_dirty: return
+            if self._autosave_processor.has_work(): return
+            if self._autosave_countdown_id: return
+            if not self._autosave_backups: return
+            interval = lib.helpers.clamp(self.autosave_interval, 5, 300)
+            self._autosave_countdown_id = GLib.timeout_add_seconds(
+                interval = interval,
+                function = self._autosave_countdown_cb,
+            )
+            logger.debug(
+                "autosave_countdown: autosave will run in %ds",
+                self.autosave_interval,
+            )
 
     def _stop_autosave_countdown(self):
         """Stop any existing countdown to an automatic backup"""
@@ -489,7 +496,7 @@ class Document (object):
 
     ## Queued autosave writes: low priority & chunked
 
-    def _queue_autosave_writes(self):
+    def _queue_autosave_writes(self,dirname=None):
         """Add autosaved backup tasks to the background processor
 
         These tasks consist of nicely chunked writes for all layers
@@ -503,9 +510,13 @@ class Document (object):
             return
         logger.debug("autosave starting: queueing save tasks")
         assert not self._painting_only
-        assert not self._autosave_processor.has_work()
         assert self._autosave_dirty
-        oradir = os.path.join(self._cache_dir, CACHE_DOC_AUTOSAVE_SUBDIR)
+        if dirname:
+            assert self._autosave_processor.get_work_count() <= 1
+            oradir = dirname
+        else:
+            assert not self._autosave_processor.has_work()
+            oradir = os.path.join(self._cache_dir, CACHE_DOC_AUTOSAVE_SUBDIR)
         datadir = os.path.join(oradir, "data")
         if not os.path.exists(datadir):
             logger.debug("autosave: creating %r...", datadir)
@@ -564,12 +575,20 @@ class Document (object):
             os.path.join(oradir, stackfile_rel),
         )
         manifest.add(stackfile_rel)
-        # Cleanup
+        self._autosave_launch_cleanup(oradir, manifest)
+    
+    def _autosave_launch_cleanup(self, oradir, manifest, taskproc=None):
+        """The common method of launching autosave cleanup task.
+        """
+        if taskproc == None:
+            taskproc = self._autosave_processor
+            
         taskproc.add_work(
-            self._autosave_cleanup_cb,
-            oradir = oradir,
-            manifest = manifest,
-        )
+                self._autosave_cleanup_cb,
+                oradir = oradir,
+                manifest = manifest,
+            )
+    
 
     def _autosave_thumbnail_cb(self, rootstack, bbox, filename):
         """Autosaved backup task: write Thumbnails/thumbnail.png
@@ -600,6 +619,46 @@ class Document (object):
             xml = ET.tostring(image_elem, encoding='UTF-8')
             xml_fp.write(xml)
         lib.fileutils.replace(tmpname, filename)
+        return False
+
+    def _project_copy_cb(self, filelist, dirinfos):
+        """Project save task: copy files of filelist into new directory.
+
+        This runs every time new project directory created,to copy 
+        unedited layers into new directory's data subdir.
+
+        """
+        assert len(dirinfos) == 2
+        newdir,curdir = dirinfos
+        newdir_data = os.path.join(newdir, 'data')
+        if not os.path.exists(newdir_data):
+            os.makedirs(newdir_data)       
+        
+        for csf in filelist:
+            # csf(current source file) is FULLPATH.
+            basename = os.path.basename(csf)
+            newfilepath = os.path.join(newdir_data, basename)
+            if not os.path.exists(basename):
+                shutil.copyfile(csf, newfilepath)
+                
+            
+            basename, ext = os.path.splitext(basename)
+            ext = ext.lower()
+            if ext == '.png':
+                if basename[-5:] == '-tile':
+                    uuidbase = basename[:-5]
+                else:
+                    uuidbase = basename
+                
+                curdir = os.path.dirname(csf)
+                strokemapname = "%s-strokemap.dat" % uuidbase
+                csf = os.path.join(curdir, strokemapname)
+                newfilepath = os.path.join(newdir_data, strokemapname)
+                if os.path.exists(csf) and not os.path.exists(newfilepath):
+                    shutil.copyfile(csf, newfilepath)
+                    
+                
+    
         return False
 
     def _autosave_cleanup_cb(self, oradir, manifest):
@@ -641,7 +700,7 @@ class Document (object):
 
     def _command_stack_updated_cb(self, cmdstack):
         assert not self._painting_only
-        if not self.autosave_backups: return
+        if not (self.autosave_backups or self._as_project): return
         self._autosave_dirty = True
         self._restart_autosave_countdown()
         logger.debug("autosave: updates detected, doc marked autosave-dirty")
@@ -1206,6 +1265,9 @@ class Document (object):
         self.sync_pending_changes()
         junk, ext = os.path.splitext(filename)
         ext = ext.lower().replace('.', '')
+        if ext == '':
+            ext = 'project'  # Incoming filename is directory name.
+
         save = getattr(self, 'save_' + ext, self._unsupported)
         result = None
         try:
@@ -1262,13 +1324,37 @@ class Document (object):
             "filename": filename,
             "basename": os.path.basename(filename),
         }
+
+        ext = None
+        self._as_project = False
         if not os.path.isfile(filename):
-            msg = C_(
-                "Document IO: loading errors",
-                u"{error_loading_common}\n"
-                u"The file does not exist."
-            ).format(**error_kwargs)
-            raise FileHandlingError(msg)
+            # filename is not file.
+            # But it might be oradir...
+            dirname = "%s%s" % (filename, os.path.sep)
+            xmlname = "%sstack.xml" % dirname
+            if (os.path.exists(xmlname) and
+                    os.path.exists("%smimetype" % dirname) and
+                    os.path.exists("%sThumbnails" % dirname) and
+                    os.path.exists("%sdata" % dirname) ):
+                # It might be oradir!
+                with open(xmlname, 'rt') as ifp:
+                    elem = ET.fromstring(ifp.read())
+                    # ElementTree cannot get 'xmlns' namespace attr
+                    # so substitute frame-active attribute for it.
+                    # (But 'lxml' can do this..?)
+                    if ('{http://mypaint.org/ns/openraster}frame-active' in 
+                            elem.attrib):
+                        ext = "project"
+                        kwargs['elem'] = elem
+
+            if ext == None:
+                msg = C_(
+                    "Document IO: loading errors",
+                    u"{error_loading_common}\n"
+                    u"The file does not exist."
+                ).format(**error_kwargs)
+                raise FileHandlingError(msg)
+
         if not os.access(filename, os.R_OK):
             msg = C_(
                 "Document IO: loading errors",
@@ -1277,8 +1363,11 @@ class Document (object):
                 u"to open this file."
             ).format(**error_kwargs)
             raise FileHandlingError(msg)
-        junk, ext = os.path.splitext(filename)
-        ext = ext.lower().replace('.', '')
+
+        if not ext:
+            junk, ext = os.path.splitext(filename)
+            ext = ext.lower().replace('.', '')
+
         load_method_name = 'load_' + ext
         load_method = getattr(self, load_method_name, self._unsupported)
         logger.info(
@@ -1475,6 +1564,120 @@ class Document (object):
 
         logger.info('%.3fs load_ora total', time.time() - t0)
 
+    def save_project(self, dirname, options=None, **kwargs):
+        """ save current document as a project
+        """
+        
+        try:
+            
+            if self._autosave_processor.has_work():
+                logger.info('autosave processor still have pending work')
+                self._autosave_processor.finish_all()
+            
+            # If 'save as another project', set _autosave_dirty flag
+            # to avoid save bypassed when right after current project saved.
+            if self.filename != dirname:
+                self._autosave_dirty = True
+            elif self._autosave_dirty == False:
+                return
+            
+
+            if self._as_project and self.filename != dirname:
+                # This document is a project and assigned to 'save as 
+                # another project'
+                # this means "copy entire project into another directory"
+                
+                # so,simply copy all layer images.
+                # With calling self._queue_autosave_writes() in advance,
+                # changed layer with stroke maps are already written.
+                # And file existence is checked in _project_copy_cb(),
+                # so overwritten with old one does not happen.
+                                
+                copy_list = []
+                
+                
+                for path, cl in self.layer_stack.walk():
+                    if not cl.autosave_dirty:
+                        filepath = None
+                        
+                        if hasattr(cl,'workfilename'):
+                            filepath = cl.workfilename
+                        elif hasattr(cl,'src') and cl.src != None:
+                            filepath = os.path.join(
+                                self.filename,
+                                cl.src                            
+                                )
+       
+                        if filepath and os.path.exists(filepath):
+                            copy_list.append(filepath)
+                    else:
+                        logger.info('%s has marked as dirty,so not copied', cl.name)
+
+    
+                if len(copy_list) > 0:
+                    taskproc = self._autosave_processor
+                    taskproc.add_work(
+                        self._project_copy_cb,
+                        copy_list,
+                        (dirname , self.filename)
+                    )
+                else:
+                    logger.warning('at save_project, copy_list is empty!')
+    
+                
+            # After all files copied,
+            # ordinary autosave processing should be launched.
+            self._queue_autosave_writes(dirname)
+              
+        finally:
+            pass
+    
+
+    def load_project(self, dirname,feedback_cb=None,**kwargs):
+        """ load a directory as a project
+        """
+        assert os.path.isdir(dirname)
+        app_cache_dir = get_app_cache_root()
+        self._stop_cache_updater()
+        self._stop_autosave_writes()
+        self.clear(new_cache=False)
+
+        self._as_project = True
+
+        try:
+            elem = self._load_from_openraster_dir(
+                dirname,
+                app_cache_dir,
+                feedback_cb=feedback_cb,
+                retain_autosave_info=False,
+            )
+        except Exception as e:
+            # Assign a valid *new* cache dir before bailing out.
+            assert self._cache_dir is None
+            self.clear(new_cache=True)
+            # Log, and tell the user about it
+            logger.exception("Failed to load project from %r", dirname)
+            tmpl = C_(
+                "Document project: restoring: errors",
+                u"Failed to load work from an project directory.\n\n"
+                u"Reason: {reason}\n\n"
+                u"{see_logs}"
+            )
+            raise FileHandlingError(
+                tmpl.format(
+                    reason = unicode(e),
+                    see_logs = _ERROR_SEE_LOGS_LINE,
+                ),
+                investigate_dir = dirname,
+            )
+        else:
+            self.filename = dirname
+            self._cache_dir = app_cache_dir
+            # For project,all layer already saved initially.
+            for pos, cl in self.layer_stack.walk():
+                cl.autosave_dirty = False
+                    
+                    
     def resume_from_autosave(self, autosave_dir, feedback_cb=None):
         """Resume using an autosave dir (and its parent cache dir)"""
         assert os.path.isdir(autosave_dir)
