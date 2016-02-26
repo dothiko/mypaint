@@ -35,6 +35,16 @@ this increment it and save as 'foobar_003.ora'
 既にバージョン番号が付いている場合には、それに従います。
 たとえばfoobar_002.oraだったら、foobar_003.oraとなります。
 
+#### project save (experimantal) : プロジェクトセーブ機能
+This feature utilize autosave functionality,extreamly faster save your work as 'Project *Directory*',not an 
+OpenRaster file.
+*This code is extreamly experimental*,so you *might lost your work* when using this feature.
+
+プロジェクトディレクトリに展開して保存し、なおかつそれを使い続ける機能です。
+OpenRasterファイルをパッケージする手間がないため高速に保存できます。autosave機能を流用して作られています。
+
+この機能はカスタム機能の中でも*極めて実験的*なもので、使用した場合何らかのバグにより作品が破壊されることもあり得ます。
+
 #### stabilizer : 強い手ブレ補正
 When this stabilizer toggle button (placed right side of eraser) turned on,
 strokes are much more heavily stabilized 
