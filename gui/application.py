@@ -92,6 +92,7 @@ import lib.xml
 import gui.profiling
 import assist
 import sizechangemode
+import beziertool
 
 ## Utility methods
 
