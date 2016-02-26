@@ -18,8 +18,6 @@ class Autosaveable:
     """Mixin and abstract base for auto-saveable structures"""
 
     __metaclass__ = abc.ABCMeta
-    
-    ignore_nonexistence = False
 
     @property
     def autosave_dirty(self):
@@ -115,15 +113,6 @@ class Autosaveable:
 
         """
 
-    
-    def is_must_save(self, filepath):
-        """ Checking whether this file should saved(encoded) or not.
-        if this method return False,the file is not saved,but copied later.
-        """
-        return (self.__autosave_dirty or 
-                not (Autosaveable.ignore_nonexistence or os.path.exists(filepath))
-               )
-               
     @property
     def src(self):
         """Read-only property.This is previously recorded filename, in data/ dir.

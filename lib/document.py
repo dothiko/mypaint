@@ -292,8 +292,6 @@ class Document (object):
 
         if not painting_only:
             self._autosave_processor = lib.idletask.Processor()
-            self._projectsave_processor = lib.idletask.Processor()
-            self.command_stack.stack_updated += self._command_stack_updated_cb
             self.effective_bbox_changed += self._effective_bbox_changed_cb
 
         # Optional page area and resolution information
@@ -512,11 +510,12 @@ class Document (object):
             return
         logger.debug("autosave starting: queueing save tasks")
         assert not self._painting_only
-        assert not self._autosave_processor.has_work()
         assert self._autosave_dirty
         if dirname:
+            assert self._autosave_processor.get_work_count() <= 1
             oradir = dirname
         else:
+            assert not self._autosave_processor.has_work()
             oradir = os.path.join(self._cache_dir, CACHE_DOC_AUTOSAVE_SUBDIR)
         datadir = os.path.join(oradir, "data")
         if not os.path.exists(datadir):
@@ -577,8 +576,9 @@ class Document (object):
         )
         manifest.add(stackfile_rel)
         
-        # Cleanup if not in project-save.
-        # in project-save , launch this task after all unmodifyed files copied.
+        # Do cleanup, if currently we are not in project-save.
+        # In other hand,cleanup task should be launched 
+        # after all unmodifyed files copied at project-save.
         if dirname == None:
             self._autosave_launch_cleanup(oradir, manifest)
             
@@ -586,6 +586,8 @@ class Document (object):
 
     
     def _autosave_launch_cleanup(self, oradir, manifest, taskproc=None):
+        """The common method of launching autosave cleanup task.
+        """
         if taskproc == None:
             taskproc = self._autosave_processor
             
@@ -646,7 +648,7 @@ class Document (object):
             newfilepath = os.path.join(newdir_data, basename)
             if not os.path.exists(basename):
                 shutil.copyfile(csf, newfilepath)
-                print newfilepath
+                
             
             basename, ext = os.path.splitext(basename)
             ext = ext.lower()
@@ -662,7 +664,7 @@ class Document (object):
                 newfilepath = os.path.join(newdir_data, strokemapname)
                 if os.path.exists(csf) and not os.path.exists(newfilepath):
                     shutil.copyfile(csf, newfilepath)
-                    print newfilepath
+                    
                 
     
         return False
@@ -1575,14 +1577,15 @@ class Document (object):
         """
         manifest = None
         try:
-            lib.autosave.Autosaveable.ignore_nonexistence = True
+            
+            if self._autosave_processor.has_work():
+                self._autosave_processor.finish_all()
             
             # If 'save as another project', set _autosave_dirty flag
             # to avoid save bypassed when right after current project saved.
             if self.filename != dirname:
                 self._autosave_dirty = True
             
-            manifest = self._queue_autosave_writes(dirname)
 
             if self._as_project and self.filename != dirname:
                 # This document is a project and assigned to 'save as 
@@ -1627,11 +1630,11 @@ class Document (object):
                     logger.warning('at save_project, copy_list is empty!')
     
                 
-
-            
+            # After all files copied,
+            # ordinary autosave processing should be launched.
+            manifest = self._queue_autosave_writes(dirname)
               
         finally:
-            lib.autosave.Autosaveable.ignore_nonexistence = False
             if manifest:
                 self._autosave_launch_cleanup(dirname, manifest)
     

@@ -435,7 +435,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
         png_bbox = self._surface.looped and bbox or tuple(self.get_bbox())
         # Use new autosavable property "must_save" to check whether 
         # save must done or not
-        if self.is_must_save(png_path):
+        if self.autosave_dirty or not os.path.exists(png_path):
             task = tiledsurface.PNGFileUpdateTask(
                 surface = self._surface,
                 filename = png_path,
@@ -772,7 +772,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         final_relpath = os.path.join("data", final_basename)
         final_path = os.path.join(oradir, final_relpath)
         
-        if self.is_must_save(final_path):
+        if self.autosave_dirty or not os.path.exists(final_path):
             final_dir = os.path.join(oradir, "data")
             tmp_fp = tempfile.NamedTemporaryFile(
                 mode = "wb",
@@ -1076,7 +1076,7 @@ class BackgroundLayer (SurfaceBackedLayer):
         x, y, w, h = self.get_bbox()
         tilepng_bbox = (x+x0, y+y0, w, h)
         tilepng_path = os.path.join(oradir, tilepng_relpath)
-        if self.is_must_save(tilepng_path):
+        if self.autosave_dirty or not os.path.exists(tilepng_path):
             task = tiledsurface.PNGFileUpdateTask(
                 surface = self._surface,
                 filename = tilepng_path,
@@ -1546,7 +1546,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         dat_path = os.path.join(oradir, dat_relpath)
         # Have to do this before the supercall because that will clear
         # the dirty flag.
-        if self.is_must_save(dat_path):
+        if self.autosave_dirty or not os.path.exists(dat_path):
             x, y, w, h = self.get_bbox()
             task = _StrokemapFileUpdateTask(
                 self.strokes,

@@ -35,6 +35,9 @@ class Processor (object):
 
     def has_work(self):
         return len(self._queue) > 0
+        
+    def get_work_count(self):
+        return len(self._queue)
 
     def add_work(self, func, *args, **kwargs):
         """Adds work
