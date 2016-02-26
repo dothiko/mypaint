@@ -1538,7 +1538,8 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
         """Queues the layer for auto-saving"""
         if self.src != None:
-            dat_basename = os.path.basename(self.src)
+            basename, ext = os.path.splitext(os.path.basename(self.src))
+            dat_basename = u"%s-strokemap.dat" % basename
         else:
             dat_basename = u"%s-strokemap.dat" % (self.autosave_uuid,)
             

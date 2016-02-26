@@ -575,15 +575,7 @@ class Document (object):
             os.path.join(oradir, stackfile_rel),
         )
         manifest.add(stackfile_rel)
-        
-        # Do cleanup, if currently we are not in project-save.
-        # In other hand,cleanup task should be launched 
-        # after all unmodifyed files copied at project-save.
-        if dirname == None:
-            self._autosave_launch_cleanup(oradir, manifest)
-            
-        return manifest
-
+        self._autosave_launch_cleanup(oradir, manifest)
     
     def _autosave_launch_cleanup(self, oradir, manifest, taskproc=None):
         """The common method of launching autosave cleanup task.
@@ -1575,16 +1567,19 @@ class Document (object):
     def save_project(self, dirname, options=None, **kwargs):
         """ save current document as a project
         """
-        manifest = None
+        
         try:
             
             if self._autosave_processor.has_work():
+                logger.info('autosave processor still have pending work')
                 self._autosave_processor.finish_all()
             
             # If 'save as another project', set _autosave_dirty flag
             # to avoid save bypassed when right after current project saved.
             if self.filename != dirname:
                 self._autosave_dirty = True
+            elif self._autosave_dirty == False:
+                return
             
 
             if self._as_project and self.filename != dirname:
@@ -1632,11 +1627,10 @@ class Document (object):
                 
             # After all files copied,
             # ordinary autosave processing should be launched.
-            manifest = self._queue_autosave_writes(dirname)
+            self._queue_autosave_writes(dirname)
               
         finally:
-            if manifest:
-                self._autosave_launch_cleanup(dirname, manifest)
+            pass
     
 
     def load_project(self, dirname,feedback_cb=None,**kwargs):
