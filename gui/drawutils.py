@@ -473,6 +473,53 @@ def render_round_floating_color_chip(cr, x, y, color, radius, z=2):
     cr.restore()
 
 
+def render_square_floating_color_chip(cr, x, y, color, size, fill, z=2):
+    """Draw a round color chip with a slight drop shadow
+
+    :param cairo.Context cr: Context in which to draw.
+    :param float x: X coordinate of the center pixel.
+    :param float y: Y coordinate of the center pixel.
+    :param lib.color.UIColor color: Color for the chip.
+    :param float size: square size, in pixels. the entire size should be
+                       size+1(center)+size
+    :param bool fill: fill inside rectangle when this is True.
+    :param int z: Simulated height of the object above the canvas.
+
+    Currently used for accept/dismiss/delete buttons and control points
+    on the painting canvas, in certain modes.
+
+    The button's style is similar to that used for the paint chips in
+    the dockable palette panel. As used here with drop shadows to
+    indicate that the blob can be interacted with, the style is similar
+    to Google's Material Design approach. This style adds a subtle edge
+    highlight in a brighter variant of "color", which seems to help
+    address adjacent color interactions.
+
+    """
+    x = round(float(x))
+    y = round(float(y))
+    
+    cr.save()
+    cr.set_dash([], 0)
+    cr.set_line_width(0)
+
+    base_col = RGBColor(color=color)
+    #hi_col = _get_paint_chip_highlight(base_col)
+
+    cr.set_line_width(1)
+    cr.set_source_rgb(*base_col.get_rgb())
+    cr.rectangle(x - size, y - size, (size * 2) + 1, (size * 2) + 1)
+    
+    cr.stroke_preserve()
+    if fill:
+        cr.fill()
+    cr.clip_preserve()
+
+    #cr.set_source_rgb(*hi_col.get_rgb())
+    #cr.stroke()
+
+    cr.restore()
+
 def render_drop_shadow(cr, z=2, line_width=None):
     """Draws a drop shadow for the current path.
 
