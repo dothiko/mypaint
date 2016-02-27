@@ -551,17 +551,18 @@ class BezierMode (InkingMode):
             #self.zone == _EditZone_Bezier.CONTROL_NODE
             if self.zone == _EditZone_Bezier.CONTROL_NODE:
                 self._last_event_node = self.nodes[self.current_node_index]
+                self.phase = _Phase.ADJUST
             elif self.zone == _EditZone_Bezier.EMPTY_CANVAS:
                 if event.state != 0:
                     # To activate some mode override
                     self._last_event_node = None
                     return super(InkingMode, self).drag_start_cb(tdw, event)
                 else:
-                    self.phase = _Phase.CREATE_NODE
                     node = self._get_event_data(tdw, event)
                     self.nodes.append(node)
                     self._queue_draw_node(0)
                     self._last_event_node = node
+                    self.phase = _Phase.ADJUST_HANDLE
 
         elif self.phase == _Phase.ADJUST:
             self._node_dragged = False
@@ -590,49 +591,29 @@ class BezierMode (InkingMode):
     def drag_update_cb(self, tdw, event, dx, dy):
         self._ensure_overlay_for_tdw(tdw)
         mx, my = tdw.display_to_model(event.x, event.y)
-        if self.phase in (_Phase.CREATE_NODE, _Phase.CAPTURE):
+        if self.phase == _Phase.CAPTURE:
+            pass
+            
+        elif self.phase == _Phase.ADJUST_HANDLE:
             node = self._last_event_node
             if self._last_event_node:
                 self._queue_draw_node(len(self.nodes)-1) # to erase
-                node.x = mx
-                node.y = my
-
-                
-     
-            
-            self._queue_draw_node(len(self.nodes)-1)
+                if len(self.nodes) == 1:
+                    handle = node.control_handles[1]
+                else:
+                    handle = node.control_handles[0]
+                handle.x = mx
+                handle.y = my
+                self._queue_draw_node(len(self.nodes)-1)
             self._queue_redraw_curve()
+            
+            #if self._last_event_node:
+                #self._queue_draw_node(len(self.nodes)-1) # to erase
+                #node.x = mx
+                #node.y = my
+            #self._queue_draw_node(len(self.nodes)-1)
+            #self._queue_redraw_curve()
                 
-            #node = self._get_event_data(tdw, event)
-            #evdata = (event.x, event.y, event.time)
-            #if not self._last_node_evdata: # e.g. after an undo while dragging
-                #append_node = True
-            #elif evdata == self._last_node_evdata:
-                #logger.debug(
-                    #"Capture: ignored successive events "
-                    #"with identical position and time: %r",
-                    #evdata,
-                #)
-                #append_node = False
-            #else:
-                #dx = event.x - self._last_node_evdata[0]
-                #dy = event.y - self._last_node_evdata[1]
-                #dist = math.hypot(dy, dx)
-                #dt = event.time - self._last_node_evdata[2]
-                #max_dist = self.MAX_INTERNODE_DISTANCE_MIDDLE
-                #if len(self.nodes) < 2:
-                    #max_dist = self.MAX_INTERNODE_DISTANCE_ENDS
-                #append_node = (
-                    #dist > max_dist and
-                    #dt > self.MAX_INTERNODE_TIME
-                #)
-            #if append_node:
-                #self.nodes.append(node)
-                #self._queue_draw_node(len(self.nodes)-1)
-                #self._queue_redraw_curve()
-                #self._last_node_evdata = evdata
-            #self._last_event_node = node
-            pass
         elif self.phase == _Phase.ADJUST:
             if self._dragged_node_start_pos:
                 x0, y0 = self._dragged_node_start_pos
@@ -661,6 +642,21 @@ class BezierMode (InkingMode):
                     pn.control_handles[1].x = node.x + hy
                     pn.control_handles[1].y = node.y - hx
                     
+            self._reset_adjust_data()
+            self._queue_redraw_all_nodes()
+            self._queue_redraw_curve()
+            if len(self.nodes) > 1:
+                self._queue_draw_buttons()
+                
+            self.phase = _Phase.CAPTURE
+            
+        elif self.phase == _Phase.ADJUST_HANDLE:
+            node = self._last_event_node
+      
+            if len(self.nodes) > 1:
+                node.control_handles[1].x = node.x - (node.control_handles[0].x - node.x)
+                node.control_handles[1].y = node.y - (node.control_handles[0].y - node.y)
+
             self._reset_adjust_data()
             self._queue_redraw_all_nodes()
             self._queue_redraw_curve()
@@ -741,7 +737,7 @@ class OverlayBezier (Overlay):
         alloc = self._tdw.get_allocation()
         for i, node, x, y in self._get_onscreen_nodes():
             color = gui.style.EDITABLE_ITEM_COLOR
-            if mode.phase in (_Phase.CAPTURE, _Phase.CREATE_NODE, _Phase.ADJUST):
+            if mode.phase in (_Phase.CAPTURE, _Phase.CREATE_NODE, _Phase.ADJUST, _Phase.ADJUST_HANDLE):
                 if i == mode.current_node_index:
                     color = gui.style.ACTIVE_ITEM_COLOR
               
