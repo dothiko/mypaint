@@ -175,6 +175,7 @@ class BezierMode (InkingMode):
     @property
     def active_cursor(self):
         if self.phase == _Phase.CAPTURE:
+            print "bezier:%s" % str(self._crosshair_cursor)
             return self._crosshair_cursor
         elif self.phase == _Phase.ADJUST:
             if self.zone == _EditZone_Bezier.CONTROL_NODE:
@@ -208,22 +209,22 @@ class BezierMode (InkingMode):
         super(BezierMode, self)._reset_adjust_data()
         self.current_handle_index = None
 
-    def enter(self, doc, **kwds):
-        """Enters the mode: called by `ModeStack.push()` etc."""
-        super(BezierMode, self).enter(doc, **kwds)
-
-        self._arrow_cursor = self.doc.app.cursors.get_action_cursor(
-            self.ACTION_NAME,
-            gui.cursor.Name.ARROW,
-        )
-        self._crosshair_cursor = self.doc.app.cursors.get_action_cursor(
-            self.ACTION_NAME,
-            gui.cursor.Name.CROSSHAIR_OPEN_PRECISE,
-        )
-        self._cursor_move_nw_se = self.doc.app.cursors.get_action_cursor(
-            self.ACTION_NAME,
-            gui.cursor.Name.MOVE_NORTHWEST_OR_SOUTHEAST,
-        )
+   #def enter(self, doc, **kwds):
+   #    """Enters the mode: called by `ModeStack.push()` etc."""
+   #    super(BezierMode, self).enter(doc, **kwds)
+   #
+   #    self._arrow_cursor = self.doc.app.cursors.get_action_cursor(
+   #        self.ACTION_NAME,
+   #        gui.cursor.Name.ARROW,
+   #    )
+   #    self._crosshair_cursor = self.doc.app.cursors.get_action_cursor(
+   #        self.ACTION_NAME,
+   #        gui.cursor.Name.CROSSHAIR_OPEN_PRECISE,
+   #    )
+   #    self._cursor_move_nw_se = self.doc.app.cursors.get_action_cursor(
+   #        self.ACTION_NAME,
+   #        gui.cursor.Name.MOVE_NORTHWEST_OR_SOUTHEAST,
+   #    )
 
     def _ensure_overlay_for_tdw(self, tdw):
         overlay = self._overlays.get(tdw)
@@ -235,6 +236,8 @@ class BezierMode (InkingMode):
         
     def _update_zone_and_target(self, tdw, x, y):
         """Update the zone and target node under a cursor position"""
+        ## FIXME mostly copied from inktool.py
+        ## the difference is control handle
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone_Bezier.EMPTY_CANVAS
         if not self.in_drag:
@@ -270,6 +273,7 @@ class BezierMode (InkingMode):
                         new_zone = _EditZone_Bezier.CONTROL_NODE
                         break
                 
+                # ADDED PORTION:
                 # New target node is not hit.
                 # But, pointer might hit control handles
                 if (new_target_node_index is None and 
@@ -308,7 +312,8 @@ class BezierMode (InkingMode):
             self.zone = new_zone
             self._ensure_overlay_for_tdw(tdw)
             if len(self.nodes) > 1:
-                self._queue_draw_buttons()
+                self._queue_previous_draw_buttons()
+               #self._queue_draw_buttons()
         # Update the "real" inactive cursor too:
         if not self.in_drag:
             cursor = None
@@ -392,6 +397,27 @@ class BezierMode (InkingMode):
         # to surpress exception
         if len(self.nodes) >= 2:
             super(BezierMode, self)._queue_draw_buttons()
+
+    def _queue_previous_draw_buttons(self):
+        """ Queue previous (current) button position to draw.
+        It means erase old position buttons.
+        BezierCurveMode changes button position with its 
+        node selection state,so we miss calcurate it in some case.
+        """
+
+        for tdw, overlay in self._overlays.items():
+            for pos in (overlay.accept_button_pos,
+                         overlay.reject_button_pos):
+                if pos is None:
+                    continue
+                r = gui.style.FLOATING_BUTTON_ICON_SIZE
+                r += max(
+                    gui.style.DROP_SHADOW_X_OFFSET,
+                    gui.style.DROP_SHADOW_Y_OFFSET,
+                )
+                r += gui.style.DROP_SHADOW_BLUR
+                x, y = pos
+                tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
 
     def _draw_curve_segment(self, model, p0, p1, p2, p3, step):
         """Draw the curve segment between the middle two points
@@ -617,6 +643,10 @@ class BezierMode (InkingMode):
     def drag_start_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
         dx, dy = tdw.display_to_model(event.x, event.y)
+
+        self._queue_previous_draw_buttons() # To erase button,and avoid glitch
+
+        # Basically,all sections should do fall-through.
         if self.phase == _Phase.CAPTURE:
 
             if self.zone == _EditZone_Bezier.EMPTY_CANVAS:
@@ -628,7 +658,6 @@ class BezierMode (InkingMode):
                     # New node added!
                     node = self._get_event_data(tdw, event)
                     self.nodes.append(node)
-                    self._queue_draw_node(0)
                     self._last_event_node = node
                     self.phase = _Phase.INIT_HANDLE
                     self.current_node_index=len(self.nodes)-1
@@ -636,6 +665,8 @@ class BezierMode (InkingMode):
                         self.current_handle_index = 1
                     else:
                         self.current_handle_index = 0
+
+                    self._queue_draw_node(self.current_node_index)
 
         elif self.phase == _Phase.ADJUST:
             self._node_dragged = False
@@ -646,6 +677,7 @@ class BezierMode (InkingMode):
                 # Use selection_motion class as offset-information
                 self.selection_motion.start(dx, dy)
 
+
         elif self.phase == _Phase.ADJUST_PRESSURE:
             if self.current_node_index is not None:
                 node = self.nodes[self.current_node_index]
@@ -655,12 +687,12 @@ class BezierMode (InkingMode):
         elif self.phase == _Phase.ADJUST_SELECTING:
             self.selection_motion.start(dx, dy)
             self.selection_motion.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
-            self._queue_draw_buttons() # To erase button!
         elif self.phase == _Phase.ADJUST_HANDLE:
             self._last_event_node = self.nodes[self.target_node_index]
             pass
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
+
 
     def drag_update_cb(self, tdw, event, dx, dy):
         self._ensure_overlay_for_tdw(tdw)
