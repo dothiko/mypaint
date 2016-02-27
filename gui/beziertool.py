@@ -328,27 +328,6 @@ class BezierMode (InkingMode):
         node = self.nodes[i]
         dx,dy = self.selection_motion.get_model_offset()
         
-       #def do_queue_area(node_idx, nx, ny, size):
-       #    if node_idx in self.selected_nodes:
-       #        x, y = tdw.model_to_display(
-       #                nx + dx, ny + dy)
-       #    else:
-       #        x, y = tdw.model_to_display(nx, ny)
-       #    x = math.floor(x)
-       #    y = math.floor(y)
-       #    tdw.queue_draw_area(x-size-1, y-size-1, size*2+2, size*2+2)
-       #            
-       #size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
-       #for tdw in self._overlays:
-       #    do_queue_area(i, node.x, node.y, size)
-       #    if i > 0:
-       #        do_queue_area(i, 
-       #            node.control_handles[0].x, node.control_handles[0].y,
-       #            size)
-       #    if i < len(self.nodes)-1 or i == 0:
-       #        do_queue_area(i, 
-       #            node.control_handles[1].x, node.control_handles[1].y,
-       #            size)                              
         def get_area(node_idx, nx, ny, size, area=None):
             if node_idx in self.selected_nodes:
                 x, y = tdw.model_to_display(
@@ -804,6 +783,105 @@ class OverlayBezier (Overlay):
     def __init__(self, mode, tdw):
         super(OverlayBezier, self).__init__(mode, tdw)
         
+    def update_button_positions(self):
+        """Recalculates the positions of the mode's buttons."""
+        # FIXME mostly copied from inktool.Overlay.update_button_positions
+        # difference is for-loop of nodes
+        nodes = self._inkmode.nodes
+        num_nodes = len(nodes)
+        if num_nodes == 0:
+            self.reject_button_pos = None
+            self.accept_button_pos = None
+            return
+
+        button_radius = gui.style.FLOATING_BUTTON_RADIUS
+        margin = 1.5 * button_radius
+        alloc = self._tdw.get_allocation()
+        view_x0, view_y0 = alloc.x, alloc.y
+        view_x1, view_y1 = view_x0+alloc.width, view_y0+alloc.height
+
+        # Force-directed layout: "wandering nodes" for the buttons'
+        # eventual positions, moving around a constellation of "fixed"
+        # points corresponding to the nodes the user manipulates.
+        fixed = []
+
+        for i, node in enumerate(nodes):
+            x, y = self._tdw.model_to_display(node.x, node.y)
+            fixed.append(_LayoutNode(x, y))
+            # ADDED PORTION:to avoid overwrap on control handles,
+            # treat control handles as nodes,when it is visible.
+            if i == self._inkmode.current_node_index:
+                for t in (0,1):
+                    fixed.append(_LayoutNode(node.control_handles[t].x, node.control_handles[t].y))
+
+        # The reject and accept buttons are connected to different nodes
+        # in the stroke by virtual springs.
+        stroke_end_i = len(fixed)-1
+        stroke_start_i = 0
+        stroke_last_quarter_i = int(stroke_end_i * 3.0 // 4.0)
+        assert stroke_last_quarter_i < stroke_end_i
+        reject_anchor_i = stroke_start_i
+        accept_anchor_i = stroke_end_i
+
+        # Classify the stroke direction as a unit vector
+        stroke_tail = (
+            fixed[stroke_end_i].x - fixed[stroke_last_quarter_i].x,
+            fixed[stroke_end_i].y - fixed[stroke_last_quarter_i].y,
+        )
+        stroke_tail_len = math.hypot(*stroke_tail)
+        if stroke_tail_len <= 0:
+            stroke_tail = (0., 1.)
+        else:
+            stroke_tail = tuple(c/stroke_tail_len for c in stroke_tail)
+
+        # Initial positions.
+        accept_button = _LayoutNode(
+            fixed[accept_anchor_i].x + stroke_tail[0]*margin,
+            fixed[accept_anchor_i].y + stroke_tail[1]*margin,
+        )
+        reject_button = _LayoutNode(
+            fixed[reject_anchor_i].x - stroke_tail[0]*margin,
+            fixed[reject_anchor_i].y - stroke_tail[1]*margin,
+        )
+
+        # Constraint boxes. They mustn't share corners.
+        # Natural hand strokes are often downwards,
+        # so let the reject button to go above the accept button.
+        reject_button_bbox = (
+            view_x0+margin, view_x1-margin,
+            view_y0+margin, view_y1-2.666*margin,
+        )
+        accept_button_bbox = (
+            view_x0+margin, view_x1-margin,
+            view_y0+2.666*margin, view_y1-margin,
+        )
+
+        # Force-update constants
+        k_repel = -25.0
+        k_attract = 0.05
+
+        # Let the buttons bounce around until they've settled.
+        for iter_i in xrange(100):
+            accept_button \
+                .add_forces_inverse_square(fixed, k=k_repel) \
+                .add_forces_inverse_square([reject_button], k=k_repel) \
+                .add_forces_linear([fixed[accept_anchor_i]], k=k_attract)
+            reject_button \
+                .add_forces_inverse_square(fixed, k=k_repel) \
+                .add_forces_inverse_square([accept_button], k=k_repel) \
+                .add_forces_linear([fixed[reject_anchor_i]], k=k_attract)
+            reject_button \
+                .update_position() \
+                .constrain_position(*reject_button_bbox)
+            accept_button \
+                .update_position() \
+                .constrain_position(*accept_button_bbox)
+            settled = [(p.speed<0.5) for p in [accept_button, reject_button]]
+            if all(settled):
+                break
+        self.accept_button_pos = accept_button.x, accept_button.y
+        self.reject_button_pos = reject_button.x, reject_button.y
+
     
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
