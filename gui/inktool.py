@@ -251,14 +251,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     ACTION_NAME = "InkingMode"
     pointer_behavior = gui.mode.Behavior.PAINT_FREEHAND
     scroll_behavior = gui.mode.Behavior.CHANGE_VIEW
-    permitted_switch_actions = (
-        set(gui.mode.BUTTON_BINDING_ACTIONS).union([
-            'RotateViewMode',
-            'ZoomViewMode',
-            'PanViewMode',
-        ])
-    )
-
 
     ## Metadata methods
 
@@ -397,7 +389,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._reset_selected_nodes()
 
 
-    def _reset_selected_nodes(self,initial_idx=None):
+    def _reset_selected_nodes(self, initial_idx=None):
         """ Resets selected_nodes list and assign
         initial index,if needed.
 
@@ -566,6 +558,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     # clicked a node.
 
                     if button == 1:
+                        # 'do_reset' is a selection reset flag
                         do_reset = False
                         if (event.state & Gdk.ModifierType.CONTROL_MASK):
                             # Holding CONTROL key = adding or removing a node.
@@ -610,6 +603,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_pressure = 0.0
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
+
         # Supercall: start drags etc
         return super(InkingMode, self).button_press_cb(tdw, event) 
 
@@ -768,6 +762,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if cursor is not self._current_override_cursor:
                 tdw.set_override_cursor(cursor)
                 self._current_override_cursor = cursor
+
 
     ## Redraws
 
@@ -1116,8 +1111,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def scroll_cb(self, tdw, event):
         """Handles scroll-wheel events, to adjust pressure."""
-        if self.phase == _Phase.ADJUST and len(self.selected_nodes) > 0:
-            for idx in self.selected_nodes:
+        if (self.phase == _Phase.ADJUST and self.target_node_index != None):
+
+            if len(self.selected_nodes) == 0:
+                targets = (self.target_node_index,)
+            else:
+                targets = self.selected_nodes
+
+            for idx in targets:
                 new_pressure = self.nodes[idx].pressure
 
                 if event.direction == Gdk.SCROLL_UP:
