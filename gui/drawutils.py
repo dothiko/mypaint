@@ -465,10 +465,11 @@ def render_round_floating_color_chip(cr, x, y, color, radius, z=2):
 
     cr.set_source_rgb(*base_col.get_rgb())
     cr.fill_preserve()
-    cr.clip_preserve()
+    #cr.clip_preserve()
 
     cr.set_source_rgb(*hi_col.get_rgb())
     cr.stroke()
+    #cr.close_path()
 
     cr.restore()
 
