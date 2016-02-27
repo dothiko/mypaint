@@ -79,10 +79,35 @@ class _Node_Bezier (object):
         self._even = flag
 
     def _replace(self, **kwarg):
+        ox = self.x
+        oy = self.y
         for ck in kwarg:
             if ck in self.__dict__:
                 self.__dict__[ck] = kwarg[ck]
+        self._refresh_control_handles(ox, oy, self.x, self.y)
         return self
+
+    def _refresh_control_handles(self, ox, oy, nx, ny):
+        """ refresh control-handle position,when node position changed.
+        :param ox: old x position,in model
+        :param oy: old y position,in model
+        :param nx: new x position,in model
+        :param ny: new y position,in model
+        """
+        for i in (0,1):
+            self.control_handles[i].x = nx + (self.control_handles[i].x - ox)
+            self.control_handles[i].y = ny + (self.control_handles[i].y - oy)
+
+    def move(self,x, y):
+        """Move this node to (x,y).
+        :param x: destination x position,in model
+        :param y: destination y position,in model
+
+        Use this method to move control points simultaneously.
+        """
+        self._refresh_control_handles(self.x, self.y, x, y)
+        self.x = x
+        self.y = y
     
     
     
@@ -303,7 +328,28 @@ class BezierMode (InkingMode):
         node = self.nodes[i]
         dx,dy = self.selection_motion.get_model_offset()
         
-        def do_queue_area(node_idx, nx, ny):
+       #def do_queue_area(node_idx, nx, ny, size):
+       #    if node_idx in self.selected_nodes:
+       #        x, y = tdw.model_to_display(
+       #                nx + dx, ny + dy)
+       #    else:
+       #        x, y = tdw.model_to_display(nx, ny)
+       #    x = math.floor(x)
+       #    y = math.floor(y)
+       #    tdw.queue_draw_area(x-size-1, y-size-1, size*2+2, size*2+2)
+       #            
+       #size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
+       #for tdw in self._overlays:
+       #    do_queue_area(i, node.x, node.y, size)
+       #    if i > 0:
+       #        do_queue_area(i, 
+       #            node.control_handles[0].x, node.control_handles[0].y,
+       #            size)
+       #    if i < len(self.nodes)-1 or i == 0:
+       #        do_queue_area(i, 
+       #            node.control_handles[1].x, node.control_handles[1].y,
+       #            size)                              
+        def get_area(node_idx, nx, ny, size, area=None):
             if node_idx in self.selected_nodes:
                 x, y = tdw.model_to_display(
                         nx + dx, ny + dy)
@@ -311,20 +357,39 @@ class BezierMode (InkingMode):
                 x, y = tdw.model_to_display(nx, ny)
             x = math.floor(x)
             y = math.floor(y)
-            size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
-            tdw.queue_draw_area(x-size-1, y-size-1, size*2+2, size*2+2)
-                    
-        for tdw in self._overlays:
-            do_queue_area(i, node.x, node.y)
-            if i > 0:
-                do_queue_area(i, 
-                    node.control_handles[0].x, node.control_handles[0].y)
-            if i < len(self.nodes)-1 or i == 0:
-                do_queue_area(i, 
-                    node.control_handles[1].x, node.control_handles[1].y)                              
+            sx = x-size-1
+            sy = y-size-1
+            ex = x+size+1
+            ey = y+size+1
+            if not area:
+                return (sx, sy, ex, ey)
+            else:
+                return (min(area[0], sx),
+                        min(area[1], sy),
+                        max(area[2], ex),
+                        max(area[3], ey))
 
-    def _queue_redraw_curve(self,step = 0.1):
-        """Redraws the entire curve on all known view TDWs"""
+        size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
+        for tdw in self._overlays:
+            area = get_area(i, node.x, node.y, size)
+            for hi in (0,1):
+                if (hi == 0 and i > 0) or (hi == 1 and i <= len(self.nodes)-1):
+                    area = get_area(i, 
+                        node.control_handles[hi].x, node.control_handles[hi].y,
+                        size, area)
+
+            tdw.queue_draw_area(area[0], area[1], 
+                    area[2] - area[0] + 1, 
+                    area[3] - area[1] + 1)
+
+
+    def _queue_redraw_curve(self,step = 0.05):
+        """Redraws the entire curve on all known view TDWs
+        :param step: rendering step of curve.
+        The lower this value is,the higher quality bezier curve rendered.
+        default value is for draft/editing, 
+        to be decreased when render final stroke.
+        """
         self._stop_task_queue_runner(complete=False)
         for tdw in self._overlays:
             model = tdw.doc
@@ -350,7 +415,9 @@ class BezierMode (InkingMode):
             super(BezierMode, self)._queue_draw_buttons()
 
     def _draw_curve_segment(self, model, p0, p1, p2, p3, step):
-        """Draw the curve segment between the middle two points"""
+        """Draw the curve segment between the middle two points
+        :param step: rendering step of curve.
+        """
         
         def get_pt(v0, v1, step):
             return v0 + ((v1-v0) * step)
@@ -380,7 +447,12 @@ class BezierMode (InkingMode):
             dtime = 1.0
             
             self.stroke_to(
-                model, dtime, x, y, pressure, xtilt, ytilt,
+                model, dtime, x, y, 
+                lib.helpers.clamp(
+                    p0.pressure + ((p3.pressure - p0.pressure) * cur_step),
+                    0.0, 1.0), 
+                xtilt, 
+                ytilt,
                 auto_split=False,
             )
                         
@@ -506,10 +578,10 @@ class BezierMode (InkingMode):
                 button0, zone0 = self._click_info
                 if event.button == button0:
                     if self.zone == zone0:
-                        if zone0 == _EditZone.REJECT_BUTTON:
+                        if zone0 == _EditZone_Bezier.REJECT_BUTTON:
                             self._start_new_capture_phase(rollback=True)
                             assert self.phase == _Phase.CAPTURE
-                        elif zone0 == _EditZone.ACCEPT_BUTTON:
+                        elif zone0 == _EditZone_Bezier.ACCEPT_BUTTON:
                             self._start_new_capture_phase(rollback=False)
                             assert self.phase == _Phase.CAPTURE
                     self._click_info = None
@@ -567,14 +639,7 @@ class BezierMode (InkingMode):
         self._ensure_overlay_for_tdw(tdw)
         dx, dy = tdw.display_to_model(event.x, event.y)
         if self.phase == _Phase.CAPTURE:
-            #self._reset_nodes()
-            #self._reset_capture_data()
-            #self._reset_adjust_data()
-            #self.zone == _EditZone_Bezier.CONTROL_NODE
-           #if self.zone == _EditZone_Bezier.CONTROL_NODE:
-           #    print('adjust!!')
-           #    self._last_event_node = self.nodes[self.current_node_index]
-           #    self.phase = _Phase.ADJUST
+
             if self.zone == _EditZone_Bezier.EMPTY_CANVAS:
                 if event.state != 0:
                     # To activate some mode override
@@ -627,7 +692,7 @@ class BezierMode (InkingMode):
         elif self.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
             node = self._last_event_node
             if self._last_event_node:
-                self._queue_draw_node(len(self.nodes)-1) # to erase
+                self._queue_draw_node(self.current_node_index)# to erase
                 handle = node.control_handles[self.current_handle_index]
                 handle.x = mx
                 handle.y = my
@@ -685,7 +750,9 @@ class BezierMode (InkingMode):
         xtilt, ytilt = self._get_event_tilt(tdw, event)
         return _Node_Bezier(
             x=x, y=y,
-            pressure=self._get_event_pressure(event),
+            pressure=lib.helpers.clamp(
+                    self._get_event_pressure(event),
+                    0.3, 1.0), 
             xtilt=xtilt, ytilt=ytilt
             )
         
@@ -744,11 +811,14 @@ class OverlayBezier (Overlay):
         mode = self._inkmode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
+        dx, dy = mode.selection_motion.get_display_offset(self._tdw)
         for i, node, x, y in self._get_onscreen_nodes():
             color = gui.style.EDITABLE_ITEM_COLOR
             if mode.phase in (_Phase.CAPTURE, _Phase.ADJUST, _Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
                 if i == mode.current_node_index:
                     color = gui.style.ACTIVE_ITEM_COLOR
+                    x += dx
+                    y += dy
               
                     # Drawing control handle
                     cr.save()
@@ -757,21 +827,24 @@ class OverlayBezier (Overlay):
                     cr.set_line_width(1)
                     for hi in (0,1):                        
                         if ((hi == 0 and i > 0) or
-                                (hi == 1 and i < len(self._inkmode.nodes)-1)):
+                                (hi == 1 and i <= len(self._inkmode.nodes)-1)): 
                             ch = node.control_handles[hi]
-                            dx, dy = self._tdw.model_to_display(ch.x, ch.y)
+                            hx, hy = self._tdw.model_to_display(ch.x, ch.y)
+                            hx += dx
+                            hy += dy
                             gui.drawutils.render_square_floating_color_chip(
-                                cr, dx, dy,
+                                cr, hx, hy,
                                 color, radius, 
                                 fill=(hi==self._inkmode.current_handle_index)) 
                             cr.move_to(x, y)
-                            cr.line_to(dx, dy)
+                            cr.line_to(hx, hy)
                             cr.stroke()
                     cr.restore()
                               
                 elif i == mode.target_node_index:
                     color = gui.style.PRELIT_ITEM_COLOR
-
+                    x += dx
+                    y += dy
       
             gui.drawutils.render_round_floating_color_chip(
                 cr=cr, x=x, y=y,
