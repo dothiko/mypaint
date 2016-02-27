@@ -292,7 +292,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     ## Override action
     permitted_switch_actions = None   
     _enable_switch_actions = set()   # Any action is permitted,for now.
-    _disable_switch_actions = ('no-any-mode',)   # Any action is permitted,for now.
+    _disable_switch_actions=set(gui.mode.BUTTON_BINDING_ACTIONS).union([
+            'RotateViewMode',
+            'ZoomViewMode',
+            'PanViewMode',
+        ])
     @classmethod
     def enable_switch_actions(cls, flag):
         if flag:
