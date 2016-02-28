@@ -104,6 +104,32 @@ also 'Average points' / 'Delete points' / oncanvas node pressure editing , now w
 コントロールキーを押しながらノードをクリックすることで、制御点を複数選択できます。
 平均化・削除・キャンバス状での筆圧修正の機能が、この複数選択状態に対応しています。
 
+#### Beziertool - Draw Cubic Bezier-sprine curve like inktool : 三次ベジェ曲線を描くためのベジェツール
+The Cubic bezier-sprine tool,like 'inkscape' tool.
+
+HOW TO OPERATION:(mostly same as inkscape)
+ 1. push & hold mouse left button where you want to place the first node.
+ 1. drag it,then the first control handle to adjust bezier curve created.
+ 1. when you feel enough,release mouse left button and end drag.
+ 1. hover mouse cursor to the place where you want to place the next node.
+ 1. push & hold mouse left button.
+ 1. and drag.you will decide the next control handle,and you will see the bezier curve.
+ 1. repeat this and create bezier-sprine curve.
+ 1. to end editing this curve,click ACCEPT button.
+
+There is no way to create new node onto intermidiate of current curve yet.
+this feature would implement later.
+
+インクモードと類似したベジェツールモードです。操作方法は
+ 1. マウス左ボタンをプッシュで最初の点を作成
+ 1. そのままドラッグで最初の制御ハンドルを伸ばす
+ 1. マウスボタンを離してドラッグ終了。
+ 1. 次に置きたい点の位置までホバーさせる
+ 1. 次の点の位置でマウス左ボタンをプッシュ
+ 1. そのままドラッグして制御ハンドルを伸ばす
+ 1. 納得行く曲線を作るまで繰り返す。
+ 1. ACCEPTボタン（チェックマーク）で完成。この時、少しだけ作業中より精度の高い滑らかな線が描かれる。
+
 #### Per device mode change : デバイスごとのモード変更
 A 'Device' referred to here is, for example, Pen tablet styls,or Pen tablet tail eraser,etc.
 
