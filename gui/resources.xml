@@ -1845,6 +1845,7 @@ Vocabulary
           <property name="short-label" translatable="yes" context="Toolbar (short labels)">Bezier</property>
           <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Bezier Curve: draw cubic bezier curve.</property>
           <property name="group">EllipseMode</property>
+          <property name="icon-name">mypaint-tool-bezier-symbolic</property>
           <property name="value">13</property>
         </object>
       </child>
@@ -1852,6 +1853,7 @@ Vocabulary
         <object class="GtkAction" id="FlipBezierCurveMode">
           <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">Bezier Curve</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">draw cubic bezier curve.</property>
+          <property name="icon-name">mypaint-tool-bezier-symbolic</property>
           <signal name="activate" handler="mode_flip_action_activated_cb"/>
         </object>
       </child>

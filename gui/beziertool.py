@@ -175,7 +175,6 @@ class BezierMode (InkingMode):
     @property
     def active_cursor(self):
         if self.phase == _Phase.CAPTURE:
-            print "bezier:%s" % str(self._crosshair_cursor)
             return self._crosshair_cursor
         elif self.phase == _Phase.ADJUST:
             if self.zone == _EditZone_Bezier.CONTROL_NODE:
@@ -408,6 +407,7 @@ class BezierMode (InkingMode):
         for tdw, overlay in self._overlays.items():
             for pos in (overlay.accept_button_pos,
                          overlay.reject_button_pos):
+                # FIXME duplicate code:from gui.inktool.queue_draw_buttons
                 if pos is None:
                     continue
                 r = gui.style.FLOATING_BUTTON_ICON_SIZE
