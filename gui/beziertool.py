@@ -121,12 +121,12 @@ class _EditZone_Bezier:
 
 class _Phase:
     """Enumeration of the states that an BezierCurveMode can be in"""
-    CAPTURE = 0
+    CAPTURE = 0           # Initial Phase
     ADJUST = 1
-    ADJUST_PRESSURE = 2
-    ADJUST_SELECTING = 3
-    ADJUST_HANDLE = 5
-    INIT_HANDLE = 6
+    ADJUST_PRESSURE = 2   # Changing nodes pressure
+    ADJUST_SELECTING = 3  # Nodes Area Selecting
+    ADJUST_HANDLE = 5     # change control-handle position
+    INIT_HANDLE = 6       # 
     
 def _bezier_iter(seq):
     """Converts an list of control point tuples to interpolatable arrays
@@ -208,23 +208,6 @@ class BezierMode (InkingMode):
         super(BezierMode, self)._reset_adjust_data()
         self.current_handle_index = None
 
-   #def enter(self, doc, **kwds):
-   #    """Enters the mode: called by `ModeStack.push()` etc."""
-   #    super(BezierMode, self).enter(doc, **kwds)
-   #
-   #    self._arrow_cursor = self.doc.app.cursors.get_action_cursor(
-   #        self.ACTION_NAME,
-   #        gui.cursor.Name.ARROW,
-   #    )
-   #    self._crosshair_cursor = self.doc.app.cursors.get_action_cursor(
-   #        self.ACTION_NAME,
-   #        gui.cursor.Name.CROSSHAIR_OPEN_PRECISE,
-   #    )
-   #    self._cursor_move_nw_se = self.doc.app.cursors.get_action_cursor(
-   #        self.ACTION_NAME,
-   #        gui.cursor.Name.MOVE_NORTHWEST_OR_SOUTHEAST,
-   #    )
-
     def _ensure_overlay_for_tdw(self, tdw):
         overlay = self._overlays.get(tdw)
         if not overlay:
@@ -236,7 +219,7 @@ class BezierMode (InkingMode):
     def _update_zone_and_target(self, tdw, x, y):
         """Update the zone and target node under a cursor position"""
         ## FIXME mostly copied from inktool.py
-        ## the difference is control handle
+        ## the difference is control handle processing
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone_Bezier.EMPTY_CANVAS
         if not self.in_drag:
@@ -340,10 +323,10 @@ class BezierMode (InkingMode):
                 x, y = tdw.model_to_display(nx, ny)
             x = math.floor(x)
             y = math.floor(y)
-            sx = x-size-1
-            sy = y-size-1
-            ex = x+size+1
-            ey = y+size+1
+            sx = x-size-2
+            sy = y-size-2
+            ex = x+size+2
+            ey = y+size+2
             if not area:
                 return (sx, sy, ex, ey)
             else:
