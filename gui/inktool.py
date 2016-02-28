@@ -292,9 +292,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     @classmethod
     def enable_switch_actions(cls, flag):
         if flag:
+            print('enable!')
             cls.permitted_switch_actions = cls._enable_switch_actions
         else:
+            print('disable!')
             cls.permitted_switch_actions = cls._disable_switch_actions
+
         
 
     ## Class config vars
@@ -322,6 +325,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     _OPTIONS_PRESENTER = None   #: Options presenter singleton
 
+    SCROLL_WHEELABLE_PHASE = _Phase.ADJUST #: to permit scroll wheel event
 
     ## Pressure oncanvas edit settings
 
@@ -1111,7 +1115,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def scroll_cb(self, tdw, event):
         """Handles scroll-wheel events, to adjust pressure."""
-        if (self.phase == _Phase.ADJUST and self.target_node_index != None):
+        if (self.phase == self.SCROLL_WHEELABLE_PHASE 
+                and self.target_node_index != None):
 
             if len(self.selected_nodes) == 0:
                 targets = (self.target_node_index,)
@@ -1773,6 +1778,22 @@ class Overlay (gui.overlays.Overlay):
             if node_on_screen:
                 yield (i, node, x, y)
 
+    def draw_selection_rect(self, cr):
+        sx, sy, ex, ey = self._inkmode.selection_motion.get_display_area(self._tdw)
+        cr.save()
+        for color in ( (0,0,0) , (1,1,1) ):
+            cr.set_source_rgb(*color)
+            cr.set_line_width(1)
+            cr.new_path()
+            cr.move_to(sx, sy)
+            cr.line_to(ex, sy)
+            cr.line_to(ex, ey)
+            cr.line_to(sx, ey)
+            cr.close_path()
+            cr.stroke()
+            cr.set_dash( (3.0, ) )
+        cr.restore()
+
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
         # Control nodes
@@ -1840,20 +1861,7 @@ class Overlay (gui.overlays.Overlay):
 
         # Selection Rectangle
         if mode.phase == _Phase.ADJUST_SELECTING:
-            sx, sy, ex, ey = mode.selection_motion.get_display_area(self._tdw)
-            cr.save()
-            for color in ( (0,0,0) , (1,1,1) ):
-                cr.set_source_rgb(*color)
-                cr.set_line_width(1)
-                cr.new_path()
-                cr.move_to(sx, sy)
-                cr.line_to(ex, sy)
-                cr.line_to(ex, ey)
-                cr.line_to(sx, ey)
-                cr.close_path()
-                cr.stroke()
-                cr.set_dash( (3.0, ) )
-            cr.restore()
+            self.draw_selection_rect(cr)
 
 class _LayoutNode (object):
     """Vertex/point for the button layout algorithm."""
