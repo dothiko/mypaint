@@ -281,6 +281,9 @@ class BezierMode (InkingMode):
                     self.target_node_index = new_target_node_index
                     if self.target_node_index is not None:
                         self._queue_draw_node(self.target_node_index)
+
+                # Disable override modes when node targetted
+                InkingMode.enable_switch_actions(new_target_node_index == None)
                         
                    
 
@@ -529,6 +532,7 @@ class BezierMode (InkingMode):
        #
        #
        #elif self.phase == _Phase.INITIAL:
+        print('pressing')
         if self.phase == _Phase.INITIAL:
             # XXX Not sure what to do here.
             # XXX Click to append nodes?
@@ -538,12 +542,34 @@ class BezierMode (InkingMode):
             if self.zone == _EditZone_Bezier.CONTROL_HANDLE:
                 self.phase = _Phase.ADJUST_HANDLE
             elif self.zone == _EditZone_Bezier.CONTROL_NODE:
-                self.phase = _Phase.MOVE_NODE
-                pass
-            pass    
-        elif self.phase == _Phase.ADJUST_PRESSURE:
-            # XXX Not sure what to do here.
-            pass
+
+                button = event.button
+                print('coming...')
+                if (self.current_node_index is not None and 
+                        button == 1 and
+                        event.state & self.__class__._PRESSURE_MOD_MASK == 
+                        self.__class__._PRESSURE_MOD_MASK):
+                    
+                    # Entering On-canvas Pressure Adjustment Phase!
+                    self.phase = _Phase.ADJUST_PRESSURE
+                    print('pressure!!!')
+            
+                    # And do not forget,this can be a node selection.
+                    if not self.current_node_index in self.selected_nodes:
+                        # To avoid old selected nodes still lit.
+                        self._queue_draw_selected_nodes() 
+                        self._reset_selected_nodes(self.current_node_index)
+                    else:
+                        # The node is already included to self.selected_nodes
+                        pass
+            
+                    # FALLTHRU: *do* start a drag 
+                else:
+                    self.phase = _Phase.MOVE_NODE
+
+       #elif self.phase == _Phase.ADJUST_PRESSURE:
+       #    # XXX Not sure what to do here.
+       #    pass
         elif self.phase == _Phase.ADJUST_SELECTING:
             # XXX Not sure what to do here.
             pass
@@ -607,6 +633,8 @@ class BezierMode (InkingMode):
 
         elif self.phase == _Phase.ADJUST_PRESSURE:
             self.options_presenter.target = (self, self.current_node_index)
+            InkingMode.enable_switch_actions(True)
+            self.phase = _Phase.INITIAL
         elif self.phase == _Phase.ADJUST_SELECTING:
             # XXX Not sure what to do here.
             pass
@@ -706,6 +734,10 @@ class BezierMode (InkingMode):
                 disp_y += event.y - self.start_y
                 x, y = tdw.display_to_model(disp_x, disp_y)
                 self.update_node(self.target_node_index, x=x, y=y)
+        
+        elif self.phase == _Phase.ADJUST_PRESSURE:
+            if self._pressed_pressure is not None:
+                self._adjust_pressure_with_motion(mx, my)
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
