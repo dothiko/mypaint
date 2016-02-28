@@ -121,12 +121,12 @@ class _EditZone_Bezier:
 
 class _Phase:
     """Enumeration of the states that an BezierCurveMode can be in"""
-    CAPTURE = 0           # Initial Phase
-    ADJUST = 1
+    INITIAL = 0           # Initial Phase,creating node.
+    MOVE_NODE = 1         # Moving node(s)
     ADJUST_PRESSURE = 2   # Changing nodes pressure
     ADJUST_SELECTING = 3  # Nodes Area Selecting
     ADJUST_HANDLE = 5     # change control-handle position
-    INIT_HANDLE = 6       # 
+    INIT_HANDLE = 6       # initialize control handle,right after create a node
     
 def _bezier_iter(seq):
     """Converts an list of control point tuples to interpolatable arrays
@@ -174,9 +174,9 @@ class BezierMode (InkingMode):
         
     @property
     def active_cursor(self):
-        if self.phase == _Phase.CAPTURE:
+        if self.phase == _Phase.INITIAL:
             return self._crosshair_cursor
-        elif self.phase == _Phase.ADJUST:
+        elif self.phase == _Phase.MOVE_NODE:
             if self.zone == _EditZone_Bezier.CONTROL_NODE:
                 return self._crosshair_cursor
             elif self.zone != _EditZone_Bezier.EMPTY_CANVAS: # assume button
@@ -223,7 +223,7 @@ class BezierMode (InkingMode):
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone_Bezier.EMPTY_CANVAS
         if not self.in_drag:
-            if self.phase == _Phase.ADJUST or self.phase == _Phase.CAPTURE:
+            if self.phase == _Phase.MOVE_NODE or self.phase == _Phase.INITIAL:
                 new_target_node_index = None
                 
                 # Test buttons for hits
@@ -299,7 +299,7 @@ class BezierMode (InkingMode):
         # Update the "real" inactive cursor too:
         if not self.in_drag:
             cursor = None
-            if self.phase in (_Phase.CAPTURE, _Phase.ADJUST, _Phase.ADJUST_PRESSURE):
+            if self.phase in (_Phase.INITIAL, _Phase.MOVE_NODE, _Phase.ADJUST_PRESSURE):
                 if self.zone == _EditZone_Bezier.CONTROL_NODE:
                     cursor = self._crosshair_cursor
                 elif self.zone != _EditZone_Bezier.EMPTY_CANVAS: # assume button
@@ -454,81 +454,82 @@ class BezierMode (InkingMode):
             return False
         self._update_zone_and_target(tdw, event.x, event.y)
         self._update_current_node_index()
-        if self.phase == _Phase.ADJUST:
-            button = event.button
-            if (self.current_node_index is not None and 
-                    button == 1 and
-                    self.phase == _Phase.ADJUST and 
-                    event.state & self.__class__._PRESSURE_MOD_MASK == 
-                    self.__class__._PRESSURE_MOD_MASK):
-                
-                # Entering On-canvas Pressure Adjustment Phase!
-                self.phase = _Phase.ADJUST_PRESSURE
-
-                # And do not forget,this can be a node selection.
-                if not self.current_node_index in self.selected_nodes:
-                    # To avoid old selected nodes still lit.
-                    self._queue_draw_selected_nodes() 
-                    self._reset_selected_nodes(self.current_node_index)
-                else:
-                    # The node is already included to self.selected_nodes
-                    pass
-
-                # FALLTHRU: *do* start a drag 
-
-            else:
-                # Normal ADJUST Phase.
-                
-                if self.zone in (_EditZone_Bezier.REJECT_BUTTON,
-                                 _EditZone_Bezier.ACCEPT_BUTTON):
-                    if (button == 1 and 
-                            event.type == Gdk.EventType.BUTTON_PRESS):
-                        self._click_info = (button, self.zone)
-                        return False
-                    # FALLTHRU: *do* allow drags to start with other buttons
-                elif self.zone == _EditZone_Bezier.CONTROL_HANDLE:
-                    self.phase = _Phase.ADJUST_HANDLE
-                    
-                elif self.zone == _EditZone_Bezier.EMPTY_CANVAS:
-                    if (event.state & Gdk.ModifierType.SHIFT_MASK):
-                        # selection box dragging start!!
-                        self.phase = _Phase.ADJUST_SELECTING
-                        self.selection_motion.start(
-                                *tdw.display_to_model(event.x, event.y))
-                    else:
-                        self._start_new_capture_phase(rollback=False)
-                        assert self.phase == _Phase.CAPTURE
-
-                    # FALLTHRU: *do* start a drag
-                else:
-                    # clicked a node.
-
-                    if button == 1:
-                        do_reset = False
-                        if (event.state & Gdk.ModifierType.CONTROL_MASK):
-                            # Holding CONTROL key = adding or removing a node.
-                            # But it is done at button_release_cb for now,
-                            pass
-
-                        else:
-                            # no CONTROL Key holded.
-                            # If new solo node clicked without holding 
-                            # CONTROL key,then reset all selected nodes.
-
-                            assert self.current_node_index != None
-
-                            do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
-                            do_reset |= not (self.current_node_index in self.selected_nodes)
-
-                        if do_reset:
-                            # To avoid old selected nodes still lit.
-                            self._queue_draw_selected_nodes() 
-                            self._reset_selected_nodes(self.current_node_index)
-
-                    # FALLTHRU: *do* start a drag
-
-
-        elif self.phase == _Phase.CAPTURE:
+       #if self.phase == _Phase.ADJUST:
+       #    button = event.button
+       #    if (self.current_node_index is not None and 
+       #            button == 1 and
+       #            self.phase == _Phase.ADJUST and 
+       #            event.state & self.__class__._PRESSURE_MOD_MASK == 
+       #            self.__class__._PRESSURE_MOD_MASK):
+       #        
+       #        # Entering On-canvas Pressure Adjustment Phase!
+       #        self.phase = _Phase.ADJUST_PRESSURE
+       #
+       #        # And do not forget,this can be a node selection.
+       #        if not self.current_node_index in self.selected_nodes:
+       #            # To avoid old selected nodes still lit.
+       #            self._queue_draw_selected_nodes() 
+       #            self._reset_selected_nodes(self.current_node_index)
+       #        else:
+       #            # The node is already included to self.selected_nodes
+       #            pass
+       #
+       #        # FALLTHRU: *do* start a drag 
+       #
+       #    else:
+       #        # Normal ADJUST Phase.
+       #        
+       #        if self.zone in (_EditZone_Bezier.REJECT_BUTTON,
+       #                         _EditZone_Bezier.ACCEPT_BUTTON):
+       #            if (button == 1 and 
+       #                    event.type == Gdk.EventType.BUTTON_PRESS):
+       #                self._click_info = (button, self.zone)
+       #                return False
+       #            # FALLTHRU: *do* allow drags to start with other buttons
+       #        elif self.zone == _EditZone_Bezier.CONTROL_HANDLE:
+       #            self.phase = _Phase.ADJUST_HANDLE
+       #            
+       #        elif self.zone == _EditZone_Bezier.EMPTY_CANVAS:
+       #            if (event.state & Gdk.ModifierType.SHIFT_MASK):
+       #                # selection box dragging start!!
+       #                self.phase = _Phase.ADJUST_SELECTING
+       #                self.selection_motion.start(
+       #                        *tdw.display_to_model(event.x, event.y))
+       #            else:
+       #                self._start_new_capture_phase(rollback=False)
+       #                assert self.phase == _Phase.INITIAL
+       #
+       #            # FALLTHRU: *do* start a drag
+       #        else:
+       #            # clicked a node.
+       #
+       #            if button == 1:
+       #                do_reset = False
+       #                if (event.state & Gdk.ModifierType.CONTROL_MASK):
+       #                    # Holding CONTROL key = adding or removing a node.
+       #                    # But it is done at button_release_cb for now,
+       #                    pass
+       #
+       #                else:
+       #                    # no CONTROL Key holded.
+       #                    # If new solo node clicked without holding 
+       #                    # CONTROL key,then reset all selected nodes.
+       #
+       #                    assert self.current_node_index != None
+       #
+       #                    do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
+       #                    do_reset |= not (self.current_node_index in self.selected_nodes)
+       #
+       #                if do_reset:
+       #                    # To avoid old selected nodes still lit.
+       #                    self._queue_draw_selected_nodes() 
+       #                    self._reset_selected_nodes(self.current_node_index)
+       #
+       #            # FALLTHRU: *do* start a drag
+       #
+       #
+       #elif self.phase == _Phase.INITIAL:
+        if self.phase == _Phase.INITIAL:
             # XXX Not sure what to do here.
             # XXX Click to append nodes?
             # XXX  but how to stop that and enter the adjust phase?
@@ -537,7 +538,7 @@ class BezierMode (InkingMode):
             if self.zone == _EditZone_Bezier.CONTROL_HANDLE:
                 self.phase = _Phase.ADJUST_HANDLE
             elif self.zone == _EditZone_Bezier.CONTROL_NODE:
-                self.phase = _Phase.ADJUST
+                self.phase = _Phase.MOVE_NODE
                 pass
             pass    
         elif self.phase == _Phase.ADJUST_PRESSURE:
@@ -561,44 +562,49 @@ class BezierMode (InkingMode):
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
 
-        if self.phase == _Phase.ADJUST:
-            if self._click_info:
-                button0, zone0 = self._click_info
-                if event.button == button0:
-                    if self.zone == zone0:
-                        if zone0 == _EditZone_Bezier.REJECT_BUTTON:
-                            self._start_new_capture_phase(rollback=True)
-                            assert self.phase == _Phase.CAPTURE
-                        elif zone0 == _EditZone_Bezier.ACCEPT_BUTTON:
-                            self._start_new_capture_phase(rollback=False)
-                            assert self.phase == _Phase.CAPTURE
-                    self._click_info = None
-                    self._update_zone_and_target(tdw, event.x, event.y)
-                    self._update_current_node_index()
-                    return False
-            else:
-                # Clicked node and button released.
-                # Add or Remove selected node
-                # when control key is pressed
-                if event.button == 1:
-                    if event.state & Gdk.ModifierType.CONTROL_MASK:
-                        tidx = self.target_node_index
-                        if tidx != None:
-                            if not tidx in self.selected_nodes:
-                                self.selected_nodes.append(tidx)
-                            else:
-                                self.selected_nodes.remove(tidx)
-                                self.target_node_index = None
-                                self.current_node_index = None
-                    else:
-                        # Single node click. 
-                        pass
+       #if self.phase == _Phase.ADJUST:
+       #    if self._click_info:
+       #        button0, zone0 = self._click_info
+       #        if event.button == button0:
+       #            if self.zone == zone0:
+       #                if zone0 == _EditZone_Bezier.REJECT_BUTTON:
+       #                    self._start_new_capture_phase(rollback=True)
+       #                    assert self.phase == _Phase.INITIAL
+       #                elif zone0 == _EditZone_Bezier.ACCEPT_BUTTON:
+       #                    self._start_new_capture_phase(rollback=False)
+       #                    assert self.phase == _Phase.INITIAL
+       #            self._click_info = None
+       #            self._update_zone_and_target(tdw, event.x, event.y)
+       #            self._update_current_node_index()
+       #            return False
+       #    else:
+       #        # Clicked node and button released.
+       #        # Add or Remove selected node
+       #        # when control key is pressed
+       #        if event.button == 1:
+       #            if event.state & Gdk.ModifierType.CONTROL_MASK:
+       #                tidx = self.target_node_index
+       #                if tidx != None:
+       #                    if not tidx in self.selected_nodes:
+       #                        self.selected_nodes.append(tidx)
+       #                    else:
+       #                        self.selected_nodes.remove(tidx)
+       #                        self.target_node_index = None
+       #                        self.current_node_index = None
+       #            else:
+       #                # Single node click. 
+       #                pass
+       #
+       #            ## fall throgh
+       #
+       #        self._update_zone_and_target(tdw, event.x, event.y)
+       #
+       #    # (otherwise fall through and end any current drag)
+       #elif self.phase == _Phase.ADJUST_PRESSURE:
+        if self.phase == _Phase.MOVE_NODE:
+           #self._update_zone_and_target(tdw, event.x, event.y)
+            pass
 
-                    ## fall throgh
-
-                self._update_zone_and_target(tdw, event.x, event.y)
-
-            # (otherwise fall through and end any current drag)
         elif self.phase == _Phase.ADJUST_PRESSURE:
             self.options_presenter.target = (self, self.current_node_index)
         elif self.phase == _Phase.ADJUST_SELECTING:
@@ -606,7 +612,7 @@ class BezierMode (InkingMode):
             pass
         elif self.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
             pass
-        elif self.phase == _Phase.CAPTURE:
+        elif self.phase == _Phase.INITIAL:
             if self.zone == _EditZone_Bezier.REJECT_BUTTON:
                 self._start_new_capture_phase(rollback=True)
             elif self.zone == _EditZone_Bezier.ACCEPT_BUTTON:
@@ -630,7 +636,7 @@ class BezierMode (InkingMode):
         self._queue_previous_draw_buttons() # To erase button,and avoid glitch
 
         # Basically,all sections should do fall-through.
-        if self.phase == _Phase.CAPTURE:
+        if self.phase == _Phase.INITIAL:
 
             if self.zone == _EditZone_Bezier.EMPTY_CANVAS:
                 if event.state != 0:
@@ -651,7 +657,7 @@ class BezierMode (InkingMode):
 
                     self._queue_draw_node(self.current_node_index)
 
-        elif self.phase == _Phase.ADJUST:
+        elif self.phase == _Phase.MOVE_NODE:
             self._node_dragged = False
             if self.target_node_index is not None:
                 node = self.nodes[self.target_node_index]
@@ -659,8 +665,7 @@ class BezierMode (InkingMode):
                 
                 # Use selection_motion class as offset-information
                 self.selection_motion.start(dx, dy)
-
-
+        
         elif self.phase == _Phase.ADJUST_PRESSURE:
             if self.current_node_index is not None:
                 node = self.nodes[self.current_node_index]
@@ -680,7 +685,7 @@ class BezierMode (InkingMode):
     def drag_update_cb(self, tdw, event, dx, dy):
         self._ensure_overlay_for_tdw(tdw)
         mx, my = tdw.display_to_model(event.x, event.y)
-        if self.phase == _Phase.CAPTURE:
+        if self.phase == _Phase.INITIAL:
             pass
             
         elif self.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
@@ -693,7 +698,7 @@ class BezierMode (InkingMode):
                 self._queue_draw_node(self.current_node_index)
             self._queue_redraw_curve()
                 
-        elif self.phase == _Phase.ADJUST:
+        elif self.phase == _Phase.MOVE_NODE:
             if self._dragged_node_start_pos:
                 x0, y0 = self._dragged_node_start_pos
                 disp_x, disp_y = tdw.model_to_display(x0, y0)
@@ -706,7 +711,7 @@ class BezierMode (InkingMode):
 
     def drag_stop_cb(self, tdw):
         self._ensure_overlay_for_tdw(tdw)
-        if self.phase == _Phase.CAPTURE:
+        if self.phase == _Phase.INITIAL:
             node = self._last_event_node
             self._reset_adjust_data()
             self._queue_redraw_all_nodes()
@@ -714,7 +719,7 @@ class BezierMode (InkingMode):
             if len(self.nodes) > 1:
                 self._queue_draw_buttons()
                 
-            self.phase = _Phase.CAPTURE
+            self.phase = _Phase.INITIAL
             
         elif self.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
             node = self._last_event_node
@@ -729,11 +734,12 @@ class BezierMode (InkingMode):
             if len(self.nodes) > 1:
                 self._queue_draw_buttons()
                 
-            self.phase = _Phase.CAPTURE
-        elif self.phase == _Phase.ADJUST:
+            self.phase = _Phase.INITIAL
+        elif self.phase == _Phase.MOVE_NODE:
             self._dragged_node_start_pos = None
             self._queue_redraw_curve()
             self._queue_draw_buttons()
+            self.phase = _Phase.INITIAL
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -907,7 +913,7 @@ class OverlayBezier (Overlay):
         dx, dy = mode.selection_motion.get_display_offset(self._tdw)
         for i, node, x, y in self._get_onscreen_nodes():
             color = gui.style.EDITABLE_ITEM_COLOR
-            if mode.phase in (_Phase.CAPTURE, _Phase.ADJUST, _Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
+            if mode.phase in (_Phase.INITIAL, _Phase.MOVE_NODE, _Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
                 if i == mode.current_node_index:
                     color = gui.style.ACTIVE_ITEM_COLOR
                     x += dx
