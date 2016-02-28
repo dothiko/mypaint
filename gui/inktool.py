@@ -309,7 +309,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     _OPTIONS_PRESENTER = None   #: Options presenter singleton
 
-    SCROLL_WHEELABLE_PHASE = _Phase.ADJUST #: to permit scroll wheel event
 
     ## Pressure oncanvas edit settings
 
@@ -1101,7 +1100,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def scroll_cb(self, tdw, event):
         """Handles scroll-wheel events, to adjust pressure."""
-        if (self.phase == self.SCROLL_WHEELABLE_PHASE 
+        if (self.phase == _Phase.ADJUST
                 and self.target_node_index != None):
 
             if len(self.selected_nodes) == 0:
