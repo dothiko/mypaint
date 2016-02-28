@@ -230,36 +230,6 @@ class BezierMode (InkingMode):
     def get_usage(self):
         return _(u"Draw, and then adjust smooth lines with bezier curve")
 
-    ## Override action
-    permitted_switch_actions = None   
-    _enable_switch_actions = set()   # Any action is permitted,for now.
-    _normal_switch_actions=set(gui.mode.BUTTON_BINDING_ACTIONS).union([
-            'RotateViewMode',
-            'ZoomViewMode',
-            'PanViewMode',
-        ])
-    _disable_switch_actions=set(gui.mode.BUTTON_BINDING_ACTIONS).union([
-            'RotateViewMode',
-            'PanViewMode',
-        ])
-
-    @classmethod
-    def change_switch_actions(cls, permit):
-        if permit == _PermitAction.ENABLE:
-            if cls.permitted_switch_actions != cls._enable_switch_actions:
-                cls.permitted_switch_actions = cls._enable_switch_actions
-                print('enable!')
-        elif permit == _PermitAction.DISABLE:
-            if cls.permitted_switch_actions != cls._disable_switch_actions:
-                cls.permitted_switch_actions = cls._disable_switch_actions
-                print('disable!')
-        elif permit == _PermitAction.NORMAL:
-            if cls.permitted_switch_actions != cls._normal_switch_actions:
-                cls.permitted_switch_actions = cls._normal_switch_actions
-                print('normal!')
-        else:
-            raise NotImplementedError("Unknown permit flag:%d" % permit)
-
 
     @property
     def inactive_cursor(self):
@@ -283,6 +253,18 @@ class BezierMode (InkingMode):
             return self._crosshair_cursor
         return None  
 
+    @property
+    def phase(self):
+        return self._phase
+
+    @phase.setter
+    def phase(self, new_phase):
+        if new_phase == _Phase.INITIAL:
+            InkingMode.enable_switch_actions(True)
+        else:
+            InkingMode.enable_switch_actions(False)
+        self._phase = new_phase
+
     ## Class config vars
 
     SCROLL_WHEELABLE_PHASE = _Phase.CREATE_PATH #: to permit scroll wheel event
@@ -299,6 +281,7 @@ class BezierMode (InkingMode):
         super(BezierMode, self).__init__(**kwargs)
 
         self.zone = _EditZone_Bezier.EMPTY_CANVAS
+        self._phase = _Phase.INITIAL
 
     def _reset_adjust_data(self):
         super(BezierMode, self)._reset_adjust_data()
@@ -378,17 +361,6 @@ class BezierMode (InkingMode):
                     if self.target_node_index is not None:
                         self._queue_draw_node(self.target_node_index)
 
-                # Disable override modes when node targetted
-                if new_target_node_index != None:
-                    BezierMode.change_switch_actions(_PermitAction.DISABLE)
-                elif self.phase == _Phase.INITIAL:
-                    BezierMode.change_switch_actions(_PermitAction.ENABLE)
-                else:
-                    BezierMode.change_switch_actions(_PermitAction.NORMAL)
-
-                 
-                        
-                   
 
         elif self.phase == _Phase.ADJUST_PRESSURE:
             # Always control node,in pressure editing.
@@ -413,17 +385,13 @@ class BezierMode (InkingMode):
                 tdw.set_override_cursor(cursor)
                 self._current_override_cursor = cursor
 
-    def enter(self, doc, **kwds):
-        """Enters the mode: called by `ModeStack.push()` etc."""
-        super(BezierMode, self).enter(doc, **kwds)
-        BezierMode.change_switch_actions(_PermitAction.ENABLE)
 
     ## Redraws
     
     def _queue_draw_node(self, i):
         """Redraws a specific control node on all known view TDWs"""
         node = self.nodes[i]
-        dx,dy = self.selection_motion.get_model_offset()
+        dx,dy = self.selection_rect.get_model_offset()
         
         def get_area(node_idx, nx, ny, size, area=None):
             if node_idx in self.selected_nodes:
@@ -477,7 +445,7 @@ class BezierMode (InkingMode):
                 description=_("Bezier"),
                 abrupt=True,
             )
-            dx, dy = self.selection_motion.get_model_offset()
+            dx, dy = self.selection_rect.get_model_offset()
             for p0, p1, p2, p3 in _bezier_iter_offset(self.nodes,
                     self.selected_nodes,
                     (dx,dy)):
@@ -632,7 +600,7 @@ class BezierMode (InkingMode):
                         (event.state & Gdk.ModifierType.SHIFT_MASK)):
                     # selection box dragging start!!
                     self.phase = _Phase.ADJUST_SELECTING
-                    self.selection_motion.start(
+                    self.selection_rect.start(
                             *tdw.display_to_model(event.x, event.y))
 
 
@@ -730,8 +698,8 @@ class BezierMode (InkingMode):
                #node = self.nodes[self.target_node_index]
                #self._dragged_node_start_pos = (node.x, node.y)
                 
-                # Use selection_motion class as offset-information
-                self.selection_motion.start(dx, dy)
+                # Use selection_rect class as offset-information
+                self.selection_rect.start(dx, dy)
         
         elif self.phase == _Phase.ADJUST_PRESSURE:
             if self.current_node_index is not None:
@@ -740,8 +708,9 @@ class BezierMode (InkingMode):
                 self._pressed_x, self._pressed_y = \
                         tdw.display_to_model(dx, dy)
         elif self.phase == _Phase.ADJUST_SELECTING:
-            self.selection_motion.start(dx, dy)
-            self.selection_motion.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
+            self.selection_rect.start(dx, dy)
+            self.selection_rect.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
+            self._queue_draw_selection_rect() # to start
         elif self.phase == _Phase.ADJUST_HANDLE:
             self._last_event_node = self.nodes[self.target_node_index]
             pass
@@ -768,15 +737,16 @@ class BezierMode (InkingMode):
         elif self.phase == _Phase.MOVE_NODE:
             if len(self.selected_nodes) > 0:
                 self._queue_draw_selected_nodes()
-                self.selection_motion.drag(mx, my)
+                self.selection_rect.drag(mx, my)
                 self._queue_draw_selected_nodes()
                 self._queue_redraw_curve()
         elif self.phase == _Phase.ADJUST_PRESSURE:
             if self._pressed_pressure is not None:
                 self._adjust_pressure_with_motion(mx, my)
         elif self.phase == _Phase.ADJUST_SELECTING:
-            self.selection_motion.drag(mx, my)
-            self._queue_draw_selection_motion()
+            self._queue_draw_selection_rect() # to erase
+            self.selection_rect.drag(mx, my)
+            self._queue_draw_selection_rect()
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -806,28 +776,28 @@ class BezierMode (InkingMode):
                 
             self.phase = _Phase.CREATE_PATH
         elif self.phase == _Phase.MOVE_NODE:
-            dx, dy = self.selection_motion.get_model_offset()
+            dx, dy = self.selection_rect.get_model_offset()
 
             for idx in self.selected_nodes:
                 cn = self.nodes[idx]
                 cn.move(cn.x + dx, cn.y + dy)
 
-            self.selection_motion.reset()
+            self.selection_rect.reset()
             self._dragged_node_start_pos = None
             self._queue_redraw_curve()
             self._queue_draw_buttons()
             self.phase = _Phase.CREATE_PATH
         elif self.phase == _Phase.ADJUST_SELECTING:
             ## Nodes selection phase
-            self._queue_draw_selection_motion()
+            self._queue_draw_selection_rect()
 
             modified = False
-            if not self.selection_motion.is_addition:
+            if not self.selection_rect.is_addition:
                 self._reset_selected_nodes()
                 modified = True
 
             for idx,cn in enumerate(self.nodes):
-                if self.selection_motion.is_inside(cn.x, cn.y):
+                if self.selection_rect.is_inside(cn.x, cn.y):
                     if not idx in self.selected_nodes:
                         self.selected_nodes.append(idx)
                         modified = True
@@ -836,7 +806,7 @@ class BezierMode (InkingMode):
                 self._queue_redraw_all_nodes()
 
             self._queue_draw_buttons() # buttons erased while selecting
-            self.selection_motion.reset()
+            self.selection_rect.reset()
             self.phase = _Phase.CREATE_PATH
 
         elif self.phase == _Phase.INITIAL:
@@ -1014,7 +984,7 @@ class OverlayBezier (Overlay):
         mode = self._inkmode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
-        dx, dy = mode.selection_motion.get_display_offset(self._tdw)
+        dx, dy = mode.selection_rect.get_display_offset(self._tdw)
         for i, node, x, y in self._get_onscreen_nodes():
             color = gui.style.EDITABLE_ITEM_COLOR
             if mode.phase in (_Phase.INITIAL, _Phase.MOVE_NODE, 
