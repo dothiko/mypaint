@@ -31,7 +31,7 @@ import lib.helpers
 import gui.cursor
 import lib.observable
 from inktool import *
-from inktool import _LayoutNode, _Phase
+from inktool import _LayoutNode, _Phase, _EditZone
 
 ## Class defs
 
@@ -156,31 +156,30 @@ class _Node_Bezier (object):
     
     
     
-class _EditZone_Bezier:
+class _EditZone_Bezier(_EditZone):
     """Enumeration of what the pointer is on in the ADJUST phase"""
-    EMPTY_CANVAS = 0  #: Nothing, empty space
-    CONTROL_NODE = 1  #: Any control node; see target_node_index
-    REJECT_BUTTON = 2  #: On-canvas button that abandons the current line
-    ACCEPT_BUTTON = 3  #: On-canvas button that commits the current line
-    CONTROL_HANDLE = 4 #: Control handle of bezier
+    CONTROL_HANDLE = 104 #: Control handle of bezier
+
+    # _EditZone-enum also used,they are defined at gui.inktool._EditZone
+   #EMPTY_CANVAS   #: Nothing, empty space
+   #CONTROL_NODE   #: Any control node; see target_node_index
+   #REJECT_BUTTON  #: On-canvas button that abandons the current line
+   #ACCEPT_BUTTON  #: On-canvas button that commits the current line
 
 class _PhaseBezier(_Phase):
     """Enumeration of the states that an BezierCurveMode can be in"""
     INITIAL = _Phase.CAPTURE     # Initial Phase,creating node.
     CREATE_PATH = _Phase.ADJUST  # Main Phase.creating path(adding node)
                                  # THIS MEMBER MUST SAME AS _Phase.ADJUST
-                                 # for InkingMode.scroll_cb()
+                                 # because for InkingMode.scroll_cb()
     MOVE_NODE = 100         # Moving node(s)
-    ADJUST_PRESSURE = 101   # Changing nodes pressure
-    ADJUST_SELECTING = 102  # Nodes Area Selecting
     ADJUST_HANDLE = 103     # change control-handle position
     INIT_HANDLE = 104       # initialize control handle,right after create a node
 
-class _PermitAction:
-    """Enumeration of permit override action"""
-    ENABLE = 0  # all actions enabled
-    DISABLE = 1 # all actions disabled
-    NORMAL = 2  # enable only pan/scroll/zoom
+   # ADJUST_PRESSURE
+   # ADJUST_SELECTING
+   # are also used,it is defined at gui.inktool._Phase
+
 
     
 def _bezier_iter(seq):
@@ -308,9 +307,6 @@ class BezierMode (InkingMode):
     def __init__(self, **kwargs):
         super(BezierMode, self).__init__(**kwargs)
 
-        self.zone = _EditZone_Bezier.EMPTY_CANVAS
-        self._phase = _PhaseBezier.INITIAL
-
     def _reset_adjust_data(self):
         super(BezierMode, self)._reset_adjust_data()
         self.current_handle_index = None
@@ -326,7 +322,8 @@ class BezierMode (InkingMode):
     def _update_zone_and_target(self, tdw, x, y):
         """Update the zone and target node under a cursor position"""
         ## FIXME mostly copied from inktool.py
-        ## the difference is control handle processing
+        ## the differences are 'control handle processing' and
+        ## 'cursor changing'
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone_Bezier.EMPTY_CANVAS
         if not self.in_drag:
@@ -362,7 +359,7 @@ class BezierMode (InkingMode):
                         new_zone = _EditZone_Bezier.CONTROL_NODE
                         break
                 
-                # ADDED PORTION:
+                ## CHANGED CODES for beziertool:
                 # New target node is not hit.
                 # But, pointer might hit control handles
                 if (new_target_node_index is None and 
@@ -402,7 +399,9 @@ class BezierMode (InkingMode):
             self._ensure_overlay_for_tdw(tdw)
             if len(self.nodes) > 1:
                 self._queue_previous_draw_buttons()
+
         # Update the "real" inactive cursor too:
+        # these codes also a little changed from inktool.
         if not self.in_drag:
             cursor = None
             if self.phase in (_PhaseBezier.INITIAL, _PhaseBezier.CREATE_PATH,
@@ -447,8 +446,10 @@ class BezierMode (InkingMode):
         size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
         for tdw in self._overlays:
             area = get_area(i, node.x, node.y, size)
+
+            # Active control handles also should be queued.
             for hi in (0,1):
-                # The first node only shows 2nd(index 1) handle.
+                # But,the first node only shows 2nd(index 1) handle.
                 if (hi == 0 and i > 0) or (hi == 1 and i <= len(self.nodes)-1):
                     handle = node.get_control_handle(hi)
                     area = get_area(i, 
@@ -490,7 +491,7 @@ class BezierMode (InkingMode):
         self._start_task_queue_runner()
 
     def _queue_draw_buttons(self):
-        # to surpress exception
+        # To surpress exception
         if len(self.nodes) >= 2:
             super(BezierMode, self)._queue_draw_buttons()
 
@@ -835,6 +836,8 @@ class BezierMode (InkingMode):
     ## Interrogating events
 
     def _get_event_data(self, tdw, event):
+        # almost same as inktool,but we needs generate _Node_Bezier object
+        # not _Node object
         x, y = tdw.display_to_model(event.x, event.y)
         xtilt, ytilt = self._get_event_tilt(tdw, event)
         return _Node_Bezier(
@@ -896,7 +899,7 @@ class OverlayBezier (Overlay):
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
         # FIXME mostly copied from inktool.Overlay.update_button_positions
-        # The difference is for-loop of nodes
+        # The difference is for-loop of nodes , to deal with control handles.
         nodes = self._inkmode.nodes
         num_nodes = len(nodes)
         if num_nodes == 0:
@@ -918,12 +921,14 @@ class OverlayBezier (Overlay):
         for i, node in enumerate(nodes):
             x, y = self._tdw.model_to_display(node.x, node.y)
             fixed.append(_LayoutNode(x, y))
-            # ADDED PORTION:to avoid buttons are overwrap on control handles,
+            # ADDED CODES FOR BEZIERTOOL: 
+            # to avoid buttons are overwrap on control handles,
             # treat control handles as nodes,when it is visible.
             if i == self._inkmode.current_node_index:
                 for t in (0,1):
                     handle = node.get_control_handle(t)
                     fixed.append(_LayoutNode(handle.x, handle.y))
+            # ADDED CODES END.
 
         # The reject and accept buttons are connected to different nodes
         # in the stroke by virtual springs.
