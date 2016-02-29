@@ -67,18 +67,44 @@ class _Node_Bezier (object):
         self.ytilt = ytilt
         self.time = 0
         if control_handles:
-            self.control_handles = control_handles
+            self._control_handles = control_handles
         else:
-            self.control_handles = (_Control_Handle(x, y), _Control_Handle(x, y))
+            self._control_handles = (_Control_Handle(x, y), _Control_Handle(x, y))
 
-        self._even = False
-        #self.set_even(even)
+        self._curve = True
 
-    def set_even(self, flag):
-        if self._even != flag and flag:
-            self.control_handles[1].x = -self.control_handles[0].x
-            self.control_handles[1].y = -self.control_handles[0].y
-        self._even = flag
+    @property
+    def curve(self):
+        return self._curve
+
+    @curve.setter
+    def curve(self, flag):
+        self._curve = flag
+        if self._curve:
+            self.set_control_handle(0, 
+                    self._control_handles[0].x,
+                    self._control_handles[0].y)
+
+    def set_control_handle(self, idx, x, y):
+        """Use this method to set control handle.
+        This method refers self._curve flag,
+        and if it is True,automatically make handles
+        as symmetry = 'Curved bezier control point'
+        """
+
+        dx = x - self.x
+        dy = y - self.y
+        self._control_handles[idx].x = x 
+        self._control_handles[idx].y = y
+
+        if self._curve:
+            tidx = (idx + 1) % 2
+            self._control_handles[tidx].x = self.x - dx
+            self._control_handles[tidx].y = self.y - dy
+
+    def get_control_handle(self,idx):
+        assert 0 <= idx <= 1
+        return self._control_handles[idx]
 
     def _replace(self, **kwarg):
         ox = self.x
@@ -97,8 +123,8 @@ class _Node_Bezier (object):
         :param ny: new y position,in model
         """
         for i in (0,1):
-            self.control_handles[i].x = nx + (self.control_handles[i].x - ox)
-            self.control_handles[i].y = ny + (self.control_handles[i].y - oy)
+            self._control_handles[i].x = nx + (self._control_handles[i].x - ox)
+            self._control_handles[i].y = ny + (self._control_handles[i].y - oy)
 
     def move(self,x, y):
         """Move this node to (x,y).
@@ -123,9 +149,10 @@ class _Node_Bezier (object):
         node.xtilt = self.xtilt
         node.ytilt = self.ytilt
         node.time = self.time
+        node._curve = self._curve
         for i in (0,1):
-            node.control_handles[i].x = self.control_handles[i].x + dx
-            node.control_handles[i].y = self.control_handles[i].y + dy
+            node._control_handles[i].x = self._control_handles[i].x + dx
+            node._control_handles[i].y = self._control_handles[i].y + dy
     
     
     
@@ -175,8 +202,8 @@ def _bezier_iter(seq):
     for idx,cn in enumerate(seq[:-1]):
         nn = seq[idx+1]
         cint[0] = cn
-        cint[1] = cn.control_handles[1]
-        cint[2] = nn.control_handles[0]
+        cint[1] = cn.get_control_handle(1)
+        cint[2] = nn.get_control_handle(0)
         cint[3] = nn
         yield cint
 
@@ -210,8 +237,8 @@ def _bezier_iter_offset(seq, selected, offset):
             bidx, nn = copy_to_buffered_node(bidx, nn)
 
         cint[0] = cn
-        cint[1] = cn.control_handles[1]
-        cint[2] = nn.control_handles[0]
+        cint[1] = cn.get_control_handle(1)
+        cint[2] = nn.get_control_handle(0)
         cint[3] = nn
         yield cint
         cn = nn
@@ -242,8 +269,6 @@ class BezierMode (InkingMode):
         if self.phase in (_PhaseBezier.INITIAL, _PhaseBezier.CREATE_PATH):
             if self.zone == _EditZone_Bezier.CONTROL_NODE:
                 return self._crosshair_cursor
-            else:
-                print "%d" % self.zone
         elif self.phase == _PhaseBezier.MOVE_NODE:
             if self.zone == _EditZone_Bezier.CONTROL_NODE:
                 return self._crosshair_cursor
@@ -344,7 +369,8 @@ class BezierMode (InkingMode):
                         self.current_node_index is not None):
                     c_node = self.nodes[self.current_node_index]
                     self.current_handle_index = None
-                    for i, handle in enumerate(c_node.control_handles):
+                    for i in (0,1):
+                        handle = c_node.get_control_handle(i)
                         hx, hy = tdw.model_to_display(handle.x, handle.y)
                         d = math.hypot(hx - x, hy - y)
                         if d > hit_dist:
@@ -403,6 +429,7 @@ class BezierMode (InkingMode):
                         nx + dx, ny + dy)
             else:
                 x, y = tdw.model_to_display(nx, ny)
+
             x = math.floor(x)
             y = math.floor(y)
             sx = x-size-2
@@ -421,9 +448,11 @@ class BezierMode (InkingMode):
         for tdw in self._overlays:
             area = get_area(i, node.x, node.y, size)
             for hi in (0,1):
+                # The first node only shows 2nd(index 1) handle.
                 if (hi == 0 and i > 0) or (hi == 1 and i <= len(self.nodes)-1):
+                    handle = node.get_control_handle(hi)
                     area = get_area(i, 
-                        node.control_handles[hi].x, node.control_handles[hi].y,
+                        handle.x, handle.y,
                         size, area)
 
             tdw.queue_draw_area(area[0], area[1], 
@@ -614,9 +643,6 @@ class BezierMode (InkingMode):
                 self.phase = _PhaseBezier.CREATE_PATH
             # FALLTHRU: *do* start a drag 
 
-       #elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
-       #    # XXX Not sure what to do here.
-       #    pass
         elif self.phase == _PhaseBezier.ADJUST_SELECTING:
             # XXX Not sure what to do here.
             pass
@@ -626,7 +652,8 @@ class BezierMode (InkingMode):
             raise NotImplementedError("Unrecognized zone %r", self.zone)
         # Update workaround state for evdev dropouts
         self._button_down = event.button
-        # Super-Supercall(not supercall): start drags etc
+
+        # Super-Supercall(not supercall) would invoke drag-related callbacks.
         return super(InkingMode, self).button_press_cb(tdw, event) 
 
     def button_release_cb(self, tdw, event):
@@ -635,26 +662,13 @@ class BezierMode (InkingMode):
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
 
-        if self.phase == _PhaseBezier.MOVE_NODE:
-           #self._update_zone_and_target(tdw, event.x, event.y)
-            pass
-
-        elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
-            self.options_presenter.target = (self, self.current_node_index)
-            self.phase = _PhaseBezier.CREATE_PATH
-        elif self.phase == _PhaseBezier.ADJUST_SELECTING:
-            # XXX Not sure what to do here.
-            pass
-        elif self.phase in (_PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
-            pass
-        elif self.phase == _PhaseBezier.CREATE_PATH:
+        if self.phase == _PhaseBezier.CREATE_PATH:
             if self.zone == _EditZone_Bezier.REJECT_BUTTON:
                 self._start_new_capture_phase(rollback=True)
             elif self.zone == _EditZone_Bezier.ACCEPT_BUTTON:
                 self._queue_redraw_curve(0.01) # Redraw with hi-fidely curve
                 self._start_new_capture_phase(rollback=False)
-        else:
-            raise NotImplementedError("Unrecognized phase %r", self.phase)
+
         # Update workaround state for evdev dropouts
         self._button_down = None
         # Initialize pressed position as invalid for hold-and-modify
@@ -663,7 +677,7 @@ class BezierMode (InkingMode):
 
 
 
-        # Super-Supercall(not supercall): stop current drag
+        # Super-Supercall(not supercall) would invoke drag_stop_cb signal.
         return super(InkingMode, self).button_release_cb(tdw, event)
         
 
@@ -689,19 +703,15 @@ class BezierMode (InkingMode):
                     self._last_event_node = node
                     self.phase = _PhaseBezier.INIT_HANDLE
                     self.current_node_index=len(self.nodes)-1
-                    if len(self.nodes) == 1:
-                        self.current_handle_index = 1
-                    else:
-                        self.current_handle_index = 0
+                    # Important: with setting initial control handle 
+                    # as the 'next' (= index 1) one,it brings us
+                    # inkscape-like node creation.
+                    self.current_handle_index = 1 
 
                     self._queue_draw_node(self.current_node_index)
 
         elif self.phase == _PhaseBezier.MOVE_NODE:
-            self._node_dragged = False
             if len(self.selected_nodes) > 0:
-               #node = self.nodes[self.target_node_index]
-               #self._dragged_node_start_pos = (node.x, node.y)
-                
                 # Use selection_rect class as offset-information
                 self.selection_rect.start(dx, dy)
         
@@ -732,9 +742,9 @@ class BezierMode (InkingMode):
             node = self._last_event_node
             if self._last_event_node:
                 self._queue_draw_node(self.current_node_index)# to erase
-                handle = node.control_handles[self.current_handle_index]
-                handle.x = mx
-                handle.y = my
+                node.set_control_handle(self.current_handle_index,
+                        mx, my)
+
                 self._queue_draw_node(self.current_node_index)
             self._queue_redraw_curve()
                 
@@ -768,11 +778,13 @@ class BezierMode (InkingMode):
         elif self.phase in (_PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
             node = self._last_event_node
       
-            if self.phase == _PhaseBezier.INIT_HANDLE and len(self.nodes) > 1:
-                node.control_handles[1].x = node.x - (node.control_handles[0].x - node.x)
-                node.control_handles[1].y = node.y - (node.control_handles[0].y - node.y)
+            # At initialize handle phase, even if the node is not 'curve'
+            # Set the handles as symmetry.
+            if (self.phase == _PhaseBezier.INIT_HANDLE and 
+                    len(self.nodes) > 1 and node.curve == False):
+                node.curve = True 
+                node.curve = False
 
-           #self._reset_adjust_data()
             self._queue_redraw_all_nodes()
             self._queue_redraw_curve()
             if len(self.nodes) > 1:
@@ -813,13 +825,12 @@ class BezierMode (InkingMode):
             self.selection_rect.reset()
             self.phase = _PhaseBezier.CREATE_PATH
 
-        elif self.phase == _PhaseBezier.INITIAL:
-            # Only to avoid NotImplementedError.
-            # In some cases at button_release_cb,this phase set.
-            # That cb will immidiately settle this callback.
-            pass 
-        else:
-            raise NotImplementedError("Unknown phase %r" % self.phase)
+        elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
+            self.phase = _PhaseBezier.CREATE_PATH
+
+        # Common processing
+        if self.current_node_index != None:
+            self.options_presenter.target = (self, self.current_node_index)
 
     ## Interrogating events
 
@@ -885,7 +896,7 @@ class OverlayBezier (Overlay):
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
         # FIXME mostly copied from inktool.Overlay.update_button_positions
-        # difference is for-loop of nodes
+        # The difference is for-loop of nodes
         nodes = self._inkmode.nodes
         num_nodes = len(nodes)
         if num_nodes == 0:
@@ -907,11 +918,12 @@ class OverlayBezier (Overlay):
         for i, node in enumerate(nodes):
             x, y = self._tdw.model_to_display(node.x, node.y)
             fixed.append(_LayoutNode(x, y))
-            # ADDED PORTION:to avoid overwrap on control handles,
+            # ADDED PORTION:to avoid buttons are overwrap on control handles,
             # treat control handles as nodes,when it is visible.
             if i == self._inkmode.current_node_index:
                 for t in (0,1):
-                    fixed.append(_LayoutNode(node.control_handles[t].x, node.control_handles[t].y))
+                    handle = node.get_control_handle(t)
+                    fixed.append(_LayoutNode(handle.x, handle.y))
 
         # The reject and accept buttons are connected to different nodes
         # in the stroke by virtual springs.
@@ -1000,13 +1012,12 @@ class OverlayBezier (Overlay):
               
                     # Drawing control handle
                     cr.save()
-                   #cr.move_to(x, y)
                     cr.set_source_rgb(0,0,1)
                     cr.set_line_width(1)
                     for hi in (0,1):                        
                         if ((hi == 0 and i > 0) or
                                 (hi == 1 and i <= len(self._inkmode.nodes)-1)): 
-                            ch = node.control_handles[hi]
+                            ch = node.get_control_handle(hi)
                             hx, hy = self._tdw.model_to_display(ch.x, ch.y)
                             hx += dx
                             hy += dy
@@ -1017,6 +1028,7 @@ class OverlayBezier (Overlay):
                             cr.move_to(x, y)
                             cr.line_to(hx, hy)
                             cr.stroke()
+
                     cr.restore()
                               
                 elif i == mode.target_node_index:
@@ -1082,8 +1094,83 @@ class OptionsPresenter_Bezier (OptionsPresenter):
         super(OptionsPresenter_Bezier, self).__init__()
 
     def _ensure_ui_populated(self):
-        super(OptionsPresenter_Bezier, self)._ensure_ui_populated()
         if self._options_grid is not None:
             return
+        builder_xml = os.path.splitext(__file__)[0] + ".glade"
+        builder = Gtk.Builder()
+        builder.set_translation_domain("mypaint")
+        builder.add_from_file(builder_xml)
+        builder.connect_signals(self)
+        self._options_grid = builder.get_object("options_grid")
+        self._point_values_grid = builder.get_object("point_values_grid")
+        self._point_values_grid.set_sensitive(False)
+        self._pressure_adj = builder.get_object("pressure_adj")
+        self._xtilt_adj = builder.get_object("xtilt_adj")
+        self._ytilt_adj = builder.get_object("ytilt_adj")
+        self._dtime_adj = builder.get_object("dtime_adj")
+        self._dtime_label = builder.get_object("dtime_label")
+        self._dtime_scale = builder.get_object("dtime_scale")
+        self._insert_button = builder.get_object("insert_point_button")
+        self._insert_button.set_sensitive(False)
+        self._delete_button = builder.get_object("delete_point_button")
+        self._delete_button.set_sensitive(False)
+        self._check_curvepoint= builder.get_object("checkbutton_curvepoint")
+        self._check_curvepoint.set_sensitive(False)
+        self._average_pressure_button = builder.get_object("average_pressure_button")
+        self._average_pressure_button.set_sensitive(False)
 
-  
+    @property
+    def target(self):
+        return super(OptionsPresenter_Bezier, self).target
+
+    @target.setter
+    def target(self, targ):
+        beziermode, cn_idx = targ
+        beziermode_ref = None
+        if beziermode:
+            beziermode_ref = weakref.ref(beziermode)
+        self._target = (beziermode_ref, cn_idx)
+        # Update the UI
+        if self._updating_ui:
+            return
+        self._updating_ui = True
+        try:
+            self._ensure_ui_populated()
+            if 0 <= cn_idx < len(beziermode.nodes):
+                cn = beziermode.nodes[cn_idx]
+                self._pressure_adj.set_value(cn.pressure)
+                self._xtilt_adj.set_value(cn.xtilt)
+                self._ytilt_adj.set_value(cn.ytilt)
+                if cn_idx > 0:
+                    sensitive = True
+                    dtime = beziermode.get_node_dtime(cn_idx)
+                else:
+                    sensitive = False
+                    dtime = 0.0
+                for w in (self._dtime_scale, self._dtime_label):
+                    w.set_sensitive(sensitive)
+                self._dtime_adj.set_value(dtime)
+                self._point_values_grid.set_sensitive(True)
+                self._check_curvepoint.set_sensitive(True)
+                self._check_curvepoint.set_active(cn.curve)
+            else:
+                self._point_values_grid.set_sensitive(False)
+                self._check_curvepoint.set_sensitive(False)
+
+            self._insert_button.set_sensitive(beziermode.can_insert_node(cn_idx))
+            self._delete_button.set_sensitive(beziermode.can_delete_node(cn_idx))
+            self._average_pressure_button.set_sensitive(len(beziermode.nodes) > 2)
+        finally:
+            self._updating_ui = False                               
+
+    def _checkbutton_curvepoint_toggled_cb(self, button):
+        beziermode, node_idx = self.target
+        if beziermode:
+            if 0 <= node_idx < len(beziermode.nodes):
+                beziermode._queue_draw_node(node_idx) 
+                beziermode._queue_redraw_curve()
+                beziermode.nodes[node_idx].curve = button.get_active()
+                beziermode._queue_draw_node(node_idx) 
+                beziermode._queue_redraw_curve()
+
+    ## Other handlers are as implemented in superclass.  
