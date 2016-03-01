@@ -59,7 +59,7 @@ class _Node_Bezier (object):
             
             
     def __init__(self,x,y,pressure=None,xtilt=0.0,ytilt=0.0,
-            control_handles=None,even=True):
+            control_handles=None,curve=True):
         self.x = x
         self.y = y
         self.pressure = pressure
@@ -71,7 +71,7 @@ class _Node_Bezier (object):
         else:
             self._control_handles = (_Control_Handle(x, y), _Control_Handle(x, y))
 
-        self._curve = True
+        self._curve = curve
 
     @property
     def curve(self):
@@ -168,13 +168,15 @@ class _EditZone_Bezier(_EditZone):
 
 class _PhaseBezier(_Phase):
     """Enumeration of the states that an BezierCurveMode can be in"""
-    INITIAL = _Phase.CAPTURE     # Initial Phase,creating node.
-    CREATE_PATH = _Phase.ADJUST  # Main Phase.creating path(adding node)
+    INITIAL = _Phase.CAPTURE     #: Initial Phase,creating node.
+    CREATE_PATH = _Phase.ADJUST  #: Main Phase.creating path(adding node)
                                  # THIS MEMBER MUST SAME AS _Phase.ADJUST
                                  # because for InkingMode.scroll_cb()
-    MOVE_NODE = 100         # Moving node(s)
-    ADJUST_HANDLE = 103     # change control-handle position
-    INIT_HANDLE = 104       # initialize control handle,right after create a node
+    MOVE_NODE = 100         #: Moving node(s)
+    ADJUST_HANDLE = 103     #: change control-handle position
+    INIT_HANDLE = 104       #: initialize control handle,right after create a node
+    PLACE_NODE = 105        #: place a new node into clicked position on current
+                            # stroke,when you click with holding CTRL key
 
    # ADJUST_PRESSURE
    # ADJUST_SELECTING
@@ -243,6 +245,27 @@ def _bezier_iter_offset(seq, selected, offset):
         cn = nn
 _bezier_iter_offset.nodebuf = (_Node_Bezier(0,0), _Node_Bezier(0,0))
 
+def _get_bezier_pt(v0, v1, step):
+    return v0 + ((v1-v0) * step)
+
+def _get_bezier_segment(p0, p1, p2, p3, step):
+
+    xa = _get_bezier_pt(p0.x, p1.x, step)
+    ya = _get_bezier_pt(p0.y, p1.y, step)
+    xb = _get_bezier_pt(p1.x, p2.x, step)
+    yb = _get_bezier_pt(p1.y, p2.y, step)
+    xc = _get_bezier_pt(p2.x, p3.x, step)
+    yc = _get_bezier_pt(p2.y, p3.y, step)
+    
+    xa = _get_bezier_pt(xa, xb, step)
+    ya = _get_bezier_pt(ya, yb, step)
+    xb = _get_bezier_pt(xb, xc, step)
+    yb = _get_bezier_pt(yb, yc, step)
+    
+    return (_get_bezier_pt(xa, xb, step),
+            _get_bezier_pt(ya, yb, step))
+
+            
 
 class BezierMode (InkingMode):
 
@@ -323,7 +346,7 @@ class BezierMode (InkingMode):
         """Update the zone and target node under a cursor position"""
         ## FIXME mostly copied from inktool.py
         ## the differences are 'control handle processing' and
-        ## 'cursor changing'
+        ## 'cursor changing' 
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone_Bezier.EMPTY_CANVAS
         if not self.in_drag:
@@ -414,6 +437,77 @@ class BezierMode (InkingMode):
                 tdw.set_override_cursor(cursor)
                 self._current_override_cursor = cursor
 
+    def _detect_on_stroke(self, x, y, allow_distance = 4.0):
+        """ detect the assigned coordinate is on stroke or not
+        :param x: cursor x position in MODEL coord
+        :param y: cursor y position in MODEL coord
+        """
+
+        for i,cn in enumerate(self.nodes[:-1]):
+            nn = self.nodes[i+1]
+            sx = min(cn.x, nn.x)
+            ex = max(cn.x, nn.x)
+            sy = min(cn.y, nn.y)
+            ey = max(cn.y, nn.y)
+            for t in (0,1):
+                cx = cn.get_control_handle(t).x
+                nx = nn.get_control_handle(t).x
+                sx = min(min(sx, cx), nx)
+                ex = max(max(sx, cx), nx)
+                cy = cn.get_control_handle(t).y
+                ny = nn.get_control_handle(t).y
+                sy = min(min(sy, cy), ny)
+                ey = max(max(sy, cy), ny)
+
+            if sx <= x <= ex and sy <= y <= ey:
+               #print('hit area')
+                step = 0.1
+                ox, oy = _get_bezier_segment(cn, cn.get_control_handle(1),
+                            nn.get_control_handle(0), nn, 0.0)
+                cur_step = step
+               #print("%.2f , %.2f" % (x, y))
+                while cur_step <= 1.0:
+                    cx, cy = _get_bezier_segment(cn, cn.get_control_handle(1),
+                            nn.get_control_handle(0), nn, cur_step)
+                    sx = min(ox, cx) - allow_distance
+                    ex = max(ox, cx) + allow_distance
+                    sy = min(oy, cy) - allow_distance
+                    ey = max(oy, cy) + allow_distance
+                   #print("%.2f,%.2f - %.2f,%.2f" % (sx, sy, ex, ey))
+                    if sx <= x <= ex and sy <= y <= ey:
+                       #print('hit segment')
+                        # vpx/vpy : vector of assigned point
+                        # vsx/vsy : vector of segment
+                        # TODO this is same as 'simplify nodes'
+                        # so these can be commonize.
+                        vpx = x - ox
+                        vpy = y - oy
+                        vsx = cx - ox
+                        vsy = cy - oy
+                        scaler_s = math.sqrt(vsx**2 + vsy**2)
+                        nsx = vsx / scaler_s
+                        nsy = vsy / scaler_s
+                        dot_vp_v = nsx * vpx + nsy * vpy
+                        vsx = (vsx * dot_vp_v) / scaler_s
+                        vsy = (vsy * dot_vp_v) / scaler_s
+                        vsx -= vpx
+                        vsy -= vpy
+                        # now,vsx/vsy is the vector of distance between
+                        # vpx/vpx and vsx/vsy
+                        distance = math.sqrt(vsx**2 + vsy**2)
+                        print distance
+
+                        if 0 < distance < allow_distance:
+                            return (i,cur_step)
+
+                    ox = cx
+                    oy = cy
+                    cur_step += step
+
+                # We need search entire the stroke     
+                # because it might be intersected.
+
+        return None
 
     ## Redraws
     
@@ -517,34 +611,20 @@ class BezierMode (InkingMode):
                 x, y = pos
                 tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
 
+
     def _draw_curve_segment(self, model, p0, p1, p2, p3, step):
         """Draw the curve segment between the middle two points
         :param step: rendering step of curve.
         """
         
-        def get_pt(v0, v1, step):
-            return v0 + ((v1-v0) * step)
         
         cur_step = 0.0
         pressure = 1.0 # for testing
         xtilt = 0.0
         ytilt = 0.0
         while cur_step <= 1.0:
-            xa = get_pt(p0.x, p1.x, cur_step)
-            ya = get_pt(p0.y, p1.y, cur_step)
-            xb = get_pt(p1.x, p2.x, cur_step)
-            yb = get_pt(p1.y, p2.y, cur_step)
-            xc = get_pt(p2.x, p3.x, cur_step)
-            yc = get_pt(p2.y, p3.y, cur_step)
-            
-            xa = get_pt(xa, xb, cur_step)
-            ya = get_pt(ya, yb, cur_step)
-            xb = get_pt(xb, xc, cur_step)
-            yb = get_pt(yb, yc, cur_step)
-            
-            x = get_pt(xa, xb, cur_step)
-            y = get_pt(ya, yb, cur_step)
-            
+            x, y = _get_bezier_segment(p0, p1, p2, p3, cur_step)
+
             #t_abs = max(last_t_abs, t_abs)
             #dtime = t_abs - last_t_abs
             # TODO This is the big problem.
@@ -630,12 +710,21 @@ class BezierMode (InkingMode):
 
             elif self.zone == _EditZone_Bezier.EMPTY_CANVAS:
                 
-                if (len(self.nodes) > 0 and 
-                        (event.state & Gdk.ModifierType.SHIFT_MASK)):
-                    # selection box dragging start!!
-                    self.phase = _PhaseBezier.ADJUST_SELECTING
-                    self.selection_rect.start(
-                            *tdw.display_to_model(event.x, event.y))
+                if (len(self.nodes) > 0): 
+
+                    if (event.state & Gdk.ModifierType.SHIFT_MASK):
+                        # selection box dragging start!!
+                        self.phase = _PhaseBezier.ADJUST_SELECTING
+                        self.selection_rect.start(
+                                *tdw.display_to_model(event.x, event.y))
+                    elif (event.state & Gdk.ModifierType.CONTROL_MASK):
+                        mx, my = tdw.display_to_model(event.x, event.y)
+                        pressed_segment = self._detect_on_stroke(mx, my)
+                        if pressed_segment:
+                            print('on stroke!')
+                            self._divide_bezier(*pressed_segment)
+                            self.phase = _PhaseBezier.PLACE_NODE
+                            return False # Cancel drag event
 
 
 
@@ -669,6 +758,9 @@ class BezierMode (InkingMode):
             elif self.zone == _EditZone_Bezier.ACCEPT_BUTTON:
                 self._queue_redraw_curve(0.01) # Redraw with hi-fidely curve
                 self._start_new_capture_phase(rollback=False)
+        if self.phase == _PhaseBezier.PLACE_NODE:
+            self.phase = _PhaseBezier.CREATE_PATH
+            pass
 
         # Update workaround state for evdev dropouts
         self._button_down = None
@@ -861,9 +953,42 @@ class BezierMode (InkingMode):
             cls._OPTIONS_PRESENTER = OptionsPresenter_Bezier()
         return cls._OPTIONS_PRESENTER
 
+    def _divide_bezier(self, index, step):
+        assert index < len(self.nodes)-1
+        cn = self.nodes[index]
+        nn = self.nodes[index+1]
+        p0 = cn
+        p1 = cn.get_control_handle(1)
+        p2 = nn.get_control_handle(0)
+        p3 = nn
 
+        xa = _get_bezier_pt(p0.x, p1.x, step)
+        ya = _get_bezier_pt(p0.y, p1.y, step)
+        xb = _get_bezier_pt(p1.x, p2.x, step)
+        yb = _get_bezier_pt(p1.y, p2.y, step)
+        xc = _get_bezier_pt(p2.x, p3.x, step)
+        yc = _get_bezier_pt(p2.y, p3.y, step)
 
+        xd = _get_bezier_pt(xa, xb, step)
+        yd = _get_bezier_pt(ya, yb, step)
+        xe = _get_bezier_pt(xb, xc, step)
+        ye = _get_bezier_pt(yb, yc, step)
+    
 
+        cn.curve = False
+        cn.set_control_handle(1, xa, ya)
+        new_node = _Node_Bezier(
+                    _get_bezier_pt(xd, xe, step), _get_bezier_pt(yd, ye, step),
+                    pressure = cn.pressure + ((nn.pressure - cn.pressure) * step),
+                    xtilt = cn.xtilt + (nn.xtilt - cn.xtilt) * step,
+                    ytilt = cn.ytilt + (nn.ytilt - cn.ytilt) * step,
+                    curve = False)
+        new_node.set_control_handle(0, xd, yd)
+        new_node.set_control_handle(1, xe, ye)
+        self.nodes.insert(index + 1, new_node)
+
+        nn.curve = False
+        nn.set_control_handle(0, xc, yc)
 
 
     def insert_node(self, i):
