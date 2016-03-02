@@ -9,8 +9,12 @@
       <separator/>
       <menu action="ProjectMenu">
           <menuitem action='OpenProject'/>
+          <menu action='OpenRecentProject'>
+          </menu>
+          <separator/>
           <menuitem action='SaveAsProject'/>
           <menuitem action='SaveProjectAsNewVersion'/>
+          <separator/>
           <menuitem action='RevertProject'/>
       </menu>
       <separator/>

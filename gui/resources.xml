@@ -186,6 +186,13 @@ Vocabulary
         </object>
       </child>
       <child>
+        <object class="GtkAction" id="OpenRecentProject">
+          <property name="label" translatable="yes" context="Menu→File (labels)">Open Recent Project</property>
+          <!-- NO TOOTIP: this is a submenu -->
+          <property name="icon-name">mypaint-history-symbolic</property>
+        </object>
+      </child>
+      <child>
         <object class="GtkAction" id="SaveAsProject">
           <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save As Project</property>
           <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current work as a project directory, with assigning it a new name.</property>

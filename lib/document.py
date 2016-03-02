@@ -1668,7 +1668,6 @@ class Document (object):
                 #    revert should executed with based on this file.
                 # 3. ordinary save executed.
 
-                print 'entering here'
                 lt = time.localtime()
                 destdirname = os.path.join(
                         self.filename,
@@ -1709,6 +1708,8 @@ class Document (object):
                 # changed layer with stroke maps are already written.
                 # And file existence is checked in _project_copy_cb(),
                 # so overwritten with old one does not happen.
+
+                destdirname = os.path.join(dirname, 'data')
                                 
                 for path, cl in self.layer_stack.walk():
                     if not cl.autosave_dirty:
@@ -1729,10 +1730,6 @@ class Document (object):
 
                 if len(copy_list) == 0:
                     logger.warning('at new save_project, copy_list is empty!')
-
-                destdirname = os.path.join(dirname, 'data')
-
-    
 
             if len(copy_list) > 0:
                 taskproc = self._autosave_processor
@@ -1814,7 +1811,6 @@ class Document (object):
             newfilepath = os.path.join(newdir, basename)
             assert os.path.exists(csf)
             if not os.path.exists(newfilepath):
-                print('copied %s to %s' % (csf, newfilepath))
                 shutil.copyfile(csf, newfilepath)
                 
             

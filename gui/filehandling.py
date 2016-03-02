@@ -149,6 +149,13 @@ class FileHandler (object):
         ra = app.find_action("OpenRecent")
         ra.add_filter(rf)
 
+        # Initializing Recent projects
+       #menubar = app.ui_manager.get_widget('/Menubar')
+       #print dir(menubar)
+       #menubar.append(gtk.MenuItem("test1"))
+       #rp.append(gtk.MenuItem("test2"))
+       #rp.append(gtk.MenuItem("test3"))
+       #
         ag = app.builder.get_object('FileActions')
         for action in ag.list_actions():
             self.app.kbm.takeover_action(action)
@@ -159,6 +166,7 @@ class FileHandler (object):
         self.active_scrap_filename = None
         self.lastsavefailed = False
         self._update_recent_items()
+        self._update_recent_project_items()
 
         saveformat_keys = [
             SAVE_FORMAT_ANY,
@@ -701,23 +709,6 @@ class FileHandler (object):
                 #TODO display "no preview available" image?
                 file_chooser.set_preview_widget_active(False)
 
-    def update_project_preview_cb(self, file_chooser, preview):
-        """Project-Save specialized version of update_preview_cb()
-        """
-        filename = file_chooser.get_preview_filename()
-        if filename:
-            thumbname = os.path.join(filename,'Thumbnails','thumbnail.png').decode('utf-8')
-            if os.path.exists(thumbname):
-                pixbuf = helpers.freedesktop_thumbnail(thumbname)
-                if pixbuf:
-                    # if pixbuf is smaller than 256px in width, copy it onto a transparent 256x256 pixbuf
-                    pixbuf = helpers.pixbuf_thumbnail(pixbuf, 256, 256, True)
-                    preview.set_from_pixbuf(pixbuf)
-                    file_chooser.set_preview_widget_active(True)
-                    return
-
-        #TODO display "no preview available" image?
-        file_chooser.set_preview_widget_active(False)
     
                 
     def get_open_dialog(self, filename=None, start_in_folder=None, file_filters=[]):
@@ -740,10 +731,6 @@ class FileHandler (object):
                 self.update_preview_cb,
                 self.file_filters)
 
-    def open_project_cb(self, action):
-        self._open_internal(gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
-                self.update_project_preview_cb,
-                None)
 
     def _open_internal(self, dialog_action, preview_cb, filters):
         ok_to_open = self.app.filehandler.confirm_destructive_action(
@@ -795,7 +782,6 @@ class FileHandler (object):
         try:
             if dialog.run() == gtk.RESPONSE_OK:
                 dialog.hide()
-                print dialog.get_filename()
                 self.open_file(dialog.get_filename().decode('utf-8'))
         finally:
             dialog.destroy()
@@ -870,61 +856,6 @@ class FileHandler (object):
                 prefix=prefix[:-len(number[0])]
             self.save_autoincrement_file(None, prefix+"_", main_doc=True, ext=ext)
 
-    def save_as_project_cb(self, action):
-        
-        if self.filename:
-            current_dirname = os.path.dirname(self.filename)
-        else:
-            current_dirname = ''
-            # choose the most recent save folder
-            self._update_recent_items()
-            for item in reversed(self._recent_items):
-                uri = item.get_uri()
-                fn, _h = lib.glib.filename_from_uri(uri)
-                dn = os.path.dirname(fn)
-                if os.path.isdir(dn):
-                    current_dirname = dn
-                    break
-                    
-        # With creating save dialog prior to self.save_as_dialog(),
-        # we can use customized version of dialog.
-        # this dialog should be destoroyed in self.save_as_dialog().
-        self.init_save_dialog(
-            gtk.FILE_CHOOSER_ACTION_CREATE_FOLDER | gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
-            False
-            )
-            
-        junk, ext = os.path.splitext(self.filename)
-        
-
-        if ext != "":
-            # This means 'export as project directory'
-            # but... we have nothing to do for this. for now.
-            self.save_as_dialog(
-                self.save_file, 
-                start_in_folder=current_dirname)
-            # export flag is for exporting other filetype.
-            # exporting as directory is not for this flag.
-        else:
-            self.save_as_dialog(
-                self.save_file, 
-                start_in_folder=current_dirname)
-
-    def save_project_as_new_version_cb(self, action):
-        if not hasattr(self.doc.model, "as_project") or self.doc.model.as_project == False:
-            self.save_as_project_cb(action)
-        else:
-            self.save_file(self.filename, options={"version_save" : True})
-
-    def revert_project_cb(self, action):
-        if hasattr(self.doc, "as_project") and self.doc.as_project == True:
-            raise NotImplementedError("revert project does not implemented yet")
-        else:
-            self.app.show_transient_message(C_(
-                "file handling: revert project failed (statusbar)",
-                u"Current document is not project,you cannot revert it.",
-            ))
-           #self.app.message_dialog(unicode(e), type=gtk.MESSAGE_ERROR)
                     
     def save_scratchpad_as_dialog(self, export=False):
         if self.app.scratchpad_filename:
@@ -1322,3 +1253,211 @@ class FileHandler (object):
         if not self._file_extension_regex.search(file_path):
             return False
         return True
+
+    ## Project related
+
+    def _update_recent_project_items(self):
+        """Updates self._recent_items from the GTK RecentManager.
+
+        This list is consumed in open_last_cb.
+
+        """
+        # Note: i.exists() does not work on Windows if the pathname
+        # contains utf-8 characters. Since GIMP also saves its URIs
+        # with utf-8 characters into this list, I assume this is a
+        # gtk bug.  So we use our own test instead of i.exists().
+
+        if 'project.recent' in self.app.preferences:
+            self._recent_projects = self.app.preferences['project.recent']
+        else:
+            self._recent_projects = []
+
+    def _recentfilter_project_func(self, rfinfo):
+        """Recent-file filter function.
+
+        This does a filename extension check, and also verifies that the
+        file actually exists.
+
+        """
+        if not rfinfo:
+            return False
+       # To workaround GTK3 bug at ubuntu 14.04 LTS.
+       #>>>> original
+       #apps = rfinfo.applications
+       #if not (apps and "mypaint" in apps):
+       #    return False
+       #return self._uri_is_loadable(rfinfo.uri)
+       ## Keep this test in sync with _update_recent_items().
+       #<<<< original
+        fnamebase, ext = os.path.splitext(rfinfo.display_name)
+        ext = ext.lower()
+        if ext in self.ext2saveformat:
+            return self._uri_is_loadable(rfinfo.uri)
+        return False
+
+
+    def update_project_preview_cb(self, file_chooser, preview):
+        """Project-Save specialized version of update_preview_cb()
+        """
+        filename = file_chooser.get_preview_filename()
+        if filename:
+            thumbname = os.path.join(filename,'Thumbnails','thumbnail.png').decode('utf-8')
+            if os.path.exists(thumbname):
+                pixbuf = helpers.freedesktop_thumbnail(thumbname)
+                if pixbuf:
+                    # if pixbuf is smaller than 256px in width, copy it onto a transparent 256x256 pixbuf
+                    pixbuf = helpers.pixbuf_thumbnail(pixbuf, 256, 256, True)
+                    preview.set_from_pixbuf(pixbuf)
+                    file_chooser.set_preview_widget_active(True)
+                    return
+
+        #TODO display "no preview available" image?
+        file_chooser.set_preview_widget_active(False)
+
+    def open_project_cb(self, action):
+        self._open_internal(gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
+                self.update_project_preview_cb,
+                None)
+
+        self.register_recent_project(self.filename)
+
+    def save_as_project_cb(self, action):
+        
+        if self.filename:
+            current_dirname = os.path.dirname(self.filename)
+        else:
+            current_dirname = ''
+            # choose the most recent save folder
+            self._update_recent_items()
+            for item in reversed(self._recent_items):
+                uri = item.get_uri()
+                fn, _h = lib.glib.filename_from_uri(uri)
+                dn = os.path.dirname(fn)
+                if os.path.isdir(dn):
+                    current_dirname = dn
+                    break
+                    
+        # With creating save dialog prior to self.save_as_dialog(),
+        # we can use customized version of dialog.
+        # this dialog should be destoroyed in self.save_as_dialog().
+        self.init_save_dialog(
+            gtk.FILE_CHOOSER_ACTION_CREATE_FOLDER | gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
+            False
+            )
+            
+        junk, ext = os.path.splitext(self.filename)
+        
+
+        if ext != "":
+            # This means 'export as project directory'
+            # but... we have nothing to do for this. for now.
+            self.save_as_dialog(
+                self.save_file, 
+                start_in_folder=current_dirname)
+            # export flag is for exporting other filetype.
+            # exporting as directory is not for this flag.
+        else:
+            self.save_as_dialog(
+                self.save_file, 
+                start_in_folder=current_dirname)
+
+
+        if not self.lastsavefailed:
+            self.register_recent_project(self.filename)
+
+    def save_project_as_new_version_cb(self, action):
+        if not hasattr(self.doc.model, "as_project") or self.doc.model.as_project == False:
+            self.save_as_project_cb(action)
+        else:
+            self.save_file(self.filename, options={"version_save" : True})
+
+        if not self.lastsavefailed:
+            self.register_recent_project(self.filename)
+
+    def revert_project_cb(self, action):
+        if hasattr(self.doc, "as_project") and self.doc.as_project == True:
+            raise NotImplementedError("revert project does not implemented yet")
+        else:
+            self.app.show_transient_message(C_(
+                "file handling: revert project failed (statusbar)",
+                u"Current document is not project,you cannot revert it.",
+            ))
+           #self.app.message_dialog(unicode(e), type=gtk.MESSAGE_ERROR)
+
+    def open_recent_project_cb(self, action):
+        filepath = self.recent_projects_info[action.id]
+        self.open_file(filepath)
+        self.register_recent_project(filepath)
+
+    def init_project_related(self, menu_or):
+        """ THIS IS ADHOC METHOD.
+        because I think there is no way to add
+        directory to recent file list. 
+        if I found more resonable way,change this.
+        (or,create filetype such as '.project'?)"""
+
+        # loading recent project info(if exists)
+        recent_project_path = os.path.join(
+                self.app.state_dirs.user_data,
+                'recent_projects.txt')
+
+        self.recent_projects_info = []
+        with open(recent_project_path, 'rt') as ifp:
+            for curdir in ifp.read().strip().split('\n'):
+                if (os.path.exists(curdir) and 
+                        os.path.isdir(curdir) and
+                        os.path.exists(os.path.join(curdir,'stack.xml'))):
+                    self.recent_projects_info.append(curdir.decode('utf-8'))
+                else:
+                    logger.info('recent dir %s does not match.so rejected.' % curdir)
+
+        menu_or.set_visible(True)
+        menu_sub = gtk.Menu()
+        menu_sub.set_visible(True)
+        self.PROJECT_RECENT_MAX = 5
+        self.project_recent_menus = []
+
+        for i in range(self.PROJECT_RECENT_MAX):
+            cmenu = gtk.MenuItem() 
+            cmenu.id = i
+            cmenu.connect('activate', self.open_recent_project_cb)
+            cmenu.set_visible(False)
+            self.project_recent_menus.append(cmenu)
+            menu_sub.append(cmenu)
+        menu_or.set_submenu(menu_sub)
+        self.menu_sub = menu_sub
+
+       #self.project_recent_menus = sorted(self.project_recent_menus, 
+       #        reverse=True)
+
+        self._refresh_recent_project_menu()
+
+    def _refresh_recent_project_menu(self):
+        for idx in range(self.PROJECT_RECENT_MAX):
+            cmenu = self.project_recent_menus[idx]
+            if idx < len(self.recent_projects_info):
+                cmenu = self.project_recent_menus[idx]
+                cmenu.set_label("%d:%s" % (idx, self.recent_projects_info[idx]))
+                cmenu.set_visible(True)
+            else:
+                cmenu.set_visible(False)
+
+    def register_recent_project(self, projectpath):
+        if (projectpath in self.recent_projects_info and
+                self.recent_projects_info[0] != projectpath):
+            self.recent_projects_info.remove(projectpath)
+            self.recent_projects_info.insert(0,projectpath)
+
+        self._refresh_recent_project_menu()
+
+    def write_recent_project_info(self):
+        recent_project_path = os.path.join(
+                self.app.state_dirs.user_data,
+                'recent_projects.txt')
+
+        with open(recent_project_path, 'w') as ifp:
+            for cdir in self.recent_projects_info:
+                ifp.write(cdir) 
+                ifp.write('\n') 
+
+
