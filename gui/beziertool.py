@@ -485,29 +485,27 @@ class BezierMode (InkingMode):
 
             if sx <= x <= ex and sy <= y <= ey:
 
-                def detect_step(start_step, end_step, increase_step):
+                def get_distance_and_step(start_step, end_step, increase_step):
                     ox, oy = _get_bezier_segment(cn, cn.get_control_handle(1),
                                 nn.get_control_handle(0), nn, start_step)
                     cur_step = start_step
-
                     while cur_step <= end_step:
+
                         cx, cy = _get_bezier_segment(cn, cn.get_control_handle(1),
                                 nn.get_control_handle(0), nn, cur_step)
-                        sx = min(ox, cx) - allow_distance
-                        ex = max(ox, cx) + allow_distance
-                        sy = min(oy, cy) - allow_distance
-                        ey = max(oy, cy) + allow_distance
-                        if sx <= x <= ex and sy <= y <= ey:
-                            # vpx/vpy : vector of assigned point
-                            # vsx/vsy : vector of segment
-                            # TODO this is same as 'simplify nodes'
-                            # so these can be commonize.
-                            vpx = x - ox
-                            vpy = y - oy
-                            vsx = cx - ox
-                            vsy = cy - oy
-                            scaler_s = math.sqrt(vsx**2 + vsy**2)
-                            if scaler_s > 0:
+
+                        # vpx/vpy : vector of assigned point
+                        # vsx/vsy : vector of segment
+                        # TODO this is same as 'simplify nodes'
+                        # so these can be commonize.
+                        vpx = x - ox
+                        vpy = y - oy
+                        vsx = cx - ox
+                        vsy = cy - oy
+                        scaler_p = math.sqrt(vpx**2 + vpy**2)
+                        scaler_s = math.sqrt(vsx**2 + vsy**2)
+                        if scaler_s > 0:
+                            if scaler_p <= scaler_s:
                                 nsx = vsx / scaler_s
                                 nsy = vsy / scaler_s
                                 dot_vp_v = nsx * vpx + nsy * vpy
@@ -515,33 +513,63 @@ class BezierMode (InkingMode):
                                 vsy = (vsy * dot_vp_v) / scaler_s
                                 vsx -= vpx
                                 vsy -= vpy
+                                # now,vsx/vsy is the vector of distance between
+                                # vpx/vpx and vsx/vsy
+                                distance = math.sqrt(vsx**2 + vsy**2)
+                            elif scaler_s < allow_distance:
+                                # Too close step.
+                                distance = scaler_p
                             else:
-                                vsx= vpx
-                                vsy= vpy
+                                # Invalid step segment
+                                distance = allow_distance 
+                        else:
+                            distance = scaler_p
 
-                            # now,vsx/vsy is the vector of distance between
-                            # vpx/vpx and vsx/vsy
-                            distance = math.sqrt(vsx**2 + vsy**2)
-
-
-                            if 0 < distance < allow_distance:
-                                return cur_step
+                        if distance < allow_distance:
+                            return (distance, cur_step)
 
                         ox = cx
                         oy = cy
                         cur_step += increase_step
                         
-
-                detected = detect_step(0.0, 1.0 , 0.1)
-                # final detection
-                if detected:
-                    prev_detected = detected
-                    detected = detect_step(detected, detected + 0.1, 0.01)
-                
-                    if detected:
-                        return (i,detected)
+                lowest_distance = allow_distance
+                cur_step = 0.0
+                distance = None
+            
+                while cur_step < 1.0:
+                    dist_and_step = get_distance_and_step(
+                                        cur_step, 
+                                        1.0, 
+                                        0.01)
+                    if dist_and_step:
+                        distance, tmp_step = dist_and_step
+                        if distance < lowest_distance:
+                            lowest_distance = distance
+                            cur_step = tmp_step
+                            if lowest_distance == 0:
+                                return (i, cur_step)
+                        
                     else:
-                        return (i,prev_detected)
+                        
+                        if (lowest_distance == allow_distance and 
+                                distance == None):
+                            # This means 'No any point on stroke found 
+                            # inside current node segment'.
+
+                            break # Proceed to next node segment
+
+                        elif distance != None:
+                            # This means 'previously found point(step) is 
+                            # what we need to pick'
+                            return (i, cur_step)
+
+                    cur_step += 0.01
+
+                # Loop has end.but,The last step might hit? 
+                if lowest_distance < allow_distance:
+                    return (i, cur_step)
+
+
                 
 
                 # We need search entire the stroke     
@@ -765,7 +793,7 @@ class BezierMode (InkingMode):
                             # (node index of start of segment, stroke step)
 
                             # To erase buttons 
-                           #self._queue_draw_buttons() 
+                            self._queue_draw_buttons() 
 
                             self._divide_bezier(*pressed_segment)
 
