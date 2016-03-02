@@ -3,15 +3,20 @@
     <menu action='FileMenu'>
       <menuitem action='New'/>
       <menuitem action='Open'/>
-      <menuitem action='OpenProject'/>
       <menuitem action='OpenRecent'/>
       <menuitem action='OpenLast'/>
       <menuitem action='Reload'/>
       <separator/>
+      <menu action="ProjectMenu">
+          <menuitem action='OpenProject'/>
+          <menuitem action='SaveAsProject'/>
+          <menuitem action='SaveProjectAsNewVersion'/>
+          <menuitem action='RevertProject'/>
+      </menu>
+      <separator/>
       <menuitem action='Save'/>
       <menuitem action='SaveAs'/>
       <menuitem action='SaveIncrementalVersion'/>
-      <menuitem action='SaveAsProject'/>
       <menuitem action='Export' />
       <separator/>
       <menuitem action='SaveScrap'/>
