@@ -1655,7 +1655,8 @@ class Document (object):
            #    return
 
             copy_list = []
-            if 'version_save' in options and options['version_save'] == True:
+            if (options != None and 'version_save' in options and 
+                    options['version_save'] == True):
                 # Version save of project assigned.
                 # The system of version save is ,
                 # 1. move currentry marked as autosave_dirty files
@@ -1730,7 +1731,6 @@ class Document (object):
 
                 if len(copy_list) == 0:
                     logger.warning('at new save_project, copy_list is empty!')
-    
 
             if len(copy_list) > 0:
                 taskproc = self._autosave_processor
