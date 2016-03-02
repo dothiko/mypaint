@@ -27,6 +27,7 @@ from datetime import datetime
 from collections import namedtuple
 import logging
 logger = logging.getLogger(__name__)
+import uuid
 
 from gi.repository import GdkPixbuf
 from gi.repository import GObject
@@ -512,6 +513,10 @@ class Document (object):
         assert not self._painting_only
         assert self._autosave_dirty
         if dirname:
+            # Project save might have pending tasks of
+            # backup or unchanged layer copy of new project save.
+            # FYI, all pending task flashed right after
+            # project-save method starts.
             assert self._autosave_processor.get_work_count() <= 1
             oradir = dirname
         else:
@@ -621,48 +626,11 @@ class Document (object):
         lib.fileutils.replace(tmpname, filename)
         return False
 
-    def _project_copy_cb(self, filelist, dirinfos):
-        """Project save task: copy files of filelist into new directory.
-
-        This runs every time new project directory created,to copy 
-        unedited layers into new directory's data subdir.
-
-        """
-        assert len(dirinfos) == 2
-        newdir,curdir = dirinfos
-        newdir_data = os.path.join(newdir, 'data')
-        if not os.path.exists(newdir_data):
-            os.makedirs(newdir_data)       
-        
-        for csf in filelist:
-            # csf(current source file) is FULLPATH.
-            basename = os.path.basename(csf)
-            newfilepath = os.path.join(newdir_data, basename)
-            if not os.path.exists(basename):
-                shutil.copyfile(csf, newfilepath)
-                
-            
-            basename, ext = os.path.splitext(basename)
-            ext = ext.lower()
-            if ext == '.png':
-                if basename[-5:] == '-tile':
-                    uuidbase = basename[:-5]
-                else:
-                    uuidbase = basename
-                
-                curdir = os.path.dirname(csf)
-                strokemapname = "%s-strokemap.dat" % uuidbase
-                csf = os.path.join(curdir, strokemapname)
-                newfilepath = os.path.join(newdir_data, strokemapname)
-                if os.path.exists(csf) and not os.path.exists(newfilepath):
-                    shutil.copyfile(csf, newfilepath)
-                    
-                
-    
-        return False
 
     def _autosave_cleanup_cb(self, oradir, manifest):
         """Autosaved backup task: final cleanup task"""
+        if self._as_project:
+            return 
         assert not self._painting_only
         surplus_files = []
         for dirpath, dirnames, filenames in os.walk(oradir):
@@ -1564,118 +1532,6 @@ class Document (object):
 
         logger.info('%.3fs load_ora total', time.time() - t0)
 
-    def save_project(self, dirname, options=None, **kwargs):
-        """ save current document as a project
-        """
-        
-        try:
-            
-            if self._autosave_processor.has_work():
-                logger.info('autosave processor still have pending work')
-                self._autosave_processor.finish_all()
-            
-            # If 'save as another project', set _autosave_dirty flag
-            # to avoid save bypassed when right after current project saved.
-            if self.filename != dirname:
-                self._autosave_dirty = True
-            elif self._autosave_dirty == False:
-                return
-            
-
-            if self._as_project and self.filename != dirname:
-                # This document is a project and assigned to 'save as 
-                # another project'
-                # this means "copy entire project into another directory"
-                
-                # so,simply copy all layer images.
-                # With calling self._queue_autosave_writes() in advance,
-                # changed layer with stroke maps are already written.
-                # And file existence is checked in _project_copy_cb(),
-                # so overwritten with old one does not happen.
-                                
-                copy_list = []
-                
-                
-                for path, cl in self.layer_stack.walk():
-                    if not cl.autosave_dirty:
-                        filepath = None
-                        
-                        if hasattr(cl,'workfilename'):
-                            filepath = cl.workfilename
-                        elif hasattr(cl,'src') and cl.src != None:
-                            filepath = os.path.join(
-                                self.filename,
-                                cl.src                            
-                                )
-       
-                        if filepath and os.path.exists(filepath):
-                            copy_list.append(filepath)
-                    else:
-                        logger.info('%s has marked as dirty,so not copied', cl.name)
-
-    
-                if len(copy_list) > 0:
-                    taskproc = self._autosave_processor
-                    taskproc.add_work(
-                        self._project_copy_cb,
-                        copy_list,
-                        (dirname , self.filename)
-                    )
-                else:
-                    logger.warning('at save_project, copy_list is empty!')
-    
-                
-            # After all files copied,
-            # ordinary autosave processing should be launched.
-            self._queue_autosave_writes(dirname)
-              
-        finally:
-            pass
-    
-
-    def load_project(self, dirname,feedback_cb=None,**kwargs):
-        """ load a directory as a project
-        """
-        assert os.path.isdir(dirname)
-        app_cache_dir = get_app_cache_root()
-        self._stop_cache_updater()
-        self._stop_autosave_writes()
-        self.clear(new_cache=False)
-
-        self._as_project = True
-
-        try:
-            elem = self._load_from_openraster_dir(
-                dirname,
-                app_cache_dir,
-                feedback_cb=feedback_cb,
-                retain_autosave_info=False,
-            )
-        except Exception as e:
-            # Assign a valid *new* cache dir before bailing out.
-            assert self._cache_dir is None
-            self.clear(new_cache=True)
-            # Log, and tell the user about it
-            logger.exception("Failed to load project from %r", dirname)
-            tmpl = C_(
-                "Document project: restoring: errors",
-                u"Failed to load work from an project directory.\n\n"
-                u"Reason: {reason}\n\n"
-                u"{see_logs}"
-            )
-            raise FileHandlingError(
-                tmpl.format(
-                    reason = unicode(e),
-                    see_logs = _ERROR_SEE_LOGS_LINE,
-                ),
-                investigate_dir = dirname,
-            )
-        else:
-            self.filename = dirname
-            self._cache_dir = app_cache_dir
-            # For project,all layer already saved initially.
-            for pos, cl in self.layer_stack.walk():
-                cl.autosave_dirty = False
                     
                     
     def resume_from_autosave(self, autosave_dir, feedback_cb=None):
@@ -1772,6 +1628,213 @@ class Document (object):
             image_elem.attrib.get(_ORA_FRAME_ACTIVE_ATTR, "false"),
         )
         self.set_frame_enabled(frame_enab, user_initiated=False)
+
+    ## Project Related
+    @property
+    def as_project(self):
+        return self._as_project
+
+    def save_project(self, dirname, options=None, **kwargs):
+        """ save current document as a project
+        """
+        
+        try:
+            
+            if self._autosave_processor.has_work():
+                logger.info('autosave processor still have pending work')
+                self._autosave_processor.finish_all()
+            
+            # If 'save as another project', set _autosave_dirty flag
+            # to avoid save bypassed when right after current project saved.
+
+            self._autosave_dirty = True # Currently, forced to set autosave_dirty
+
+           #if self.filename != dirname:
+           #    self._autosave_dirty = True
+           #elif self._autosave_dirty == False:
+           #    return
+
+            copy_list = []
+            if 'version_save' in options and options['version_save'] == True:
+                # Version save of project assigned.
+                # The system of version save is ,
+                # 1. move currentry marked as autosave_dirty files
+                #    into 'backup' directory,which named with 
+                #    'yyyy-mm-dd/uuid' format. 
+                #    for example,if you saved it at 2016.3.3,
+                #    the directory name should be
+                #    such as 'backup/2016-03-03/281c4ff(snip)'
+                # 2. copy current stack.xml file into backup dir.
+                #    revert should executed with based on this file.
+                # 3. ordinary save executed.
+
+                lt = time.localtime()
+                destdirname = os.path.join(
+                        self.filename,
+                        'backup',
+                        '%04d-%02d-%02d' % (lt.tm_year, lt.tm_mon, lt.tm_mday),
+                        str(uuid.uuid4()))
+
+                assert not os.path.exists(destdirname)
+
+                for path, cl in self.layer_stack.walk():
+                    if cl.autosave_dirty:
+                        filepath = None
+                        
+                        if hasattr(cl,'workfilename'):
+                            filepath = cl.workfilename
+                        elif hasattr(cl,'src') and cl.src != None:
+                            filepath = os.path.join(
+                                self.filename,
+                                cl.src                            
+                                )
+       
+                        if filepath: 
+                            assert os.path.exists(filepath)
+                            copy_list.append(filepath)
+
+                filepath = os.path.join(self.filename,'stack.xml')
+                assert os.path.exists(filepath)
+                copy_list.append(filepath)
+
+
+            elif self._as_project and self.filename != dirname:
+                # This document is a project and assigned to 'save as 
+                # another project'
+                # this means "copy entire project into another directory"
+                
+                # so,simply copy all layer images.
+                # With calling self._queue_autosave_writes() in advance,
+                # changed layer with stroke maps are already written.
+                # And file existence is checked in _project_copy_cb(),
+                # so overwritten with old one does not happen.
+
+                destdirname = os.path.join(dirname, 'data')
+                                
+                for path, cl in self.layer_stack.walk():
+                    if not cl.autosave_dirty:
+                        filepath = None
+                        
+                        if hasattr(cl,'workfilename'):
+                            filepath = cl.workfilename
+                        elif hasattr(cl,'src') and cl.src != None:
+                            filepath = os.path.join(
+                                self.filename,
+                                cl.src                            
+                                )
+       
+                        if filepath and os.path.exists(filepath):
+                            copy_list.append(filepath)
+                    else:
+                        logger.info('%s has marked as dirty,so not copied', cl.name)
+
+                if len(copy_list) == 0:
+                    logger.warning('at new save_project, copy_list is empty!')
+    
+
+            if len(copy_list) > 0:
+                taskproc = self._autosave_processor
+                taskproc.add_work(
+                    self._project_copy_cb,
+                    copy_list,
+                    (destdirname , self.filename)
+                )
+    
+                
+            # After all files copied,
+            # ordinary autosave processing should be launched.
+            self._queue_autosave_writes(dirname)
+              
+        finally:
+            pass
+    
+
+    def load_project(self, dirname,feedback_cb=None,**kwargs):
+        """ load a directory as a project
+        """
+        assert os.path.isdir(dirname)
+        app_cache_dir = get_app_cache_root()
+        self._stop_cache_updater()
+        self._stop_autosave_writes()
+        self.clear(new_cache=False)
+
+        self._as_project = True
+
+        try:
+            elem = self._load_from_openraster_dir(
+                dirname,
+                app_cache_dir,
+                feedback_cb=feedback_cb,
+                retain_autosave_info=False,
+            )
+        except Exception as e:
+            # Assign a valid *new* cache dir before bailing out.
+            assert self._cache_dir is None
+            self.clear(new_cache=True)
+            # Log, and tell the user about it
+            logger.exception("Failed to load project from %r", dirname)
+            tmpl = C_(
+                "Document project: restoring: errors",
+                u"Failed to load work from an project directory.\n\n"
+                u"Reason: {reason}\n\n"
+                u"{see_logs}"
+            )
+            raise FileHandlingError(
+                tmpl.format(
+                    reason = unicode(e),
+                    see_logs = _ERROR_SEE_LOGS_LINE,
+                ),
+                investigate_dir = dirname,
+            )
+        else:
+            self.filename = dirname
+            self._cache_dir = app_cache_dir
+            # For project,all layer already saved initially.
+            for pos, cl in self.layer_stack.walk():
+                cl.autosave_dirty = False
+
+    def _project_copy_cb(self, filelist, dirinfos):
+        """Project save task: copy files of filelist into new directory.
+
+        This runs every time new project directory created,to copy 
+        unedited layers into new directory's data subdir.
+
+        """
+        assert len(dirinfos) == 2
+        newdir, curdir = dirinfos
+        if not os.path.exists(newdir):
+            os.makedirs(newdir)       
+
+        
+        for csf in filelist:
+            # csf(current source file) is FULLPATH.
+            basename = os.path.basename(csf)
+            newfilepath = os.path.join(newdir, basename)
+            assert os.path.exists(csf)
+            if not os.path.exists(newfilepath):
+                shutil.copyfile(csf, newfilepath)
+                
+            
+            basename, ext = os.path.splitext(basename)
+            ext = ext.lower()
+            if ext == '.png':
+                # .png might have some strokemaps.
+                if basename[-5:] == '-tile':
+                    uuidbase = basename[:-5]
+                else:
+                    uuidbase = basename
+                
+                curdir = os.path.dirname(csf)
+                strokemapname = "%s-strokemap.dat" % uuidbase
+                csf = os.path.join(curdir, strokemapname)
+                assert os.path.exists(csf)
+                newfilepath = os.path.join(newdir, strokemapname)
+                if os.path.exists(csf) and not os.path.exists(newfilepath):
+                    shutil.copyfile(csf, newfilepath)
+                    
+                
+    
+        return False
 
 
 def _save_layers_to_new_orazip(root_stack, filename, bbox=None, xres=None, yres=None, frame_active=False, **kwargs):

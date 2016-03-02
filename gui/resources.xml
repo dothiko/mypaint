@@ -78,14 +78,6 @@ Vocabulary
         <accelerator key="o" modifiers="GDK_CONTROL_MASK"/>
       </child>
       <child>
-        <object class="GtkAction" id="OpenProject">
-          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Open Project</property>
-          <property name="short-label" translatable="yes" context="Toolbar (short labels)">Open Project</property>
-          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Load a directory as a project to work on.</property>
-          <signal name="activate" handler="open_project_cb"/>
-        </object>
-      </child>
-      <child>
         <object class="GtkAction" id="OpenLast">
           <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Open Most Recent</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Load the file you saved most recently.</property>
@@ -141,13 +133,6 @@ Vocabulary
         <accelerator key="s" modifiers="GDK_CONTROL_MASK | GDK_MOD1_MASK"/>
       </child>
       <child>
-        <object class="GtkAction" id="SaveAsProject">
-          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save As Project</property>
-          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current work as a project directory, with assigning it a new name.</property>
-          <signal name="activate" handler="save_as_project_cb"/>
-        </object>
-      </child>
-      <child>
         <object class="GtkAction" id="Export">
           <property name="icon-name">mypaint-document-export-symbolic</property>
           <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Export…</property>
@@ -191,6 +176,37 @@ Vocabulary
           <signal name="activate" handler="autorecover_cb"/>
         </object>
       </child>
+      <!--{{{ Project Related: actions affecting the project directory -->
+      <child>
+        <object class="GtkAction" id="OpenProject">
+          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Open Project</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">Open Project</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Load a directory as a project to work on.</property>
+          <signal name="activate" handler="open_project_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="SaveAsProject">
+          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save As Project</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current work as a project directory, with assigning it a new name.</property>
+          <signal name="activate" handler="save_as_project_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="SaveProjectAsNewVersion">
+          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save Project as New version</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current work,overwritten files are saved into backup directory automatically.</property>
+          <signal name="activate" handler="save_project_as_new_version_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="RevertProject">
+          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Revert Project</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Revert project from older contents,if it exists.</property>
+          <signal name="activate" handler="revert_project_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
     </object>
   </child>
   <!-- }}} -->
@@ -896,6 +912,12 @@ Vocabulary
       <child>
         <object class="GtkAction" id="FileMenu">
           <property name="label" translatable="yes" context="Menu (labels)">File</property>
+          <!-- NO TOOLTIP: this is a menu -->
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="ProjectMenu">
+          <property name="label" translatable="yes" context="Menu→File (labels)">Project</property>
           <!-- NO TOOLTIP: this is a menu -->
         </object>
       </child>

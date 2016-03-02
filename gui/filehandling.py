@@ -909,6 +909,22 @@ class FileHandler (object):
             self.save_as_dialog(
                 self.save_file, 
                 start_in_folder=current_dirname)
+
+    def save_project_as_new_version_cb(self, action):
+        if not hasattr(self.doc.model, "as_project") or self.doc.model.as_project == False:
+            self.save_as_project_cb(action)
+        else:
+            self.save_file(self.filename, options={"version_save" : True})
+
+    def revert_project_cb(self, action):
+        if hasattr(self.doc, "as_project") and self.doc.as_project == True:
+            raise NotImplementedError("revert project does not implemented yet")
+        else:
+            self.app.show_transient_message(C_(
+                "file handling: revert project failed (statusbar)",
+                u"Current document is not project,you cannot revert it.",
+            ))
+           #self.app.message_dialog(unicode(e), type=gtk.MESSAGE_ERROR)
                     
     def save_scratchpad_as_dialog(self, export=False):
         if self.app.scratchpad_filename:
