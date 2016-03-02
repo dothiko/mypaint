@@ -193,6 +193,13 @@ Vocabulary
         </object>
       </child>
       <child>
+        <object class="GtkAction" id="SaveCurrentProject">
+          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save Current Project</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current project.</property>
+          <signal name="activate" handler="save_current_project_cb"/>
+        </object>
+      </child>
+      <child>
         <object class="GtkAction" id="SaveAsProject">
           <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save As Project</property>
           <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current work as a project directory, with assigning it a new name.</property>

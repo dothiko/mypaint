@@ -1256,6 +1256,7 @@ class FileHandler (object):
 
     ## Project related
 
+
     def _update_recent_project_items(self):
         """Updates self._recent_items from the GTK RecentManager.
 
@@ -1320,6 +1321,15 @@ class FileHandler (object):
                 None)
 
         self.register_recent_project(self.filename)
+
+    def save_current_project_cb(self, action):
+        if not hasattr(self.doc.model, "as_project") or self.doc.model.as_project == False:
+            self.save_as_project_cb(action)
+        else:
+            self.save_cb(action)
+
+        if not self.lastsavefailed:
+            self.register_recent_project(self.filename)
 
     def save_as_project_cb(self, action):
         
@@ -1443,9 +1453,12 @@ class FileHandler (object):
                 cmenu.set_visible(False)
 
     def register_recent_project(self, projectpath):
+
         if (projectpath in self.recent_projects_info and
                 self.recent_projects_info[0] != projectpath):
             self.recent_projects_info.remove(projectpath)
+
+        if (self.recent_projects_info[0] != projectpath):
             self.recent_projects_info.insert(0,projectpath)
 
         self._refresh_recent_project_menu()
