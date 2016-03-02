@@ -341,12 +341,36 @@ class BezierMode (InkingMode):
             tdw.display_overlays.append(overlay)
             self._overlays[tdw] = overlay
         return overlay
+
+    ## Update inner states related methods
+
+    def _update_current_node_index(self):
+        """Updates current_node_index from target_node_index & redraw"""
+        new_index = self.target_node_index
+        old_index = self.current_node_index
+        if new_index == old_index:
+            return
+
+        # In BezierMode class,changing current_node_index
+        # might cause re-positioning of buttons.
+        # so we need to queue drawing button.
+        self._queue_draw_buttons() 
+
+        self.current_node_index = new_index
+        self.current_node_changed(new_index)
+        self.options_presenter.target = (self, new_index)
+        for i in (old_index, new_index):
+            if i is not None:
+                self._queue_draw_node(i)
+
+        self._queue_draw_buttons()
         
     def _update_zone_and_target(self, tdw, x, y):
         """Update the zone and target node under a cursor position"""
         ## FIXME mostly copied from inktool.py
         ## the differences are 'control handle processing' and
-        ## 'cursor changing' 
+        ## 'cursor changing' and, queuing buttons draw 
+        ## to follow current_node_index
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone_Bezier.EMPTY_CANVAS
         if not self.in_drag:
@@ -460,49 +484,65 @@ class BezierMode (InkingMode):
                 ey = max(max(sy, cy), ny)
 
             if sx <= x <= ex and sy <= y <= ey:
-               #print('hit area')
-                step = 0.1
-                ox, oy = _get_bezier_segment(cn, cn.get_control_handle(1),
-                            nn.get_control_handle(0), nn, 0.0)
-                cur_step = step
-               #print("%.2f , %.2f" % (x, y))
-                while cur_step <= 1.0:
-                    cx, cy = _get_bezier_segment(cn, cn.get_control_handle(1),
-                            nn.get_control_handle(0), nn, cur_step)
-                    sx = min(ox, cx) - allow_distance
-                    ex = max(ox, cx) + allow_distance
-                    sy = min(oy, cy) - allow_distance
-                    ey = max(oy, cy) + allow_distance
-                   #print("%.2f,%.2f - %.2f,%.2f" % (sx, sy, ex, ey))
-                    if sx <= x <= ex and sy <= y <= ey:
-                       #print('hit segment')
-                        # vpx/vpy : vector of assigned point
-                        # vsx/vsy : vector of segment
-                        # TODO this is same as 'simplify nodes'
-                        # so these can be commonize.
-                        vpx = x - ox
-                        vpy = y - oy
-                        vsx = cx - ox
-                        vsy = cy - oy
-                        scaler_s = math.sqrt(vsx**2 + vsy**2)
-                        nsx = vsx / scaler_s
-                        nsy = vsy / scaler_s
-                        dot_vp_v = nsx * vpx + nsy * vpy
-                        vsx = (vsx * dot_vp_v) / scaler_s
-                        vsy = (vsy * dot_vp_v) / scaler_s
-                        vsx -= vpx
-                        vsy -= vpy
-                        # now,vsx/vsy is the vector of distance between
-                        # vpx/vpx and vsx/vsy
-                        distance = math.sqrt(vsx**2 + vsy**2)
-                        print distance
 
-                        if 0 < distance < allow_distance:
-                            return (i,cur_step)
+                def detect_step(start_step, end_step, increase_step):
+                    ox, oy = _get_bezier_segment(cn, cn.get_control_handle(1),
+                                nn.get_control_handle(0), nn, start_step)
+                    cur_step = start_step
 
-                    ox = cx
-                    oy = cy
-                    cur_step += step
+                    while cur_step <= end_step:
+                        cx, cy = _get_bezier_segment(cn, cn.get_control_handle(1),
+                                nn.get_control_handle(0), nn, cur_step)
+                        sx = min(ox, cx) - allow_distance
+                        ex = max(ox, cx) + allow_distance
+                        sy = min(oy, cy) - allow_distance
+                        ey = max(oy, cy) + allow_distance
+                        if sx <= x <= ex and sy <= y <= ey:
+                            # vpx/vpy : vector of assigned point
+                            # vsx/vsy : vector of segment
+                            # TODO this is same as 'simplify nodes'
+                            # so these can be commonize.
+                            vpx = x - ox
+                            vpy = y - oy
+                            vsx = cx - ox
+                            vsy = cy - oy
+                            scaler_s = math.sqrt(vsx**2 + vsy**2)
+                            if scaler_s > 0:
+                                nsx = vsx / scaler_s
+                                nsy = vsy / scaler_s
+                                dot_vp_v = nsx * vpx + nsy * vpy
+                                vsx = (vsx * dot_vp_v) / scaler_s
+                                vsy = (vsy * dot_vp_v) / scaler_s
+                                vsx -= vpx
+                                vsy -= vpy
+                            else:
+                                vsx= vpx
+                                vsy= vpy
+
+                            # now,vsx/vsy is the vector of distance between
+                            # vpx/vpx and vsx/vsy
+                            distance = math.sqrt(vsx**2 + vsy**2)
+
+
+                            if 0 < distance < allow_distance:
+                                return cur_step
+
+                        ox = cx
+                        oy = cy
+                        cur_step += increase_step
+                        
+
+                detected = detect_step(0.0, 1.0 , 0.1)
+                # final detection
+                if detected:
+                    prev_detected = detected
+                    detected = detect_step(detected, detected + 0.1, 0.01)
+                
+                    if detected:
+                        return (i,detected)
+                    else:
+                        return (i,prev_detected)
+                
 
                 # We need search entire the stroke     
                 # because it might be intersected.
@@ -721,8 +761,17 @@ class BezierMode (InkingMode):
                         mx, my = tdw.display_to_model(event.x, event.y)
                         pressed_segment = self._detect_on_stroke(mx, my)
                         if pressed_segment:
-                            print('on stroke!')
+                            # pressed_segment is a tuple which contains
+                            # (node index of start of segment, stroke step)
+
+                            # To erase buttons 
+                           #self._queue_draw_buttons() 
+
                             self._divide_bezier(*pressed_segment)
+
+                            # queue new node here.
+                            self._queue_draw_node(pressed_segment[0] + 1)
+                            
                             self.phase = _PhaseBezier.PLACE_NODE
                             return False # Cancel drag event
 
@@ -759,6 +808,8 @@ class BezierMode (InkingMode):
                 self._queue_redraw_curve(0.01) # Redraw with hi-fidely curve
                 self._start_new_capture_phase(rollback=False)
         if self.phase == _PhaseBezier.PLACE_NODE:
+           #self._queue_draw_buttons() 
+            self._queue_redraw_curve() 
             self.phase = _PhaseBezier.CREATE_PATH
             pass
 
@@ -954,6 +1005,10 @@ class BezierMode (InkingMode):
         return cls._OPTIONS_PRESENTER
 
     def _divide_bezier(self, index, step):
+        """ Divide (insert a node intermidiate stroke)
+        to current active bezier stroke 
+        without shape change.
+        """
         assert index < len(self.nodes)-1
         cn = self.nodes[index]
         nn = self.nodes[index+1]
@@ -975,6 +1030,8 @@ class BezierMode (InkingMode):
         ye = _get_bezier_pt(yb, yc, step)
     
 
+        # The nodes around a new node changed to 'not curve' node,
+        # to retain original shape.
         cn.curve = False
         cn.set_control_handle(1, xa, ya)
         new_node = _Node_Bezier(
