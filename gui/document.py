@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of MyPaint.
-# Copyright (C) 2007-2010 by Martin Renold <martinxyz@gmx.ch>
+# Copyright (C) 2010-2016 by the MyPaint Development Team.
+# Copyright (C) 2007-2013 by Martin Renold <martinxyz@gmx.ch>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -31,6 +32,7 @@ import gtk
 from gtk import gdk
 from gtk import keysyms
 from gi.repository import Gio
+from gi.repository import GLib
 
 import lib.layer
 import lib.helpers
@@ -311,8 +313,8 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         # Deferred until after the app starts (runs in the first idle-
         # processing phase) as a workaround for https://gna.org/bugs/?14372
         # ([Windows] crash when moving the pen during startup)
-        gobject.idle_add(self.init_pointer_events)
-        gobject.idle_add(self.init_scroll_events)
+        GLib.idle_add(self.init_pointer_events)
+        GLib.idle_add(self.init_scroll_events)
 
         self.zoomlevel_values = [1.0/16, 1.0/8, 2.0/11, 0.25, 1.0/3, 0.50, 2.0/3,  # micro
                                  1.0, 1.5, 2.0, 3.0, 4.0, 5.5, 8.0,        # normal
@@ -762,7 +764,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             # events. But not ShowPopupMenu, sadly: we'd break button
             # hold behaviour for more reasonable devices if we used
             # this trick.
-            gobject.idle_add(handler.activate)
+            GLib.idle_add(handler.activate)
             return True
         else:
             return False
@@ -915,7 +917,15 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             return
         # Paste to the upper left of the doc bbox (see above)
         x, y, w, h = self.model.get_bbox()
-        self.model.load_layer_from_pixbuf(pixbuf, x, y)
+        try:
+            self.model.load_layer_from_pixbuf(pixbuf, x, y)
+        except:
+            logger.exception("Paste failed")
+            self.app.show_transient_message(C_(
+                "Statusbar message: paste result",
+                u"Cannot paste into this type of layer."
+            ))
+            return
         self.app.show_transient_message(C_(
             "Statusbar message: paste result",
             u"Pasted {w}×{h} image.",
@@ -1108,7 +1118,11 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         path = layers.path_below(path)
         if path:
             self.model.select_layer(path=path)
-        self.layerblink_state.activate(action)
+
+        if self.model.layer_stack.current_layer_solo:
+            self.tdw.queue_draw()
+        else:
+            self.layerblink_state.activate(action)
 
     def select_layer_above_cb(self, action):
         """``SelectLayerAbove`` GtkAction callback"""
@@ -1117,7 +1131,11 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         path = layers.path_above(path)
         if path:
             self.model.select_layer(path=path)
-        self.layerblink_state.activate(action)
+
+        if self.model.layer_stack.current_layer_solo:
+            self.tdw.queue_draw()
+        else:
+            self.layerblink_state.activate(action)
 
     def _update_layer_select_actions(self, *_ignored):
         """Updates the Select Layer Above/Below actions"""
@@ -1832,17 +1850,17 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         """
         if immediate:
             if self._view_changed_notification_srcid:
-                gobject.source_remove(self._view_changed_notification_srcid)
+                GLib.source_remove(self._view_changed_notification_srcid)
                 self._view_changed_notification_srcid = None
             self._view_changed_notification_idle_cb()
             return
         if self._view_changed_notification_srcid:
             return
         cb = self._view_changed_notification_idle_cb
-        priority = gobject.PRIORITY_LOW
+        priority = GLib.PRIORITY_LOW
         if prioritize:
-            priority = gobject.PRIORITY_HIGH_IDLE
-        srcid = gobject.idle_add(cb, priority=priority)
+            priority = GLib.PRIORITY_HIGH_IDLE
+        srcid = GLib.idle_add(cb, priority=priority)
         self._view_changed_notification_srcid = srcid
 
     def _view_changed_notification_idle_cb(self):
@@ -1955,7 +1973,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
                     ev = ev.copy()
                 if timeout > 0:
                     # Queue a change of key-up callback after the timeout
-                    gobject.timeout_add(timeout, cb, mode, flip_action, ev)
+                    GLib.timeout_add(timeout, cb, mode, flip_action, ev)
 
                     def _continue_mode_early_keyup_cb(*a):
                         # Record early keyup, but otherwise keep in mode
