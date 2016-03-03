@@ -381,9 +381,6 @@ class Application (object):
         # Create application unique assist object
         self._assist = assist.Stabilizer()
 
-        # XXX THIS IS ADHOC CODES.WE NEED REWRITE THIS!!
-        menu_or = self.ui_manager.get_widget('/Menubar/FileMenu/ProjectMenu/OpenRecentProject')
-        self.filehandler.init_project_related(menu_or)
 
     def _at_application_start(self, filenames, fullscreen):
         col = self.brush_color_manager.get_color()
@@ -422,8 +419,12 @@ class Application (object):
             autosave_recovery = gui.autorecover.Presenter(self)
             autosave_recovery.run(startup=True)
 
-        # XXX my local codes
+        # XXX my local codes --------------------
         self.workspace.mylocal_save_dock_info()
+
+        # for Recent project 
+        menu_orp = self.ui_manager.get_widget('/Menubar/FileMenu/ProjectMenu/OpenRecentProject')
+        self.filehandler.init_project_related(menu_orp)
 
     def save_settings(self):
         """Saves the current settings to persistent storage."""
