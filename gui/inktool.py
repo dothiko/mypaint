@@ -1330,15 +1330,16 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             
         # after then,delete it.
         new_nodes = [self.nodes[0]]
-        for idx,cn in enumerate(self.nodes):
-            if idx in self.selected_nodes:
-                if self.current_node_index == idx:
+        for idx,cn in enumerate(self.nodes[1:-1]):
+            t_idx = idx + 1
+            if t_idx in self.selected_nodes:
+                if self.current_node_index == t_idx:
                     self.current_node_index = None
 
-                if self.target_node_index == idx:
+                if self.target_node_index == t_idx:
                     self.target_node_index = None
             else:
-                new_nodes.append(self.nodes[idx])
+                new_nodes.append(cn)
 
         new_nodes.append(self.nodes[-1])
         self.nodes = new_nodes

@@ -737,10 +737,14 @@ class BezierMode (InkingMode):
                         _EditZone_Bezier.ACCEPT_BUTTON)):
                 if (event.button == 1 and 
                         event.type == Gdk.EventType.BUTTON_PRESS):
-                        # we need save this information,because
-                        # in some case,re-entered button_press_cb
-                        # without any release events.
-                        self._click_info = (event.button, self.zone)
+
+                        # To avoid some of visual glitches,
+                        # we need to process button here.
+                        if self.zone == _EditZone_Bezier.REJECT_BUTTON:
+                            self._start_new_capture_phase(rollback=True)
+                        elif self.zone == _EditZone_Bezier.ACCEPT_BUTTON:
+                            self._queue_redraw_curve(0.01) # Redraw with hi-fidely curve
+                            self._start_new_capture_phase(rollback=False)
                         self._reset_adjust_data()
                         return False
                     
@@ -856,16 +860,7 @@ class BezierMode (InkingMode):
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
 
-        if self.phase == _PhaseBezier.CREATE_PATH:
-            if self._click_info:
-                button, zone = self._click_info
-                if zone == _EditZone_Bezier.REJECT_BUTTON:
-                    self._start_new_capture_phase(rollback=True)
-                elif zone == _EditZone_Bezier.ACCEPT_BUTTON:
-                    self._queue_redraw_curve(0.01) # Redraw with hi-fidely curve
-                    self._start_new_capture_phase(rollback=False)
-                self._click_info = None
-        elif self.phase == _PhaseBezier.PLACE_NODE:
+        if self.phase == _PhaseBezier.PLACE_NODE:
            #self._queue_draw_buttons() 
             self._queue_redraw_curve() 
             self.phase = _PhaseBezier.CREATE_PATH
@@ -1128,6 +1123,7 @@ class BezierMode (InkingMode):
         self._queue_redraw_curve()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
+
 
 
 class OverlayBezier (Overlay):
