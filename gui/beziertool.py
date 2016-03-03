@@ -872,9 +872,6 @@ class BezierMode (InkingMode):
 
         # Update workaround state for evdev dropouts
         self._button_down = None
-        # Initialize pressed position as invalid for hold-and-modify
-        self._pressed_x = None
-        self._pressed_y = None
 
 
 
@@ -967,12 +964,12 @@ class BezierMode (InkingMode):
     def drag_stop_cb(self, tdw):
         self._ensure_overlay_for_tdw(tdw)
         if self.phase == _PhaseBezier.CREATE_PATH:
-            node = self._last_event_node
             self._reset_adjust_data()
-            self._queue_redraw_all_nodes()
-            self._queue_redraw_curve()
-            if len(self.nodes) > 1:
-                self._queue_draw_buttons()
+            if len(self.nodes) > 0:
+                self._queue_redraw_curve()
+                self._queue_redraw_all_nodes()
+                if len(self.nodes) > 1:
+                    self._queue_draw_buttons()
                 
             
         elif self.phase in (_PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
@@ -1028,6 +1025,9 @@ class BezierMode (InkingMode):
         elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
             self.phase = _PhaseBezier.CREATE_PATH
             self.selection_rect.reset()
+            # Initialize pressed position as invalid for hold-and-modify
+            self._pressed_x = None
+            self._pressed_y = None
 
         # Common processing
         if self.current_node_index != None:
@@ -1164,9 +1164,14 @@ class OverlayBezier (Overlay):
             # to avoid buttons are overwrap on control handles,
             # treat control handles as nodes,when it is visible.
             if i == self._inkmode.current_node_index:
-                for t in (0,1):
+                if i==0:
+                    seq = (1,)
+                else:
+                    seq = (0,1)
+                for t in seq:
                     handle = node.get_control_handle(t)
-                    fixed.append(_LayoutNode(handle.x, handle.y))
+                    x, y = self._tdw.model_to_display(handle.x, handle.y)
+                    fixed.append(_LayoutNode(x, y))
             # ADDED CODES END.
 
         # The reject and accept buttons are connected to different nodes

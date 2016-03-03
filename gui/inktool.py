@@ -350,7 +350,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
 
-        self._pressed_pressure = None
 
         
 
@@ -369,6 +368,16 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self.current_node_index = None
         self.target_node_index = None
         self._dragged_node_start_pos = None
+
+        # Pressed position when drag starts, for oncanvas pressure modifying.
+        # these attributes looks like same as self.start_x/y,
+        # but these attribute are rewritten in _adjust_pressure_with_motion,
+        # to continuously change pressure in one dragging sequence.
+        # so cannot use self.start_x/y for oncanvas pressure modify.
+        # furthermore, self._pressed_* is model coordinate.
+        self._pressed_x = None
+        self._pressed_y = None
+        self._pressed_pressure = None
 
         # Multiple selected nodes.   
         # This is a index list of node from self.nodes
@@ -652,9 +661,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_pressure = 0.0
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
-        # Initialize pressed position as invalid for hold-and-modify
-        self._pressed_x = None
-        self._pressed_y = None
+
+
         # Supercall: stop current drag
         return super(InkingMode, self).button_release_cb(tdw, event)
 
@@ -895,7 +903,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def drag_start_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
-        dx, dy = tdw.display_to_model(event.x, event.y)
+        mx, my = tdw.display_to_model(event.x, event.y)
         if self.phase == _Phase.CAPTURE:
             self._reset_nodes()
             self._reset_capture_data()
@@ -919,15 +927,15 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 self._dragged_node_start_pos = (node.x, node.y)
                 
                 # Use selection_rect class as offset-information
-                self.selection_rect.start(dx, dy)
+                self.selection_rect.start(mx, my)
 
         elif self.phase == _Phase.ADJUST_PRESSURE:
             if self.current_node_index is not None:
                 node = self.nodes[self.current_node_index]
                 self._pressed_pressure = node.pressure
-                self._pressed_x, self._pressed_y = dx, dy
+                self._pressed_x, self._pressed_y = mx, my
         elif self.phase == _Phase.ADJUST_SELECTING:
-            self.selection_rect.start(dx, dy)
+            self.selection_rect.start(mx, my)
             self.selection_rect.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
             self._queue_draw_buttons() # To erase button!
             self._queue_draw_selection_rect() # to start
@@ -1052,11 +1060,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 # 'converting offset to model and add it to
                 # node position' will cause calculation error,
                 # it bring us a little shifted position.
-                dx, dy = self.selection_rect.get_model_offset()
+                mx, my = self.selection_rect.get_model_offset()
 
                 for idx in self.selected_nodes:
                     cn = self.nodes[idx]
-                    self.nodes[idx] = cn._replace(x=cn.x + dx, y=cn.y + dy)
+                    self.nodes[idx] = cn._replace(x=cn.x + mx, y=cn.y + my)
 
                 self.selection_rect.reset()
 
@@ -1065,6 +1073,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._queue_draw_buttons()
         elif self.phase == _Phase.ADJUST_PRESSURE:
             ## Pressure editing phase end.
+            self._pressed_x = None
+            self._pressed_y = None
 
             # Return to ADJUST phase.
             # simple but very important,to ensure entering normal editing.
