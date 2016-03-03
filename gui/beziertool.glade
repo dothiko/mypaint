@@ -277,6 +277,30 @@ Negative values mean leftwards tilts.</property>
             <property name="width">2</property>
           </packing>
         </child>
+        <child>
+          <object class="GtkButton" id="apply_variation_button">
+            <property name="label" translatable="yes">Apply Variation</property>
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="receives_default">True</property>
+            <property name="tooltip_text" translatable="yes">Apply current variation to bezier stroke.</property>
+            <property name="margin_top">6</property>
+            <signal name="clicked" handler="_apply_variation_button_cb" swapped="no"/>
+          </object>
+          <packing>
+            <property name="left_attach">1</property>
+            <property name="top_attach">2</property>
+          </packing>
+        </child>
+        <child>
+          <placeholder/>
+        </child>
+        <child>
+          <placeholder/>
+        </child>
+        <child>
+          <placeholder/>
+        </child>
       </object>
       <packing>
         <property name="left_attach">0</property>

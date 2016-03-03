@@ -30,8 +30,9 @@ import gui.drawutils
 import lib.helpers
 import gui.cursor
 import lib.observable
-from inktool import *
-from inktool import _LayoutNode, _Phase, _EditZone
+from gui.inktool import *
+from gui.inktool import _LayoutNode, _Phase, _EditZone
+from gui.linemode import LineModeCurveWidget
 
 ## Class defs
 
@@ -319,7 +320,8 @@ class BezierMode (InkingMode):
 
     ## Class config vars
 
-
+    DRAFT_STEP = 0.01 # Draft(Editing) Bezier curve stroke step.
+    FINAL_STEP = 0.005 # Final output stroke Bezier-curve step.
 
     ## Other class vars
 
@@ -479,6 +481,7 @@ class BezierMode (InkingMode):
         """
 
         for i,cn in enumerate(self.nodes[:-1]):
+            # Get boundary rectangle,to reduce processing segment
             nn = self.nodes[i+1]
             sx = min(cn.x, nn.x)
             ex = max(cn.x, nn.x)
@@ -551,7 +554,7 @@ class BezierMode (InkingMode):
                     dist_and_step = get_distance_and_step(
                                         cur_step, 
                                         1.0, 
-                                        0.01)
+                                        BezierMode.DRAFT_STEP)
                     if dist_and_step:
                         distance, tmp_step = dist_and_step
                         if distance < lowest_distance:
@@ -574,7 +577,7 @@ class BezierMode (InkingMode):
                             # what we need to pick'
                             return (i, cur_step)
 
-                    cur_step += 0.01
+                    cur_step += BezierMode.DRAFT_STEP
 
                 # Loop has end.but,The last step might hit? 
                 if lowest_distance < allow_distance:
@@ -743,7 +746,7 @@ class BezierMode (InkingMode):
                         if self.zone == _EditZone_Bezier.REJECT_BUTTON:
                             self._start_new_capture_phase(rollback=True)
                         elif self.zone == _EditZone_Bezier.ACCEPT_BUTTON:
-                            self._queue_redraw_curve(0.01) # Redraw with hi-fidely curve
+                            self._queue_redraw_curve(BezierMode.FINAL_STEP) # Redraw with hi-fidely curve
                             self._start_new_capture_phase(rollback=False)
                         self._reset_adjust_data()
                         return False
@@ -1124,6 +1127,74 @@ class BezierMode (InkingMode):
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
+    def apply_pressure_points(self, points):
+        """ apply pressure reprenting points
+        from LineModeCurveWidget.
+
+        :param points:  a list of tuple.a tuple is
+        (x position of point, y position of point)
+        y position is decleasing upward,so we need to
+        use the value reversed when we treat it as 
+        pressure value.
+
+        if this parameter is None, BezierMode automatically
+        get it from its Optionpresentor.
+        """
+
+        # We need smooooth value, so treat the points
+        # as Bezier-curve points.
+
+        # first of all, get the entire stroke length
+        # to normalize stroke.
+
+        if len(self.nodes) < 2:
+            return
+
+        if points == None:
+            assert hasattr(self.options_presenter,'curve')
+            points = self.options_presenter.curve.points
+
+        assert len(points) == 4
+
+        self._queue_redraw_curve()
+
+        node_length=[]
+        total_length = 0.0
+
+        for idx, cn in enumerate(self.nodes[:-1]):
+            nn = self.nodes[idx + 1]
+            ox, oy = _get_bezier_segment(cn, cn.get_control_handle(1),
+                        nn.get_control_handle(0), nn, 0)
+            cur_step = BezierMode.DRAFT_STEP
+            length = 0.0 
+            while cur_step < 1.0:
+                cx, cy = _get_bezier_segment(cn, cn.get_control_handle(1),
+                            nn.get_control_handle(0), nn, cur_step)
+                length += math.sqrt((cx - ox) ** 2 + (cy - oy) ** 2)
+                cur_step += BezierMode.DRAFT_STEP
+                ox = cx
+                oy = cy
+
+            node_length.append(length)
+            total_length+=length
+
+        node_length.append(total_length) # this is sentinel
+
+
+        # use control handle class temporary to get smooth pressures.
+        ap = _Control_Handle(*points[0])
+        bp = _Control_Handle(*points[1])
+        cp = _Control_Handle(*points[2])
+        dp = _Control_Handle(*points[3])
+        cur_length = 0.0
+        for idx,cn in enumerate(self.nodes):
+            cx, cy = _get_bezier_segment(ap, bp, cp, dp, 
+                        cur_length / total_length)
+            cn.pressure = 1.0 - cy
+            cur_length += node_length[idx]
+        
+        self._queue_redraw_curve()
+
 
 
 class OverlayBezier (Overlay):
@@ -1365,6 +1436,32 @@ class OptionsPresenter_Bezier (OptionsPresenter):
         self._average_pressure_button = builder.get_object("average_pressure_button")
         self._average_pressure_button.set_sensitive(False)
 
+        self._apply_variation_button = builder.get_object("apply_variation_button")
+        self._apply_variation_button.set_sensitive(False)
+
+       #combo = builder.get_object("variation_preset_combobox")
+       #combo.visible = False
+       #self._variation_preset_combo = combo
+        
+
+        self._point_editing_grid = builder.get_object("points_editing_grid")
+        self._init_specialized_widgets(1)
+
+
+
+    def _init_specialized_widgets(self, row):
+        # XXX code duplication from gui.linemode.LineModeOptionsWidget
+        curve = LineModeCurveWidget()
+        curve.set_size_request(175, 125)
+        self.curve = curve
+        exp = Gtk.Expander()
+        exp.set_label(_("Pressure variation..."))
+        exp.set_use_markup(False)
+        exp.add(curve)
+        self._point_editing_grid.attach(exp, 0, row, 2, 1)
+        exp.set_expanded(True)
+         
+
     @property
     def target(self):
         return super(OptionsPresenter_Bezier, self).target
@@ -1406,6 +1503,7 @@ class OptionsPresenter_Bezier (OptionsPresenter):
             self._insert_button.set_sensitive(beziermode.can_insert_node(cn_idx))
             self._delete_button.set_sensitive(beziermode.can_delete_node(cn_idx))
             self._average_pressure_button.set_sensitive(len(beziermode.nodes) > 2)
+            self._apply_variation_button.set_sensitive(len(beziermode.nodes) >= 2)
         finally:
             self._updating_ui = False                               
 
@@ -1418,5 +1516,13 @@ class OptionsPresenter_Bezier (OptionsPresenter):
                 beziermode.nodes[node_idx].curve = button.get_active()
                 beziermode._queue_draw_node(node_idx) 
                 beziermode._queue_redraw_curve()
+
+    def _apply_variation_button_cb(self, button):
+        beziermode, node_idx = self.target
+        if beziermode:
+            if len(beziermode.nodes) > 1:
+                # To LineModeCurveWidget, 
+                # we can access control points as "points" attribute.
+                beziermode.apply_pressure_points(self.curve.points)
 
     ## Other handlers are as implemented in superclass.  

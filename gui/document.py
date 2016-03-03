@@ -2132,6 +2132,13 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         mode=self.modes.top
         if getattr(mode, 'deselect_all_nodes', False):
             mode.deselect_all_nodes()
+
+    def apply_pressure_variation_nodes_cb(self, action):
+        """Callback: Apply current OptionWidget's pressure variation 
+        into current control points"""
+        mode=self.modes.top
+        if getattr(mode, 'apply_pressure_points', False):
+            mode.apply_pressure_points(None)
     
 
 

@@ -838,6 +838,14 @@ Vocabulary
           <signal name="activate" handler="deselect_all_nodes_cb"/>
         </object>
       </child>
+
+      <child>
+        <object class="GtkAction" id="ApplyPressureVariationNodes">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Deselect all nodes</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Apply Pressure Variation curve into current control points.</property>
+          <signal name="activate" handler="apply_pressure_variation_nodes_cb"/>
+        </object>
+      </child>
       <!-- }}} -->
     </object>
   </child>
