@@ -925,8 +925,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if self.current_node_index is not None:
                 node = self.nodes[self.current_node_index]
                 self._pressed_pressure = node.pressure
-                self._pressed_x, self._pressed_y = \
-                        tdw.display_to_model(dx, dy)
+                self._pressed_x, self._pressed_y = dx, dy
         elif self.phase == _Phase.ADJUST_SELECTING:
             self.selection_rect.start(dx, dy)
             self.selection_rect.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)

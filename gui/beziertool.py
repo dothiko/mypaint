@@ -885,7 +885,7 @@ class BezierMode (InkingMode):
     ## Drag handling (both capture and adjust phases)
     def drag_start_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
-        dx, dy = tdw.display_to_model(event.x, event.y)
+        mx, my = tdw.display_to_model(event.x, event.y)
 
         self._queue_previous_draw_buttons() # To erase button,and avoid glitch
 
@@ -914,16 +914,15 @@ class BezierMode (InkingMode):
         elif self.phase == _PhaseBezier.MOVE_NODE:
             if len(self.selected_nodes) > 0:
                 # Use selection_rect class as offset-information
-                self.selection_rect.start(dx, dy)
+                self.selection_rect.start(mx, my)
         
         elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
             if self.current_node_index is not None:
                 node = self.nodes[self.current_node_index]
                 self._pressed_pressure = node.pressure
-                self._pressed_x, self._pressed_y = \
-                        tdw.display_to_model(dx, dy)
+                self._pressed_x, self._pressed_y = mx, my
         elif self.phase == _PhaseBezier.ADJUST_SELECTING:
-            self.selection_rect.start(dx, dy)
+            self.selection_rect.start(mx, my)
             self.selection_rect.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
             self._queue_draw_selection_rect() # to start
         elif self.phase == _PhaseBezier.ADJUST_HANDLE:
