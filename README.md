@@ -38,12 +38,28 @@ this increment it and save as 'foobar_003.ora'
 #### project save (experimantal) : プロジェクトセーブ機能
 This feature utilize autosave functionality,extreamly faster save your work as 'Project *Directory*',not an 
 OpenRaster file.
-*This code is extreamly experimental*,so you *might lost your work* when using this feature.
+you can use this from 'Files' -> 'Projects' submenu,
+
+ * Open Project - open project directory previously saved (or extracted Openraster file directory)
+ * Open Recent Project - Quick access to recently opened/saved projects
+ * Save current project - overwrite current this is almost same as 'Save' menu
+ * Save As Project - save current opened work as new project directory 
+ * Save Project as New version - save project , and changed (to be overwritten) layers are backuped.
+ * Revert Project - **DO NOT CLICK THIS. under construction.** but you can manually revert older layer / strokemap with file manager of your desktop environment.
+
+**This code is extreamly experimental**,so you *might lost your work* when using this feature.
 
 プロジェクトディレクトリに展開して保存し、なおかつそれを使い続ける機能です。
 OpenRasterファイルをパッケージする手間がないため高速に保存できます。autosave機能を流用して作られています。
 
-この機能はカスタム機能の中でも*極めて実験的*なもので、使用した場合何らかのバグにより作品が破壊されることもあり得ます。
+この機能はカスタム機能の中でも**極めて実験的**なもので、使用した場合何らかのバグにより作品が破壊されることもあり得ます。
+
+ * Open Project - プロジェクトを開きます
+ * Open Recent Project - 最近使ったプロジェクトを開きます
+ * Save current project - 現在のプロジェクトを上書き保存
+ * Save As Project - 新規プロジェクトとして保存
+ * Save Project as New version - プロジェクトを上書き保存し、その際、上書きが発生するレイヤの画像をすべて退避します。
+ * Revert Project - **作成中なのでクリックしないでください** しかし、ファイルマネージャを使って手動で戻すことも可能だと思われます。
 
 #### stabilizer : 強い手ブレ補正
 When this stabilizer toggle button (placed right side of eraser) turned on,
@@ -117,8 +133,10 @@ HOW TO OPERATION:(mostly same as inkscape)
  1. repeat this and create bezier-sprine curve.
  1. to end editing this curve,click ACCEPT button.
 
-There is no way to create new node onto intermidiate of current curve yet.
-this feature would implement later.
+And, you can add node (divide bezier stroke intermidiate) with holding CTRL key and click the stroke.
+
+futhermore,you can set nodes pressure at once by using Pressure Variation curve option widget and "Apply Variation" button (or "ApplyPressureVariationNodes" Action from keyboard)
+
 
 インクモードと類似したベジェツールモードです。操作方法は
  1. マウス左ボタンをプッシュで最初の点を作成
@@ -129,6 +147,10 @@ this feature would implement later.
  1. そのままドラッグして制御ハンドルを伸ばす
  1. 納得行く曲線を作るまで繰り返す。
  1. ACCEPTボタン（チェックマーク）で完成。この時、少しだけ作業中より精度の高い滑らかな線が描かれる。
+ 
+CTRLキーを押しながらストロークをクリックすることで、その部分に制御点を追加出来ます。
+
+さらに、オプションプレゼンターのPressure Variationウィジェットと、Apply Variationボタン（もしくは ApplyPressureVariationNodes アクションをキーボードから発動）で、現在のストロークの筆圧を一度に設定できます！
 
 #### Per device mode change : デバイスごとのモード変更
 A 'Device' referred to here is, for example, Pen tablet styls,or Pen tablet tail eraser,etc.
