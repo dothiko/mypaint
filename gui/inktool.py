@@ -113,7 +113,6 @@ class _SelectionRect:
         self.sy = 0
         self.ex = 0
         self.ey = 0
-        self._prev_area = None
 
         # workaround flag, because drag_stop_cb does not have
         # event parameter.
@@ -1074,6 +1073,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._pressed_pressure = None
             self._queue_redraw_curve()
             self._queue_draw_buttons()
+            self.selection_rect.reset()
         elif self.phase == _Phase.ADJUST_SELECTING:
             ## Nodes selection phase
             self._queue_draw_selection_rect()

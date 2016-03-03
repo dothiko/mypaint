@@ -393,36 +393,45 @@ class BezierMode (InkingMode):
                         new_target_node_index = None
                         new_zone = btn_zone
                         break
-                # Test nodes for a hit, in reverse draw order
-                if new_zone == _EditZone_Bezier.EMPTY_CANVAS:
-                    hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 12
-                    new_target_node_index = None
-                    for i, node in reversed(list(enumerate(self.nodes))):
-                        node_x, node_y = tdw.model_to_display(node.x, node.y)
-                        d = math.hypot(node_x - x, node_y - y)
-                        if d > hit_dist:
-                            continue
-                        new_target_node_index = i
-                        new_zone = _EditZone_Bezier.CONTROL_NODE
-                        break
-                
+
+
                 ## CHANGED CODES for beziertool:
-                # New target node is not hit.
-                # But, pointer might hit control handles
-                if (new_target_node_index is None and 
-                        self.current_node_index is not None):
-                    c_node = self.nodes[self.current_node_index]
-                    self.current_handle_index = None
-                    for i in (0,1):
-                        handle = c_node.get_control_handle(i)
-                        hx, hy = tdw.model_to_display(handle.x, handle.y)
-                        d = math.hypot(hx - x, hy - y)
-                        if d > hit_dist:
-                            continue
-                        new_target_node_index = self.current_node_index
-                        self.current_handle_index = i
-                        new_zone = _EditZone_Bezier.CONTROL_HANDLE
-                        break         
+                if (new_zone == _EditZone_Bezier.EMPTY_CANVAS):
+                   
+                    # Checking Control handles first:
+                    # because when you missed setting control handle 
+                    # at node creation stage,if node zone detection
+                    # is prior to control handle, they are unoperatable.
+                    if (self.current_node_index is not None):
+                        c_node = self.nodes[self.current_node_index]
+                        self.current_handle_index = None
+                        if self.current_node_index == 0:
+                            seq = (1,)
+                        else:
+                            seq = (0, 1)
+                        for i in seq:
+                            handle = c_node.get_control_handle(i)
+                            hx, hy = tdw.model_to_display(handle.x, handle.y)
+                            d = math.hypot(hx - x, hy - y)
+                            if d > hit_dist:
+                                continue
+                            new_target_node_index = self.current_node_index
+                            self.current_handle_index = i
+                            new_zone = _EditZone_Bezier.CONTROL_HANDLE
+                            break         
+
+                    # Test nodes for a hit, in reverse draw order
+                    if new_target_node_index == None:
+                        hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 12
+                        for i, node in reversed(list(enumerate(self.nodes))):
+                            node_x, node_y = tdw.model_to_display(node.x, node.y)
+                            d = math.hypot(node_x - x, node_y - y)
+                            if d > hit_dist:
+                                continue
+                            new_target_node_index = i
+                            new_zone = _EditZone_Bezier.CONTROL_NODE
+                            break
+                
                     
                     
                     
@@ -433,6 +442,8 @@ class BezierMode (InkingMode):
                     self.target_node_index = new_target_node_index
                     if self.target_node_index is not None:
                         self._queue_draw_node(self.target_node_index)
+
+                ## Fallthru below
 
 
         elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
@@ -719,11 +730,21 @@ class BezierMode (InkingMode):
             return False
         self._update_zone_and_target(tdw, event.x, event.y)
         self._update_current_node_index()
-
         if self.phase in (_PhaseBezier.INITIAL, _PhaseBezier.CREATE_PATH):
             # Initial state - everything starts here!
        
-            if self.zone == _EditZone_Bezier.CONTROL_HANDLE:
+            if (self.zone in (_EditZone_Bezier.REJECT_BUTTON, 
+                        _EditZone_Bezier.ACCEPT_BUTTON)):
+                if (event.button == 1 and 
+                        event.type == Gdk.EventType.BUTTON_PRESS):
+                        # we need save this information,because
+                        # in some case,re-entered button_press_cb
+                        # without any release events.
+                        self._click_info = (event.button, self.zone)
+                        return False
+                    
+                    
+            elif self.zone == _EditZone_Bezier.CONTROL_HANDLE:
                 self.phase = _PhaseBezier.ADJUST_HANDLE
             elif self.zone == _EditZone_Bezier.CONTROL_NODE:
                 # Grabbing a node...
@@ -815,8 +836,13 @@ class BezierMode (InkingMode):
             pass
         elif self.phase in (_PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
             pass
+        elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
+            # XXX in some cases,ADJUST_PRESSURE phase come here
+            # without reaching drag_stop_cb.(it might due to pen tablet...)
+            # so ignore this for now,or something should be done here?
+            pass 
         else:
-            raise NotImplementedError("Unrecognized zone %r", self.zone)
+            raise NotImplementedError("Unrecognized phase %r", self.phase)
         # Update workaround state for evdev dropouts
         self._button_down = event.button
 
@@ -830,12 +856,15 @@ class BezierMode (InkingMode):
             return False
 
         if self.phase == _PhaseBezier.CREATE_PATH:
-            if self.zone == _EditZone_Bezier.REJECT_BUTTON:
-                self._start_new_capture_phase(rollback=True)
-            elif self.zone == _EditZone_Bezier.ACCEPT_BUTTON:
-                self._queue_redraw_curve(0.01) # Redraw with hi-fidely curve
-                self._start_new_capture_phase(rollback=False)
-        if self.phase == _PhaseBezier.PLACE_NODE:
+            if self._click_info:
+                button, zone = self._click_info
+                if zone == _EditZone_Bezier.REJECT_BUTTON:
+                    self._start_new_capture_phase(rollback=True)
+                elif zone == _EditZone_Bezier.ACCEPT_BUTTON:
+                    self._queue_redraw_curve(0.01) # Redraw with hi-fidely curve
+                    self._start_new_capture_phase(rollback=False)
+                self._click_info = None
+        elif self.phase == _PhaseBezier.PLACE_NODE:
            #self._queue_draw_buttons() 
             self._queue_redraw_curve() 
             self.phase = _PhaseBezier.CREATE_PATH
@@ -999,6 +1028,7 @@ class BezierMode (InkingMode):
 
         elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
             self.phase = _PhaseBezier.CREATE_PATH
+            self.selection_rect.reset()
 
         # Common processing
         if self.current_node_index != None:
