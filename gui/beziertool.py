@@ -741,6 +741,7 @@ class BezierMode (InkingMode):
                         # in some case,re-entered button_press_cb
                         # without any release events.
                         self._click_info = (event.button, self.zone)
+                        self._reset_adjust_data()
                         return False
                     
                     
