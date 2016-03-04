@@ -374,7 +374,7 @@ class BezierMode (InkingMode):
 
         self._queue_draw_buttons()
         
-    def _update_zone_and_target(self, tdw, x, y):
+    def _update_zone_and_target(self, tdw, x, y, ignore_handle=False):
         """Update the zone and target node under a cursor position"""
         ## FIXME mostly copied from inktool.py
         ## the differences are 'control handle processing' and
@@ -411,7 +411,8 @@ class BezierMode (InkingMode):
                     # because when you missed setting control handle 
                     # at node creation stage,if node zone detection
                     # is prior to control handle, they are unoperatable.
-                    if (self.current_node_index is not None):
+                    if (self.current_node_index is not None and 
+                            ignore_handle == False):
                         c_node = self.nodes[self.current_node_index]
                         self.current_handle_index = None
                         if self.current_node_index == 0:
@@ -738,7 +739,8 @@ class BezierMode (InkingMode):
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
-        self._update_zone_and_target(tdw, event.x, event.y)
+        self._update_zone_and_target(tdw, event.x, event.y,
+                event.state & Gdk.ModifierType.MOD1_MASK)
         self._update_current_node_index()
         if self.phase in (_PhaseBezier.INITIAL, _PhaseBezier.CREATE_PATH):
             # Initial state - everything starts here!
