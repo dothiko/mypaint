@@ -30,7 +30,7 @@ import gui.drawutils
 import lib.helpers
 import gui.cursor
 import lib.observable
-from gui.linemode import LineModeCurveWidget
+import gui.curve
 import gui.widgets
 
 
@@ -2036,6 +2036,94 @@ class _LayoutNode (object):
         self.velocity = (vx, vy)
         return self
 
+
+class StrokeCurveWidget (gui.curve.CurveWidget):
+    """Graph of pressure by distance, tied to the central LineModeSettings"""
+
+    _SETTINGS_COORDINATE = [('entry_pressure', (0, 1)),
+                            ('midpoint_pressure', (1, 1)),
+                            ('exit_pressure', (3, 1)),
+                            ('line_head', (1, 0)),
+                            ('line_tail', (2, 0))]
+
+    def __init__(self):
+        from application import get_app
+        self.app = get_app()
+       #gui.curve.CurveWidget.__init__(self, npoints=4, ylockgroups=((1, 2),),
+       #                     changed_cb=self._changed_cb)
+        super(StrokeCurveWidget, self).__init__(npoints=4, ylockgroups=((1, 2),),
+                             changed_cb=self._changed_cb)
+        self.app.line_mode_settings.observers.append(self._adjs_changed_cb)
+        self._update()
+
+    def _adjs_changed_cb(self, changed):
+        logger.debug("Updating stroke curve widget(changed: %r)", changed)
+        self._update()
+
+    def _update(self):
+        for setting, coord_pair in self._SETTINGS_COORDINATE:
+
+            adj = self.app.line_mode_settings.adjustments[setting]
+            value = adj.get_value()
+
+            index, subindex = coord_pair
+            if not setting.startswith('line'):
+                value = 1.0 - value
+            if subindex == 0:
+                coord = (value, self.points[index][1])
+            else:
+                coord = (self.points[index][0], value)
+            self.set_point(index, coord)
+
+        self.queue_draw()
+
+    def _changed_cb(self, curve):
+        """Updates the linemode pressure settings when the curve is altered"""
+        for setting, coord_pair in self._SETTINGS_COORDINATE:
+            index, subindex = coord_pair
+            value = self.points[index][subindex]
+            if not setting.startswith('line'):
+                value = 1.0 - value
+            value = max(0.0001, value)
+            adj = self.app.line_mode_settings.adjustments[setting]
+            adj.set_value(value)
+
+    def draw_cb(self, widget, cr):
+        super(StrokeCurveWidget, self).draw_cb(widget, cr)
+
+        width, height = self.get_display_area()
+        if width <= 0 or height <= 0:
+            return
+
+        def get_disp(x, y):
+            return (x * width + gui.curve.RADIUS, 
+                    y * height + gui.curve.RADIUS)
+
+        
+        ap = self.points[0]
+        bp = self.points[1]
+        cp = self.points[2]
+        dp = self.points[3]
+        step = 0.05
+        ox, oy = get_disp(*gui.drawutils.get_cubic_bezier_segment(ap, bp, cp, dp,
+                    0.0))
+        cr.move_to(ox, oy)
+        cur_step = step
+        while cur_step < 1.0:
+            cx, cy = get_disp(*gui.drawutils.get_cubic_bezier_segment(ap, bp, cp, dp,
+                        cur_step))
+            cr.line_to(cx, cy)
+            cr.stroke()
+            cr.move_to(cx, cy)
+            cur_step+=step
+
+        # don't forget draw final segment
+        cx, cy = get_disp(*gui.drawutils.get_cubic_bezier_segment(ap, bp, cp, dp,
+                    1.0))
+        cr.line_to(cx, cy)
+        cr.stroke()
+        return True
+
 class OptionsPresenter (object):
     """Presents UI for directly editing point values etc."""
 
@@ -2135,7 +2223,7 @@ class OptionsPresenter (object):
     def init_linecurve_widget(self, row, box):
 
         # XXX code duplication from gui.linemode.LineModeOptionsWidget
-        curve = LineModeCurveWidget()
+        curve = StrokeCurveWidget()
         curve.set_size_request(175, 125)
         self.curve = curve
         exp = Gtk.Expander()
