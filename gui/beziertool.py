@@ -33,7 +33,7 @@ import gui.cursor
 import lib.observable
 from gui.inktool import *
 from gui.inktool import _LayoutNode, _Phase, _EditZone
-from gui.linemode import LineModeCurveWidget
+from gui.linemode import *
 
 ## Class defs
 
@@ -1165,7 +1165,7 @@ class BezierMode (InkingMode):
             while cur_step < 1.0:
                 cx, cy = gui.drawutils.get_cubic_bezier_segment(cn, cn.get_control_handle(1),
                             nn.get_control_handle(0), nn, cur_step)
-                length += math.sqrt((cx - ox) ** 2 + (cy - oy) ** 2)
+                length += vector_length(cx - ox, cy - oy)#math.sqrt((cx - ox) ** 2 + (cy - oy) ** 2)
                 cur_step += BezierMode.DRAFT_STEP
                 ox = cx
                 oy = cy

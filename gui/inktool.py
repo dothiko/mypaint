@@ -32,6 +32,7 @@ import gui.cursor
 import lib.observable
 import gui.curve
 import gui.widgets
+from gui.linemode import *
 
 
 ## Class defs
@@ -59,14 +60,6 @@ class _Node (collections.namedtuple("_Node", _NODE_FIELDS)):
     * xtilt, ytilt: float in [-1.0, 1.0]
     * time: absolute seconds, float
     """
-
-
-
-def _get_identity_vector(x,y,sx,sy):
-    vx=x-sx
-    vy=y-sy
-    s = math.hypot(vx,vy)
-    return (vx/s,vy/s)
 
 
 class _EditZone:
@@ -1509,10 +1502,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     try:
                         # avx, avy is identity vector of current-prev node
                         # bvx, bvy is identity vector of next-prev node
-                        avx, avy = _get_identity_vector(cn.x, cn.y,
-                                pn.x, pn.y)
-                        bvx, bvy = _get_identity_vector(nn.x, nn.y,
-                                pn.x, pn.y)
+                        avx, avy = normal(pn.x, pn.y, cn.x, cn.y)
+                        bvx, bvy = normal(pn.x, pn.y, nn.x, nn.y)
                         avx=(avx + bvx) / 2.0
                         avy=(avy + bvy) / 2.0
                         s = math.hypot(cn.x - pn.x, cn.y - pn.y)
@@ -1575,8 +1566,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 elif cur_segment < cur_length:
                     # segment end.need for adding a node.
                     try:
-                        avx, avy = _get_identity_vector(nn.x, nn.y,
-                                cn.x, cn.y)
+                        avx, avy = normal(cn.x, cn.y, nn.x, nn.y)
                         avx *= cur_segment
                         avy *= cur_segment
                         new_nodes.append(self.nodes[sidx]._replace(
