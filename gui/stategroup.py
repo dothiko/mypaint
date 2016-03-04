@@ -62,7 +62,8 @@ class State (object):
 
     #: The state is automatically left after this time (ignored during
     #: press-and-hold)
-    autoleave_timeout = 0.800
+   #autoleave_timeout = 0.800
+    autoleave_timeout = 0.100
 
     # : popups only: how long the cursor is allowed outside before closing
     # : (ignored during press-and-hold)"
