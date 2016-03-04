@@ -1642,21 +1642,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_redraw_all_nodes()
 
 
-    def apply_pressure_points(self, points):
+    def apply_pressure_from_curve_widget(self):
         """ apply pressure reprenting points
-        from LineModeCurveWidget.
+        from StrokeCurveWidget.
         Mostly resembles as BezierMode.apply_pressure_points,
         but inktool stroke calculartion is not same as
         BezierMode.
-
-        :param points:  a list of tuple.a tuple is
-        (x position of point, y position of point)
-        y position is decleasing upward,so we need to
-        use the value reversed when we treat it as
-        pressure value.
-
-        if this parameter is None, BezierMode automatically
-        get it from its Optionpresentor.
         """
 
         # We need smooooth value, so treat the points
@@ -1668,14 +1659,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         if len(self.nodes) < 2:
             return
 
-        if points == None:
-            assert hasattr(self.options_presenter,'curve')
-            points = self.options_presenter.curve.points
-
-        assert len(points) == 4
+        assert hasattr(self.options_presenter,'curve')
+        curve = self.options_presenter.curve
 
         self._queue_redraw_curve()
 
+        # Getting entire stroke(vector) length
         node_length=[]
         total_length = 0.0
 
@@ -1690,15 +1679,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
 
         # use control handle class temporary to get smooth pressures.
-        ap = points[0]
-        bp = points[1]
-        cp = points[2]
-        dp = points[3]
         cur_length = 0.0
         new_nodes=[]
         for idx,cn in enumerate(self.nodes):
-            cx, cy = gui.drawutils.get_cubic_bezier_segment(ap, bp, cp, dp,
-                        cur_length / total_length)
+            cx, cy = curve.get_curve_value(cur_length / total_length)
             new_nodes.append(cn._replace(pressure = 1.0 - cy))
             cur_length += node_length[idx]
 
@@ -2100,29 +2084,44 @@ class StrokeCurveWidget (gui.curve.CurveWidget):
                     y * height + gui.curve.RADIUS)
 
         
-        ap = self.points[0]
-        bp = self.points[1]
-        cp = self.points[2]
-        dp = self.points[3]
         step = 0.05
-        ox, oy = get_disp(*gui.drawutils.get_cubic_bezier_segment(ap, bp, cp, dp,
-                    0.0))
+        ox, oy = get_disp(*self.get_curve_value(0.0))
         cr.move_to(ox, oy)
         cur_step = step
         while cur_step < 1.0:
-            cx, cy = get_disp(*gui.drawutils.get_cubic_bezier_segment(ap, bp, cp, dp,
-                        cur_step))
+            cx, cy = get_disp(*self.get_curve_value(cur_step))
             cr.line_to(cx, cy)
             cr.stroke()
             cr.move_to(cx, cy)
             cur_step+=step
 
         # don't forget draw final segment
-        cx, cy = get_disp(*gui.drawutils.get_cubic_bezier_segment(ap, bp, cp, dp,
-                    1.0))
+        cx, cy = get_disp(*self.get_curve_value(1.0))
         cr.line_to(cx, cy)
         cr.stroke()
         return True
+
+    def get_curve_value(self, step):
+        bx,by = self.points[1]
+        cx,cy = self.points[2]
+
+        xp = (bx + (cx - bx) / 2,
+              by + (cy - by) / 2)
+
+        if step <= 0.5:
+            t_step = step * 2
+            ap = self.points[0]
+            bp = self.points[1]
+            cp = xp
+
+        else:
+            t_step = (step - 0.5) * 2
+            ap = xp
+            bp = self.points[2]
+            cp = self.points[3]
+
+        return gui.drawutils.get_bezier_segment(ap, bp, cp, 
+                t_step)
 
 class OptionsPresenter (object):
     """Presents UI for directly editing point values etc."""
@@ -2396,5 +2395,5 @@ class OptionsPresenter (object):
             if len(inkmode.nodes) > 1:
                 # To LineModeCurveWidget,
                 # we can access control points as "points" attribute.
-                inkmode.apply_pressure_points(self.curve.points)
+                inkmode.apply_pressure_from_curve_widget()
 

@@ -2137,8 +2137,8 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         """Callback: Apply current OptionWidget's pressure variation 
         into current control points"""
         mode=self.modes.top
-        if getattr(mode, 'apply_pressure_points', False):
-            mode.apply_pressure_points(None)
+        if getattr(mode, 'apply_pressure_from_curve_widget', False):
+            mode.apply_pressure_from_curve_widget(None)
     
 
 

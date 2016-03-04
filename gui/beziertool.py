@@ -1134,18 +1134,9 @@ class BezierMode (InkingMode):
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
-    def apply_pressure_points(self, points):
+    def apply_pressure_from_curve_widget(self):
         """ apply pressure reprenting points
-        from LineModeCurveWidget.
-
-        :param points:  a list of tuple.a tuple is
-        (x position of point, y position of point)
-        y position is decleasing upward,so we need to
-        use the value reversed when we treat it as 
-        pressure value.
-
-        if this parameter is None, BezierMode automatically
-        get it from its Optionpresentor.
+        from StrokeCurveWidget.
         """
 
         # We need smooooth value, so treat the points
@@ -1157,11 +1148,8 @@ class BezierMode (InkingMode):
         if len(self.nodes) < 2:
             return
 
-        if points == None:
-            assert hasattr(self.options_presenter,'curve')
-            points = self.options_presenter.curve.points
-
-        assert len(points) == 4
+        assert hasattr(self.options_presenter,'curve')
+        curve = self.options_presenter.curve
 
         self._queue_redraw_curve()
 
@@ -1189,14 +1177,9 @@ class BezierMode (InkingMode):
 
 
         # use control handle class temporary to get smooth pressures.
-        ap = points[0]
-        bp = points[1]
-        cp = points[2]
-        dp = points[3]
         cur_length = 0.0
         for idx,cn in enumerate(self.nodes):
-            cx, cy = gui.drawutils.get_cubic_bezier_segment(ap, bp, cp, dp, 
-                        cur_length / total_length)
+            cx, cy = curve.get_curve_value(cur_length / total_length)
             cn.pressure = 1.0 - cy
             cur_length += node_length[idx]
         
@@ -1512,6 +1495,6 @@ class OptionsPresenter_Bezier (OptionsPresenter):
             if len(beziermode.nodes) > 1:
                 # To LineModeCurveWidget, 
                 # we can access control points as "points" attribute.
-                beziermode.apply_pressure_points(self.curve.points)
+                beziermode.apply_pressure_from_curve_widget()
 
     ## Other handlers are as implemented in superclass.  
