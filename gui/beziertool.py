@@ -1078,7 +1078,7 @@ class BezierMode (InkingMode):
         cn = self.nodes[index]
         nn = self.nodes[index+1]
 
-        p0, p1, p2=get_cubic_bezier_segment_raw(
+        p0, p1, p2=gui.drawutils.get_cubic_bezier_segment_raw(
                 cn, cn.get_control_handle(1),
                 nn.get_control_handle(0), nn,
                 step)
@@ -1086,7 +1086,7 @@ class BezierMode (InkingMode):
         xa, ya = p0
         xc, yc = p2
 
-        p0, p1=get_bezier_segment_raw(p0, p1, p2, step)
+        p0, p1=gui.drawutils.get_bezier_segment_raw(p0, p1, p2, step)
 
         xd, yd = p0
         xe, ye = p1
@@ -1096,7 +1096,8 @@ class BezierMode (InkingMode):
         cn.curve = False
         cn.set_control_handle(1, xa, ya)
         new_node = _Node_Bezier(
-                    get_bezier_pt(xd, xe, step), get_bezier_pt(yd, ye, step),
+                    gui.drawutils.get_bezier_pt(xd, xe, step), 
+                    gui.drawutils.get_bezier_pt(yd, ye, step),
                     pressure = cn.pressure + ((nn.pressure - cn.pressure) * step),
                     xtilt = cn.xtilt + (nn.xtilt - cn.xtilt) * step,
                     ytilt = cn.ytilt + (nn.ytilt - cn.ytilt) * step,
