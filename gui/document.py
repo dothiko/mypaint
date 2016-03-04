@@ -2138,7 +2138,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         into current control points"""
         mode=self.modes.top
         if getattr(mode, 'apply_pressure_from_curve_widget', False):
-            mode.apply_pressure_from_curve_widget(None)
+            mode.apply_pressure_from_curve_widget()
     
 
 
