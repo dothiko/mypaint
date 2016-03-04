@@ -1687,21 +1687,17 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
         node_length.append(total_length) # this is sentinel
 
-        class _Point:
-            def __init__(self, x, y):
-                self.x = x
-                self.y = y
 
 
         # use control handle class temporary to get smooth pressures.
-        ap = _Point(*points[0])
-        bp = _Point(*points[1])
-        cp = _Point(*points[2])
-        dp = _Point(*points[3])
+        ap = points[0]
+        bp = points[1]
+        cp = points[2]
+        dp = points[3]
         cur_length = 0.0
         new_nodes=[]
         for idx,cn in enumerate(self.nodes):
-            cx, cy = gui.drawutils.get_bezier_segment(ap, bp, cp, dp,
+            cx, cy = gui.drawutils.get_cubic_bezier_segment(ap, bp, cp, dp,
                         cur_length / total_length)
             new_nodes.append(cn._replace(pressure = 1.0 - cy))
             cur_length += node_length[idx]
@@ -2039,7 +2035,6 @@ class _LayoutNode (object):
             vy = 0
         self.velocity = (vx, vy)
         return self
-
 
 class OptionsPresenter (object):
     """Presents UI for directly editing point values etc."""

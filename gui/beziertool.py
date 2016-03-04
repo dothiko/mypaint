@@ -16,6 +16,7 @@ import weakref
 import os.path
 from logging import getLogger
 logger = getLogger(__name__)
+import array
 
 from gettext import gettext as _
 import gi
@@ -36,12 +37,30 @@ from gui.linemode import LineModeCurveWidget
 
 ## Class defs
 
-class _Control_Handle:
+class _Control_Handle(object):
     def __init__(self, x, y):
-        self.x = x
-        self.y = y
+       #self.x = x
+       #self.y = y
+        self._array = array.array('f',(x,y))
+
+    def __getitem__(self, idx):
+        return self._array[idx]
+
+    @property
+    def x(self):
+        return self._array[0]
+    @x.setter
+    def x(self,x):
+        self._array[0]=x
+
+    @property
+    def y(self):
+        return self._array[1]
+    @y.setter
+    def y(self,y):
+        self._array[1]=y
     
-class _Node_Bezier (object):
+class _Node_Bezier (_Control_Handle):
     """Recorded control point.
     In bezier curve,nodes are frequently rewritten
     and each nodes own control handles.
@@ -59,14 +78,18 @@ class _Node_Bezier (object):
     
             
             
-    def __init__(self,x,y,pressure=None,xtilt=0.0,ytilt=0.0,
+    def __init__(self,x,y,pressure=1.0,xtilt=0.0,ytilt=0.0,
             control_handles=None,curve=True):
-        self.x = x
-        self.y = y
+       #self.x = x
+       #self.y = y
         self.pressure = pressure
         self.xtilt = xtilt
         self.ytilt = ytilt
         self.time = 0
+       #self._array = array.array('f', 
+       #        (x, y, pressure, xtilt, ytilt, time))
+        super(_Node_Bezier, self).__init__(x, y)
+
         if control_handles:
             self._control_handles = control_handles
         else:
@@ -154,6 +177,9 @@ class _Node_Bezier (object):
         for i in (0,1):
             node._control_handles[i].x = self._control_handles[i].x + dx
             node._control_handles[i].y = self._control_handles[i].y + dy
+
+    def __getitem__(self, idx):
+        return self._array[idx]
     
     
     
@@ -481,12 +507,12 @@ class BezierMode (InkingMode):
             if sx <= x <= ex and sy <= y <= ey:
 
                 def get_distance_and_step(start_step, end_step, increase_step):
-                    ox, oy = gui.drawutils.get_bezier_segment(cn, cn.get_control_handle(1),
+                    ox, oy = gui.drawutils.get_cubic_bezier_segment(cn, cn.get_control_handle(1),
                                 nn.get_control_handle(0), nn, start_step)
                     cur_step = start_step
                     while cur_step <= end_step:
 
-                        cx, cy = gui.drawutils.get_bezier_segment(cn, cn.get_control_handle(1),
+                        cx, cy = gui.drawutils.get_cubic_bezier_segment(cn, cn.get_control_handle(1),
                                 nn.get_control_handle(0), nn, cur_step)
 
                         # vpx/vpy : vector of assigned point
@@ -686,7 +712,7 @@ class BezierMode (InkingMode):
         xtilt = 0.0
         ytilt = 0.0
         while cur_step <= 1.0:
-            x, y = gui.drawutils.get_bezier_segment(p0, p1, p2, p3, cur_step)
+            x, y = gui.drawutils.get_cubic_bezier_segment(p0, p1, p2, p3, cur_step)
 
             #t_abs = max(last_t_abs, t_abs)
             #dtime = t_abs - last_t_abs
@@ -1144,12 +1170,12 @@ class BezierMode (InkingMode):
 
         for idx, cn in enumerate(self.nodes[:-1]):
             nn = self.nodes[idx + 1]
-            ox, oy = gui.drawutils.get_bezier_segment(cn, cn.get_control_handle(1),
+            ox, oy = gui.drawutils.get_cubic_bezier_segment(cn, cn.get_control_handle(1),
                         nn.get_control_handle(0), nn, 0)
             cur_step = BezierMode.DRAFT_STEP
             length = 0.0 
             while cur_step < 1.0:
-                cx, cy = gui.drawutils.get_bezier_segment(cn, cn.get_control_handle(1),
+                cx, cy = gui.drawutils.get_cubic_bezier_segment(cn, cn.get_control_handle(1),
                             nn.get_control_handle(0), nn, cur_step)
                 length += math.sqrt((cx - ox) ** 2 + (cy - oy) ** 2)
                 cur_step += BezierMode.DRAFT_STEP
@@ -1163,13 +1189,13 @@ class BezierMode (InkingMode):
 
 
         # use control handle class temporary to get smooth pressures.
-        ap = _Control_Handle(*points[0])
-        bp = _Control_Handle(*points[1])
-        cp = _Control_Handle(*points[2])
-        dp = _Control_Handle(*points[3])
+        ap = points[0]
+        bp = points[1]
+        cp = points[2]
+        dp = points[3]
         cur_length = 0.0
         for idx,cn in enumerate(self.nodes):
-            cx, cy = gui.drawutils.get_bezier_segment(ap, bp, cp, dp, 
+            cx, cy = gui.drawutils.get_cubic_bezier_segment(ap, bp, cp, dp, 
                         cur_length / total_length)
             cn.pressure = 1.0 - cy
             cur_length += node_length[idx]

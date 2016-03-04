@@ -590,9 +590,31 @@ def get_drop_shadow_offsets(line_width, z=2):
 def _get_bezier_pt(v0, v1, step):
     return v0 + ((v1-v0) * step)
 
-def get_bezier_segment(p0, p1, p2, p3, step):
+def get_bezier_segment(p0, p1, p2, step):
+    """ get bezier point from points.
+    each points should be sequence,
+    [0] is x, [1] is y
+    
+    :param p0: the first point
+    :param p1: control point from first point
+    :param p2: control point to next point
+    :param p1: the next point
+    :param step: bezier curve step.
+                 this should be in a range(0.0 - 1.0)
+    """
+    xa = _get_bezier_pt(p0[0], p1[0], step)
+    ya = _get_bezier_pt(p0[1], p1[1], step)
+    xb = _get_bezier_pt(p1[0], p2[0], step)
+    yb = _get_bezier_pt(p1[1], p2[1], step)
+    
+    return (_get_bezier_pt(xa, xb, step),
+            _get_bezier_pt(ya, yb, step))
+
+
+def get_cubic_bezier_segment(p0, p1, p2, p3, step):
     """ get cubic bezier point from points.
-    each points should have attributes x,y
+    each points should be sequence,
+    [0] is x, [1] is y
     
     :param p0: the first point
     :param p1: control point from first point
@@ -602,20 +624,18 @@ def get_bezier_segment(p0, p1, p2, p3, step):
                  this should be in a range(0.0 - 1.0)
     """
 
-    xa = _get_bezier_pt(p0.x, p1.x, step)
-    ya = _get_bezier_pt(p0.y, p1.y, step)
-    xb = _get_bezier_pt(p1.x, p2.x, step)
-    yb = _get_bezier_pt(p1.y, p2.y, step)
-    xc = _get_bezier_pt(p2.x, p3.x, step)
-    yc = _get_bezier_pt(p2.y, p3.y, step)
+    xa = _get_bezier_pt(p0[0], p1[0], step)
+    ya = _get_bezier_pt(p0[1], p1[1], step)
+    xb = _get_bezier_pt(p1[0], p2[0], step)
+    yb = _get_bezier_pt(p1[1], p2[1], step)
+    xc = _get_bezier_pt(p2[0], p3[0], step)
+    yc = _get_bezier_pt(p2[1], p3[1], step)
+
+    return get_bezier_segment((xa,ya),
+                              (xb,yb),
+                              (xc,yc),
+                              step)
     
-    xa = _get_bezier_pt(xa, xb, step)
-    ya = _get_bezier_pt(ya, yb, step)
-    xb = _get_bezier_pt(xb, xc, step)
-    yb = _get_bezier_pt(yb, yc, step)
-    
-    return (_get_bezier_pt(xa, xb, step),
-            _get_bezier_pt(ya, yb, step))
 
 ## Test code
 
