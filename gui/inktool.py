@@ -1263,22 +1263,31 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def can_delete_node(self, i):
         return 0 < i < len(self.nodes)-1
 
+    def _adjust_current_node_index(self):
+        """ Adjust self.current_node_index
+        inherited classes might have different behavior
+        for it.
+        """
+        if self.current_node_index >= len(self.nodes):
+            self.current_node_index = len(self.nodes) - 2
+            self.current_node_changed(
+                    self.current_node_index)
+
     def delete_node(self, i):
         """Delete a node, and issue redraws & updates"""
         assert self.can_delete_node(i), "Can't delete endpoints"
         # Redraw old locations of things while the node still exists
         self._queue_draw_buttons()
         self._queue_draw_node(i)
-        # Remove the node
+
         self.nodes.pop(i)
-        # Limit the current node
-        new_cn = self.current_node_index
-        if new_cn >= len(self.nodes):
-            new_cn = len(self.nodes) - 2
-            self.current_node_index = new_cn
-            self.current_node_changed(new_cn)
-        # Options panel update
-        self.options_presenter.target = (self, new_cn)
+
+        # Limit the current node.
+        # this processing may vary in inherited classes,
+        # so wrap this.
+        self._adjust_current_node_index()
+
+        self.options_presenter.target = (self, self.current_node_index)
         # Issue redraws for the changed on-canvas elements
         self._queue_redraw_curve()
         self._queue_redraw_all_nodes()

@@ -1077,30 +1077,26 @@ class BezierMode (InkingMode):
         assert index < len(self.nodes)-1
         cn = self.nodes[index]
         nn = self.nodes[index+1]
-        p0 = cn
-        p1 = cn.get_control_handle(1)
-        p2 = nn.get_control_handle(0)
-        p3 = nn
 
-        xa = _get_bezier_pt(p0.x, p1.x, step)
-        ya = _get_bezier_pt(p0.y, p1.y, step)
-        xb = _get_bezier_pt(p1.x, p2.x, step)
-        yb = _get_bezier_pt(p1.y, p2.y, step)
-        xc = _get_bezier_pt(p2.x, p3.x, step)
-        yc = _get_bezier_pt(p2.y, p3.y, step)
+        p0, p1, p2=get_cubic_bezier_segment_raw(
+                cn, cn.get_control_handle(1),
+                nn.get_control_handle(0), nn,
+                step)
 
-        xd = _get_bezier_pt(xa, xb, step)
-        yd = _get_bezier_pt(ya, yb, step)
-        xe = _get_bezier_pt(xb, xc, step)
-        ye = _get_bezier_pt(yb, yc, step)
-    
+        xa, ya = p0
+        xc, yc = p2
+
+        p0, p1=get_bezier_segment_raw(p0, p1, p2, step)
+
+        xd, yd = p0
+        xe, ye = p1
 
         # The nodes around a new node changed to 'not curve' node,
         # to retain original shape.
         cn.curve = False
         cn.set_control_handle(1, xa, ya)
         new_node = _Node_Bezier(
-                    _get_bezier_pt(xd, xe, step), _get_bezier_pt(yd, ye, step),
+                    get_bezier_pt(xd, xe, step), get_bezier_pt(yd, ye, step),
                     pressure = cn.pressure + ((nn.pressure - cn.pressure) * step),
                     xtilt = cn.xtilt + (nn.xtilt - cn.xtilt) * step,
                     ytilt = cn.ytilt + (nn.ytilt - cn.ytilt) * step,
@@ -1113,6 +1109,17 @@ class BezierMode (InkingMode):
         nn.set_control_handle(0, xc, yc)
 
 
+
+    def _adjust_current_node_index(self):
+        """ Adjust self.current_node_index
+        inherited classes might have different behavior
+        for it.
+        """
+        if self.current_node_index >= len(self.nodes):
+            self.current_node_index = None
+            self.current_node_changed(
+                    self.current_node_index)
+                                                
     def insert_node(self, i):
         """Insert a node, and issue redraws & updates"""
         assert self.can_insert_node(i), "Can't insert back of the endpoint"

@@ -587,8 +587,14 @@ def get_drop_shadow_offsets(line_width, z=2):
 
 ## Bezier curve
 
-def _get_bezier_pt(v0, v1, step):
+def get_bezier_pt(v0, v1, step):
     return v0 + ((v1-v0) * step)
+
+def get_bezier_segment_raw(p0, p1, p2, step):
+    return ( (get_bezier_pt(p0[0], p1[0], step),
+              get_bezier_pt(p0[1], p1[1], step)),
+             (get_bezier_pt(p1[0], p2[0], step),
+              get_bezier_pt(p1[1], p2[1], step)) )
 
 def get_bezier_segment(p0, p1, p2, step):
     """ get bezier point from points.
@@ -602,14 +608,18 @@ def get_bezier_segment(p0, p1, p2, step):
     :param step: bezier curve step.
                  this should be in a range(0.0 - 1.0)
     """
-    xa = _get_bezier_pt(p0[0], p1[0], step)
-    ya = _get_bezier_pt(p0[1], p1[1], step)
-    xb = _get_bezier_pt(p1[0], p2[0], step)
-    yb = _get_bezier_pt(p1[1], p2[1], step)
+    p0, p1 = get_bezier_segment_raw(p0, p1, p2, step)
     
-    return (_get_bezier_pt(xa, xb, step),
-            _get_bezier_pt(ya, yb, step))
+    return (get_bezier_pt(p0[0], p1[0], step),
+            get_bezier_pt(p0[1], p1[1], step))
 
+def get_cubic_bezier_segment_raw(p0, p1, p2, p3, step):
+    return ( (get_bezier_pt(p0[0], p1[0], step), 
+              get_bezier_pt(p0[1], p1[1], step)),
+             (get_bezier_pt(p1[0], p2[0], step),
+              get_bezier_pt(p1[1], p2[1], step)),
+             (get_bezier_pt(p2[0], p3[0], step),
+              get_bezier_pt(p2[1], p3[1], step)) )
 
 def get_cubic_bezier_segment(p0, p1, p2, p3, step):
     """ get cubic bezier point from points.
@@ -624,17 +634,12 @@ def get_cubic_bezier_segment(p0, p1, p2, p3, step):
                  this should be in a range(0.0 - 1.0)
     """
 
-    xa = _get_bezier_pt(p0[0], p1[0], step)
-    ya = _get_bezier_pt(p0[1], p1[1], step)
-    xb = _get_bezier_pt(p1[0], p2[0], step)
-    yb = _get_bezier_pt(p1[1], p2[1], step)
-    xc = _get_bezier_pt(p2[0], p3[0], step)
-    yc = _get_bezier_pt(p2[1], p3[1], step)
 
-    return get_bezier_segment((xa,ya),
-                              (xb,yb),
-                              (xc,yc),
-                              step)
+    p0, p1, p2 = get_cubic_bezier_segment_raw(
+            p0, p1, p2, p3, step)
+
+
+    return get_bezier_segment(p0, p1, p2, step)
     
 
 ## Test code
