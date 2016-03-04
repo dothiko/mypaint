@@ -30,6 +30,8 @@ import gui.drawutils
 import lib.helpers
 import gui.cursor
 import lib.observable
+from gui.linemode import LineModeCurveWidget
+import gui.widgets
 
 
 ## Class defs
@@ -77,7 +79,7 @@ class _EditZone:
 
 class _SelectionRect:
     """A class of selection area information for InkingMode.
-    This class also used for record dragging motion offset, 
+    This class also used for record dragging motion offset,
     when move selected nodes.
 
     All position attributes are model coordinate.
@@ -86,9 +88,9 @@ class _SelectionRect:
 
     Mainly,to select multiple nodes with rectangle, from GUI.
 
-    And...if canvas has been scrolled,we cannot convert 
+    And...if canvas has been scrolled,we cannot convert
     display coordinate 'offset' to model coordinate.
-    because the origin moved by scrolling,so convert offset of 
+    because the origin moved by scrolling,so convert offset of
     screen coordination to model should be incorrect.
     so we need to remember offset start and end position,
     and convert them into model coord,then calculate offset.
@@ -97,7 +99,7 @@ class _SelectionRect:
     retaining offset start/end position data,
     not only selection rectangle.
 
-    ## About instance 
+    ## About instance
     The instance of this class should be unique for application,
     only one instance created as the InkingMode class attribute.
     """
@@ -116,7 +118,7 @@ class _SelectionRect:
 
         # workaround flag, because drag_stop_cb does not have
         # event parameter.
-        self.is_addition = False 
+        self.is_addition = False
 
     def start(self,x,y):
         self.sx = x
@@ -148,7 +150,7 @@ class _SelectionRect:
                 (cey - csy + 1) + self.LINE_WIDTH * 2 + 1)
 
     def is_enabled(self):
-        return self.sx != None 
+        return self.sx != None
 
     def is_inside(self, x, y):
         """ check whether x,y is inside selected rectangle.
@@ -168,7 +170,7 @@ class _SelectionRect:
         sx,sy = tdw.model_to_display(self.sx, self.sy)
         ex,ey = tdw.model_to_display(self.ex, self.ey)
         return (sx, sy, ex, ey)
-        
+
     def get_offset(self):
         return (self.ex - self.sx, self.ey - self.sy)
 
@@ -267,7 +269,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         return None
 
     ## Override action
-    permitted_switch_actions = None   
+    permitted_switch_actions = None
     _enable_switch_actions = set()   # Any action is permitted,for now.
     _disable_switch_actions=set(gui.mode.BUTTON_BINDING_ACTIONS).union([
             'RotateViewMode',
@@ -281,7 +283,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         else:
             cls.permitted_switch_actions = cls._disable_switch_actions
 
-        
+
 
     ## Class config vars
 
@@ -313,7 +315,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     # Pressure editing key modifiers,single node and with nearby nodes.
     # these can be hard-coded,but we might need some customizability later.
-    _PRESSURE_MOD_MASK = Gdk.ModifierType.SHIFT_MASK 
+    _PRESSURE_MOD_MASK = Gdk.ModifierType.SHIFT_MASK
     _PRESSURE_NEARBY_MOD_MASK = Gdk.ModifierType.CONTROL_MASK
 
     _PRESSURE_WHEEL_STEP = 0.025 # pressure modifying step,for mouse wheel
@@ -351,7 +353,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_ytilt = 0.0
 
 
-        
+
 
 
 
@@ -379,7 +381,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._pressed_y = None
         self._pressed_pressure = None
 
-        # Multiple selected nodes.   
+        # Multiple selected nodes.
         # This is a index list of node from self.nodes
         self._reset_selected_nodes()
 
@@ -396,7 +398,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """
 
         if initial_idx == None:
-            self.selected_nodes=[]  
+            self.selected_nodes=[]
         elif len(self.selected_nodes) == 0:
             self.selected_nodes.append(initial_idx)
         elif len(self.selected_nodes) == 1:
@@ -508,32 +510,32 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._update_current_node_index()
         if self.phase == _Phase.ADJUST:
             button = event.button
-            if (self.current_node_index is not None and 
+            if (self.current_node_index is not None and
                     button == 1 and
-                    self.phase == _Phase.ADJUST and 
-                    event.state & self.__class__._PRESSURE_MOD_MASK == 
+                    self.phase == _Phase.ADJUST and
+                    event.state & self.__class__._PRESSURE_MOD_MASK ==
                     self.__class__._PRESSURE_MOD_MASK):
-                
+
                 # Entering On-canvas Pressure Adjustment Phase!
                 self.phase = _Phase.ADJUST_PRESSURE
 
                 # And do not forget,this can be a node selection.
                 if not self.current_node_index in self.selected_nodes:
                     # To avoid old selected nodes still lit.
-                    self._queue_draw_selected_nodes() 
+                    self._queue_draw_selected_nodes()
                     self._reset_selected_nodes(self.current_node_index)
                 else:
                     # The node is already included to self.selected_nodes
                     pass
 
-                # FALLTHRU: *do* start a drag 
+                # FALLTHRU: *do* start a drag
 
             else:
                 # Normal ADJUST Phase.
-                
+
                 if self.zone in (_EditZone.REJECT_BUTTON,
                                  _EditZone.ACCEPT_BUTTON):
-                    if (button == 1 and 
+                    if (button == 1 and
                             event.type == Gdk.EventType.BUTTON_PRESS):
                         self._click_info = (button, self.zone)
                         return False
@@ -562,7 +564,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
                         else:
                             # no CONTROL Key holded.
-                            # If new solo node clicked without holding 
+                            # If new solo node clicked without holding
                             # CONTROL key,then reset all selected nodes.
 
                             assert self.current_node_index != None
@@ -572,7 +574,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
                         if do_reset:
                             # To avoid old selected nodes still lit.
-                            self._queue_draw_selected_nodes() 
+                            self._queue_draw_selected_nodes()
                             self._reset_selected_nodes(self.current_node_index)
 
                     # FALLTHRU: *do* start a drag
@@ -584,7 +586,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # XXX  but how to stop that and enter the adjust phase?
             # XXX Click to add a 1st & 2nd (=last) node only?
             # XXX  but needs to allow a drag after the 1st one's placed.
-            pass    
+            pass
         elif self.phase == _Phase.ADJUST_PRESSURE:
             # XXX Not sure what to do here.
             pass
@@ -600,7 +602,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_ytilt = 0.0
 
         # Supercall: start drags etc
-        return super(InkingMode, self).button_press_cb(tdw, event) 
+        return super(InkingMode, self).button_press_cb(tdw, event)
 
     def button_release_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
@@ -638,7 +640,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                                 self.target_node_index = None
                                 self.current_node_index = None
                     else:
-                        # Single node click. 
+                        # Single node click.
                         pass
 
                     ## fall throgh
@@ -737,7 +739,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
         elif self.phase == _Phase.ADJUST_PRESSURE:
             # Always control node,in pressure editing.
-            new_zone = _EditZone.CONTROL_NODE 
+            new_zone = _EditZone.CONTROL_NODE
 
         # Update the zone, and assume any change implies a button state
         # change as well (for now...)
@@ -925,7 +927,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if self.target_node_index is not None:
                 node = self.nodes[self.target_node_index]
                 self._dragged_node_start_pos = (node.x, node.y)
-                
+
                 # Use selection_rect class as offset-information
                 self.selection_rect.start(mx, my)
 
@@ -1019,7 +1021,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if self.nodes[-1] is not node:
                 # When too close against last captured node,
                 # delete it.
-                d = math.hypot(self.nodes[-1].x - node.x, 
+                d = math.hypot(self.nodes[-1].x - node.x,
                         self.nodes[-1].y - node.y)
                 mid_d = tdw.display_to_model(
                         self.CAPTURE_SETTING.internode_distance_middle, 0)[0]
@@ -1051,12 +1053,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
 
                 # To avoid calculation error,
-                # We need to once convert position of a node 
+                # We need to once convert position of a node
                 # into display coordinate,
                 # and add offset to it.
                 # Then convert it to model coordinate again.
                 #
-                # In contrast,in the method such as 
+                # In contrast,in the method such as
                 # 'converting offset to model and add it to
                 # node position' will cause calculation error,
                 # it bring us a little shifted position.
@@ -1104,7 +1106,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._queue_draw_buttons() # buttons erased while selecting
             self.selection_rect.reset()
             self.phase = _Phase.ADJUST
-        else:                      
+        else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
     def scroll_cb(self, tdw, event):
@@ -1255,7 +1257,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         return dtime
 
     def set_node_dtime(self, i, dtime):
-        dtime = max(dtime, self.CAPTURE_SETTING.min_internode_time) 
+        dtime = max(dtime, self.CAPTURE_SETTING.min_internode_time)
         nodes = self.nodes
         if not (0 < i < len(nodes)):
             return
@@ -1293,7 +1295,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def _adjust_pressure_with_motion(self, x, y):
         """Adjust pressure of current selected node,
         and it may affects nearby nodes
-        
+
         :param x: currently dragging posisiton,in model coord.
         :param y: currently dragging posisiton,in model coord.
         """
@@ -1327,7 +1329,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_draw_buttons()
         for idx in self.selected_nodes:
             self._queue_draw_node(idx)
-            
+
         # after then,delete it.
         new_nodes = [self.nodes[0]]
         for idx,cn in enumerate(self.nodes[1:-1]):
@@ -1366,7 +1368,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         newnode = _Node(
             x=(cn.x + nn.x)/2.0, y=(cn.y + nn.y) / 2.0,
             pressure=(cn.pressure + nn.pressure) / 2.0,
-            xtilt=(cn.xtilt + nn.xtilt) / 2.0, 
+            xtilt=(cn.xtilt + nn.xtilt) / 2.0,
             ytilt=(cn.ytilt + nn.ytilt) / 2.0,
             time=(cn.time + nn.time) / 2.0
         )
@@ -1471,10 +1473,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     ## nodes average
     def average_nodes_angle(self):
         """Average nodes angle.
-        Treat stroke as a sequence of vector,and 
+        Treat stroke as a sequence of vector,and
         average all nodes angle,except for first and last.
 
-        The meaning of 'angle' referred here is, 
+        The meaning of 'angle' referred here is,
         for example,there is 3 nodes in order of A,B and C,
 
             __ -- B ---___
@@ -1519,15 +1521,15 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                         new_nodes.append(cn._replace(x=avx+pn.x, y=avy+pn.y))
                     except ZeroDivisionError:
                         # This means 'two nodes at same place'.
-                        # abort averaging for this node. 
-                        new_nodes.append(cn) 
+                        # abort averaging for this node.
+                        new_nodes.append(cn)
                 else:
                     new_nodes.append(cn)
 
                 pn = cn
                 cn = nn
                 idx += 1
-        
+
             new_nodes.append(self.nodes[-1])
             self.nodes = new_nodes
             # redraw new nodes
@@ -1535,7 +1537,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def average_nodes_distance(self):
         """Average nodes distance.
-        Treat stroke as a sequence of vector,and 
+        Treat stroke as a sequence of vector,and
         average(to half) all nodes distance,
         except for first and last.
 
@@ -1561,7 +1563,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             cur_segment = segment_length
             sidx = 1 # source node idx,it is not equal to idx.
             for idx,cn in enumerate(self.nodes[:-1]):
-                nn = self.nodes[idx+1]  
+                nn = self.nodes[idx+1]
                 cur_length = math.hypot(cn.x - nn.x, cn.y - nn.y)
 
                 if cur_segment == cur_length:
@@ -1593,7 +1595,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
             new_nodes.append(self.nodes[-1])
             self.nodes = new_nodes
-                    
+
             # redraw new nodes
             self._queue_all_visual_redraw()
 
@@ -1611,7 +1613,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
             for idx,cn in enumerate(self.nodes):
                 if (idx > 0 and idx < len(self.nodes) - 1 and
-                        (len(self.selected_nodes) == 0 or 
+                        (len(self.selected_nodes) == 0 or
                             idx in self.selected_nodes) ):
                     pn = self.nodes[idx-1]
                     nn = self.nodes[idx+1]
@@ -1619,7 +1621,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     # not simple average,weighted one
                     new_pressure = (pn.pressure * 0.25 +
                                     cn.pressure * 0.5 +
-                                    nn.pressure * 0.25) 
+                                    nn.pressure * 0.25)
 
                     cn = cn._replace(pressure = new_pressure)
 
@@ -1639,7 +1641,76 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self.selected_nodes = []
         self._queue_redraw_all_nodes()
 
-        
+
+    def apply_pressure_points(self, points):
+        """ apply pressure reprenting points
+        from LineModeCurveWidget.
+        Mostly resembles as BezierMode.apply_pressure_points,
+        but inktool stroke calculartion is not same as
+        BezierMode.
+
+        :param points:  a list of tuple.a tuple is
+        (x position of point, y position of point)
+        y position is decleasing upward,so we need to
+        use the value reversed when we treat it as
+        pressure value.
+
+        if this parameter is None, BezierMode automatically
+        get it from its Optionpresentor.
+        """
+
+        # We need smooooth value, so treat the points
+        # as Bezier-curve points.
+
+        # first of all, get the entire stroke length
+        # to normalize stroke.
+
+        if len(self.nodes) < 2:
+            return
+
+        if points == None:
+            assert hasattr(self.options_presenter,'curve')
+            points = self.options_presenter.curve.points
+
+        assert len(points) == 4
+
+        self._queue_redraw_curve()
+
+        node_length=[]
+        total_length = 0.0
+
+        for idx, cn in enumerate(self.nodes[:-1]):
+            nn = self.nodes[idx + 1]
+            length = math.sqrt((cn.x - nn.x) ** 2 + (cn.y - nn.y) ** 2)
+            node_length.append(length)
+            total_length+=length
+
+        node_length.append(total_length) # this is sentinel
+
+        class _Point:
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+
+
+        # use control handle class temporary to get smooth pressures.
+        ap = _Point(*points[0])
+        bp = _Point(*points[1])
+        cp = _Point(*points[2])
+        dp = _Point(*points[3])
+        cur_length = 0.0
+        new_nodes=[]
+        for idx,cn in enumerate(self.nodes):
+            cx, cy = gui.drawutils.get_bezier_segment(ap, bp, cp, dp,
+                        cur_length / total_length)
+            new_nodes.append(cn._replace(pressure = 1.0 - cy))
+            cur_length += node_length[idx]
+
+        self.nodes = new_nodes
+
+        self._queue_redraw_curve()
+
+
 
 class Overlay (gui.overlays.Overlay):
     """Overlay for an InkingMode's adjustable points"""
@@ -1798,9 +1869,9 @@ class Overlay (gui.overlays.Overlay):
         dx,dy = mode.selection_rect.get_display_offset(self._tdw)
         for i, node, x, y in self._get_onscreen_nodes():
             color = gui.style.EDITABLE_ITEM_COLOR
-            if (mode.phase in 
-                    (_Phase.ADJUST, 
-                     _Phase.ADJUST_PRESSURE, 
+            if (mode.phase in
+                    (_Phase.ADJUST,
+                     _Phase.ADJUST_PRESSURE,
                      _Phase.ADJUST_SELECTING)):
                 if i == mode.current_node_index:
                     color = gui.style.ACTIVE_ITEM_COLOR
@@ -1820,9 +1891,9 @@ class Overlay (gui.overlays.Overlay):
                 radius=radius,
             )
         # Buttons
-        if (mode.phase in 
-                (_Phase.ADJUST, 
-                 _Phase.ADJUST_PRESSURE) and 
+        if (mode.phase in
+                (_Phase.ADJUST,
+                 _Phase.ADJUST_PRESSURE) and
                 not mode.in_drag):
             self.update_button_positions()
             radius = gui.style.FLOATING_BUTTON_RADIUS
@@ -1973,6 +2044,25 @@ class _LayoutNode (object):
 class OptionsPresenter (object):
     """Presents UI for directly editing point values etc."""
 
+    variation_preset_store = None
+
+    variation_presets = [
+            ('Default', ((0.0, 0.7), (0.3, 0.3), (0.7, 0.3), (1.0, 0.7)) ),
+            ('Flurent', ((0.0, 0.9), (0.20, 0.4), (0.8, 0.4), (1.0, 0.9)) ),
+            ('Thick'  , ((0.0, 0.4), (0.25, 0.2), (0.75, 0.2), (1.0, 0.4)) ),
+            ('Thin'   , ((0.0, 0.9), (0.25, 0.7), (0.75, 0.7), (1.0, 0.9)) ),
+            ('Head'  , ((0.0, 0.6), (0.25, 0.4), (0.5, 0.6), (1.0, 0.8)) ),
+            ('Tail'   , ((0.0, 0.8), (0.25, 0.6), (0.5, 0.4), (1.0, 0.6)) ),
+            ]
+
+    @classmethod
+    def init_variation_preset_store(cls):
+        if cls.variation_preset_store == None:
+            store = Gtk.ListStore(str, int)
+            for i,preset in enumerate(cls.variation_presets):
+                store.append((preset[0],i))
+            cls.variation_preset_store = store
+
     def __init__(self):
         super(OptionsPresenter, self).__init__()
         from application import get_app
@@ -1987,14 +2077,14 @@ class OptionsPresenter (object):
         self._dtime_scale = None
         self._insert_button = None
         self._delete_button = None
-        self._optimize_button = None
-        self._cull_button = None
-        self._average_angle_button = None
-        self._average_distance_button = None
-        self._average_pressure_button = None
+        self._apply_variation_button = None
+        self._variation_preset_combo = None
 
         self._updating_ui = False
         self._target = (None, None)
+
+        OptionsPresenter.init_variation_preset_store()
+        
 
     def _ensure_ui_populated(self):
         if self._options_grid is not None:
@@ -2017,20 +2107,69 @@ class OptionsPresenter (object):
         self._insert_button.set_sensitive(False)
         self._delete_button = builder.get_object("delete_point_button")
         self._delete_button.set_sensitive(False)
-        self._optimize_button = builder.get_object("simplify_points_button")
-        self._optimize_button.set_sensitive(False)
-        self._cull_button = builder.get_object("cull_points_button")
-        self._cull_button.set_sensitive(False)
         self._period_adj = builder.get_object("period_adj")
         self._period_scale = builder.get_object("period_scale")
         self._period_adj.set_value(self._app.preferences.get(
             "inktool.capture_period_factor", 1))
-        self._average_angle_button = builder.get_object("average_angle_button")
-        self._average_angle_button.set_sensitive(False)
-        self._average_distance_button = builder.get_object("average_distance_button")
-        self._average_distance_button.set_sensitive(False)
-        self._average_pressure_button = builder.get_object("average_pressure_button")
-        self._average_pressure_button.set_sensitive(False)
+
+        apply_btn = builder.get_object("apply_variation_button")
+        apply_btn.set_sensitive(False)
+        self._apply_variation_button = apply_btn
+
+        base_grid = builder.get_object("points_editing_grid")
+        toolbar = gui.widgets.inline_toolbar(
+            self._app,
+            [
+                ("SimplifyNodes", "mypaint-layer-group-new-symbolic"),
+                ("CullNodes", "mypaint-add-symbolic"),
+                ("AverageNodesAngle", "mypaint-remove-symbolic"),
+                ("AverageNodesDistance", "mypaint-up-symbolic"),
+                ("AverageNodesPressure", "mypaint-down-symbolic"),
+            ]
+        )
+        style = toolbar.get_style_context()
+        style.set_junction_sides(Gtk.JunctionSides.TOP)
+        base_grid.attach(toolbar, 0, 0, 2, 1)
+
+        self.init_linecurve_widget(1, base_grid)
+        self.init_variation_preset_combo(2, base_grid,
+                self._apply_variation_button)
+
+
+
+    def init_linecurve_widget(self, row, box):
+
+        # XXX code duplication from gui.linemode.LineModeOptionsWidget
+        curve = LineModeCurveWidget()
+        curve.set_size_request(175, 125)
+        self.curve = curve
+        exp = Gtk.Expander()
+        exp.set_label(_("Pressure variation..."))
+        exp.set_use_markup(False)
+        exp.add(curve)
+        box.attach(exp, 0, row, 2, 1)
+        exp.set_expanded(True)
+
+    def init_variation_preset_combo(self, row, box, ref_button):
+        combo = Gtk.ComboBox.new_with_model(
+                OptionsPresenter.variation_preset_store)
+        cell = Gtk.CellRendererText()
+        combo.pack_start(cell,True)
+        combo.add_attribute(cell,'text',0)
+        combo.set_active(0)
+        combo.set_sensitive(True) # variation preset always can be changed
+        combo.set_margin_top(ref_button.get_margin_top())
+        combo.set_margin_end(4)
+        combo.set_margin_bottom(ref_button.get_margin_bottom())
+        box.attach(combo, 0, row, 1, 1)
+        combo.connect('changed', self._variation_preset_combo_changed_cb)
+        self._variation_preset_combo = combo
+
+    def set_variation_preset(self, idx):
+        assert idx < len(self.variation_presets) 
+        name, preset_seq = self.variation_presets[idx]
+        for i,point in enumerate(preset_seq):
+            self.curve.points[i] = point
 
     @property
     def widget(self):
@@ -2086,15 +2225,17 @@ class OptionsPresenter (object):
                 self._point_values_grid.set_sensitive(False)
             self._insert_button.set_sensitive(inkmode.can_insert_node(cn_idx))
             self._delete_button.set_sensitive(inkmode.can_delete_node(cn_idx))
-            self._optimize_button.set_sensitive(len(inkmode.nodes) > 3)
-            self._cull_button.set_sensitive(len(inkmode.nodes) > 2)
             self._period_adj.set_value(self._app.preferences.get(
                 "inktool.capture_period_factor", 1))
-            self._average_angle_button.set_sensitive(len(inkmode.nodes) > 2)
-            self._average_distance_button.set_sensitive(len(inkmode.nodes) > 2)
-            self._average_pressure_button.set_sensitive(len(inkmode.nodes) > 2)
+
+            self._apply_variation_button.set_sensitive(len(inkmode.nodes) > 2)
         finally:
-            self._updating_ui = False                               
+            self._updating_ui = False
+
+    def _variation_preset_combo_changed_cb(self, widget):
+        iter = self._variation_preset_combo.get_active_iter()
+        self.set_variation_preset(
+              self.variation_preset_store[iter][1])
 
     def _pressure_adj_value_changed_cb(self, adj):
         if self._updating_ui:
@@ -2165,4 +2306,12 @@ class OptionsPresenter (object):
         inkmode, node_idx = self.target
         if inkmode:
             inkmode.average_nodes_pressure()
+
+    def _apply_variation_button_cb(self, button):
+        inkmode, node_idx = self.target
+        if inkmode:
+            if len(inkmode.nodes) > 1:
+                # To LineModeCurveWidget,
+                # we can access control points as "points" attribute.
+                inkmode.apply_pressure_points(self.curve.points)
 

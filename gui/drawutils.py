@@ -585,6 +585,37 @@ def get_drop_shadow_offsets(line_width, z=2):
         dy + max_line_width + slack,
     ])
 
+## Bezier curve
+
+def _get_bezier_pt(v0, v1, step):
+    return v0 + ((v1-v0) * step)
+
+def get_bezier_segment(p0, p1, p2, p3, step):
+    """ get cubic bezier point from points.
+    each points should have attributes x,y
+    
+    :param p0: the first point
+    :param p1: control point from first point
+    :param p2: control point to next point
+    :param p1: the next point
+    :param step: bezier curve step.
+                 this should be in a range(0.0 - 1.0)
+    """
+
+    xa = _get_bezier_pt(p0.x, p1.x, step)
+    ya = _get_bezier_pt(p0.y, p1.y, step)
+    xb = _get_bezier_pt(p1.x, p2.x, step)
+    yb = _get_bezier_pt(p1.y, p2.y, step)
+    xc = _get_bezier_pt(p2.x, p3.x, step)
+    yc = _get_bezier_pt(p2.y, p3.y, step)
+    
+    xa = _get_bezier_pt(xa, xb, step)
+    ya = _get_bezier_pt(ya, yb, step)
+    xb = _get_bezier_pt(xb, xc, step)
+    yb = _get_bezier_pt(yb, yc, step)
+    
+    return (_get_bezier_pt(xa, xb, step),
+            _get_bezier_pt(ya, yb, step))
 
 ## Test code
 

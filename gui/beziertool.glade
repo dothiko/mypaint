@@ -279,7 +279,7 @@ Negative values mean leftwards tilts.</property>
         </child>
         <child>
           <object class="GtkButton" id="apply_variation_button">
-            <property name="label" translatable="yes">Apply Variation</property>
+            <property name="label" translatable="yes">Apply</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">True</property>

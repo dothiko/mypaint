@@ -246,25 +246,6 @@ def _bezier_iter_offset(seq, selected, offset):
         cn = nn
 _bezier_iter_offset.nodebuf = (_Node_Bezier(0,0), _Node_Bezier(0,0))
 
-def _get_bezier_pt(v0, v1, step):
-    return v0 + ((v1-v0) * step)
-
-def _get_bezier_segment(p0, p1, p2, p3, step):
-
-    xa = _get_bezier_pt(p0.x, p1.x, step)
-    ya = _get_bezier_pt(p0.y, p1.y, step)
-    xb = _get_bezier_pt(p1.x, p2.x, step)
-    yb = _get_bezier_pt(p1.y, p2.y, step)
-    xc = _get_bezier_pt(p2.x, p3.x, step)
-    yc = _get_bezier_pt(p2.y, p3.y, step)
-    
-    xa = _get_bezier_pt(xa, xb, step)
-    ya = _get_bezier_pt(ya, yb, step)
-    xb = _get_bezier_pt(xb, xc, step)
-    yb = _get_bezier_pt(yb, yc, step)
-    
-    return (_get_bezier_pt(xa, xb, step),
-            _get_bezier_pt(ya, yb, step))
 
             
 
@@ -500,12 +481,12 @@ class BezierMode (InkingMode):
             if sx <= x <= ex and sy <= y <= ey:
 
                 def get_distance_and_step(start_step, end_step, increase_step):
-                    ox, oy = _get_bezier_segment(cn, cn.get_control_handle(1),
+                    ox, oy = gui.drawutils.get_bezier_segment(cn, cn.get_control_handle(1),
                                 nn.get_control_handle(0), nn, start_step)
                     cur_step = start_step
                     while cur_step <= end_step:
 
-                        cx, cy = _get_bezier_segment(cn, cn.get_control_handle(1),
+                        cx, cy = gui.drawutils.get_bezier_segment(cn, cn.get_control_handle(1),
                                 nn.get_control_handle(0), nn, cur_step)
 
                         # vpx/vpy : vector of assigned point
@@ -705,7 +686,7 @@ class BezierMode (InkingMode):
         xtilt = 0.0
         ytilt = 0.0
         while cur_step <= 1.0:
-            x, y = _get_bezier_segment(p0, p1, p2, p3, cur_step)
+            x, y = gui.drawutils.get_bezier_segment(p0, p1, p2, p3, cur_step)
 
             #t_abs = max(last_t_abs, t_abs)
             #dtime = t_abs - last_t_abs
@@ -1163,12 +1144,12 @@ class BezierMode (InkingMode):
 
         for idx, cn in enumerate(self.nodes[:-1]):
             nn = self.nodes[idx + 1]
-            ox, oy = _get_bezier_segment(cn, cn.get_control_handle(1),
+            ox, oy = gui.drawutils.get_bezier_segment(cn, cn.get_control_handle(1),
                         nn.get_control_handle(0), nn, 0)
             cur_step = BezierMode.DRAFT_STEP
             length = 0.0 
             while cur_step < 1.0:
-                cx, cy = _get_bezier_segment(cn, cn.get_control_handle(1),
+                cx, cy = gui.drawutils.get_bezier_segment(cn, cn.get_control_handle(1),
                             nn.get_control_handle(0), nn, cur_step)
                 length += math.sqrt((cx - ox) ** 2 + (cy - oy) ** 2)
                 cur_step += BezierMode.DRAFT_STEP
@@ -1188,7 +1169,7 @@ class BezierMode (InkingMode):
         dp = _Control_Handle(*points[3])
         cur_length = 0.0
         for idx,cn in enumerate(self.nodes):
-            cx, cy = _get_bezier_segment(ap, bp, cp, dp, 
+            cx, cy = gui.drawutils.get_bezier_segment(ap, bp, cp, dp, 
                         cur_length / total_length)
             cn.pressure = 1.0 - cy
             cur_length += node_length[idx]
@@ -1439,28 +1420,10 @@ class OptionsPresenter_Bezier (OptionsPresenter):
         self._apply_variation_button = builder.get_object("apply_variation_button")
         self._apply_variation_button.set_sensitive(False)
 
-       #combo = builder.get_object("variation_preset_combobox")
-       #combo.visible = False
-       #self._variation_preset_combo = combo
-        
-
-        self._point_editing_grid = builder.get_object("points_editing_grid")
-        self._init_specialized_widgets(1)
-
-
-
-    def _init_specialized_widgets(self, row):
-        # XXX code duplication from gui.linemode.LineModeOptionsWidget
-        curve = LineModeCurveWidget()
-        curve.set_size_request(175, 125)
-        self.curve = curve
-        exp = Gtk.Expander()
-        exp.set_label(_("Pressure variation..."))
-        exp.set_use_markup(False)
-        exp.add(curve)
-        self._point_editing_grid.attach(exp, 0, row, 2, 1)
-        exp.set_expanded(True)
-         
+        base_grid = builder.get_object("points_editing_grid")
+        self.init_linecurve_widget(1, base_grid)
+        self.init_variation_preset_combo(2, base_grid,
+                self._apply_variation_button)
 
     @property
     def target(self):
