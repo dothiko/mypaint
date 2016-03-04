@@ -1412,14 +1412,18 @@ class FileHandler (object):
                 'recent_projects.txt')
 
         self.recent_projects_info = []
-        with open(recent_project_path, 'rt') as ifp:
-            for curdir in ifp.read().strip().split('\n'):
-                if (os.path.exists(curdir) and 
-                        os.path.isdir(curdir) and
-                        os.path.exists(os.path.join(curdir,'stack.xml'))):
-                    self.recent_projects_info.append(curdir.decode('utf-8'))
-                else:
-                    logger.info('recent dir %s does not match.so rejected.' % curdir)
+        if os.path.exists(recent_project_path):
+            with open(recent_project_path, 'rt') as ifp:
+                for curdir in ifp.read().strip().split('\n'):
+                    if (os.path.exists(curdir) and 
+                            os.path.isdir(curdir) and
+                            os.path.exists(os.path.join(curdir,'stack.xml'))):
+                        self.recent_projects_info.append(
+                                curdir.decode('utf-8'))
+                    else:
+                        logger.info(
+                                'recent dir %s does not match.so rejected.' % 
+                                curdir)
 
         menu_or.set_visible(True)
         menu_sub = gtk.Menu()
