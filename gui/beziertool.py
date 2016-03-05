@@ -1557,16 +1557,11 @@ class OptionsPresenter_Bezier (OptionsPresenter):
         self._delete_button.set_sensitive(False)
         self._check_curvepoint= builder.get_object("checkbutton_curvepoint")
         self._check_curvepoint.set_sensitive(False)
-        self._average_pressure_button = builder.get_object("average_pressure_button")
-        self._average_pressure_button.set_sensitive(False)
 
-        self._apply_variation_button = builder.get_object("apply_variation_button")
-        self._apply_variation_button.set_sensitive(False)
 
         base_grid = builder.get_object("points_editing_grid")
-        self.init_linecurve_widget(1, base_grid)
-        self.init_variation_preset_combo(2, base_grid,
-                self._apply_variation_button)
+        self.init_linecurve_widget(0, base_grid)
+        self.init_variation_preset_combo(1, base_grid)
 
     @property
     def target(self):
@@ -1608,8 +1603,6 @@ class OptionsPresenter_Bezier (OptionsPresenter):
 
             self._insert_button.set_sensitive(beziermode.can_insert_node(cn_idx))
             self._delete_button.set_sensitive(beziermode.can_delete_node(cn_idx))
-            self._average_pressure_button.set_sensitive(len(beziermode.nodes) > 2)
-            self._apply_variation_button.set_sensitive(len(beziermode.nodes) >= 2)
         finally:
             self._updating_ui = False                               
 
@@ -1623,13 +1616,6 @@ class OptionsPresenter_Bezier (OptionsPresenter):
                 beziermode._queue_draw_node(node_idx) 
                 beziermode._queue_redraw_curve()
 
-    def _apply_variation_button_cb(self, button):
-        beziermode, node_idx = self.target
-        if beziermode:
-            if len(beziermode.nodes) > 1:
-                # To LineModeCurveWidget, 
-                # we can access control points as "points" attribute.
-                beziermode.apply_pressure_from_curve_widget()
 
     def _variation_preset_combo_changed_cb(self, widget):
         super(OptionsPresenter_Bezier, self)._variation_preset_combo_changed_cb(widget)

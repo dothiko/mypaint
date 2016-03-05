@@ -2232,7 +2232,7 @@ class OptionsPresenter (object):
         box.attach(exp, 0, row, 2, 1)
         exp.set_expanded(True)
 
-    def init_variation_preset_combo(self, row, box, ref_button):
+    def init_variation_preset_combo(self, row, box, ref_button=None):
         combo = Gtk.ComboBox.new_with_model(
                 OptionsPresenter.variation_preset_store)
         cell = Gtk.CellRendererText()
@@ -2240,10 +2240,13 @@ class OptionsPresenter (object):
         combo.add_attribute(cell,'text',0)
         combo.set_active(0)
         combo.set_sensitive(True) # variation preset always can be changed
-        combo.set_margin_top(ref_button.get_margin_top())
-        combo.set_margin_end(4)
-        combo.set_margin_bottom(ref_button.get_margin_bottom())
-        box.attach(combo, 0, row, 1, 1)
+        if ref_button:
+            combo.set_margin_top(ref_button.get_margin_top())
+            combo.set_margin_end(4)
+            combo.set_margin_bottom(ref_button.get_margin_bottom())
+            box.attach(combo, 0, row, 1, 1)
+        else:
+            box.attach(combo, 0, row, 2, 1)
         combo.connect('changed', self._variation_preset_combo_changed_cb)
         self._variation_preset_combo = combo
 

@@ -263,34 +263,7 @@ Negative values mean leftwards tilts.</property>
         <property name="margin_bottom">6</property>
         <property name="column_homogeneous">True</property>
         <child>
-          <object class="GtkButton" id="average_pressure_button">
-            <property name="label" translatable="yes">Average Pressure</property>
-            <property name="visible">True</property>
-            <property name="can_focus">True</property>
-            <property name="receives_default">True</property>
-            <property name="tooltip_text" translatable="yes">Average pressure of selected nodes.</property>
-            <signal name="clicked" handler="_average_pressure_clicked_cb" swapped="no"/>
-          </object>
-          <packing>
-            <property name="left_attach">0</property>
-            <property name="top_attach">0</property>
-            <property name="width">2</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkButton" id="apply_variation_button">
-            <property name="label" translatable="yes">Apply</property>
-            <property name="visible">True</property>
-            <property name="can_focus">True</property>
-            <property name="receives_default">True</property>
-            <property name="tooltip_text" translatable="yes">Apply current variation to bezier stroke.</property>
-            <property name="margin_top">6</property>
-            <signal name="clicked" handler="_apply_variation_button_cb" swapped="no"/>
-          </object>
-          <packing>
-            <property name="left_attach">1</property>
-            <property name="top_attach">2</property>
-          </packing>
+          <placeholder/>
         </child>
         <child>
           <placeholder/>
