@@ -218,7 +218,7 @@ class PressureMap(object):
         self.curve_widget = source
 
     def get_pressure(self, step):
-        return self.curve_widget.get_curve_value(step)
+        return self.curve_widget.get_pressure_value(step)
 
 
 
@@ -663,7 +663,7 @@ class BezierMode (InkingMode):
                     area[3] - area[1] + 1)
 
 
-    def redraw_curve(self, erase=False):
+    def redraw_curve_cb(self, erase=False):
         """ Frontend method,to redraw curve from outside this class"""
         if erase:
             for tdw in self._overlays:
@@ -774,11 +774,10 @@ class BezierMode (InkingMode):
             dtime = 0.5
 
             if pressure_src and internode_steps:
-                junk, pressure_map = pressure_src.get_pressure(
+                pressure_map = pressure_src.get_pressure(
                         gui.drawutils.linear_interpolation(
                             internode_steps[0], internode_steps[1], cur_step)
                         )
-                pressure_map = 1.0 - pressure_map
             else:
                 pressure_map = 1.0
             
@@ -1266,8 +1265,7 @@ class BezierMode (InkingMode):
         # use control handle class temporary to get smooth pressures.
         cur_length = 0.0
         for idx,cn in enumerate(self.nodes):
-            cx, cy = curve.get_curve_value(cur_length / total_length)
-            cn.pressure = 1.0 - cy
+            cn.pressure = curve.get_curve_value(cur_length / total_length)
             cur_length += node_length[idx]
         
         self._queue_redraw_curve()
@@ -1305,7 +1303,7 @@ class BezierMode (InkingMode):
         if len(self.nodes) <= 1:
             if len(self.nodes) == 0:
                 self.phase = _PhaseBezier.INITIAL
-            self.redraw_curve(True)
+            self.redraw_curve_cb(True)
         else:
             self._queue_redraw_curve()
 
@@ -1612,6 +1610,6 @@ class OptionsPresenter_Bezier (OptionsPresenter):
         super(OptionsPresenter_Bezier, self)._variation_preset_combo_changed_cb(widget)
         beziermode, node_idx = self.target
         if beziermode:
-            beziermode.redraw_curve()
+            beziermode.redraw_curve_cb()
 
     ## Other handlers are as implemented in superclass.  

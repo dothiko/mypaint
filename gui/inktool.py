@@ -34,6 +34,19 @@ import gui.curve
 import gui.widgets
 from gui.linemode import *
 
+## Module constants
+
+# Default Pressure variations.
+# display-name, list of 4 control points.
+# actually x-axis value of points[0] and points[3] are fixed.
+_PRESSURE_VARIATIONS = [
+        ('Default', [(0.0, 0.7), (0.3, 0.0), (0.7, 0.0), (1.0, 0.7)] ),
+        ('Flurent', [(0.0, 0.9), (0.20, 0.4), (0.8, 0.4), (1.0, 0.9)] ),
+        ('Thick'  , [(0.0, 0.4), (0.25, 0.2), (0.75, 0.2), (1.0, 0.4)] ),
+        ('Thin'   , [(0.0, 0.9), (0.25, 0.7), (0.75, 0.7), (1.0, 0.9)] ),
+        ('Head'   , [(0.0, 0.4), (0.25, 0.1), (0.75, 0.4), (1.0, 0.6)] ),
+        ('Tail'   , [(0.0, 0.6), (0.25, 0.4), (0.75, 0.1), (1.0, 0.4)] ),
+        ]
 
 ## Class defs
 
@@ -1682,8 +1695,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         cur_length = 0.0
         new_nodes=[]
         for idx,cn in enumerate(self.nodes):
-            cx, cy = curve.get_curve_value(cur_length / total_length)
-            new_nodes.append(cn._replace(pressure = 1.0 - cy))
+            val = curve.get_pressure_value(cur_length / total_length)
+            new_nodes.append(cn._replace(pressure=val)) 
             cur_length += node_length[idx]
 
         self.nodes = new_nodes
@@ -2021,58 +2034,153 @@ class _LayoutNode (object):
         return self
 
 
+class StrokePressureSettings (object):
+    """Manage GtkAdjustments for tweaking Inktool StrokeCurveWidget settings.
+
+    An instance resides in the main application singleton. Changes to the
+    adjustments are reflected into the app preferences.
+
+    this class is originated from LineModeSettings of gui/linemode.py
+    """
+
+    ## Class Constants
+    _PREF_KEY_BASE = "inkmode.pressure"
+
+    def __init__(self, app):
+        """Initializer; initial settings are loaded from the app prefs"""
+        object.__init__(self)
+        self.app = app
+        self.observers = []  #: List of callbacks
+        self._idle_srcid = None
+        self._changed_settings = set()
+        self._settings = {}
+        custom_pressures = self.app.preferences.get(
+                StrokePressureSettings.get_pref_key('names'),
+                None)
+        if not custom_pressures:
+            for cname, pressure_list in _PRESSURE_VARIATIONS:
+                self._settings[cname] = pressure_list
+        else:
+            for cname, pressure_list in custom_pressures:
+                prefs_key = StrokePressureSettings.get_pref_key(cname)
+                values = self.app.preferences.get(prefs_key, None)
+                if values == None:
+                    values = self.get_default_setting()
+                    logger.warning('There is no such stroke pressure setting %s' % cname)
+                self._settings[cname] = pressure_list
+            # Ensure 'Default' exists
+            if not 'Default' in self._settings:
+                self._settings['Default'] = self.get_default_setting()
+
+
+    @classmethod
+    def get_pref_key(cls, name):
+        return "%s.%s" % (cls._PREF_KEY_BASE, name)
+
+    @property
+    def settings(self):
+        return self._settings
+
+    @property
+    def current_setting(self):
+        prefs_key = StrokePressureSettings.get_pref_key('last_used')
+        return self.app.preferences.get(prefs_key, 'Default')
+
+    @current_setting.setter
+    def current_setting(self, name):
+        prefs_key = StrokePressureSettings.get_pref_key('last_used')
+        self.app.preferences[prefs_key] = name
+
+    @property
+    def last_used_setting(self):
+        prefs_key = StrokePressureSettings.get_pref_key('last_used')
+        return self.app.preferences.get(prefs_key, 'Default')
+
+    def _set_last_used(self, name):
+        prefs_key = StrokePressureSettings.get_pref_key('last_used')
+        self.app.preferences[prefs_key] = name
+
+    def get_default_setting(self):
+        """ Not the named 'Default' setting,
+        return the application default setting.
+        """
+        return _PRESSURE_VARIATIONS[0][1]
+
+    def finalize(self):
+        """ Finalize current settings into app.preference
+        """
+        for cname in self._settings:
+            prefs_key = StrokePressureSettings.get_pref_key(cname)
+            self.app.preferences[prefs_key] = self._settings[cname]
+
+        prefs_key = StrokePressureSettings.get_pref_key('names')
+        self.app.preferences[prefs_key] = self._settings.keys()
+
+    def points_changed_cb(self, curve):
+
+        setting = self._settings[self.current_setting]
+        for i in range(min(len(curve.points),4)):
+            setting[i] = curve.points[i] # no copy needed,because it is tuple.
+
+        if self._idle_srcid is None:
+            self._idle_srcid = GLib.idle_add(self._values_changed_idle_cb)
+
+    def _values_changed_idle_cb(self):
+        # Aggregate, idle-state callback for multiple adjustments being changed
+        # in a single event. Queues redraws, and runs observers. The curve sets
+        # multiple settings at once, and we might as well not queue too many
+        # redraws.
+        if self._idle_srcid is not None:
+            current_mode = self.app.doc.modes.top
+            if hasattr(current_mode, 'redraw_curve_cb'):
+                # Redraw last_line when settings are adjusted in the adjustment Curve
+                GLib.idle_add(current_mode.redraw_curve_cb)
+            for func in self.observers:
+                func(self._changed_settings)
+            self._changed_settings = set()
+            self._idle_srcid = None
+        return False
+
+
+
 class StrokeCurveWidget (gui.curve.CurveWidget):
     """Graph of pressure by distance, tied to the central LineModeSettings"""
 
-    _SETTINGS_COORDINATE = [('entry_pressure', (0, 1)),
-                            ('midpoint_pressure', (1, 1)),
-                            ('exit_pressure', (3, 1)),
-                            ('line_head', (1, 0)),
-                            ('line_tail', (2, 0))]
+    ## Class constants
+
+    _CURVE_STEP = 0.05 # The smoothness of curve(0.0 - 1.0).
+                       # lower value is smoother.
 
     def __init__(self):
         from application import get_app
         self.app = get_app()
-       #gui.curve.CurveWidget.__init__(self, npoints=4, ylockgroups=((1, 2),),
-       #                     changed_cb=self._changed_cb)
-        super(StrokeCurveWidget, self).__init__(npoints=4, ylockgroups=((1, 2),),
+        super(StrokeCurveWidget, self).__init__(npoints=4, 
                              changed_cb=self._changed_cb)
-        self.app.line_mode_settings.observers.append(self._adjs_changed_cb)
+
+        self.setting_changed_cb()
         self._update()
 
-    def _adjs_changed_cb(self, changed):
-        logger.debug("Updating stroke curve widget(changed: %r)", changed)
-        self._update()
+
+    def setting_changed_cb(self):
+        name = self.app.stroke_pressure_settings.current_setting
+        preset_seq = self.app.stroke_pressure_settings.settings[name]
+        for i, value in enumerate(preset_seq):
+            if i >= 4:
+                break
+            self.set_point(i, value)
+        self.queue_draw()
 
     def _update(self):
-        for setting, coord_pair in self._SETTINGS_COORDINATE:
-
-            adj = self.app.line_mode_settings.adjustments[setting]
-            value = adj.get_value()
-
-            index, subindex = coord_pair
-            if not setting.startswith('line'):
-                value = 1.0 - value
-            if subindex == 0:
-                coord = (value, self.points[index][1])
-            else:
-                coord = (self.points[index][0], value)
-            self.set_point(index, coord)
-
+        # we needs this method ,called from superclass 
         self.queue_draw()
+
 
     def _changed_cb(self, curve):
         """Updates the linemode pressure settings when the curve is altered"""
-        for setting, coord_pair in self._SETTINGS_COORDINATE:
-            index, subindex = coord_pair
-            value = self.points[index][subindex]
-            if not setting.startswith('line'):
-                value = 1.0 - value
-            value = max(0.0001, value)
-            adj = self.app.line_mode_settings.adjustments[setting]
-            adj.set_value(value)
+        self.app.stroke_pressure_settings.points_changed_cb(self)
 
     def draw_cb(self, widget, cr):
+
         super(StrokeCurveWidget, self).draw_cb(widget, cr)
 
         width, height = self.get_display_area()
@@ -2084,24 +2192,37 @@ class StrokeCurveWidget (gui.curve.CurveWidget):
                     y * height + gui.curve.RADIUS)
 
         
-        step = 0.05
-        ox, oy = get_disp(*self.get_curve_value(0.0))
+        cr.save()
+
+        # [TODO] we need choose color which is friendly with
+        # the theme which is used by end-user.
+        cr.set_source_rgb(0.4,0.4,0.8)
+
+        ox, oy = get_disp(*self._get_curve_value(0.0))
         cr.move_to(ox, oy)
-        cur_step = step
+        cur_step = self._CURVE_STEP
         while cur_step < 1.0:
-            cx, cy = get_disp(*self.get_curve_value(cur_step))
+            cx, cy = get_disp(*self._get_curve_value(cur_step))
             cr.line_to(cx, cy)
             cr.stroke()
             cr.move_to(cx, cy)
-            cur_step+=step
+            cur_step+= self._CURVE_STEP
 
         # don't forget draw final segment
-        cx, cy = get_disp(*self.get_curve_value(1.0))
+        cx, cy = get_disp(*self._get_curve_value(1.0))
         cr.line_to(cx, cy)
         cr.stroke()
+        cr.restore()
         return True
 
-    def get_curve_value(self, step):
+    def _get_curve_value(self, step):
+        """ Treat 4 points of self.points as bezier-control-points
+        and get curve interpolated value.
+        but to get minimum value(it is reversed to maximum pressure)
+        does not treat self.points as single cubic bezier curve,
+        but two connected bezier curve.
+        if we use cubic one,it never reachs the top.
+        """
         bx,by = self.points[1]
         cx,cy = self.points[2]
 
@@ -2123,26 +2244,23 @@ class StrokeCurveWidget (gui.curve.CurveWidget):
         return gui.drawutils.get_bezier_segment(ap, bp, cp, 
                 t_step)
 
+    def get_pressure_value(self, step):
+        junk, value = self._get_curve_value(step)
+        return lib.helpers.clamp(1.0 - value, 0.0, 1.0)
+
 class OptionsPresenter (object):
     """Presents UI for directly editing point values etc."""
 
     variation_preset_store = None
 
-    variation_presets = [
-            ('Default', ((0.0, 0.7), (0.3, 0.0), (0.7, 0.0), (1.0, 0.7)) ),
-            ('Flurent', ((0.0, 0.9), (0.20, 0.4), (0.8, 0.4), (1.0, 0.9)) ),
-            ('Thick'  , ((0.0, 0.4), (0.25, 0.2), (0.75, 0.2), (1.0, 0.4)) ),
-            ('Thin'   , ((0.0, 0.9), (0.25, 0.7), (0.75, 0.7), (1.0, 0.9)) ),
-            ('Head'   , ((0.0, 0.4), (0.25, 0.1), (0.75, 0.4), (1.0, 0.6)) ),
-            ('Tail'   , ((0.0, 0.6), (0.25, 0.4), (0.75, 0.1), (1.0, 0.4)) ),
-            ]
-
     @classmethod
     def init_variation_preset_store(cls):
         if cls.variation_preset_store == None:
+            from application import get_app
+            _app = get_app()
             store = Gtk.ListStore(str, int)
-            for i,preset in enumerate(cls.variation_presets):
-                store.append((preset[0],i))
+            for i,name in enumerate(_app.stroke_pressure_settings.settings):
+                store.append((name,i))
             cls.variation_preset_store = store
 
     def __init__(self):
@@ -2250,11 +2368,16 @@ class OptionsPresenter (object):
         combo.connect('changed', self._variation_preset_combo_changed_cb)
         self._variation_preset_combo = combo
 
-    def set_variation_preset(self, idx):
-        assert idx < len(self.variation_presets) 
-        name, preset_seq = self.variation_presets[idx]
-        for i,point in enumerate(preset_seq):
-            self.curve.points[i] = point
+        # set last active setting.
+        last_used = self._app.stroke_pressure_settings.last_used_setting
+        def walk_combo_cb(model, path, iter, user_data):
+            if self.variation_preset_store[iter][0] == last_used:
+                combo.set_active_iter(iter)
+                return True
+
+        self.variation_preset_store.foreach(walk_combo_cb,None)
+
+
 
     @property
     def widget(self):
@@ -2319,8 +2442,9 @@ class OptionsPresenter (object):
 
     def _variation_preset_combo_changed_cb(self, widget):
         iter = self._variation_preset_combo.get_active_iter()
-        self.set_variation_preset(
-              self.variation_preset_store[iter][1])
+        self._app.stroke_pressure_settings.current_setting = \
+                self.variation_preset_store[iter][0]
+        self.curve.setting_changed_cb()
 
     def _pressure_adj_value_changed_cb(self, adj):
         if self._updating_ui:

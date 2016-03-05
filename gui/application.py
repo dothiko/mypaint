@@ -93,6 +93,7 @@ import gui.profiling
 import assist
 import sizechangemode
 import beziertool
+import inktool
 
 ## Utility methods
 
@@ -317,6 +318,7 @@ class Application (object):
         self.brushmodifier = brushmodifier.BrushModifier(self)
         signal_callback_objs.append(self.brushmodifier)
         self.line_mode_settings = linemode.LineModeSettings(self)
+        self.stroke_pressure_settings = inktool.StrokePressureSettings(self)
 
         self.modemanager_for_device = {}
 
@@ -436,6 +438,8 @@ class Application (object):
         f = open(settingspath, 'w')
         f.write(jsonstr)
         f.close()
+
+        self.stroke_pressure_settings.finalize()
 
     def apply_settings(self):
         """Applies the current settings.
