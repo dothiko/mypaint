@@ -669,9 +669,20 @@ class BezierMode (InkingMode):
                     area[3] - area[1] + 1)
 
 
-    def redraw_curve(self):
+    def redraw_curve(self, erase=False):
         """ Frontend method,to redraw curve from outside this class"""
-        self._queue_redraw_curve()
+        if erase:
+            for tdw in self._overlays:
+                model = tdw.doc
+                self._queue_task(self.brushwork_rollback, model)
+                self._queue_task(
+                    self.brushwork_begin, model,
+                    description=_("Bezier"),
+                    abrupt=True,
+                )
+        else:
+            self._queue_redraw_curve()
+
 
     def _queue_redraw_curve(self, step = 0.05, pressure_obj=None):
         """Redraws the entire curve on all known view TDWs
@@ -1186,9 +1197,10 @@ class BezierMode (InkingMode):
 
     def _adjust_current_node_index(self):
         """ Adjust self.current_node_index
-        inherited classes might have different behavior
-        for it.
+        child classes might have different behavior
+        from Inktool about current_node_index.
         """
+        print 'here11'
         if self.current_node_index >= len(self.nodes):
             self.current_node_index = None
             self.current_node_changed(
@@ -1270,6 +1282,44 @@ class BezierMode (InkingMode):
         self._queue_redraw_curve()
 
 
+    def delete_selected_nodes(self):
+        """ Beziertool can delete any nodes...even
+        first / last one!
+        """
+
+        # First of all,queue redraw area.
+        self._queue_draw_buttons()
+        for idx in self.selected_nodes:
+            self._queue_draw_node(idx)
+
+        self._queue_redraw_curve()
+
+        # after then,delete it.
+        new_nodes = []
+        for idx,cn in enumerate(self.nodes):
+            if idx in self.selected_nodes:
+                if self.current_node_index == idx:
+                    self.current_node_index = None
+                    self.current_node_index = None
+
+                if self.target_node_index == idx:
+                    self.target_node_index = None
+            else:
+                new_nodes.append(cn)
+
+        self.nodes = new_nodes
+        self._reset_selected_nodes()
+
+        # Issue redraws for the changed on-canvas elements
+        if len(self.nodes) <= 1:
+            if len(self.nodes) == 0:
+                self.phase = _PhaseBezier.INITIAL
+            self.redraw_curve(True)
+        else:
+            self._queue_redraw_curve()
+
+        self._queue_redraw_all_nodes()
+        self._queue_draw_buttons()
 
 class OverlayBezier (Overlay):
     """Overlay for an BezierMode's adjustable points"""

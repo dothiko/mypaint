@@ -2088,8 +2088,8 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
     def delete_current_node_cb(self, action):
         """Callback: delete currently selected node"""
         mode=self.modes.top
-        if getattr(mode, 'delete_current_node', False):
-            mode.delete_current_node()
+        if getattr(mode, 'delete_selected_nodes', False):
+            mode.delete_selected_nodes()
     
     def simplify_nodes_cb(self, action):
         """Callback: simplify current inktool stroke"""

@@ -1265,8 +1265,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def _adjust_current_node_index(self):
         """ Adjust self.current_node_index
-        inherited classes might have different behavior
-        for it.
+        child classes might have different behavior
+        from Inktool about current_node_index.
         """
         if self.current_node_index >= len(self.nodes):
             self.current_node_index = len(self.nodes) - 2
@@ -1325,7 +1325,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._pressed_y = y
         self._queue_redraw_curve()
 
-    def delete_current_node(self):
+    def delete_selected_nodes(self):
 
         # First of all,queue redraw area.
         self._queue_draw_buttons()
@@ -1338,6 +1338,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             t_idx = idx + 1
             if t_idx in self.selected_nodes:
                 if self.current_node_index == t_idx:
+                    self.current_node_index = None
                     self.current_node_index = None
 
                 if self.target_node_index == t_idx:
