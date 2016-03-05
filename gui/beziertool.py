@@ -771,7 +771,7 @@ class BezierMode (InkingMode):
             #dtime = t_abs - last_t_abs
             # TODO This is the big problem.
             # how we decide the speed from static node list?
-            dtime = 1.0
+            dtime = 0.5
 
             if pressure_src and internode_steps:
                 junk, pressure_map = pressure_src.get_pressure(
