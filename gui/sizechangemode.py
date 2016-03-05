@@ -127,11 +127,9 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         self._ensure_overlay_for_tdw(tdw)
         self._queue_draw_brush() # erase previous brush circle
 
-        self.pressed_x, self.pressed_y = \
-                tdw.display_to_model(event.x, event.y)
         if self.base_x == None:
-            self.base_x = self.pressed_x
-            self.base_y = self.pressed_y
+            self.base_x = self.start_x
+            self.base_y = self.start_y
             # getting returning point of cursor,in screen coordinate
             disp = gdk.Display.get_default()
             screen, self.start_screen_x , self.start_screen_y ,mod = \
@@ -142,9 +140,8 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
     def drag_update_cb(self, tdw, event, dx, dy):
 
         self._ensure_overlay_for_tdw(tdw)
-        mx, my = tdw.display_to_model(event.x, event.y)
-        cx = mx - self.pressed_x
-        cy = my - self.pressed_y
+        cx = event.x - self.start_x
+        cy = event.y - self.start_y
         cs = math.hypot(cx, cy)
         if cs > 0.0:
             # Getting angle against straight vertical identity vector.
@@ -185,10 +182,10 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
             self._queue_draw_brush()
 
             # refresh pressed position
-            self.pressed_x = mx
-            self.pressed_y = my
+            self.start_x = event.x
+            self.start_y = event.y
 
-        return super(SizechangeMode, self).drag_update_cb(tdw, event, mx, my)
+        return super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
 
     def drag_stop_cb(self, tdw):
         self._ensure_overlay_for_tdw(tdw)
@@ -227,11 +224,10 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         for tdw, overlay in self._overlays.items():
             if self.base_x != None:
                 cur_radius = self.get_cursor_radius(tdw)
-                sx, sy = tdw.model_to_display(self.base_x, self.base_y)
                 areasize = cur_radius*2 + space*2 +1
                 tdw.queue_draw_area(
-                        sx - cur_radius - space,  
-                        sy - cur_radius - space,
+                        self.base_x - cur_radius - space,  
+                        self.base_y - cur_radius - space,
                         areasize, areasize)
 
     ## Mode options
@@ -243,6 +239,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
             widget = _SizeChangerOptionWidget()
             cls._OPTIONS_WIDGET = widget
         return cls._OPTIONS_WIDGET
+
 
 class _Overlay (gui.overlays.Overlay):
     """Overlay for an SizechangeMode's brushsize"""
@@ -256,13 +253,11 @@ class _Overlay (gui.overlays.Overlay):
         """Draw brush size to the screen"""
 
         cr.save()
-        color = gui.style.ACTIVE_ITEM_COLOR
+       #color = gui.style.ACTIVE_ITEM_COLOR
         cr.set_source_rgb(0, 0, 0)
-        sx, sy = self._tdw.model_to_display(
-                self._sizemode.base_x, 
-                self._sizemode.base_y)
         cr.set_line_width(1)
-        cr.arc( sx, sy,
+        cr.arc( self._sizemode.base_x,
+                self._sizemode.base_y,
                 self._sizemode.get_cursor_radius(self._tdw),
                 0.0,
                 2*math.pi)
