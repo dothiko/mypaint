@@ -166,7 +166,6 @@ class FileHandler (object):
         self.active_scrap_filename = None
         self.lastsavefailed = False
         self._update_recent_items()
-        self._update_recent_project_items()
 
         saveformat_keys = [
             SAVE_FORMAT_ANY,
@@ -1256,47 +1255,6 @@ class FileHandler (object):
 
     ## Project related
 
-
-    def _update_recent_project_items(self):
-        """Updates self._recent_items from the GTK RecentManager.
-
-        This list is consumed in open_last_cb.
-
-        """
-        # Note: i.exists() does not work on Windows if the pathname
-        # contains utf-8 characters. Since GIMP also saves its URIs
-        # with utf-8 characters into this list, I assume this is a
-        # gtk bug.  So we use our own test instead of i.exists().
-
-        if 'project.recent' in self.app.preferences:
-            self._recent_projects = self.app.preferences['project.recent']
-        else:
-            self._recent_projects = []
-
-    def _recentfilter_project_func(self, rfinfo):
-        """Recent-file filter function.
-
-        This does a filename extension check, and also verifies that the
-        file actually exists.
-
-        """
-        if not rfinfo:
-            return False
-       # To workaround GTK3 bug at ubuntu 14.04 LTS.
-       #>>>> original
-       #apps = rfinfo.applications
-       #if not (apps and "mypaint" in apps):
-       #    return False
-       #return self._uri_is_loadable(rfinfo.uri)
-       ## Keep this test in sync with _update_recent_items().
-       #<<<< original
-        fnamebase, ext = os.path.splitext(rfinfo.display_name)
-        ext = ext.lower()
-        if ext in self.ext2saveformat:
-            return self._uri_is_loadable(rfinfo.uri)
-        return False
-
-
     def update_project_preview_cb(self, file_chooser, preview):
         """Project-Save specialized version of update_preview_cb()
         """
@@ -1401,9 +1359,9 @@ class FileHandler (object):
 
     def init_project_related(self, menu_or):
         """ THIS IS ADHOC METHOD.
-        because I think there is no way to add
-        directory to recent file list. 
-        if I found more resonable way,change this.
+        Ideally we should use GTK recent file list against project too, 
+        but it seems to be GTK cannot accept a directory to 'recent file list'.
+        if I found more resonable way,I'll change this.
         (or,create filetype such as '.project'?)"""
 
         # loading recent project info(if exists)
@@ -1476,5 +1434,4 @@ class FileHandler (object):
             for cdir in self.recent_projects_info:
                 ifp.write(cdir) 
                 ifp.write('\n') 
-
 

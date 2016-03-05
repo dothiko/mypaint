@@ -209,7 +209,7 @@ Vocabulary
       <child>
         <object class="GtkAction" id="SaveProjectAsNewVersion">
           <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save Project as New version</property>
-          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current work,overwritten files are saved into backup directory automatically.</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current work,old files are saved into backup directory.</property>
           <signal name="activate" handler="save_project_as_new_version_cb"/>
         </object>
       </child>
