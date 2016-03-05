@@ -181,8 +181,6 @@ class _Node_Bezier (_Control_Handle):
     def __getitem__(self, idx):
         return self._array[idx]
     
-    
-    
 class _EditZone_Bezier(_EditZone):
     """Enumeration of what the pointer is on in the ADJUST phase"""
     CONTROL_HANDLE = 104 #: Control handle of bezier
@@ -209,7 +207,28 @@ class _PhaseBezier(_Phase):
    # ADJUST_SELECTING
    # are also used,it is defined at gui.inktool._Phase
 
+class PressureMap(object):
+    """ PressureMap object, to mapping 'pressure-variation'
+    configuration to current stroke.
 
+    With this mechanism, even the stroke has only 2 nodes,
+    the variation mapped entire stroke.
+    old node-based pressure mapping code,it cannot 
+    process pressure correctly in 2 node curve.
+    """
+
+    def __init__(self, source):
+        """
+        :param source: source curve widget.
+        """
+        self.curve_widget = source
+
+    def get_pressure(self, step):
+        return self.curve_widget.get_curve_value(step)
+
+
+
+## Function defs
     
 def _bezier_iter(seq):
     """Converts an list of control point tuples to interpolatable arrays
@@ -330,9 +349,14 @@ class BezierMode (InkingMode):
     DRAFT_STEP = 0.01 # Draft(Editing) Bezier curve stroke step.
     FINAL_STEP = 0.005 # Final output stroke Bezier-curve step.
 
+    _DEFAULT_PRESSURE = 0.5 # default bezier pressure,this is fixed value.
+                            # because it is hard to capure pressure from devices 
+                            # with current BezierMode interface.
+
     ## Other class vars
 
     _OPTIONS_PRESENTER = None   #: Options presenter singleton
+    _PRESSURE_MAP = None #: Pressure mapping object singleton
 
     ## Initialization & lifecycle methods
 
@@ -645,14 +669,23 @@ class BezierMode (InkingMode):
                     area[3] - area[1] + 1)
 
 
-    def _queue_redraw_curve(self,step = 0.05):
+    def redraw_curve(self):
+        """ Frontend method,to redraw curve from outside this class"""
+        self._queue_redraw_curve()
+
+    def _queue_redraw_curve(self, step = 0.05, pressure_obj=None):
         """Redraws the entire curve on all known view TDWs
         :param step: rendering step of curve.
         The lower this value is,the higher quality bezier curve rendered.
         default value is for draft/editing, 
         to be decreased when render final stroke.
+        :param pressure_obj: a pressure-mapping object or None
         """
         self._stop_task_queue_runner(complete=False)
+
+        if pressure_obj == None:
+            pressure_obj = self.pressure_map
+
         for tdw in self._overlays:
             model = tdw.doc
             if len(self.nodes) < 2:
@@ -664,14 +697,19 @@ class BezierMode (InkingMode):
                 abrupt=True,
             )
             dx, dy = self.selection_rect.get_model_offset()
+            idx = 0.0
+            cnt = len(self.nodes) - 1
             for p0, p1, p2, p3 in _bezier_iter_offset(self.nodes,
                     self.selected_nodes,
                     (dx,dy)):
                 self._queue_task(
                     self._draw_curve_segment,
                     model,
-                    p0, p1, p2, p3, step
+                    p0, p1, p2, p3, step,
+                    pressure_obj,
+                    (idx / cnt, (idx+1) / cnt)
                 )
+                idx+=1.0
         self._start_task_queue_runner()
 
     def _queue_draw_buttons(self):
@@ -702,9 +740,19 @@ class BezierMode (InkingMode):
                 tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
 
 
-    def _draw_curve_segment(self, model, p0, p1, p2, p3, step):
+    def _draw_curve_segment(self, model, p0, p1, p2, p3, step, 
+            pressure_src=None, internode_steps=None):
         """Draw the curve segment between the middle two points
-        :param step: rendering step of curve.
+        :param step: Rendering step of curve.
+        :param pressure_src: Pressure source object,which has 
+            get_pressure(step) method.
+            this is used for 'pressure variation mapping' feature.
+        :param internode_steps: A tuple of 
+            (the step of start point in entire stroke,
+             the step of end point in entire stroke)
+            or None. 
+        if either pressure_src or internode_steps is none,
+        the 'pressure variation mapping' feature disabled.
         """
         
         
@@ -719,15 +767,25 @@ class BezierMode (InkingMode):
             # TODO This is the big problem.
             # how we decide the speed from static node list?
             dtime = 1.0
+
+            if pressure_src and internode_steps:
+                junk, pressure_map = pressure_src.get_pressure(
+                        gui.drawutils.linear_interpolation(
+                            internode_steps[0], internode_steps[1], cur_step)
+                        )
+                pressure_map = 1.0 - pressure_map
+            else:
+                pressure_map = 1.0
             
             self.stroke_to(
                 model, 
-                gui.drawutils.linear_interpolation(
-                    p0.dtime, p3.dtime, cur_step),
+                dtime,
+               #gui.drawutils.linear_interpolation(
+               #    p0.dtime, p3.dtime, cur_step),
                 x, y, 
                 lib.helpers.clamp(
                     gui.drawutils.linear_interpolation(
-                    p0.pressure, p3.pressure, cur_step),
+                    p0.pressure, p3.pressure, cur_step) * pressure_map,
                     0.0, 1.0), 
                 gui.drawutils.linear_interpolation(
                     p0.xtilt, p3.xtilt, cur_step),
@@ -1057,7 +1115,7 @@ class BezierMode (InkingMode):
             x=x, y=y,
             pressure=lib.helpers.clamp(
                     self._get_event_pressure(event),
-                    0.3, 1.0), 
+                    self._DEFAULT_PRESSURE, 1.0), 
             xtilt=xtilt, ytilt=ytilt
             )
         
@@ -1073,6 +1131,16 @@ class BezierMode (InkingMode):
         if cls._OPTIONS_PRESENTER is None:
             cls._OPTIONS_PRESENTER = OptionsPresenter_Bezier()
         return cls._OPTIONS_PRESENTER
+
+    @property
+    def pressure_map(self):
+        """pressure map object for stroke drawing with pressure mapping"""
+        cls = self.__class__
+        if cls._PRESSURE_MAP is None:
+            if cls._OPTIONS_PRESENTER == None:
+                t = cls.options_presenter
+            cls._PRESSURE_MAP = PressureMap(cls._OPTIONS_PRESENTER.curve)
+        return cls._PRESSURE_MAP
 
     def _divide_bezier(self, index, step):
         """ Divide (insert a node intermidiate stroke)
@@ -1157,8 +1225,6 @@ class BezierMode (InkingMode):
         # We need smooooth value, so treat the points
         # as Bezier-curve points.
 
-        # first of all, get the entire stroke length
-        # to normalize stroke.
 
         if len(self.nodes) < 2:
             return
@@ -1167,6 +1233,9 @@ class BezierMode (InkingMode):
         curve = self.options_presenter.curve
 
         self._queue_redraw_curve()
+
+        # First of all, get the entire stroke length
+        # to normalize stroke.
 
         node_length=[]
         total_length = 0.0
@@ -1511,5 +1580,14 @@ class OptionsPresenter_Bezier (OptionsPresenter):
                 # To LineModeCurveWidget, 
                 # we can access control points as "points" attribute.
                 beziermode.apply_pressure_from_curve_widget()
+
+    def _variation_preset_combo_changed_cb(self, widget):
+        super(OptionsPresenter_Bezier, self)._variation_preset_combo_changed_cb(widget)
+       #iter = self._variation_preset_combo.get_active_iter()
+       #self.set_variation_preset(
+       #      self.variation_preset_store[iter][1])
+        beziermode, node_idx = self.target
+        if beziermode:
+            beziermode.redraw_curve()
 
     ## Other handlers are as implemented in superclass.  
