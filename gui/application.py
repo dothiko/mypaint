@@ -433,13 +433,13 @@ class Application (object):
         self.brushmanager.save_brushes_for_devices()
         self.brushmanager.save_brush_history()
         self.filehandler.save_scratchpad(self.scratchpad_filename)
+        self.stroke_pressure_settings.finalize()
         settingspath = join(self.user_confpath, 'settings.json')
         jsonstr = helpers.json_dumps(self.preferences)
         f = open(settingspath, 'w')
         f.write(jsonstr)
         f.close()
 
-        self.stroke_pressure_settings.finalize()
 
     def apply_settings(self):
         """Applies the current settings.

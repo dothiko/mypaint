@@ -2055,22 +2055,15 @@ class StrokePressureSettings (object):
         self._changed_settings = set()
         self._settings = {}
         custom_pressures = self.app.preferences.get(
-                StrokePressureSettings.get_pref_key('names'),
-                None)
-        if not custom_pressures:
-            for cname, pressure_list in _PRESSURE_VARIATIONS:
-                self._settings[cname] = pressure_list
-        else:
-            for cname, pressure_list in custom_pressures:
-                prefs_key = StrokePressureSettings.get_pref_key(cname)
-                values = self.app.preferences.get(prefs_key, None)
-                if values == None:
-                    values = self.get_default_setting()
-                    logger.warning('There is no such stroke pressure setting %s' % cname)
-                self._settings[cname] = pressure_list
-            # Ensure 'Default' exists
-            if not 'Default' in self._settings:
-                self._settings['Default'] = self.get_default_setting()
+                StrokePressureSettings.get_pref_key('settings'),
+                _PRESSURE_VARIATIONS)
+
+        for cname, pressure_list in custom_pressures:
+            self._settings[cname] = pressure_list
+        
+        # Ensure 'Default' exists
+        if not 'Default' in self._settings:
+            self._settings['Default'] = self.get_default_setting()
 
 
     @classmethod
@@ -2109,12 +2102,14 @@ class StrokePressureSettings (object):
     def finalize(self):
         """ Finalize current settings into app.preference
         """
-        for cname in self._settings:
-            prefs_key = StrokePressureSettings.get_pref_key(cname)
-            self.app.preferences[prefs_key] = self._settings[cname]
+        save_settings = []
 
-        prefs_key = StrokePressureSettings.get_pref_key('names')
-        self.app.preferences[prefs_key] = self._settings.keys()
+        for cname in self._settings:
+            save_settings.append((cname, self._settings[cname]))
+
+        prefs_key = StrokePressureSettings.get_pref_key('settings')
+        self.app.preferences[prefs_key] = save_settings
+
 
     def points_changed_cb(self, curve):
 
