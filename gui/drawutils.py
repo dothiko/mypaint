@@ -640,7 +640,10 @@ def get_cubic_bezier_segment(p0, p1, p2, p3, step):
 
 
     return get_bezier_segment(p0, p1, p2, step)
-    
+
+## Linear interpolation
+def linear_interpolation(base, dest, step):
+    return base + ((dest - base) * step)
 
 ## Test code
 

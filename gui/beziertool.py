@@ -709,7 +709,6 @@ class BezierMode (InkingMode):
         
         
         cur_step = 0.0
-        pressure = 1.0 # for testing
         xtilt = 0.0
         ytilt = 0.0
         while cur_step <= 1.0:
@@ -722,12 +721,18 @@ class BezierMode (InkingMode):
             dtime = 1.0
             
             self.stroke_to(
-                model, dtime, x, y, 
+                model, 
+                gui.drawutils.linear_interpolation(
+                    p0.dtime, p3.dtime, cur_step),
+                x, y, 
                 lib.helpers.clamp(
-                    p0.pressure + ((p3.pressure - p0.pressure) * cur_step),
+                    gui.drawutils.linear_interpolation(
+                    p0.pressure, p3.pressure, cur_step),
                     0.0, 1.0), 
-                xtilt, 
-                ytilt,
+                gui.drawutils.linear_interpolation(
+                    p0.xtilt, p3.xtilt, cur_step),
+                gui.drawutils.linear_interpolation(
+                    p0.ytilt, p3.ytilt, cur_step),
                 auto_split=False,
             )
                         
