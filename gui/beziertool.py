@@ -764,14 +764,13 @@ class BezierMode (InkingMode):
         cur_step = 0.0
         xtilt = 0.0
         ytilt = 0.0
-        while cur_step <= 1.0:
+        dtime = 0.5
+        # TODO dtime is the big problem.
+        # how we decide the speed from static node list?
+        
+        def draw_single_segment(cur_step):
             x, y = gui.drawutils.get_cubic_bezier_segment(p0, p1, p2, p3, cur_step)
 
-            #t_abs = max(last_t_abs, t_abs)
-            #dtime = t_abs - last_t_abs
-            # TODO This is the big problem.
-            # how we decide the speed from static node list?
-            dtime = 0.5
 
             if pressure_src and internode_steps:
                 pressure_map = pressure_src.get_pressure(
@@ -795,8 +794,12 @@ class BezierMode (InkingMode):
                     p0.ytilt, p3.ytilt, cur_step),
                 auto_split=False,
             )
-                        
+
+        while cur_step < 1.0:
+            draw_single_segment(cur_step)            
             cur_step += step
+
+        draw_single_segment(1.0) # Ensure draw the last segment          
 
     ## Raw event handling (prelight & zone selection in adjust phase)
     def button_press_cb(self, tdw, event):
