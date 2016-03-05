@@ -39,8 +39,6 @@ from gui.linemode import *
 
 class _Control_Handle(object):
     def __init__(self, x, y):
-       #self.x = x
-       #self.y = y
         self._array = array.array('f',(x,y))
 
     def __getitem__(self, idx):
@@ -80,14 +78,10 @@ class _Node_Bezier (_Control_Handle):
             
     def __init__(self,x,y,pressure=1.0,xtilt=0.0,ytilt=0.0,
             control_handles=None,curve=True):
-       #self.x = x
-       #self.y = y
         self.pressure = pressure
         self.xtilt = xtilt
         self.ytilt = ytilt
         self.time = 0
-       #self._array = array.array('f', 
-       #        (x, y, pressure, xtilt, ytilt, time))
         super(_Node_Bezier, self).__init__(x, y)
 
         if control_handles:
@@ -791,8 +785,6 @@ class BezierMode (InkingMode):
             self.stroke_to(
                 model, 
                 dtime,
-               #gui.drawutils.linear_interpolation(
-               #    p0.dtime, p3.dtime, cur_step),
                 x, y, 
                 lib.helpers.clamp(
                     gui.drawutils.linear_interpolation(
@@ -947,7 +939,6 @@ class BezierMode (InkingMode):
             return False
 
         if self.phase == _PhaseBezier.PLACE_NODE:
-           #self._queue_draw_buttons() 
             self._queue_redraw_curve() 
             self.phase = _PhaseBezier.CREATE_PATH
             pass
@@ -1261,7 +1252,7 @@ class BezierMode (InkingMode):
             while cur_step < 1.0:
                 cx, cy = gui.drawutils.get_cubic_bezier_segment(cn, cn.get_control_handle(1),
                             nn.get_control_handle(0), nn, cur_step)
-                length += vector_length(cx - ox, cy - oy)#math.sqrt((cx - ox) ** 2 + (cy - oy) ** 2)
+                length += vector_length(cx - ox, cy - oy)
                 cur_step += BezierMode.DRAFT_STEP
                 ox = cx
                 oy = cy
@@ -1619,9 +1610,6 @@ class OptionsPresenter_Bezier (OptionsPresenter):
 
     def _variation_preset_combo_changed_cb(self, widget):
         super(OptionsPresenter_Bezier, self)._variation_preset_combo_changed_cb(widget)
-       #iter = self._variation_preset_combo.get_active_iter()
-       #self.set_variation_preset(
-       #      self.variation_preset_store[iter][1])
         beziermode, node_idx = self.target
         if beziermode:
             beziermode.redraw_curve()
