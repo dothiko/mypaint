@@ -1296,8 +1296,8 @@ class Document (object):
         ext = None
         self._as_project = False
         if not os.path.isfile(filename):
-            # filename is not file.
-            # But it might be oradir...
+            # Filename is not file.
+            # But it might be oradir(project)...
             dirname = "%s%s" % (filename, os.path.sep)
             xmlname = "%sstack.xml" % dirname
             if (os.path.exists(xmlname) and
@@ -1634,7 +1634,7 @@ class Document (object):
     def as_project(self):
         return self._as_project
 
-    def save_project(self, dirname, options=None, **kwargs):
+    def save_project(self, dirname, **kwargs):
         """ save current document as a project
         """
         
@@ -1649,101 +1649,105 @@ class Document (object):
 
             self._autosave_dirty = True # Currently, forced to set autosave_dirty
 
-           #if self.filename != dirname:
-           #    self._autosave_dirty = True
-           #elif self._autosave_dirty == False:
-           #    return
+            if (kwargs != None):
 
-            copy_list = []
-            if (options != None and 'version_save' in options and 
-                    options['version_save'] == True):
-                # Version save of project assigned.
-                # The system of version save is ,
-                # 1. move currentry marked as autosave_dirty files
-                #    into 'backup' directory,which named with 
-                #    'yyyy-mm-dd/uuid' format. 
-                #    for example,if you saved it at 2016.3.3,
-                #    the directory name should be
-                #    such as 'backup/2016-03-03/281c4ff(snip)'
-                # 2. copy current stack.xml file into backup dir.
-                #    revert should executed with based on this file.
-                # 3. ordinary save executed.
+                copy_list = []
+                                 
 
-                lt = time.localtime()
-                destdirname = os.path.join(
-                        self.filename,
-                        'backup',
-                        '%04d-%02d-%02d' % (lt.tm_year, lt.tm_mon, lt.tm_mday),
-                        str(uuid.uuid4()))
+                if ('version_save' in kwargs): 
+                    # Version save of project assigned.
+                    # The system of version save is ,
+                    # 1. move currentry marked as autosave_dirty files
+                    #    into 'backup' directory,which named with 
+                    #    'yyyy-mm-dd/uuid' format. 
+                    #    for example,if you saved it at 2016.3.3,
+                    #    the directory name should be
+                    #    such as 'backup/2016-03-03/281c4ff(snip)'
+                    # 2. copy current stack.xml file into backup dir.
+                    #    revert should executed with based on this file.
+                    # 3. ordinary save executed.
 
-                assert not os.path.exists(destdirname)
+                    source_dir = kwargs['version_save']
 
-                for path, cl in self.layer_stack.walk():
-                    if cl.autosave_dirty:
-                        filepath = None
-                        
-                        if hasattr(cl,'workfilename'):
-                            filepath = cl.workfilename
-                        elif hasattr(cl,'src') and cl.src != None:
-                            filepath = os.path.join(
-                                self.filename,
-                                cl.src                            
-                                )
-       
-                        if filepath: 
-                            assert os.path.exists(filepath)
-                            copy_list.append(filepath)
+                    lt = time.localtime()
+                    destdirname = os.path.join(
+                            source_dir,
+                            'backup',
+                            '%04d-%02d-%02d' % (lt.tm_year, lt.tm_mon, lt.tm_mday),
+                            str(uuid.uuid4()))
 
-                filepath = os.path.join(self.filename,'stack.xml')
-                assert os.path.exists(filepath)
-                copy_list.append(filepath)
+                    assert not os.path.exists(destdirname)
+
+                    for path, cl in self.layer_stack.walk():
+                        if cl.autosave_dirty:
+                            filepath = None
+                            
+                            if hasattr(cl,'workfilename'):
+                                filepath = cl.workfilename
+                            elif hasattr(cl,'src') and cl.src != None:
+                                filepath = os.path.join(
+                                    source_dir,
+                                    cl.src                            
+                                    )
+           
+                            if filepath: 
+                                assert os.path.exists(filepath)
+                                copy_list.append(filepath)
+
+                    filepath = os.path.join(source_dir,'stack.xml')
+                    assert os.path.exists(filepath)
+                    copy_list.append(filepath)
 
 
-            elif self._as_project and self.filename != dirname:
-                # This document is a project and assigned to 'save as 
-                # another project'
-                # this means "copy entire project into another directory"
-                
-                # so,simply copy all layer images.
-                # With calling self._queue_autosave_writes() in advance,
-                # changed layer with stroke maps are already written.
-                # And file existence is checked in _project_copy_cb(),
-                # so overwritten with old one does not happen.
+                elif 'source_dir' in kwargs:
+                    # This document is a project and assigned to 'save as 
+                    # another project'
+                    # this means "copy entire project into another directory"
+                    
+                    # so,simply copy all layer images.
+                    # With calling self._queue_autosave_writes() in advance,
+                    # changed layer with stroke maps are already written.
+                    # And file existence is checked in _project_copy_cb(),
+                    # so overwritten with old one does not happen.
 
-                destdirname = os.path.join(dirname, 'data')
-                                
-                for path, cl in self.layer_stack.walk():
-                    if not cl.autosave_dirty:
-                        filepath = None
-                        
-                        if hasattr(cl,'workfilename'):
-                            filepath = cl.workfilename
-                        elif hasattr(cl,'src') and cl.src != None:
-                            filepath = os.path.join(
-                                self.filename,
-                                cl.src                            
-                                )
-       
-                        if filepath and os.path.exists(filepath):
-                            copy_list.append(filepath)
-                    else:
-                        logger.info('%s has marked as dirty,so not copied', cl.name)
+                    source_dir = kwargs['source_dir']
 
-                if len(copy_list) == 0:
-                    logger.warning('at new save_project, copy_list is empty!')
+                    destdirname = os.path.join(dirname, 'data')
+                                    
+                    for path, cl in self.layer_stack.walk():
+                        if not cl.autosave_dirty:
+                            filepath = None
+                            
+                            if hasattr(cl,'workfilename'):
+                                filepath = cl.workfilename
+                            elif hasattr(cl,'src') and cl.src != None:
+                                filepath = os.path.join(
+                                    source_dir,
+                                    cl.src                            
+                                    )
+           
+                            if filepath and os.path.exists(filepath):
+                                copy_list.append(filepath)
+                        else:
+                            logger.info('%s has marked as dirty,so not copied', cl.name)
 
-            if len(copy_list) > 0:
-                taskproc = self._autosave_processor
-                taskproc.add_work(
-                    self._project_copy_cb,
-                    copy_list,
-                    (destdirname , self.filename)
-                )
+                    if len(copy_list) == 0:
+                        logger.warning('at new save_project, copy_list is empty!')
+
+                if len(copy_list) > 0:
+                    assert os.path.exists(source_dir)
+                    taskproc = self._autosave_processor
+                    taskproc.add_work(
+                        self._project_copy_cb,
+                        copy_list,
+                        (destdirname , source_dir)
+                    )
     
                 
             # After all files copied,
             # ordinary autosave processing should be launched.
             self._queue_autosave_writes(dirname)
+            self._as_project = True
               
         finally:
             pass
@@ -1787,7 +1791,6 @@ class Document (object):
                 investigate_dir = dirname,
             )
         else:
-            self.filename = dirname
             self._cache_dir = app_cache_dir
             # For project,all layer already saved initially.
             for pos, cl in self.layer_stack.walk():

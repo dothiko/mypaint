@@ -149,13 +149,6 @@ class FileHandler (object):
         ra = app.find_action("OpenRecent")
         ra.add_filter(rf)
 
-        # Initializing Recent projects
-       #menubar = app.ui_manager.get_widget('/Menubar')
-       #print dir(menubar)
-       #menubar.append(gtk.MenuItem("test1"))
-       #rp.append(gtk.MenuItem("test2"))
-       #rp.append(gtk.MenuItem("test3"))
-       #
         ag = app.builder.get_object('FileActions')
         for action in ag.list_actions():
             self.app.kbm.takeover_action(action)
@@ -569,6 +562,10 @@ class FileHandler (object):
         )
         if "multifile" in options:  # thumbs & recents are inappropriate
             return
+        if "project" in options:
+            self.filename = os.path.abspath(filename)
+            self.register_recent_project(self.filename)
+            return # recent file management is inappropriate,for now
         if not os.path.isfile(filename):  # failed to save
             return
         if not export:
@@ -1284,10 +1281,8 @@ class FileHandler (object):
         if not hasattr(self.doc.model, "as_project") or self.doc.model.as_project == False:
             self.save_as_project_cb(action)
         else:
-            self.save_cb(action)
+            self.save_file(self.filename, project=True)
 
-        if not self.lastsavefailed:
-            self.register_recent_project(self.filename)
 
     def save_as_project_cb(self, action):
         
@@ -1314,33 +1309,30 @@ class FileHandler (object):
             )
             
         junk, ext = os.path.splitext(self.filename)
-        
+                
 
         if ext != "":
             # This means 'export as project directory'
             # but... we have nothing to do for this. for now.
             self.save_as_dialog(
                 self.save_file, 
-                start_in_folder=current_dirname)
+                start_in_folder=current_dirname,
+                project=True)
             # export flag is for exporting other filetype.
             # exporting as directory is not for this flag.
         else:
+            # This means 'save a project into another directory (copy project)'
             self.save_as_dialog(
                 self.save_file, 
-                start_in_folder=current_dirname)
-
-
-        if not self.lastsavefailed:
-            self.register_recent_project(self.filename)
+                start_in_folder=current_dirname,
+                project=True,source_dir=self.filename)
 
     def save_project_as_new_version_cb(self, action):
+
         if not hasattr(self.doc.model, "as_project") or self.doc.model.as_project == False:
             self.save_as_project_cb(action)
         else:
-            self.save_file(self.filename, options={"version_save" : True})
-
-        if not self.lastsavefailed:
-            self.register_recent_project(self.filename)
+            self.save_file(self.filename, project=True,version_save=self.filename)
 
     def revert_project_cb(self, action):
         if hasattr(self.doc, "as_project") and self.doc.as_project == True:
