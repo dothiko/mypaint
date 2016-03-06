@@ -86,6 +86,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         self.app = None
         self._cursor = gdk.Cursor(gdk.CursorType.BLANK_CURSOR)
         self._overlays = {}  # keyed by tdw
+        self._enable_warp = False
 
     ## InteractionMode/DragMode implementation
 
@@ -132,8 +133,9 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
             self.base_y = self.start_y
             # getting returning point of cursor,in screen coordinate
             disp = gdk.Display.get_default()
-            screen, self.start_screen_x , self.start_screen_y ,mod = \
-                    disp.get_pointer()
+            if self._enable_warp:
+                screen, self.start_screen_x , self.start_screen_y ,mod = \
+                        disp.get_pointer()
         self._queue_draw_brush()
         super(SizechangeMode, self).drag_start_cb(tdw, event)
 
@@ -163,8 +165,8 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
                 direction = 1
 
             # setting differencial of size.
-            # 400.0 is not theorical number,it's my feeling
-            diff = cs / 400.0  
+            # 0.003 is not theorical number,it's my feeling
+            diff = cs * 0.004
 
             if direction == 0:
                 # decrease 
@@ -193,8 +195,12 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         self.start_drag = False
 
         # return cursor to starting point.
-        d=tdw.get_display()
-        d.warp_pointer(d.get_default_screen(),self.start_screen_x,self.start_screen_y)
+        # but,absolute axis pointer device(like pen-stylus)
+        # rather unconfortable than nothing done.
+        if self._enable_warp:
+            d = gdk.Display.get_default()
+           #d=tdw.get_display()
+            d.warp_pointer(d.get_default_screen(),self.start_screen_x,self.start_screen_y)
         return super(SizechangeMode, self).drag_stop_cb(tdw)
 
 
