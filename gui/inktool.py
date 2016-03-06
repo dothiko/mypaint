@@ -1283,6 +1283,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """
         if self.current_node_index >= len(self.nodes):
             self.current_node_index = len(self.nodes) - 2
+            if self.current_node_index < 0:
+                self.current_node_index = None
             self.current_node_changed(
                     self.current_node_index)
 
@@ -1352,16 +1354,13 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if t_idx in self.selected_nodes:
                 if self.current_node_index == t_idx:
                     self.current_node_index = None
-                    self.current_node_index = None
-
-                if self.target_node_index == t_idx:
-                    self.target_node_index = None
             else:
                 new_nodes.append(cn)
 
         new_nodes.append(self.nodes[-1])
         self.nodes = new_nodes
         self._reset_selected_nodes()
+        self.target_node_index = None
 
         # Issue redraws for the changed on-canvas elements
         self._queue_redraw_curve()

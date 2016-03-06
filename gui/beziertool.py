@@ -1193,7 +1193,6 @@ class BezierMode (InkingMode):
         child classes might have different behavior
         from Inktool about current_node_index.
         """
-        print 'here11'
         if self.current_node_index >= len(self.nodes):
             self.current_node_index = None
             self.current_node_changed(
@@ -1275,8 +1274,8 @@ class BezierMode (InkingMode):
 
 
     def delete_selected_nodes(self):
-        """ Beziertool can delete any nodes...even
-        first / last one!
+        """ Beziertool can delete any nodes...
+        even first / last one!
         """
 
         # First of all,queue redraw area.
@@ -1292,15 +1291,13 @@ class BezierMode (InkingMode):
             if idx in self.selected_nodes:
                 if self.current_node_index == idx:
                     self.current_node_index = None
-                    self.current_node_index = None
-
-                if self.target_node_index == idx:
-                    self.target_node_index = None
             else:
                 new_nodes.append(cn)
 
         self.nodes = new_nodes
         self._reset_selected_nodes()
+        self._adjust_current_node_index()
+        self.target_node_index = None
 
         # Issue redraws for the changed on-canvas elements
         if len(self.nodes) <= 1:
