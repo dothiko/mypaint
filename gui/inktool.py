@@ -358,9 +358,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
 
-
-
-
+        ## hiding nodes
+        self._hide_nodes = False
 
 
     def _reset_nodes(self):
@@ -390,6 +389,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         # Multiple selected nodes.
         # This is a index list of node from self.nodes
         self._reset_selected_nodes()
+
+        self.hide_nodes = False
 
 
     def _reset_selected_nodes(self, initial_idx=None):
@@ -1702,6 +1703,15 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
         self._queue_redraw_curve()
 
+    ## Nodes hide
+    @property
+    def hide_nodes(self):
+        return self._hide_nodes
+
+    @hide_nodes.setter
+    def hide_nodes(self, flag):
+        self._hide_nodes = flag
+        self._queue_redraw_all_nodes()
 
 
 class Overlay (gui.overlays.Overlay):
@@ -1858,30 +1868,31 @@ class Overlay (gui.overlays.Overlay):
         mode = self._inkmode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
-        dx,dy = mode.selection_rect.get_display_offset(self._tdw)
-        for i, node, x, y in self._get_onscreen_nodes():
-            color = gui.style.EDITABLE_ITEM_COLOR
-            if (mode.phase in
-                    (_Phase.ADJUST,
-                     _Phase.ADJUST_PRESSURE,
-                     _Phase.ADJUST_SELECTING)):
-                if i == mode.current_node_index:
-                    color = gui.style.ACTIVE_ITEM_COLOR
-                    if mode.phase == _Phase.ADJUST:
-                        x += dx
-                        y += dy
-                elif i == mode.target_node_index:
-                    color = gui.style.PRELIT_ITEM_COLOR
-                elif i in mode.selected_nodes:
-                    color = gui.style.POSTLIT_ITEM_COLOR
-                    if mode.phase == _Phase.ADJUST:
-                        x += dx
-                        y += dy
-            gui.drawutils.render_round_floating_color_chip(
-                cr=cr, x=x, y=y,
-                color=color,
-                radius=radius,
-            )
+        if not mode.hide_nodes:
+            dx,dy = mode.selection_rect.get_display_offset(self._tdw)
+            for i, node, x, y in self._get_onscreen_nodes():
+                color = gui.style.EDITABLE_ITEM_COLOR
+                if (mode.phase in
+                        (_Phase.ADJUST,
+                         _Phase.ADJUST_PRESSURE,
+                         _Phase.ADJUST_SELECTING)):
+                    if i == mode.current_node_index:
+                        color = gui.style.ACTIVE_ITEM_COLOR
+                        if mode.phase == _Phase.ADJUST:
+                            x += dx
+                            y += dy
+                    elif i == mode.target_node_index:
+                        color = gui.style.PRELIT_ITEM_COLOR
+                    elif i in mode.selected_nodes:
+                        color = gui.style.POSTLIT_ITEM_COLOR
+                        if mode.phase == _Phase.ADJUST:
+                            x += dx
+                            y += dy
+                gui.drawutils.render_round_floating_color_chip(
+                    cr=cr, x=x, y=y,
+                    color=color,
+                    radius=radius,
+                )
         # Buttons
         if (mode.phase in
                 (_Phase.ADJUST,
@@ -2305,6 +2316,7 @@ class OptionsPresenter (object):
         self._period_scale = builder.get_object("period_scale")
         self._period_adj.set_value(self._app.preferences.get(
             "inktool.capture_period_factor", 1))
+        self._hide_nodes_check = builder.get_object("hide_nodes_checkbutton")
 
         apply_btn = builder.get_object("apply_variation_button")
         apply_btn.set_sensitive(False)
@@ -2328,6 +2340,16 @@ class OptionsPresenter (object):
         self.init_linecurve_widget(1, base_grid)
         self.init_variation_preset_combo(2, base_grid,
                 self._apply_variation_button)
+
+       #hide_nodes_act = self._app.find_action('HideNodes')
+       #if hide_nodes_act:
+       #    self._app.ui_manager.do_connect_proxy(
+       #            hide_nodes_act,
+       #            self._hide_nodes_check)
+       #            
+       #   #hide_nodes_act.connect_proxy(self._hide_nodes_check)
+       #else:
+       #    print('no such hide!')
 
 
 

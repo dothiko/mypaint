@@ -2139,6 +2139,16 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         mode=self.modes.top
         if getattr(mode, 'apply_pressure_from_curve_widget', False):
             mode.apply_pressure_from_curve_widget()
+
+    def hide_nodes_cb(self, action):
+        """Callback: Toggle stroke nodes visibility,to check
+        stroke"""
+        mode=self.modes.top
+        if hasattr(mode, 'hide_nodes'):
+            # actually this is a toggle
+            # but its hiding state changed from
+            # inside of the mode class.
+            mode.hide_nodes = not mode.hide_nodes
     
 
 

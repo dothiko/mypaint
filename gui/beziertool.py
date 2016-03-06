@@ -310,7 +310,8 @@ class BezierMode (InkingMode):
     @property
     def active_cursor(self):
         if self.phase in (_PhaseBezier.INITIAL, _PhaseBezier.CREATE_PATH):
-            if self.zone == _EditZone_Bezier.CONTROL_NODE:
+            if self.zone in (_EditZone_Bezier.CONTROL_NODE,
+                    _EditZone_Bezier.CONTROL_HANDLE):
                 return self._crosshair_cursor
         elif self.phase == _PhaseBezier.MOVE_NODE:
             if self.zone == _EditZone_Bezier.CONTROL_NODE:
@@ -1431,51 +1432,52 @@ class OverlayBezier (Overlay):
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
         dx, dy = mode.selection_rect.get_display_offset(self._tdw)
-        for i, node, x, y in self._get_onscreen_nodes():
-            color = gui.style.EDITABLE_ITEM_COLOR
-            if mode.phase in (_PhaseBezier.INITIAL, _PhaseBezier.MOVE_NODE, 
-                    _PhaseBezier.CREATE_PATH, _PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
-                if i == mode.current_node_index:
-                    color = gui.style.ACTIVE_ITEM_COLOR
-                    x += dx
-                    y += dy
-              
-                    # Drawing control handle
-                    cr.save()
-                    cr.set_source_rgb(0,0,1)
-                    cr.set_line_width(1)
-                    for hi in (0,1):                        
-                        if ((hi == 0 and i > 0) or
-                                (hi == 1 and i <= len(self._inkmode.nodes)-1)): 
-                            ch = node.get_control_handle(hi)
-                            hx, hy = self._tdw.model_to_display(ch.x, ch.y)
-                            hx += dx
-                            hy += dy
-                            gui.drawutils.render_square_floating_color_chip(
-                                cr, hx, hy,
-                                color, radius, 
-                                fill=(hi==self._inkmode.current_handle_index)) 
-                            cr.move_to(x, y)
-                            cr.line_to(hx, hy)
-                            cr.stroke()
+        if not mode.hide_nodes:
+            for i, node, x, y in self._get_onscreen_nodes():
+                color = gui.style.EDITABLE_ITEM_COLOR
+                if mode.phase in (_PhaseBezier.INITIAL, _PhaseBezier.MOVE_NODE, 
+                        _PhaseBezier.CREATE_PATH, _PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
+                    if i == mode.current_node_index:
+                        color = gui.style.ACTIVE_ITEM_COLOR
+                        x += dx
+                        y += dy
+                  
+                        # Drawing control handle
+                        cr.save()
+                        cr.set_source_rgb(0,0,1)
+                        cr.set_line_width(1)
+                        for hi in (0,1):                        
+                            if ((hi == 0 and i > 0) or
+                                    (hi == 1 and i <= len(self._inkmode.nodes)-1)): 
+                                ch = node.get_control_handle(hi)
+                                hx, hy = self._tdw.model_to_display(ch.x, ch.y)
+                                hx += dx
+                                hy += dy
+                                gui.drawutils.render_square_floating_color_chip(
+                                    cr, hx, hy,
+                                    color, radius, 
+                                    fill=(hi==self._inkmode.current_handle_index)) 
+                                cr.move_to(x, y)
+                                cr.line_to(hx, hy)
+                                cr.stroke()
 
-                    cr.restore()
-                              
-                elif i == mode.target_node_index:
-                    color = gui.style.PRELIT_ITEM_COLOR
-                    x += dx
-                    y += dy
-                elif i in mode.selected_nodes:
-                    color = gui.style.POSTLIT_ITEM_COLOR
-                    x += dx
-                    y += dy
-      
-            gui.drawutils.render_round_floating_color_chip(
-                cr=cr, x=x, y=y,
-                color=color,
-                radius=radius,
-            )
-            
+                        cr.restore()
+                                  
+                    elif i == mode.target_node_index:
+                        color = gui.style.PRELIT_ITEM_COLOR
+                        x += dx
+                        y += dy
+                    elif i in mode.selected_nodes:
+                        color = gui.style.POSTLIT_ITEM_COLOR
+                        x += dx
+                        y += dy
+          
+                gui.drawutils.render_round_floating_color_chip(
+                    cr=cr, x=x, y=y,
+                    color=color,
+                    radius=radius,
+                )
+                
     
                 
         # Buttons
