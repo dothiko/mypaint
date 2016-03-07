@@ -76,12 +76,12 @@ class _Node_Bezier (_Control_Handle):
     
             
             
-    def __init__(self,x,y,pressure=1.0,xtilt=0.0,ytilt=0.0,
+    def __init__(self,x,y,pressure=1.0,xtilt=0.0,ytilt=0.0,dtime=0.5,
             control_handles=None,curve=True):
         self.pressure = pressure
         self.xtilt = xtilt
         self.ytilt = ytilt
-        self.time = 0
+        self.time = dtime
         super(_Node_Bezier, self).__init__(x, y)
 
         if control_handles:
@@ -272,14 +272,25 @@ class BezierMode (InkingMode):
             InkingMode.enable_switch_actions(False)
         self._phase = new_phase
 
+    @classmethod
+    def set_default_dtime(cls, new_dtime):
+        cls._DEFAULT_DTIME = new_dtime
+
+    @classmethod
+    def set_default_pressure(cls, new_pressure):
+        cls._DEFAULT_PRESSURE = new_pressure
+
+
     ## Class config vars
 
     DRAFT_STEP = 0.01 # Draft(Editing) Bezier curve stroke step.
     FINAL_STEP = 0.005 # Final output stroke Bezier-curve step.
 
     _DEFAULT_PRESSURE = 0.5 # default bezier pressure,this is fixed value.
-                            # because it is hard to capure pressure from devices 
-                            # with current BezierMode interface.
+                            # because it is hard to control pressure 
+                            # for human hand at node creation.
+
+    _DEFAULT_DTIME = 0.5 # default dtime value
 
     ## Other class vars
 
@@ -304,7 +315,6 @@ class BezierMode (InkingMode):
         return overlay
 
     ## Update inner states related methods
-
     def _update_current_node_index(self):
         """Updates current_node_index from target_node_index & redraw"""
         new_index = self.target_node_index
@@ -1067,10 +1077,12 @@ class BezierMode (InkingMode):
         xtilt, ytilt = self._get_event_tilt(tdw, event)
         return _Node_Bezier(
             x=x, y=y,
-            pressure=lib.helpers.clamp(
-                    self._get_event_pressure(event),
-                    self._DEFAULT_PRESSURE, 1.0), 
-            xtilt=xtilt, ytilt=ytilt
+           #pressure=lib.helpers.clamp(
+           #        self._get_event_pressure(event),
+           #        self._DEFAULT_PRESSURE, 1.0), 
+            pressure=self._DEFAULT_PRESSURE,
+            xtilt=xtilt, ytilt=ytilt,
+            dtime=self._DEFAULT_DTIME
             )
         
 
@@ -1128,6 +1140,7 @@ class BezierMode (InkingMode):
                     pressure = cn.pressure + ((nn.pressure - cn.pressure) * step),
                     xtilt = cn.xtilt + (nn.xtilt - cn.xtilt) * step,
                     ytilt = cn.ytilt + (nn.ytilt - cn.ytilt) * step,
+                    dtime = self._DEFAULT_DTIME,
                     curve = False)
         new_node.set_control_handle(0, xd, yd)
         new_node.set_control_handle(1, xe, ye)
@@ -1162,7 +1175,8 @@ class BezierMode (InkingMode):
             x=(cn.x + nn.x)/2.0, y=(cn.y + nn.y) / 2.0,
             pressure=(cn.pressure + nn.pressure) / 2.0,
             xtilt=(cn.xtilt + nn.xtilt) / 2.0, 
-            ytilt=(cn.ytilt + nn.ytilt) / 2.0           
+            ytilt=(cn.ytilt + nn.ytilt) / 2.0,
+            dtime=self._DEFAULT_DTIME
         )
         self.nodes.insert(i+1,newnode)
 
@@ -1500,6 +1514,7 @@ class OptionsPresenter_Bezier (OptionsPresenter):
     def _ensure_ui_populated(self):
         if self._options_grid is not None:
             return
+        self._updating_ui = True
         builder_xml = os.path.splitext(__file__)[0] + ".glade"
         builder = Gtk.Builder()
         builder.set_translation_domain("mypaint")
@@ -1521,10 +1536,22 @@ class OptionsPresenter_Bezier (OptionsPresenter):
         self._check_curvepoint= builder.get_object("checkbutton_curvepoint")
         self._check_curvepoint.set_sensitive(False)
 
+        self._default_dtime_scale = builder.get_object("default_dtime_scale")
+        self._default_dtime_scale.set_sensitive(True)
+        self._default_pressure_scale = builder.get_object("default_pressure_scale")
+        self._default_pressure_scale.set_sensitive(True)
+        self._default_dtime_adj = builder.get_object("default_dtime_adj")
+        self._default_pressure_adj = builder.get_object("default_pressure_adj")
+
+        self._default_dtime_adj.set_value(BezierMode._DEFAULT_DTIME)
+        self._default_pressure_adj.set_value(BezierMode._DEFAULT_PRESSURE)
+
+
 
         base_grid = builder.get_object("points_editing_grid")
         self.init_linecurve_widget(0, base_grid)
         self.init_variation_preset_combo(1, base_grid)
+        self._updating_ui = False
 
     @property
     def target(self):
@@ -1569,7 +1596,50 @@ class OptionsPresenter_Bezier (OptionsPresenter):
         finally:
             self._updating_ui = False                               
 
+    def set_checkbutton_curvepoint(self, flag):
+        """ called from BezierMode object,
+        when current node curve status changed.
+        """
+
+        # avoid cancelling other ongoing ui updating
+        entering_updating_ui = self._updating_ui
+
+        self._updating_ui = True
+        self._check_curvepoint.set_active(flag)
+        self._updating_ui = entering_updating_ui
+
+    def set_default_values(self, dtime, pressure):
+        """ called from BezierMode object,
+        when default dtime or pressure changed.
+        """
+
+        # avoid cancelling other ongoing ui updating
+        entering_updating_ui = self._updating_ui
+
+        self._updating_ui = True
+        if dtime:
+            self._default_dtime_adj.set_value(dtime)
+        if pressure:
+            self._default_pressure_adj.set_value(pressure)
+        self._updating_ui = entering_updating_ui
+
+    def set_checkbutton_curvepoint(self, flag):
+        """ called from BezierMode object,
+        when current node curve status changed.
+        """
+
+        # avoid cancelling other ongoing ui updating
+        if self._updating_ui: 
+            self._check_curvepoint.set_active(flag)
+            return
+
+        self._updating_ui = True
+        self._check_curvepoint.set_active(flag)
+        self._updating_ui = False
+
     def _checkbutton_curvepoint_toggled_cb(self, button):
+        if self._updating_ui:
+            return
         beziermode, node_idx = self.target
         if beziermode:
             if 0 <= node_idx < len(beziermode.nodes):
@@ -1581,9 +1651,21 @@ class OptionsPresenter_Bezier (OptionsPresenter):
 
 
     def _variation_preset_combo_changed_cb(self, widget):
+        if self._updating_ui:
+            return
         super(OptionsPresenter_Bezier, self)._variation_preset_combo_changed_cb(widget)
         beziermode, node_idx = self.target
         if beziermode:
             beziermode.redraw_curve_cb()
+
+    def _default_dtime_value_changed_cb(self, adj):
+        if self._updating_ui:
+            return
+        BezierMode.set_default_dtime(adj.get_value())
+
+    def _default_pressure_value_changed_cb(self, adj):
+        if self._updating_ui:
+            return
+        BezierMode.set_default_pressure(adj.get_value())
 
     ## Other handlers are as implemented in superclass.  
