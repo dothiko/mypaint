@@ -1424,6 +1424,29 @@ class OverlayBezier (Overlay):
         self.accept_button_pos = accept_button.x, accept_button.y
         self.reject_button_pos = reject_button.x, reject_button.y
 
+    def paint_control_handle(self, cr, i, node, x, y, dx, dy, draw_line):
+        cr.save()
+        cr.set_source_rgb(0,0,1)
+        cr.set_line_width(1)
+        for hi in (0,1):                        
+            if ((hi == 0 and i > 0) or
+                    (hi == 1 and i <= len(self._inkmode.nodes)-1)): 
+                ch = node.get_control_handle(hi)
+                hx, hy = self._tdw.model_to_display(ch.x, ch.y)
+                hx += dx
+                hy += dy
+                gui.drawutils.render_square_floating_color_chip(
+                    cr, hx, hy,
+                    gui.style.ACTIVE_ITEM_COLOR, 
+                    gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
+                    fill=(hi==self._inkmode.current_handle_index)) 
+                if draw_line:
+                    cr.move_to(x, y)
+                    cr.line_to(hx, hy)
+                    cr.stroke()
+
+        cr.restore()
+
     
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
@@ -1432,52 +1455,53 @@ class OverlayBezier (Overlay):
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
         dx, dy = mode.selection_rect.get_display_offset(self._tdw)
-        if not mode.hide_nodes:
-            for i, node, x, y in self._get_onscreen_nodes():
-                color = gui.style.EDITABLE_ITEM_COLOR
-                if mode.phase in (_PhaseBezier.INITIAL, _PhaseBezier.MOVE_NODE, 
-                        _PhaseBezier.CREATE_PATH, _PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
+        for i, node, x, y in self._get_onscreen_nodes():
+            show_node = not mode.hide_nodes
+            color = gui.style.EDITABLE_ITEM_COLOR
+            if mode.phase in (_PhaseBezier.INITIAL, _PhaseBezier.MOVE_NODE, 
+                    _PhaseBezier.CREATE_PATH, _PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
+                if show_node:
                     if i == mode.current_node_index:
                         color = gui.style.ACTIVE_ITEM_COLOR
-                        x += dx
-                        y += dy
                   
                         # Drawing control handle
-                        cr.save()
-                        cr.set_source_rgb(0,0,1)
-                        cr.set_line_width(1)
-                        for hi in (0,1):                        
-                            if ((hi == 0 and i > 0) or
-                                    (hi == 1 and i <= len(self._inkmode.nodes)-1)): 
-                                ch = node.get_control_handle(hi)
-                                hx, hy = self._tdw.model_to_display(ch.x, ch.y)
-                                hx += dx
-                                hy += dy
-                                gui.drawutils.render_square_floating_color_chip(
-                                    cr, hx, hy,
-                                    color, radius, 
-                                    fill=(hi==self._inkmode.current_handle_index)) 
-                                cr.move_to(x, y)
-                                cr.line_to(hx, hy)
-                                cr.stroke()
-
-                        cr.restore()
+                        self.paint_control_handle(
+                                cr, i, node, 
+                                x, y, dx, dy,
+                                True)
                                   
                     elif i == mode.target_node_index:
                         color = gui.style.PRELIT_ITEM_COLOR
-                        x += dx
-                        y += dy
                     elif i in mode.selected_nodes:
                         color = gui.style.POSTLIT_ITEM_COLOR
-                        x += dx
-                        y += dy
-          
+
+                else:
+                    if i == mode.current_node_index:
+                        # Drawing control handle
+                        if mode.zone == _EditZone_Bezier.CONTROL_HANDLE:
+                            show_node = True
+                            color = gui.style.ACTIVE_ITEM_COLOR
+                            self.paint_control_handle(cr,
+                                i, node, x, y, dx, dy, True)
+                                  
+                    # not 'elif' ... because target_node_index
+                    # and current_node_index maight be same.
+                    if i == mode.target_node_index:
+                        show_node = True
+                        color = gui.style.PRELIT_ITEM_COLOR
+
+                if (color != gui.style.EDITABLE_ITEM_COLOR and
+                        mode.phase == _PhaseBezier.ADJUST ):
+                    x += dx
+                    y += dy
+      
+            if show_node:
                 gui.drawutils.render_round_floating_color_chip(
                     cr=cr, x=x, y=y,
                     color=color,
                     radius=radius,
                 )
-                
+            
     
                 
         # Buttons

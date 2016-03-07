@@ -1868,31 +1868,37 @@ class Overlay (gui.overlays.Overlay):
         mode = self._inkmode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
-        if not mode.hide_nodes:
-            dx,dy = mode.selection_rect.get_display_offset(self._tdw)
-            for i, node, x, y in self._get_onscreen_nodes():
-                color = gui.style.EDITABLE_ITEM_COLOR
-                if (mode.phase in
-                        (_Phase.ADJUST,
-                         _Phase.ADJUST_PRESSURE,
-                         _Phase.ADJUST_SELECTING)):
+        dx,dy = mode.selection_rect.get_display_offset(self._tdw)
+        for i, node, x, y in self._get_onscreen_nodes():
+            color = gui.style.EDITABLE_ITEM_COLOR
+            show_node = not mode.hide_nodes
+            if (mode.phase in
+                    (_Phase.ADJUST,
+                     _Phase.ADJUST_PRESSURE,
+                     _Phase.ADJUST_SELECTING)):
+                if show_node:
                     if i == mode.current_node_index:
                         color = gui.style.ACTIVE_ITEM_COLOR
-                        if mode.phase == _Phase.ADJUST:
-                            x += dx
-                            y += dy
                     elif i == mode.target_node_index:
                         color = gui.style.PRELIT_ITEM_COLOR
                     elif i in mode.selected_nodes:
                         color = gui.style.POSTLIT_ITEM_COLOR
-                        if mode.phase == _Phase.ADJUST:
-                            x += dx
-                            y += dy
+
+                else:
+                    if i == mode.target_node_index:
+                        show_node = True
+                        color = gui.style.PRELIT_ITEM_COLOR
+
+                if (color != gui.style.EDITABLE_ITEM_COLOR and
+                        mode.phase == _Phase.ADJUST):
+                    x += dx
+                    y += dy
+
+            if show_node:
                 gui.drawutils.render_round_floating_color_chip(
                     cr=cr, x=x, y=y,
                     color=color,
-                    radius=radius,
-                )
+                    radius=radius,)
         # Buttons
         if (mode.phase in
                 (_Phase.ADJUST,
