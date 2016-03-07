@@ -461,11 +461,11 @@ class BezierMode (InkingMode):
                 cx = cn.get_control_handle(t).x
                 nx = nn.get_control_handle(t).x
                 sx = min(min(sx, cx), nx)
-                ex = max(max(sx, cx), nx)
+                ex = max(max(ex, cx), nx)
                 cy = cn.get_control_handle(t).y
                 ny = nn.get_control_handle(t).y
                 sy = min(min(sy, cy), ny)
-                ey = max(max(sy, cy), ny)
+                ey = max(max(ey, cy), ny)
 
             if sx <= x <= ex and sy <= y <= ey:
 
@@ -728,8 +728,8 @@ class BezierMode (InkingMode):
         
         def draw_single_segment(cur_step):
             
-            x, y = gui.drawutils.get_cubic_bezier_segment_with_offset(
-                p0, p1, p2, p3, o0, o3,cur_step)
+            x, y = gui.drawutils.get_cubic_bezier_segment(
+                p0, p1, p2, p3, cur_step, o0, o3)
 
 
             if pressure_src and internode_steps:
