@@ -562,10 +562,15 @@ class FileHandler (object):
         )
         if "multifile" in options:  # thumbs & recents are inappropriate
             return
+
+        #+ Project check.
         if "project" in options:
             self.filename = os.path.abspath(filename)
             self.register_recent_project(self.filename)
-            return # recent file management is inappropriate,for now
+            # As project, recent file management is inappropriate,for now
+            return 
+           #export = True # so pretend export, bypass it! 
+
         if not os.path.isfile(filename):  # failed to save
             return
         if not export:
@@ -923,7 +928,7 @@ class FileHandler (object):
                     ## Otherwise,fall-through
                     
                 else:
-                    # this is for 'project' save.
+                    #+ this is for 'project' save.
                     filename = name   
                     if export:
                         # Do not change working file
@@ -1250,7 +1255,7 @@ class FileHandler (object):
             return False
         return True
 
-    ## Project related
+    ##+ Project related
 
     def update_project_preview_cb(self, file_chooser, preview):
         """Project-Save specialized version of update_preview_cb()

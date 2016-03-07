@@ -848,7 +848,7 @@ Vocabulary
       <child>
         <object class="GtkAction" id="HideNodes">
           <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Hide nodes</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Temporally hide nodes,to visually check stroke</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Temporally hide nodes to comfirm the brush stroke.</property>
           <signal name="activate" handler="hide_nodes_cb"/>
         </object>
       </child>

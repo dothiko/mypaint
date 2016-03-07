@@ -2047,13 +2047,6 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             if not action.get_active():
                 action.set_active(True)
 
-    ## Assist modifier
-    def assist_mode_stabilizer_cb(self, action):
-        self.stabilizer_mode=action.get_active()
-
-    def assist_mode_normal_cb(self, action):
-        pass
-
     ## External layer editing support
 
     def begin_external_layer_edit_cb(self, action):
@@ -2151,6 +2144,12 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             mode.hide_nodes = not mode.hide_nodes
     
 
+    ##+ Assist modifier
 
+    def assist_mode_stabilizer_cb(self, action):
+        self.stabilizer_mode=action.get_active()
+
+    def assist_mode_normal_cb(self, action):
+        pass
 
 
