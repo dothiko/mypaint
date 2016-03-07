@@ -221,73 +221,6 @@ class PressureMap(object):
         return self.curve_widget.get_pressure_value(step)
 
 
-
-## Function defs
-    
-def _bezier_iter(seq):
-    """Converts an list of control point tuples to interpolatable arrays
-
-    :param list seq: Sequence of tuples of nodes
-    :param list selected: Selected control points index list
-    :param list offset: An Offset for selected points,a tuple of (x,y).
-    :returns: Iterator producing (p-1, p0, p1, p2)
-
-    The resulting sequence of 4-tuples is intended to be fed into
-    spline_4p().  The start and end points are therefore normally
-    doubled, producing a curve that passes through them, along a vector
-    aimed at the second or penultimate point respectively.
-
-    """
-    cint = [None, None, None, None]
-
-    for idx,cn in enumerate(seq[:-1]):
-        nn = seq[idx+1]
-        cint[0] = cn
-        cint[1] = cn.get_control_handle(1)
-        cint[2] = nn.get_control_handle(0)
-        cint[3] = nn
-        yield cint
-
-def _bezier_iter_offset(seq, selected, offset):
-    """Converts an list of control point tuples to interpolatable arrays
-
-    :param list seq: Sequence of tuples of nodes
-    :param list selected: Selected control points index list
-    :param list offset: An Offset for selected points,a tuple of (x,y).
-    :returns: Iterator producing (p-1, p0, p1, p2)
-
-    The resulting sequence of 4-tuples is intended to be fed into
-    spline_4p().  The start and end points are therefore normally
-    doubled, producing a curve that passes through them, along a vector
-    aimed at the second or penultimate point respectively.
-
-    """
-    cint = [None, None, None, None]
-    dx, dy = offset
-    bidx = 0
-    def copy_to_buffered_node(bidx,node):
-        node.copy(_bezier_iter_offset.nodebuf[bidx], dx, dy)
-        return ((bidx+1) % 2, _bezier_iter_offset.nodebuf[bidx])
-
-    cn = seq[0]
-    if 0 in selected:
-        bidx, cn = copy_to_buffered_node(bidx, cn)
-
-    for idx,nn in enumerate(seq[1:]):
-        if idx+1 in selected:
-            bidx, nn = copy_to_buffered_node(bidx, nn)
-
-        cint[0] = cn
-        cint[1] = cn.get_control_handle(1)
-        cint[2] = nn.get_control_handle(0)
-        cint[3] = nn
-        yield cint
-        cn = nn
-_bezier_iter_offset.nodebuf = (_Node_Bezier(0,0), _Node_Bezier(0,0))
-
-
-            
-
 class BezierMode (InkingMode):
 
     ## Metadata properties
@@ -703,19 +636,17 @@ class BezierMode (InkingMode):
                 abrupt=True,
             )
             dx, dy = self.selection_rect.get_model_offset()
-            idx = 0.0
-            cnt = len(self.nodes) - 1
-            for p0, p1, p2, p3 in _bezier_iter_offset(self.nodes,
-                    self.selected_nodes,
-                    (dx,dy)):
+            idx = 0
+            cnt = float(len(self.nodes) - 1)
+            while idx < len(self.nodes) - 1:
                 self._queue_task(
                     self._draw_curve_segment,
                     model,
-                    p0, p1, p2, p3, step,
+                    idx, idx+1, dx, dy,step,
                     pressure_obj,
                     (idx / cnt, (idx+1) / cnt)
                 )
-                idx+=1.0
+                idx+=1
         self._start_task_queue_runner()
 
     def _queue_draw_buttons(self):
@@ -746,7 +677,7 @@ class BezierMode (InkingMode):
                 tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
 
 
-    def _draw_curve_segment(self, model, p0, p1, p2, p3, step, 
+    def _draw_curve_segment(self, model, sidx, eidx, dx, dy, step,
             pressure_src=None, internode_steps=None):
         """Draw the curve segment between the middle two points
         :param step: Rendering step of curve.
@@ -769,8 +700,26 @@ class BezierMode (InkingMode):
         # TODO dtime is the big problem.
         # how we decide the speed from static node list?
         
+        p0 = self.nodes[sidx]
+        p3 = self.nodes[eidx]
+        p1 = p0.get_control_handle(1)
+        p2 = p3.get_control_handle(0)
+        
+        offset = (dx, dy)
+        if sidx in self.selected_nodes:
+            o0 = offset
+        else:
+            o0 = gui.drawutils.BEZIER_OFFSET_NONE
+        
+        if eidx in self.selected_nodes:
+            o3 = offset
+        else:
+            o3 = gui.drawutils.BEZIER_OFFSET_NONE
+        
         def draw_single_segment(cur_step):
-            x, y = gui.drawutils.get_cubic_bezier_segment(p0, p1, p2, p3, cur_step)
+            
+            x, y = gui.drawutils.get_cubic_bezier_segment_with_offset(
+                p0, p1, p2, p3, o0, o3,cur_step)
 
 
             if pressure_src and internode_steps:
