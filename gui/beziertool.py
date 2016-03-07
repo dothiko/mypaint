@@ -1457,18 +1457,14 @@ class OverlayBezier (Overlay):
         dx, dy = mode.selection_rect.get_display_offset(self._tdw)
         for i, node, x, y in self._get_onscreen_nodes():
             show_node = not mode.hide_nodes
+            show_handle = False
             color = gui.style.EDITABLE_ITEM_COLOR
             if mode.phase in (_PhaseBezier.INITIAL, _PhaseBezier.MOVE_NODE, 
                     _PhaseBezier.CREATE_PATH, _PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
                 if show_node:
                     if i == mode.current_node_index:
                         color = gui.style.ACTIVE_ITEM_COLOR
-                  
-                        # Drawing control handle
-                        self.paint_control_handle(
-                                cr, i, node, 
-                                x, y, dx, dy,
-                                True)
+                        show_handle = True                 
                                   
                     elif i == mode.target_node_index:
                         color = gui.style.PRELIT_ITEM_COLOR
@@ -1481,17 +1477,18 @@ class OverlayBezier (Overlay):
                         if mode.zone == _EditZone_Bezier.CONTROL_HANDLE:
                             show_node = True
                             color = gui.style.ACTIVE_ITEM_COLOR
-                            self.paint_control_handle(cr,
-                                i, node, x, y, dx, dy, True)
                                   
                     # not 'elif' ... because target_node_index
                     # and current_node_index maight be same.
                     if i == mode.target_node_index:
                         show_node = True
+                        show_handle = True
                         color = gui.style.PRELIT_ITEM_COLOR
 
                 if (color != gui.style.EDITABLE_ITEM_COLOR and
-                        mode.phase == _PhaseBezier.ADJUST ):
+                        mode.phase in (_PhaseBezier.CREATE_PATH,
+                                       _PhaseBezier.MOVE_NODE,
+                                       _PhaseBezier.ADJUST)):
                     x += dx
                     y += dy
       
@@ -1501,7 +1498,9 @@ class OverlayBezier (Overlay):
                     color=color,
                     radius=radius,
                 )
-            
+                if show_handle:
+                    self.paint_control_handle(cr, i, node, x, y, dx, dy, True)
+                                    
     
                 
         # Buttons
