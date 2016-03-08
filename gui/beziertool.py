@@ -423,19 +423,21 @@ class BezierMode (InkingMode):
                 # Test buttons for hits
                 overlay = self._ensure_overlay_for_tdw(tdw)
                 hit_dist = gui.style.FLOATING_BUTTON_RADIUS
-                button_info = [
-                    (_EditZone_Bezier.ACCEPT_BUTTON, overlay.accept_button_pos),
-                    (_EditZone_Bezier.REJECT_BUTTON, overlay.reject_button_pos),
-                ]
-                for btn_zone, btn_pos in button_info:
-                    if btn_pos is None:
-                        continue
-                    btn_x, btn_y = btn_pos
-                    d = math.hypot(btn_x - x, btn_y - y)
-                    if d <= hit_dist:
-                        new_target_node_index = None
-                        new_zone = btn_zone
-                        break
+
+                if len(self.nodes) > 1:
+                    button_info = [
+                        (_EditZone_Bezier.ACCEPT_BUTTON, overlay.accept_button_pos),
+                        (_EditZone_Bezier.REJECT_BUTTON, overlay.reject_button_pos),
+                    ]
+                    for btn_zone, btn_pos in button_info:
+                        if btn_pos is None:
+                            continue
+                        btn_x, btn_y = btn_pos
+                        d = math.hypot(btn_x - x, btn_y - y)
+                        if d <= hit_dist:
+                            new_target_node_index = None
+                            new_zone = btn_zone
+                            break
 
 
                 ## CHANGED CODES for beziertool:
