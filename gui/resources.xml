@@ -1907,6 +1907,13 @@ Vocabulary
           <signal name="activate" handler="mode_flip_action_activated_cb"/>
         </object>
       </child>
+      <child>
+        <object class="GtkAction" id="ToggleBezierNodeCurve">
+          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">Toggle Bezier Node Curve</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">toggle bezier node's force curve check.</property>
+          <signal name="activate" handler="bezier_curve_node_activated_cb"/>
+        </object>
+      </child>
       <!-- }}} -->
     </object>
   </child>

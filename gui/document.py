@@ -2142,6 +2142,15 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             # but its hiding state changed from
             # inside of the mode class.
             mode.hide_nodes = not mode.hide_nodes
+
+    ##+ Bezier curve related
+    def bezier_curve_node_activated_cb(self, action):
+        mode=self.modes.top
+        if hasattr(mode, 'toggle_current_node_curve'):
+            # actually this is a toggle
+            # but its hiding state changed from
+            # inside of the mode class.
+            mode.toggle_current_node_curve()
     
 
     ##+ Assist modifier

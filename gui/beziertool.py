@@ -1388,6 +1388,18 @@ class BezierMode (InkingMode):
             self._queue_redraw_all_nodes()
             self._queue_draw_buttons()
 
+    def toggle_current_node_curve(self):
+        """ mainly called from Callback of gui.document
+        """
+        if (self.phase in (_PhaseBezier.CREATE_PATH, ) and
+                len(self.nodes) > 0 and
+                self.current_node_index != None):
+            cn = self.nodes[self.current_node_index]
+            cn.curve = not cn.curve
+            self.options_presenter.set_checkbutton_curvepoint(
+                    cn.curve)
+
+
 
 class OverlayBezier (Overlay):
     """Overlay for an BezierMode's adjustable points"""
