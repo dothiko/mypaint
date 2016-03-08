@@ -416,7 +416,7 @@ class BezierMode (InkingMode):
         ## to follow current_node_index
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone_Bezier.EMPTY_CANVAS
-        if not self.in_drag:
+        if not self.in_drag and len(self.nodes) > 0:
             if self.phase in (_PhaseBezier.MOVE_NODE, _PhaseBezier.INITIAL, _PhaseBezier.CREATE_PATH):
                 new_target_node_index = None
                 
@@ -1029,6 +1029,7 @@ class BezierMode (InkingMode):
                     self._last_event_node = node
                     self.phase = _PhaseBezier.INIT_HANDLE
                     self.current_node_index=len(self.nodes)-1
+                    self._reset_selected_nodes()
                     # Important: with setting initial control handle 
                     # as the 'next' (= index 1) one,it brings us
                     # inkscape-like node creation.

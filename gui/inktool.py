@@ -337,6 +337,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def __init__(self, **kwargs):
         super(InkingMode, self).__init__(**kwargs)
+
+        #+ initialize selected nodes - 
+        #+ place this prior to _reset_nodes()
+        self.selected_nodes=[]
+
         self.phase = _Phase.CAPTURE
         self.zone = _EditZone.EMPTY_CANVAS
         self.current_node_index = None  #: Node active in the options ui
@@ -358,12 +363,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
 
-        ## hiding nodes
+
+        #+ Hiding nodes functionality
         self._hide_nodes = False
 
 
     def _reset_nodes(self):
         self.nodes = []  # nodes that met the distance+time criteria
+        self._reset_selected_nodes(None)
 
 
     def _reset_capture_data(self):
@@ -405,7 +412,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """
 
         if initial_idx == None:
-            self.selected_nodes=[]
+            if len(self.selected_nodes) > 0:
+                self.selected_nodes=[]
         elif len(self.selected_nodes) == 0:
             self.selected_nodes.append(initial_idx)
         elif len(self.selected_nodes) == 1:
@@ -1650,7 +1658,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_redraw_all_nodes()
 
     def deselect_all_nodes(self):
-        self.selected_nodes = []
+        self._reset_selected_nodes(None)
         self._queue_redraw_all_nodes()
 
 
