@@ -17,6 +17,7 @@ import os.path
 from logging import getLogger
 logger = getLogger(__name__)
 import array
+import time
 
 from gettext import gettext as _
 import gi
@@ -171,6 +172,7 @@ class _Node_Bezier (_Control_Handle):
         for i in (0,1):
             node._control_handles[i].x = self._control_handles[i].x + dx
             node._control_handles[i].y = self._control_handles[i].y + dy
+        return node
 
     def __getitem__(self, idx):
         return self._array[idx]
@@ -219,6 +221,71 @@ class PressureMap(object):
 
     def get_pressure(self, step):
         return self.curve_widget.get_pressure_value(step)
+
+class StrokeHistory(object):
+    """ Stroke History class.this is singleton,stored as 
+    class attribute of BezierMode
+    """
+    def __init__(self, maxcount):
+        self._max = maxcount
+        self._nodes = Gtk.ListStore(str,object)
+        self._nodes.append( ('------', None) )
+        
+    def register(self, nodes):
+        lt = time.localtime()
+        timestr = '%02d:%02d:%02d-%d' % (lt.tm_hour, lt.tm_min,
+                lt.tm_sec, len(nodes))
+        self._nodes.insert(1, (timestr, nodes))
+        if len(self._nodes) > self._max:
+            del self._nodes[self._max - 1]
+
+    @property
+    def liststore(self):
+        return self._nodes
+
+    def get_and_place_nodes(self, idx, x, y):
+        """ generate a copy of stroke and
+        'place' (move) it to (x,y)
+
+        :param idx: the REVERSED index(most recent one is 0) of nodes.
+        """
+        assert 1 <= idx < len(self._nodes)
+        src = self._nodes[len(self._nodes)-idx][1]
+        fn = src[0]
+        ret = []
+        for cn in src:
+            if x != None and y != None:
+                nx = (cn.x - fn.x) + x
+                ny = (cn.y - fn.y) + y
+            else:
+                nx = cn.x
+                ny = cn.y
+
+            new_node=_Node_Bezier(
+                    nx,ny,
+                    cn.pressure,
+                    cn.xtilt,cn.ytilt,
+                    cn.time,
+                    None,
+                    cn.curve)
+
+            for i in (0, 1):
+                handle = cn.get_control_handle(i)
+                if x != None and y != None:
+                    nx = (handle.x - fn.x) + x 
+                    ny = (handle.y - fn.y) + y
+                else:
+                    nx = handle.x
+                    ny = handle.y
+                new_node.set_control_handle(i, nx, ny)
+                if cn.curve:
+                    break
+
+            ret.append(new_node)
+
+        return ret
+        
+
 
 
 class BezierMode (InkingMode):
@@ -292,6 +359,8 @@ class BezierMode (InkingMode):
 
     _DEFAULT_DTIME = 0.5 # default dtime value
 
+    stroke_history = StrokeHistory(6) # stroke history
+
     ## Other class vars
 
     _OPTIONS_PRESENTER = None   #: Options presenter singleton
@@ -301,6 +370,7 @@ class BezierMode (InkingMode):
 
     def __init__(self, **kwargs):
         super(BezierMode, self).__init__(**kwargs)
+        self._stroke_from_history = False
 
     def _reset_adjust_data(self):
         super(BezierMode, self)._reset_adjust_data()
@@ -314,7 +384,9 @@ class BezierMode (InkingMode):
             self._overlays[tdw] = overlay
         return overlay
 
-    ## Update inner states related methods
+
+    ## Update inner states methods
+
     def _update_current_node_index(self):
         """Updates current_node_index from target_node_index & redraw"""
         new_index = self.target_node_index
@@ -443,6 +515,20 @@ class BezierMode (InkingMode):
             if cursor is not self._current_override_cursor:
                 tdw.set_override_cursor(cursor)
                 self._current_override_cursor = cursor
+
+    def _start_new_capture_phase_bezier(self, rollback=False):
+        if rollback:
+            pass
+        else:
+            if not self._stroke_from_history:
+                self.stroke_history.register(self.nodes)
+
+        super(BezierMode, self)._start_new_capture_phase(rollback)
+        self._stroke_from_history = False
+        self.options_presenter.reset_stroke_history()
+
+
+    ## Stroke related
 
     def _detect_on_stroke(self, x, y, allow_distance = 4.0):
         """ detect the assigned coordinate is on stroke or not
@@ -761,6 +847,8 @@ class BezierMode (InkingMode):
 
         draw_single_segment(1.0) # Ensure draw the last segment          
 
+    ### Event handling
+
     ## Raw event handling (prelight & zone selection in adjust phase)
     def button_press_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
@@ -781,10 +869,10 @@ class BezierMode (InkingMode):
                         # To avoid some of visual glitches,
                         # we need to process button here.
                         if self.zone == _EditZone_Bezier.REJECT_BUTTON:
-                            self._start_new_capture_phase(rollback=True)
+                            self._start_new_capture_phase_bezier(rollback=True)
                         elif self.zone == _EditZone_Bezier.ACCEPT_BUTTON:
                             self._queue_redraw_curve(BezierMode.FINAL_STEP) # Redraw with hi-fidely curve
-                            self._start_new_capture_phase(rollback=False)
+                            self._start_new_capture_phase_bezier(rollback=False)
                         self._reset_adjust_data()
                         return False
                     
@@ -886,6 +974,9 @@ class BezierMode (InkingMode):
             # without reaching drag_stop_cb.(it might due to pen tablet...)
             # so ignore this for now,or something should be done here?
             pass 
+        elif self.phase == _PhaseBezier.MOVE_NODE:
+            # THIS CANNOT BE HAPPEN...might be an evdev dropout.through it.
+            pass
         else:
             raise NotImplementedError("Unrecognized phase %r", self.phase)
         # Update workaround state for evdev dropouts
@@ -900,6 +991,10 @@ class BezierMode (InkingMode):
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
 
+        # Here is 'button_release_cb',which called 
+        # prior to drag_stop_cb.
+        # so, in this method, changing self._phase
+        # is very special case. 
         if self.phase == _PhaseBezier.PLACE_NODE:
             self._queue_redraw_curve() 
             self.phase = _PhaseBezier.CREATE_PATH
@@ -907,8 +1002,6 @@ class BezierMode (InkingMode):
 
         # Update workaround state for evdev dropouts
         self._button_down = None
-
-
 
         # Super-Supercall(not supercall) would invoke drag_stop_cb signal.
         return super(InkingMode, self).button_release_cb(tdw, event)
@@ -1087,8 +1180,6 @@ class BezierMode (InkingMode):
         
 
     ## Node editing
-
-    
 
     @property
     def options_presenter(self):
@@ -1273,6 +1364,30 @@ class BezierMode (InkingMode):
 
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
+
+    def recall_nodes(self, idx):
+        """ recall nodes from history
+        """
+        print idx
+        if 0 < idx < len(self.stroke_history.liststore):
+            self._queue_draw_buttons()
+            self._queue_redraw_all_nodes()
+            self._queue_redraw_curve()
+
+            self._stroke_from_history = True
+
+            x = y = None
+            if len(self.nodes) > 0:
+                x = self.nodes[0].x
+                y = self.nodes[0].y
+
+            self.nodes = self.stroke_history.get_and_place_nodes(
+                    idx, x, y)
+
+            self._queue_redraw_curve()
+            self._queue_redraw_all_nodes()
+            self._queue_draw_buttons()
+
 
 class OverlayBezier (Overlay):
     """Overlay for an BezierMode's adjustable points"""
@@ -1546,7 +1661,12 @@ class OptionsPresenter_Bezier (OptionsPresenter):
         self._default_dtime_adj.set_value(BezierMode._DEFAULT_DTIME)
         self._default_pressure_adj.set_value(BezierMode._DEFAULT_PRESSURE)
 
-
+        combo = builder.get_object('stroke_history_combobox')
+        combo.set_model(BezierMode.stroke_history.liststore)
+        cell = Gtk.CellRendererText()
+        combo.pack_start(cell,True)
+        combo.add_attribute(cell,'text',0)
+        self._stroke_history_combo = combo
 
         base_grid = builder.get_object("points_editing_grid")
         self.init_linecurve_widget(0, base_grid)
@@ -1637,6 +1757,11 @@ class OptionsPresenter_Bezier (OptionsPresenter):
         self._check_curvepoint.set_active(flag)
         self._updating_ui = False
 
+    def reset_stroke_history(self):
+        self._updating_ui = True
+        self._stroke_history_combo.set_active(0)
+        self._updating_ui = False
+
     def _checkbutton_curvepoint_toggled_cb(self, button):
         if self._updating_ui:
             return
@@ -1667,5 +1792,12 @@ class OptionsPresenter_Bezier (OptionsPresenter):
         if self._updating_ui:
             return
         BezierMode.set_default_pressure(adj.get_value())
+    
+    def _stroke_history_combobox_changed_cb(self, widget):
+        if self._updating_ui:
+            return
+        beziermode, node_idx = self.target
+        if beziermode:
+            beziermode.recall_nodes(self._stroke_history_combo.get_active())
 
     ## Other handlers are as implemented in superclass.  

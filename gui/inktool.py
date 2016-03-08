@@ -506,7 +506,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self.phase = _Phase.CAPTURE
         InkingMode.enable_switch_actions(True)
 
-
     ## Raw event handling (prelight & zone selection in adjust phase)
     def button_press_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
