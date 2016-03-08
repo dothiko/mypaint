@@ -250,7 +250,7 @@ class StrokeHistory(object):
         :param idx: the REVERSED index(most recent one is 0) of nodes.
         """
         assert 1 <= idx < len(self._nodes)
-        src = self._nodes[len(self._nodes)-idx][1]
+        src = self._nodes[idx][1]
         fn = src[0]
         ret = []
         for cn in src:
