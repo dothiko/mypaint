@@ -440,7 +440,6 @@ class BezierMode (InkingMode):
                             break
 
 
-                ## CHANGED CODES for beziertool:
                 if (new_zone == _EditZone_Bezier.EMPTY_CANVAS):
                    
                     # Checking Control handles first:
@@ -755,8 +754,9 @@ class BezierMode (InkingMode):
     def _queue_previous_draw_buttons(self):
         """ Queue previous (current) button position to draw.
         It means erase old position buttons.
-        BezierCurveMode changes button position with its 
-        node selection state,so we miss calcurate it in some case.
+        BezierCurveMode changes dramatically button position with its 
+        node selection state (due to display control handles),
+        so we might miss calcurate button location in some case.
         """
 
         for tdw, overlay in self._overlays.items():
@@ -798,8 +798,11 @@ class BezierMode (InkingMode):
         # TODO dtime is the big problem.
         # how we decide the speed from static node list?
         
-        p0 = self.nodes[sidx]
-        p3 = self.nodes[eidx]
+        try:
+            p0 = self.nodes[sidx]
+            p3 = self.nodes[eidx]
+        except IndexError:
+            return
         p1 = p0.get_control_handle(1)
         p2 = p3.get_control_handle(0)
         
@@ -1031,7 +1034,7 @@ class BezierMode (InkingMode):
                     self._last_event_node = node
                     self.phase = _PhaseBezier.INIT_HANDLE
                     self.current_node_index=len(self.nodes)-1
-                    self._reset_selected_nodes()
+                    self._reset_selected_nodes(self.current_node_index)
                     # Important: with setting initial control handle 
                     # as the 'next' (= index 1) one,it brings us
                     # inkscape-like node creation.
@@ -1244,6 +1247,8 @@ class BezierMode (InkingMode):
         nn.set_control_handle(0, xc, yc)
 
 
+    def can_delete_node(self, idx):
+        return 1 <= idx < len(self.nodes)
 
     def _adjust_current_node_index(self):
         """ Adjust self.current_node_index
