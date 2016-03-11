@@ -383,14 +383,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self.target_node_index = None
         self._dragged_node_start_pos = None
 
-        # Pressed position when drag starts, for oncanvas pressure modifying.
-        # these attributes looks like same as self.start_x/y,
-        # but these attribute are rewritten in _adjust_pressure_with_motion,
-        # to continuously change pressure in one dragging sequence.
-        # so cannot use self.start_x/y for oncanvas pressure modify.
-        # furthermore, self._pressed_* is model coordinate.
-        self._pressed_x = None
-        self._pressed_y = None
         self._pressed_pressure = None
 
         # Multiple selected nodes.
@@ -949,7 +941,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if self.current_node_index is not None:
                 node = self.nodes[self.current_node_index]
                 self._pressed_pressure = node.pressure
-                self._pressed_x, self._pressed_y = mx, my
         elif self.phase == _Phase.ADJUST_SELECTING:
             self.selection_rect.start(mx, my)
             self.selection_rect.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
@@ -1014,7 +1005,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
         elif self.phase == _Phase.ADJUST_PRESSURE:
             if self._pressed_pressure is not None:
-                self._adjust_pressure_with_motion(mx, my)
+                self._adjust_pressure_with_motion(dx, dy)
         elif self.phase == _Phase.ADJUST_SELECTING:
             self._queue_draw_selection_rect() # to erase
             self.selection_rect.drag(mx, my)
@@ -1317,20 +1308,18 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_draw_buttons()
 
 
-    def _adjust_pressure_with_motion(self, x, y):
+    def _adjust_pressure_with_motion(self, dx, dy):
         """Adjust pressure of current selected node,
         and it may affects nearby nodes
 
-        :param x: currently dragging posisiton,in model coord.
-        :param y: currently dragging posisiton,in model coord.
+        :param dx: currently dragging posisiton,in model coord.
+        :param dy: currently dragging posisiton,in model coord.
         """
 
-        cx = x - self._pressed_x
-        cy = y - self._pressed_y
-        cs = math.sqrt(cx * cx + cy * cy)
+        cs = math.sqrt(dx * dx + dy * dy)
         if cs > 0.0:
-            nx = cx / cs
-            ny = cy / cs
+            nx = dx / cs
+            ny = dy / cs
             angle = math.acos(ny)  # Getting angle
             diff = cs / 128.0  # 128.0 is not theorical number,it's my feeling
 
@@ -1344,8 +1333,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 cn = self.nodes[idx]
                 self.nodes[idx] = cn._replace(pressure = cn.pressure + diff)
 
-        self._pressed_x = x
-        self._pressed_y = y
         self._queue_redraw_curve()
 
     def delete_selected_nodes(self):
