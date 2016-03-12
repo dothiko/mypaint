@@ -414,10 +414,15 @@ class BezierMode (InkingMode):
         ## the differences are 'control handle processing' and
         ## 'cursor changing' and, queuing buttons draw 
         ## to follow current_node_index
+
+
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone_Bezier.EMPTY_CANVAS
         if not self.in_drag and len(self.nodes) > 0:
-            if self.phase in (_PhaseBezier.MOVE_NODE, _PhaseBezier.INITIAL, _PhaseBezier.CREATE_PATH):
+            if self.phase in (_PhaseBezier.MOVE_NODE, 
+                    _PhaseBezier.ADJUST_PRESSURE, 
+                    _PhaseBezier.CREATE_PATH):
+
                 new_target_node_index = None
                 
                 # Test buttons for hits
@@ -441,43 +446,40 @@ class BezierMode (InkingMode):
 
 
                 if (new_zone == _EditZone_Bezier.EMPTY_CANVAS):
-                   
-                    # Checking Control handles first:
-                    # because when you missed setting control handle 
-                    # at node creation stage,if node zone detection
-                    # is prior to control handle, they are unoperatable.
-                    if (self.current_node_index is not None and 
-                            ignore_handle == False):
-                        c_node = self.nodes[self.current_node_index]
-                        self.current_handle_index = None
-                        if self.current_node_index == 0:
-                            seq = (1,)
-                        else:
-                            seq = (0, 1)
-                        for i in seq:
-                            handle = c_node.get_control_handle(i)
-                            hx, hy = tdw.model_to_display(handle.x, handle.y)
-                            d = math.hypot(hx - x, hy - y)
-                            if d > hit_dist:
-                                continue
-                            new_target_node_index = self.current_node_index
-                            self.current_handle_index = i
-                            new_zone = _EditZone_Bezier.CONTROL_HANDLE
-                            break         
 
-                    # Test nodes for a hit, in reverse draw order
-                    if new_target_node_index == None:
-                        hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 12
-                        for i, node in reversed(list(enumerate(self.nodes))):
-                            node_x, node_y = tdw.model_to_display(node.x, node.y)
-                            d = math.hypot(node_x - x, node_y - y)
-                            if d > hit_dist:
-                                continue
-                            new_target_node_index = i
-                            new_zone = _EditZone_Bezier.CONTROL_NODE
-                            break
-                
-                    
+                    if self.phase == _PhaseBezier.ADJUST_PRESSURE:
+                        new_target_node_index = self._search_target_node(tdw, x, y)
+                    else:
+                        # Checking Control handles first:
+                        # because when you missed setting control handle 
+                        # at node creation stage,if node zone detection
+                        # is prior to control handle, they are unoperatable.
+                        if (self.current_node_index is not None and 
+                                ignore_handle == False):
+                            c_node = self.nodes[self.current_node_index]
+                            self.current_handle_index = None
+                            if self.current_node_index == 0:
+                                seq = (1,)
+                            else:
+                                seq = (0, 1)
+                            for i in seq:
+                                handle = c_node.get_control_handle(i)
+                                hx, hy = tdw.model_to_display(handle.x, handle.y)
+                                d = math.hypot(hx - x, hy - y)
+                                if d > hit_dist:
+                                    continue
+                                new_target_node_index = self.current_node_index
+                                self.current_handle_index = i
+                                new_zone = _EditZone_Bezier.CONTROL_HANDLE
+                                break         
+
+                        # Test nodes for a hit, in reverse draw order
+                        if new_target_node_index == None:
+                            new_target_node_index = self._search_target_node(tdw, x, y)
+
+                    if (new_target_node_index != None and 
+                        new_zone == _EditZone_Bezier.EMPTY_CANVAS):
+                        new_zone = _EditZone.CONTROL_NODE
                     
                     
                 # Update the prelit node, and draw changes to it
@@ -491,7 +493,7 @@ class BezierMode (InkingMode):
                 ## Fallthru below
 
 
-        elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
+        elif self.phase == _PhaseBezier.ADJUST_PRESSURE_ONESHOT:
             # Always control node,in pressure editing.
             new_zone = _EditZone_Bezier.CONTROL_NODE 
 
@@ -863,7 +865,11 @@ class BezierMode (InkingMode):
         self._update_zone_and_target(tdw, event.x, event.y,
                 event.state & Gdk.ModifierType.MOD1_MASK)
         self._update_current_node_index()
-        if self.phase in (_PhaseBezier.INITIAL, _PhaseBezier.CREATE_PATH):
+        if self.phase == _PhaseBezier.INITIAL: 
+            self.phase = _PhaseBezier.CREATE_PATH
+            # FALLTHRU: *do* start a drag 
+        elif self.phase in (_PhaseBezier.CREATE_PATH,
+                _PhaseBezier.ADJUST_PRESSURE):
             # Initial state - everything starts here!
        
             if (self.zone in (_EditZone_Bezier.REJECT_BUTTON, 
@@ -882,91 +888,102 @@ class BezierMode (InkingMode):
                         return False
                     
                     
-            elif self.zone == _EditZone_Bezier.CONTROL_HANDLE:
-                self.phase = _PhaseBezier.ADJUST_HANDLE
             elif self.zone == _EditZone_Bezier.CONTROL_NODE:
                 # Grabbing a node...
                 button = event.button
-                if (self.current_node_index is not None and 
-                        button == 1 and
-                        event.state & self.__class__._PRESSURE_MOD_MASK == 
-                        self.__class__._PRESSURE_MOD_MASK):
-                    # It's 'Entering On-canvas Pressure Adjustment Phase'!
+                if self.phase == _PhaseBezier.CREATE_PATH:
 
-                    self.phase = _PhaseBezier.ADJUST_PRESSURE
-            
-                    # And do not forget,this can be a node selection.
-                    if not self.current_node_index in self.selected_nodes:
-                        # To avoid old selected nodes still lit.
-                        self._queue_draw_selected_nodes() 
-                        self._reset_selected_nodes(self.current_node_index)
-                    else:
-                        # The node is already included to self.selected_nodes
-                        pass
-            
-                    # FALLTHRU: *do* start a drag 
-                else:
-                    # normal move node start
-                    self.phase = _PhaseBezier.MOVE_NODE
+                    if (self.current_node_index is not None and 
+                            button == 1 and
+                            event.state & self.__class__._PRESSURE_MOD_MASK == 
+                            self.__class__._PRESSURE_MOD_MASK):
+                        # It's 'Entering On-canvas Pressure Adjustment Phase'!
 
-                    if button == 1:
-                        if (event.state & Gdk.ModifierType.CONTROL_MASK):
-                            # Holding CONTROL key = adding or removing a node.
-                            if self.current_node_index in self.selected_nodes:
-                                self.selected_nodes.remove(self.current_node_index)
-                            else:
-                                self.selected_nodes.append(self.current_node_index)
-        
+                        self._returning_phase = self.phase
+                        self.phase = _PhaseBezier.ADJUST_PRESSURE_ONESHOT
+                
+                        # And do not forget,this can be a node selection.
+                        if not self.current_node_index in self.selected_nodes:
+                            # To avoid old selected nodes still lit.
                             self._queue_draw_selected_nodes() 
+                            self._reset_selected_nodes(self.current_node_index)
                         else:
-                            # no CONTROL Key holded.
-                            # If new solo node clicked without holding 
-                            # CONTROL key,then reset all selected nodes.
-        
-                            assert self.current_node_index != None
-        
-                            do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
-                            do_reset |= not (self.current_node_index in self.selected_nodes)
-        
-                            if do_reset:
-                                # To avoid old selected nodes still lit.
-                                self._queue_draw_selected_nodes() 
-                                self._reset_selected_nodes(self.current_node_index)
+                            # The node is already included to self.selected_nodes
+                            pass
+                
+                        # FALLTHRU: *do* start a drag 
+                    else:
+                        # normal move node start
+                        self.phase = _PhaseBezier.MOVE_NODE
 
-                    # FALLTHRU: *do* start a drag 
+                        if button == 1:
+                            if (event.state & Gdk.ModifierType.CONTROL_MASK):
+                                # Holding CONTROL key = adding or removing a node.
+                                if self.current_node_index in self.selected_nodes:
+                                    self.selected_nodes.remove(self.current_node_index)
+                                else:
+                                    self.selected_nodes.append(self.current_node_index)
+            
+                                self._queue_draw_selected_nodes() 
+                            else:
+                                # no CONTROL Key holded.
+                                # If new solo node clicked without holding 
+                                # CONTROL key,then reset all selected nodes.
+            
+                                assert self.current_node_index != None
+            
+                                do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
+                                do_reset |= not (self.current_node_index in self.selected_nodes)
+            
+                                if do_reset:
+                                    # To avoid old selected nodes still lit.
+                                    self._queue_draw_selected_nodes() 
+                                    self._reset_selected_nodes(self.current_node_index)
+
+                # FALLTHRU: *do* start a drag 
 
             elif self.zone == _EditZone_Bezier.EMPTY_CANVAS:
                 
-                if (len(self.nodes) > 0): 
+                if self.phase == _PhaseBezier.CREATE_PATH:
+                    if (len(self.nodes) > 0): 
 
-                    if (event.state & Gdk.ModifierType.SHIFT_MASK):
-                        # selection box dragging start!!
-                        self.phase = _PhaseBezier.ADJUST_SELECTING
-                        self.selection_rect.start(
-                                *tdw.display_to_model(event.x, event.y))
-                    elif (event.state & Gdk.ModifierType.CONTROL_MASK):
-                        mx, my = tdw.display_to_model(event.x, event.y)
-                        pressed_segment = self._detect_on_stroke(mx, my)
-                        if pressed_segment:
-                            # pressed_segment is a tuple which contains
-                            # (node index of start of segment, stroke step)
+                        if (event.state & Gdk.ModifierType.SHIFT_MASK):
+                            # selection box dragging start!!
+                            if self._returning_phase == None:
+                                self._returning_phase = self.phase
+                            self.phase = _PhaseBezier.ADJUST_SELECTING
+                            self.selection_rect.start(
+                                    *tdw.display_to_model(event.x, event.y))
+                        elif (event.state & Gdk.ModifierType.CONTROL_MASK):
+                            mx, my = tdw.display_to_model(event.x, event.y)
+                            pressed_segment = self._detect_on_stroke(mx, my)
+                            if pressed_segment:
+                                # pressed_segment is a tuple which contains
+                                # (node index of start of segment, stroke step)
 
-                            # To erase buttons 
-                            self._queue_draw_buttons() 
+                                # To erase buttons 
+                                self._queue_draw_buttons() 
 
-                            self._divide_bezier(*pressed_segment)
+                                self._divide_bezier(*pressed_segment)
 
-                            # queue new node here.
-                            self._queue_draw_node(pressed_segment[0] + 1)
-                            
-                            self.phase = _PhaseBezier.PLACE_NODE
-                            return False # Cancel drag event
+                                # queue new node here.
+                                self._queue_draw_node(pressed_segment[0] + 1)
+                                
+                                self.phase = _PhaseBezier.PLACE_NODE
+                                return False # Cancel drag event
+
+                elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
+                    if self._returning_phase == None:
+                        self._returning_phase = _PhaseBezier.CREATE_PATH
+                        self._queue_redraw_all_nodes()
+                        self._queue_draw_buttons()
+                    self.phase = _PhaseBezier.CHANGE_PHASE
+
+            elif self.zone == _EditZone_Bezier.CONTROL_HANDLE:
+                if self.phase == _PhaseBezier.CREATE_PATH:
+                    self.phase = _PhaseBezier.ADJUST_HANDLE
 
 
-
-            if self.phase == _PhaseBezier.INITIAL:
-               #BezierMode.change_switch_actions(_PermitAction.ENABLE)
-                self.phase = _PhaseBezier.CREATE_PATH
             # FALLTHRU: *do* start a drag 
 
         elif self.phase == _PhaseBezier.ADJUST_SELECTING:
@@ -979,7 +996,7 @@ class BezierMode (InkingMode):
             # without reaching drag_stop_cb.(it might due to pen tablet...)
             # so ignore this for now,or something should be done here?
             pass 
-        elif self.phase == _PhaseBezier.MOVE_NODE:
+        elif self.phase in (_PhaseBezier.MOVE_NODE, _PhaseBezier.CHANGE_PHASE):
             # THIS CANNOT BE HAPPEN...might be an evdev dropout.through it.
             pass
         else:
@@ -1047,17 +1064,18 @@ class BezierMode (InkingMode):
                 # Use selection_rect class as offset-information
                 self.selection_rect.start(mx, my)
         
-        elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
-            if self.current_node_index is not None:
-                node = self.nodes[self.current_node_index]
-                self._pressed_pressure = node.pressure
-                self._pressed_x, self._pressed_y = mx, my
+        elif self.phase in (_PhaseBezier.ADJUST_PRESSURE, 
+                _PhaseBezier.ADJUST_PRESSURE_ONESHOT):
+            pass
         elif self.phase == _PhaseBezier.ADJUST_SELECTING:
             self.selection_rect.start(mx, my)
             self.selection_rect.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
             self._queue_draw_selection_rect() # to start
         elif self.phase == _PhaseBezier.ADJUST_HANDLE:
             self._last_event_node = self.nodes[self.target_node_index]
+            pass
+        elif self.phase == _PhaseBezier.CHANGE_PHASE:
+            # DO NOT DO ANYTHING.
             pass
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
@@ -1085,13 +1103,16 @@ class BezierMode (InkingMode):
                 self.selection_rect.drag(mx, my)
                 self._queue_draw_selected_nodes()
                 self._queue_redraw_curve()
-        elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
-            if self._pressed_pressure is not None:
-                self._adjust_pressure_with_motion(mx, my)
+        elif self.phase in (_PhaseBezier.ADJUST_PRESSURE,
+                _PhaseBezier.ADJUST_PRESSURE_ONESHOT):
+            self._adjust_pressure_with_motion(dx, dy)
         elif self.phase == _PhaseBezier.ADJUST_SELECTING:
             self._queue_draw_selection_rect() # to erase
             self.selection_rect.drag(mx, my)
             self._queue_draw_selection_rect()
+        elif self.phase == _PhaseBezier.CHANGE_PHASE:
+            # DO NOT DO ANYTHING.
+            pass
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -1154,18 +1175,23 @@ class BezierMode (InkingMode):
 
             self._queue_draw_buttons() # buttons erased while selecting
             self.selection_rect.reset()
-            self.phase = _PhaseBezier.CREATE_PATH
 
-        elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
-            self.phase = _PhaseBezier.CREATE_PATH
-            self.selection_rect.reset()
-            # Initialize pressed position as invalid for hold-and-modify
-            self._pressed_x = None
-            self._pressed_y = None
+            # phase returns the last phase 
+
+        elif self.phase in (_PhaseBezier.ADJUST_PRESSURE, 
+                _PhaseBezier.ADJUST_PRESSURE_ONESHOT):
+            self._queue_draw_buttons()
+        elif self.phase == _PhaseBezier.CHANGE_PHASE:
+            pass
+
 
         # Common processing
         if self.current_node_index != None:
             self.options_presenter.target = (self, self.current_node_index)
+
+        if self._returning_phase != None:
+            self.phase = self._returning_phase
+            self._returning_phase = None
 
     ## Interrogating events
 
@@ -1553,12 +1579,21 @@ class OverlayBezier (Overlay):
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
         dx, dy = mode.selection_rect.get_display_offset(self._tdw)
+        fill_flag = not mode.phase in (_PhaseBezier.ADJUST_PRESSURE,
+                _PhaseBezier.ADJUST_PRESSURE_ONESHOT)
+
         for i, node, x, y in self._get_onscreen_nodes():
             show_node = not mode.hide_nodes
             show_handle = False
             color = gui.style.EDITABLE_ITEM_COLOR
-            if mode.phase in (_PhaseBezier.INITIAL, _PhaseBezier.MOVE_NODE, 
-                    _PhaseBezier.CREATE_PATH, _PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
+
+            if mode.phase in (_PhaseBezier.INITIAL, 
+                    _PhaseBezier.MOVE_NODE, 
+                    _PhaseBezier.CREATE_PATH, 
+                    _PhaseBezier.ADJUST_PRESSURE,
+                    _PhaseBezier.ADJUST_PRESSURE_ONESHOT,
+                    _PhaseBezier.ADJUST_HANDLE, 
+                    _PhaseBezier.INIT_HANDLE):
                 if show_node:
                     if i == mode.current_node_index:
                         color = gui.style.ACTIVE_ITEM_COLOR
@@ -1595,8 +1630,9 @@ class OverlayBezier (Overlay):
                     cr=cr, x=x, y=y,
                     color=color,
                     radius=radius,
+                    fill=fill_flag
                 )
-                if show_handle:
+                if show_handle and fill_flag:
                     self.paint_control_handle(cr, i, node, x, y, dx, dy, True)
                                     
     

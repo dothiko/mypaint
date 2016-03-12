@@ -59,6 +59,7 @@ class _Phase:
     ADJUST_PRESSURE = 2
     ADJUST_SELECTING = 3
     ADJUST_PRESSURE_ONESHOT = 4
+    CHANGE_PHASE = 5
 
 
 _NODE_FIELDS = ("x", "y", "pressure", "xtilt", "ytilt", "time")
@@ -368,6 +369,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         #+ Hiding nodes functionality
         self._hide_nodes = False
 
+        #+ returning phase.for special phase changing case.
+        self._returning_phase = None
+
 
     def _reset_nodes(self):
         self.nodes = []  # nodes that met the distance+time criteria
@@ -549,12 +553,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 elif self.zone == _EditZone.EMPTY_CANVAS:
                     if (event.state & Gdk.ModifierType.SHIFT_MASK):
                         # selection box dragging start!!
-                        self._returning_phase = self.phase
+                        if self._returning_phase == None:
+                            self._returning_phase = self.phase
                         self.phase = _Phase.ADJUST_SELECTING
                         self.selection_rect.start(
                                 *tdw.display_to_model(event.x, event.y))
                     elif self.phase == _Phase.ADJUST_PRESSURE:
                         self.phase = _Phase.ADJUST
+                        self._queue_redraw_all_nodes()
                     else:
                         self._start_new_capture_phase(rollback=False)
                         assert self.phase == _Phase.CAPTURE
@@ -619,7 +625,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
 
-        if self.phase == _Phase.ADJUST:
+        if self.phase in (_Phase.ADJUST , _Phase.ADJUST_PRESSURE):
             if self._click_info:
                 button0, zone0 = self._click_info
                 if event.button == button0:
@@ -657,8 +663,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 self._update_zone_and_target(tdw, event.x, event.y)
 
             # (otherwise fall through and end any current drag)
-        elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
-            self.options_presenter.target = (self, self.current_node_index)
         elif self.phase == _Phase.ADJUST_SELECTING:
             # XXX Not sure what to do here.
             pass
@@ -673,6 +677,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
 
+
+        # other processing 
+        if self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
+            self.options_presenter.target = (self, self.current_node_index)
 
         # Supercall: stop current drag
         return super(InkingMode, self).button_release_cb(tdw, event)
@@ -703,26 +711,31 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def current_node_changed(self, index):
         """Event: current_node_index was changed"""
 
+    def _search_target_node(self, tdw, x, y):
+        """ utility method: to commonize processing,
+        even in inherited classes.
+        """
+        hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 12
+        new_target_node_index = None
+        for i, node in reversed(list(enumerate(self.nodes))):
+            node_x, node_y = tdw.model_to_display(node.x, node.y)
+            d = math.hypot(node_x - x, node_y - y)
+            if d > hit_dist:
+                continue
+            new_target_node_index = i
+            break
+        return new_target_node_index
+
     def _update_zone_and_target(self, tdw, x, y):
         """Update the zone and target node under a cursor position"""
-
-        def search_target_node():
-            hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 12
-            new_target_node_index = None
-            for i, node in reversed(list(enumerate(self.nodes))):
-                node_x, node_y = tdw.model_to_display(node.x, node.y)
-                d = math.hypot(node_x - x, node_y - y)
-                if d > hit_dist:
-                    continue
-                new_target_node_index = i
-                break
-            return new_target_node_index
 
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone.EMPTY_CANVAS
 
         if not self.in_drag:
-            if self.phase == _Phase.ADJUST:
+            if self.phase in (_Phase.ADJUST,
+                    _Phase.ADJUST_PRESSURE):
+
                 new_target_node_index = None
                 # Test buttons for hits
                 overlay = self._ensure_overlay_for_tdw(tdw)
@@ -740,9 +753,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                         new_target_node_index = None
                         new_zone = btn_zone
                         break
+
                 # Test nodes for a hit, in reverse draw order
                 if new_zone == _EditZone.EMPTY_CANVAS:
-                    new_target_node_index = search_target_node()
+                    new_target_node_index = self._search_target_node(tdw, x, y)
                     if new_target_node_index != None:
                         new_zone = _EditZone.CONTROL_NODE
 
@@ -755,8 +769,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                         self._queue_draw_node(self.target_node_index)
 
 
-            elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
-                self.target_node_index = search_target_node()
+            elif self.phase ==  _Phase.ADJUST_PRESSURE_ONESHOT:
+                self.target_node_index = self._search_target_node(tdw, x, y)
                 if self.target_node_index != None:
                     new_zone = _EditZone.CONTROL_NODE
 
@@ -961,8 +975,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self.selection_rect.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
             self._queue_draw_buttons() # To erase button!
             self._queue_draw_selection_rect() # to start
+        elif self.phase == _Phase.CHANGE_PHASE:
+            pass
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
+
 
     def drag_update_cb(self, tdw, event, dx, dy):
         self._ensure_overlay_for_tdw(tdw)
@@ -1024,6 +1041,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._queue_draw_selection_rect() # to erase
             self.selection_rect.drag(mx, my)
             self._queue_draw_selection_rect()
+        elif self.phase == _Phase.CHANGE_PHASE:
+            pass
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -1122,8 +1141,13 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._queue_draw_buttons() # buttons erased while selecting
             self.selection_rect.reset()
             self.phase = self._returning_phase
+        elif self.phase == _Phase.CHANGE_PHASE:
+            pass
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
+
+        if self._returning_phase == None:
+            self._returning_phase = self.phase
 
     def scroll_cb(self, tdw, event):
         """Handles scroll-wheel events, to adjust pressure."""
