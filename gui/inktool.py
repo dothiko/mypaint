@@ -58,6 +58,7 @@ class _Phase:
     ADJUST = 1
     ADJUST_PRESSURE = 2
     ADJUST_SELECTING = 3
+    ADJUST_PRESSURE_ONESHOT = 4
 
 
 _NODE_FIELDS = ("x", "y", "pressure", "xtilt", "ytilt", "time")
@@ -266,7 +267,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
                 return self._arrow_cursor
 
-        elif self.phase == _Phase.ADJUST_PRESSURE:
+        elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
             if self.zone == _EditZone.CONTROL_NODE:
                 return self._cursor_move_nw_se
 
@@ -383,7 +384,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self.target_node_index = None
         self._dragged_node_start_pos = None
 
-        self._pressed_pressure = None
 
         # Multiple selected nodes.
         # This is a index list of node from self.nodes
@@ -521,10 +521,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     self.phase == _Phase.ADJUST and
                     event.state & self.__class__._PRESSURE_MOD_MASK ==
                     self.__class__._PRESSURE_MOD_MASK):
-
+            
                 # Entering On-canvas Pressure Adjustment Phase!
-                self.phase = _Phase.ADJUST_PRESSURE
-
+                self.phase = _Phase.ADJUST_PRESSURE_ONESHOT
+            
                 # And do not forget,this can be a node selection.
                 if not self.current_node_index in self.selected_nodes:
                     # To avoid old selected nodes still lit.
@@ -533,11 +533,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 else:
                     # The node is already included to self.selected_nodes
                     pass
-
+            
                 # FALLTHRU: *do* start a drag
-
+            
             else:
-                # Normal ADJUST Phase.
+            # Normal ADJUST Phase.
 
                 if self.zone in (_EditZone.REJECT_BUTTON,
                                  _EditZone.ACCEPT_BUTTON):
@@ -593,8 +593,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # XXX Click to add a 1st & 2nd (=last) node only?
             # XXX  but needs to allow a drag after the 1st one's placed.
             pass
-        elif self.phase == _Phase.ADJUST_PRESSURE:
+        elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
             # XXX Not sure what to do here.
+            if self.zone == _EditZone.CONTROL_NODE:
+                pass
             pass
         elif self.phase == _Phase.ADJUST_SELECTING:
             # XXX Not sure what to do here.
@@ -654,7 +656,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 self._update_zone_and_target(tdw, event.x, event.y)
 
             # (otherwise fall through and end any current drag)
-        elif self.phase == _Phase.ADJUST_PRESSURE:
+        elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
             self.options_presenter.target = (self, self.current_node_index)
         elif self.phase == _Phase.ADJUST_SELECTING:
             # XXX Not sure what to do here.
@@ -702,8 +704,22 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def _update_zone_and_target(self, tdw, x, y):
         """Update the zone and target node under a cursor position"""
+
+        def search_target_node():
+            hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 12
+            new_target_node_index = None
+            for i, node in reversed(list(enumerate(self.nodes))):
+                node_x, node_y = tdw.model_to_display(node.x, node.y)
+                d = math.hypot(node_x - x, node_y - y)
+                if d > hit_dist:
+                    continue
+                new_target_node_index = i
+                break
+            return new_target_node_index
+
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone.EMPTY_CANVAS
+
         if not self.in_drag:
             if self.phase == _Phase.ADJUST:
                 new_target_node_index = None
@@ -725,16 +741,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                         break
                 # Test nodes for a hit, in reverse draw order
                 if new_zone == _EditZone.EMPTY_CANVAS:
-                    hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 12
-                    new_target_node_index = None
-                    for i, node in reversed(list(enumerate(self.nodes))):
-                        node_x, node_y = tdw.model_to_display(node.x, node.y)
-                        d = math.hypot(node_x - x, node_y - y)
-                        if d > hit_dist:
-                            continue
-                        new_target_node_index = i
+                    new_target_node_index = search_target_node()
+                    if new_target_node_index != None:
                         new_zone = _EditZone.CONTROL_NODE
-                        break
+
                 # Update the prelit node, and draw changes to it
                 if new_target_node_index != self.target_node_index:
                     if self.target_node_index is not None:
@@ -743,7 +753,13 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     if self.target_node_index is not None:
                         self._queue_draw_node(self.target_node_index)
 
-        elif self.phase == _Phase.ADJUST_PRESSURE:
+
+            elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
+                self.target_node_index = search_target_node()
+                if self.target_node_index != None:
+                    new_zone = _EditZone.CONTROL_NODE
+
+        elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
             # Always control node,in pressure editing.
             new_zone = _EditZone.CONTROL_NODE
 
@@ -756,7 +772,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         # Update the "real" inactive cursor too:
         if not self.in_drag:
             cursor = None
-            if self.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE):
+            if self.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
                 if self.zone == _EditZone.CONTROL_NODE:
                     cursor = self._crosshair_cursor
                 elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
@@ -937,10 +953,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 # Use selection_rect class as offset-information
                 self.selection_rect.start(mx, my)
 
-        elif self.phase == _Phase.ADJUST_PRESSURE:
-            if self.current_node_index is not None:
-                node = self.nodes[self.current_node_index]
-                self._pressed_pressure = node.pressure
+        elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
+            pass
         elif self.phase == _Phase.ADJUST_SELECTING:
             self.selection_rect.start(mx, my)
             self.selection_rect.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
@@ -1003,9 +1017,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
                 self._queue_redraw_curve()
 
-        elif self.phase == _Phase.ADJUST_PRESSURE:
-            if self._pressed_pressure is not None:
-                self._adjust_pressure_with_motion(dx, dy)
+        elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
+            self._adjust_pressure_with_motion(dx, dy)
         elif self.phase == _Phase.ADJUST_SELECTING:
             self._queue_draw_selection_rect() # to erase
             self.selection_rect.drag(mx, my)
@@ -1078,15 +1091,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self._dragged_node_start_pos = None
             self._queue_redraw_curve()
             self._queue_draw_buttons()
-        elif self.phase == _Phase.ADJUST_PRESSURE:
+        elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
             ## Pressure editing phase end.
-            self._pressed_x = None
-            self._pressed_y = None
-
             # Return to ADJUST phase.
             # simple but very important,to ensure entering normal editing.
-            self.phase = _Phase.ADJUST
-            self._pressed_pressure = None
+            if self.phase == _Phase.ADJUST_PRESSURE_ONESHOT:
+                self.phase = _Phase.ADJUST
             self._queue_redraw_curve()
             self._queue_draw_buttons()
             self.selection_rect.reset()
@@ -1116,7 +1126,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def scroll_cb(self, tdw, event):
         """Handles scroll-wheel events, to adjust pressure."""
-        if (self.phase == _Phase.ADJUST
+        if (self.phase in (_Phase.ADJUST, 
+                _Phase.ADJUST_PRESSURE, 
+                _Phase.ADJUST_PRESSURE_ONESHOT) 
                 and self.target_node_index != None):
 
             if len(self.selected_nodes) == 0:
@@ -1312,8 +1324,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """Adjust pressure of current selected node,
         and it may affects nearby nodes
 
-        :param dx: currently dragging posisiton,in model coord.
-        :param dy: currently dragging posisiton,in model coord.
+        :param dx/dy: currently dragging position,in display coord.
         """
 
         cs = math.sqrt(dx * dx + dy * dy)
@@ -1321,7 +1332,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             nx = dx / cs
             ny = dy / cs
             angle = math.acos(ny)  # Getting angle
-            diff = cs / 128.0  # 128.0 is not theorical number,it's my feeling
+            diff = cs / 128.0  # XXX around 128.0 pixel is good..? 
+                               # it might be change at HiDPI system
 
             if math.pi / 4 < angle < math.pi / 4 + math.pi / 2:
                 if nx < 0.0:
@@ -1329,9 +1341,18 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             elif ny < 0.0:
                 diff *= -1
 
-            for idx in self.selected_nodes:
-                cn = self.nodes[idx]
-                self.nodes[idx] = cn._replace(pressure = cn.pressure + diff)
+            if (self.target_node_index != None and 
+                    not self.target_node_index in self.selected_nodes):
+                cn = self.nodes[self.target_node_index]
+                self.nodes[self.target_node_index] = \
+                        cn._replace(pressure = lib.helpers.clamp(
+                            cn.pressure + diff,0.0, 1.0))
+            else:
+                for idx in self.selected_nodes:
+                    cn = self.nodes[idx]
+                    self.nodes[idx] = \
+                            cn._replace(pressure = lib.helpers.clamp(
+                                cn.pressure + diff,0.0, 1.0))
 
         self._queue_redraw_curve()
 
@@ -1707,6 +1728,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._hide_nodes = flag
         self._queue_redraw_all_nodes()
 
+    def enter_pressure_phase(self):
+        if self.phase == _Phase.ADJUST:
+            self.phase = _Phase.ADJUST_PRESSURE
+            self._queue_redraw_all_nodes()
+        elif self.phase == _Phase.ADJUST_PRESSURE:
+            self.phase = _Phase.ADJUST
+            self._queue_redraw_all_nodes()
+
 
 class Overlay (gui.overlays.Overlay):
     """Overlay for an InkingMode's adjustable points"""
@@ -1863,12 +1892,14 @@ class Overlay (gui.overlays.Overlay):
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
         dx,dy = mode.selection_rect.get_display_offset(self._tdw)
+        fill_flag = not mode.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT)
         for i, node, x, y in self._get_onscreen_nodes():
             color = gui.style.EDITABLE_ITEM_COLOR
             show_node = not mode.hide_nodes
             if (mode.phase in
                     (_Phase.ADJUST,
                      _Phase.ADJUST_PRESSURE,
+                     _Phase.ADJUST_PRESSURE_ONESHOT,
                      _Phase.ADJUST_SELECTING)):
                 if show_node:
                     if i == mode.current_node_index:
@@ -1892,11 +1923,14 @@ class Overlay (gui.overlays.Overlay):
                 gui.drawutils.render_round_floating_color_chip(
                     cr=cr, x=x, y=y,
                     color=color,
-                    radius=radius,)
+                    radius=radius,
+                    fill=fill_flag)
+
         # Buttons
         if (mode.phase in
                 (_Phase.ADJUST,
-                 _Phase.ADJUST_PRESSURE) and
+                 _Phase.ADJUST_PRESSURE,
+                 _Phase.ADJUST_PRESSURE_ONESHOT) and
                 not mode.in_drag):
             self.update_button_positions()
             radius = gui.style.FLOATING_BUTTON_RADIUS

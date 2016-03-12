@@ -427,7 +427,7 @@ def _get_paint_chip_shadow(color):
     return shadow
 
 
-def render_round_floating_color_chip(cr, x, y, color, radius, z=2):
+def render_round_floating_color_chip(cr, x, y, color, radius, z=2, fill=True):
     """Draw a round color chip with a slight drop shadow
 
     :param cairo.Context cr: Context in which to draw.
@@ -436,6 +436,7 @@ def render_round_floating_color_chip(cr, x, y, color, radius, z=2):
     :param lib.color.UIColor color: Color for the chip.
     :param float radius: Circle radius, in pixels.
     :param int z: Simulated height of the object above the canvas.
+    :param fill: only draw circle when False
 
     Currently used for accept/dismiss/delete buttons and control points
     on the painting canvas, in certain modes.
@@ -464,7 +465,8 @@ def render_round_floating_color_chip(cr, x, y, color, radius, z=2):
     render_drop_shadow(cr, z=z)
 
     cr.set_source_rgb(*base_col.get_rgb())
-    cr.fill_preserve()
+    if fill:
+        cr.fill_preserve()
     #cr.clip_preserve()
 
     cr.set_source_rgb(*hi_col.get_rgb())

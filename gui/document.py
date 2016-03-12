@@ -2143,6 +2143,14 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             # inside of the mode class.
             mode.hide_nodes = not mode.hide_nodes
 
+    def enter_pressure_phase_cb(self, action):
+        """Callback: Enter pressure modification phase,in inktool
+        or inktool inherited tool.
+        """
+        mode=self.modes.top
+        if hasattr(mode, 'enter_pressure_phase'):
+            mode.enter_pressure_phase()
+
     ##+ Bezier curve related
     def bezier_curve_node_activated_cb(self, action):
         mode=self.modes.top

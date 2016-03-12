@@ -852,6 +852,13 @@ Vocabulary
           <signal name="activate" handler="hide_nodes_cb"/>
         </object>
       </child>
+      <child>
+        <object class="GtkAction" id="PressurePhase">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Enter Pressure phase</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Enter pressure modification phase,in Inktool(or Inktool inherited tool)</property>
+          <signal name="activate" handler="enter_pressure_phase_cb"/>
+        </object>
+      </child>
       <!-- }}} -->
     </object>
   </child>
