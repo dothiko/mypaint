@@ -514,7 +514,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             return False
         self._update_zone_and_target(tdw, event.x, event.y)
         self._update_current_node_index()
-        if self.phase == _Phase.ADJUST:
+        if self.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE):
             button = event.button
             if (self.current_node_index is not None and
                     button == 1 and
@@ -537,7 +537,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 # FALLTHRU: *do* start a drag
             
             else:
-            # Normal ADJUST Phase.
+            # Normal ADJUST/ADJUST_PRESSURE Phase.
 
                 if self.zone in (_EditZone.REJECT_BUTTON,
                                  _EditZone.ACCEPT_BUTTON):
@@ -549,9 +549,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 elif self.zone == _EditZone.EMPTY_CANVAS:
                     if (event.state & Gdk.ModifierType.SHIFT_MASK):
                         # selection box dragging start!!
+                        self._returning_phase = self.phase
                         self.phase = _Phase.ADJUST_SELECTING
                         self.selection_rect.start(
                                 *tdw.display_to_model(event.x, event.y))
+                    elif self.phase == _Phase.ADJUST_PRESSURE:
+                        self.phase = _Phase.ADJUST
                     else:
                         self._start_new_capture_phase(rollback=False)
                         assert self.phase == _Phase.CAPTURE
@@ -593,10 +596,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # XXX Click to add a 1st & 2nd (=last) node only?
             # XXX  but needs to allow a drag after the 1st one's placed.
             pass
-        elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
+        elif self.phase == _Phase.ADJUST_PRESSURE_ONESHOT:
             # XXX Not sure what to do here.
-            if self.zone == _EditZone.CONTROL_NODE:
-                pass
             pass
         elif self.phase == _Phase.ADJUST_SELECTING:
             # XXX Not sure what to do here.
@@ -1120,7 +1121,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
             self._queue_draw_buttons() # buttons erased while selecting
             self.selection_rect.reset()
-            self.phase = _Phase.ADJUST
+            self.phase = self._returning_phase
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
