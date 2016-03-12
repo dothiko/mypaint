@@ -669,8 +669,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         elif self.phase == _Phase.CAPTURE:
             # Update options_presenter when capture phase end
             self.options_presenter.target = (self, None)
-        else:
-            raise NotImplementedError("Unrecognized zone %r", self.zone)
+
         # Update workaround state for evdev dropouts
         self._button_down = None
         self._last_good_raw_pressure = 0.0
