@@ -199,25 +199,39 @@ class PolyfillMode (BezierMode):
         pass # do nothing
 
     def _queue_redraw_curve(self, tdw):
+        sdx, sdy = self.selection_rect.get_display_offset(tdw)
         for i,cn in enumerate(self.nodes):
             # Get boundary rectangle,to reduce processing segment
-            nn = self.nodes[(i+1) % len(self.nodes)]
-            sx = min(cn.x, nn.x)
-            ex = max(cn.x, nn.x)
-            sy = min(cn.y, nn.y)
-            ey = max(cn.y, nn.y)
-            for t in (0,1):
-                cx = cn.get_control_handle(t).x
-                nx = nn.get_control_handle(t).x
-                sx = min(min(sx, cx), nx)
-                ex = max(max(ex, cx), nx)
-                cy = cn.get_control_handle(t).y
-                ny = nn.get_control_handle(t).y
-                sy = min(min(sy, cy), ny)
-                ey = max(max(ey, cy), ny)
+            n = (i+1) % len(self.nodes)
+            nn = self.nodes[n]
+            cnx, cny = tdw.model_to_display(cn.x, cn.y)
+            if i in self.selected_nodes:
+                cnx+=sdx
+                cny+=sdy
+            nnx, nny = tdw.model_to_display(nn.x, nn.y)
+            if n in self.selected_nodes:
+                nnx+=sdx
+                nny+=sdy
 
-            sx,sy = tdw.model_to_display(sx, sy)
-            ex,ey = tdw.model_to_display(ex, ey)
+            sx = min(cnx, nnx)
+            ex = max(cnx, nnx)
+            sy = min(cny, nny)
+            ey = max(cny, nny)
+
+            cx, cy = tdw.model_to_display(*cn.get_control_handle(1))
+            if i in self.selected_nodes:
+                cx+=sdx
+                cy+=sdy
+
+            nx, ny = tdw.model_to_display(*nn.get_control_handle(0))
+            if n in self.selected_nodes:
+                nx+=sdx
+                ny+=sdy
+
+            sx = min(min(sx, cx), nx)
+            ex = max(max(ex, cx), nx)
+            sy = min(min(sy, cy), ny)
+            ey = max(max(ey, cy), ny)
 
             tdw.queue_draw_area(sx, sy, ex-sx+1, ey-sy+1)
 
@@ -455,6 +469,7 @@ class PolyfillMode (BezierMode):
             pass
             
         elif self.phase in (_PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
+            self._queue_redraw_curve(tdw)  
             node = self._last_event_node
             if self._last_event_node:
                 self._queue_draw_node(self.current_node_index)# to erase
@@ -466,6 +481,7 @@ class PolyfillMode (BezierMode):
                 
         elif self.phase == _PhaseBezier.MOVE_NODE:
             if len(self.selected_nodes) > 0:
+                self._queue_redraw_curve(tdw)  
                 self._queue_draw_selected_nodes()
                 self.selection_rect.drag(mx, my)
                 self._queue_draw_selected_nodes()
