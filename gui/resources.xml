@@ -1922,6 +1922,26 @@ Vocabulary
         </object>
       </child>
       <!-- }}} -->
+      <!-- {{{ Polyfill tool and flip actions -->
+      <child>
+        <object class="GtkRadioAction" id="PolyFillMode">
+          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">Polygon Fill</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">Polyfill</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Polygon fill: fill a polygon area,with current color.</property>
+          <property name="group">EllipseMode</property>
+          <property name="icon-name">mypaint-tool-bezier-symbolic</property>
+          <property name="value">14</property>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="FlipPolyFillMode">
+          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">Polygon fill</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">draw filled polygon</property>
+          <property name="icon-name">mypaint-tool-bezier-symbolic</property>
+          <signal name="activate" handler="mode_flip_action_activated_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
     </object>
   </child>
   <!-- }}} -->

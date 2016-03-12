@@ -93,6 +93,7 @@ import gui.profiling
 import assist
 import sizechangemode
 import beziertool
+import polyfilltool
 import inktool
 
 ## Utility methods

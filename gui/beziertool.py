@@ -1818,7 +1818,7 @@ class OptionsPresenter_Bezier (OptionsPresenter):
         self._stroke_history_combo.set_active(0)
         self._updating_ui = False
 
-    def _checkbutton_curvepoint_toggled_cb(self, button):
+    def checkbutton_curvepoint_toggled_cb(self, button):
         if self._updating_ui:
             return
         beziermode, node_idx = self.target
@@ -1849,7 +1849,7 @@ class OptionsPresenter_Bezier (OptionsPresenter):
             return
         BezierMode.set_default_pressure(adj.get_value())
     
-    def _stroke_history_combobox_changed_cb(self, widget):
+    def stroke_history_combobox_changed_cb(self, widget):
         if self._updating_ui:
             return
         beziermode, node_idx = self.target
