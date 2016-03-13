@@ -24,18 +24,101 @@ import gi
 from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GLib
+import cairo
 
 import gui.mode
 import gui.overlays
 import gui.style
 import gui.drawutils
 import lib.helpers
+import lib.layer
 import gui.cursor
 import lib.observable
 from gui.inktool import *
 from gui.linemode import *
 from gui.beziertool import *
 from gui.beziertool import _Control_Handle, _Node_Bezier, _EditZone_Bezier, _PhaseBezier
+
+## Module funcs
+
+def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None, 
+        color=None, gradient=None,
+        dx=0, dy=0, ox=0, oy=0, stroke=False):
+    """ draw cairo polygon
+    :param selected_nodes: list of INDEX of selected nodes 
+    :param dx,dy: offset position of selected nodes
+    :param ox,oy: polygon origin position
+    """
+    if len(nodes) > 1:
+        cr.save()
+        cr.set_line_width(1)
+        if color:
+            cr.set_source_rgb(*color.get_rgb())
+        else:
+            cr.set_source_rgb(1.0,0,0) # test purpose
+
+        for i, node in enumerate(nodes):#self._get_onscreen_nodes():
+
+            if tdw:
+                x, y = tdw.model_to_display(node.x, node.y)
+            else:
+                x, y = node
+
+            x-=ox
+            y-=oy
+
+            n = (i+1) % len(nodes)
+
+            if tdw:
+                x1, y1 = tdw.model_to_display(*node.get_control_handle(1))
+                x2, y2 = tdw.model_to_display(*nodes[n].get_control_handle(0))
+                x3, y3 = tdw.model_to_display(nodes[n].x, nodes[n].y)
+            else:
+                x1, y1 = node.get_control_handle(1)
+                x2, y2 = nodes[n].get_control_handle(0)
+                x3, y3 = nodes[n].x, nodes[n].y
+
+            x1-=ox
+            x2-=ox
+            x3-=ox
+            y1-=oy
+            y2-=oy
+            y3-=oy
+
+            if selected_nodes:
+
+                if i in selected_nodes:
+                    x += dx
+                    y += dy
+                    x1 += dx
+                    y1 += dy
+
+                if n in selected_nodes:
+                    x2 += dx
+                    y2 += dy
+                    x3 += dx
+                    y3 += dy
+
+            if i==0:
+                cr.move_to(x,y)
+
+            cr.curve_to(x1, y1, x2, y2, x3, y3) 
+
+
+
+        if len(nodes) > 2:
+            cr.close_path()
+            cr.fill_preserve()
+
+        if stroke:
+            cr.set_source_rgb(1,1,1)
+            cr.stroke_preserve()
+            cr.set_source_rgb(0,0,0)
+            cr.set_dash( (3.0, ) )
+            cr.stroke()
+
+        cr.restore()
+
 
 ## Class defs
 
@@ -54,6 +137,9 @@ class PolyfillMode (BezierMode):
     def get_usage(self):
         return _(u"fill up polygon with current foreground color,or gradient")
 
+    @property
+    def foreground_color(self):
+        return self.doc.app.brush_color_manager.get_color()
 
     ## Class config vars
     stroke_history = StrokeHistory(6) # stroke history of polyfilltool 
@@ -90,7 +176,6 @@ class PolyfillMode (BezierMode):
         new_zone = _EditZone_Bezier.EMPTY_CANVAS
         if not self.in_drag and len(self.nodes) > 0:
             if self.phase in (_PhaseBezier.MOVE_NODE, 
-                    _PhaseBezier.ADJUST_PRESSURE, 
                     _PhaseBezier.CREATE_PATH):
 
                 new_target_node_index = None
@@ -117,40 +202,34 @@ class PolyfillMode (BezierMode):
 
                 if (new_zone == _EditZone_Bezier.EMPTY_CANVAS):
 
-                    if self.phase == _PhaseBezier.ADJUST_PRESSURE:
+                    # Checking Control handles first:
+                    # because when you missed setting control handle 
+                    # at node creation stage,if node zone detection
+                    # is prior to control handle, they are unoperatable.
+                    if (self.current_node_index is not None and 
+                            ignore_handle == False):
+                        c_node = self.nodes[self.current_node_index]
+                        self.current_handle_index = None
+                        if self.current_node_index == 0:
+                            seq = (1,)
+                        else:
+                            seq = (0, 1)
+                        for i in seq:
+                            handle = c_node.get_control_handle(i)
+                            hx, hy = tdw.model_to_display(handle.x, handle.y)
+                            d = math.hypot(hx - x, hy - y)
+                            if d > hit_dist:
+                                continue
+                            new_target_node_index = self.current_node_index
+                            self.current_handle_index = i
+                            new_zone = _EditZone_Bezier.CONTROL_HANDLE
+                            break         
+
+                    # Test nodes for a hit, in reverse draw order
+                    if new_target_node_index == None:
                         new_target_node_index = self._search_target_node(tdw, x, y)
-                    else:
-                        # Checking Control handles first:
-                        # because when you missed setting control handle 
-                        # at node creation stage,if node zone detection
-                        # is prior to control handle, they are unoperatable.
-                        if (self.current_node_index is not None and 
-                                ignore_handle == False):
-                            c_node = self.nodes[self.current_node_index]
-                            self.current_handle_index = None
-                            if self.current_node_index == 0:
-                                seq = (1,)
-                            else:
-                                seq = (0, 1)
-                            for i in seq:
-                                handle = c_node.get_control_handle(i)
-                                hx, hy = tdw.model_to_display(handle.x, handle.y)
-                                d = math.hypot(hx - x, hy - y)
-                                if d > hit_dist:
-                                    continue
-                                new_target_node_index = self.current_node_index
-                                self.current_handle_index = i
-                                new_zone = _EditZone_Bezier.CONTROL_HANDLE
-                                break         
-
-                        # Test nodes for a hit, in reverse draw order
-                        if new_target_node_index == None:
-                            new_target_node_index = self._search_target_node(tdw, x, y)
-
-                    if (new_target_node_index != None and 
-                        new_zone == _EditZone_Bezier.EMPTY_CANVAS):
                         new_zone = _EditZone_Bezier.CONTROL_NODE
-                    
+
                     
                 # Update the prelit node, and draw changes to it
                 if new_target_node_index != self.target_node_index:
@@ -162,10 +241,6 @@ class PolyfillMode (BezierMode):
 
                 ## Fallthru below
 
-
-        elif self.phase == _PhaseBezier.ADJUST_PRESSURE_ONESHOT:
-            # Always control node,in pressure editing.
-            new_zone = _EditZone_Bezier.CONTROL_NODE 
 
         # Update the zone, and assume any change implies a button state
         # change as well (for now...)
@@ -180,7 +255,7 @@ class PolyfillMode (BezierMode):
         if not self.in_drag:
             cursor = None
             if self.phase in (_PhaseBezier.INITIAL, _PhaseBezier.CREATE_PATH,
-                    _PhaseBezier.MOVE_NODE, _PhaseBezier.ADJUST_PRESSURE):
+                    _PhaseBezier.MOVE_NODE):
                 if self.zone == _EditZone_Bezier.CONTROL_NODE:
                     cursor = self._crosshair_cursor
                 elif self.zone != _EditZone_Bezier.EMPTY_CANVAS: # assume button
@@ -190,6 +265,65 @@ class PolyfillMode (BezierMode):
                 self._current_override_cursor = cursor
 
 
+    def _get_maximum_rect(self, tdw, dx=0, dy=0):
+        """ get possible maximum rectangle 
+        """
+        if len(self.nodes) < 2:
+            return (0,0,0,0)
+        sx = ex = self.nodes[0].x
+        sy = ey = self.nodes[0].y
+        for i,cn in enumerate(self.nodes):
+            # Get boundary rectangle,to reduce processing segment
+            n = (i+1) % len(self.nodes)
+            nn = self.nodes[n]
+            if tdw:
+                cnx, cny = tdw.model_to_display(cn.x, cn.y)
+            else:
+                cnx, cny = cn
+
+            if i in self.selected_nodes:
+                cnx+=dx
+                cny+=dy
+
+            if tdw:
+                nnx, nny = tdw.model_to_display(nn.x, nn.y)
+            else:
+                nnx, nny = nn
+
+            if n in self.selected_nodes:
+                nnx+=dx
+                nny+=dy
+
+            sx = min(min(sx,cnx), nnx)
+            ex = max(max(ex,cnx), nnx)
+            sy = min(min(sy,cny), nny)
+            ey = max(max(ey,cny), nny)
+
+            if tdw:
+                cx, cy = tdw.model_to_display(*cn.get_control_handle(1))
+            else:
+                cx, cy = cn.get_control_handle(1)
+
+            if i in self.selected_nodes:
+                cx+=dx
+                cy+=dy
+
+            if tdw:
+                nx, ny = tdw.model_to_display(*nn.get_control_handle(0))
+            else:
+                nx, ny = cn.get_control_handle(0)
+
+            if n in self.selected_nodes:
+                nx+=dx
+                ny+=dy
+
+            sx = min(min(sx, cx), nx)
+            ex = max(max(ex, cx), nx)
+            sy = min(min(sy, cy), ny)
+            ey = max(max(ey, cy), ny)
+
+        return (sx, sy, ex, ey)
+
 
     ## Redraws
     
@@ -198,44 +332,59 @@ class PolyfillMode (BezierMode):
         """ Frontend method,to redraw curve from outside this class"""
         pass # do nothing
 
-    def _queue_redraw_curve(self, tdw):
+    def _queue_redraw_curve(self, tdw=None):
+        if tdw == None:
+            tdw = self._grab_widget
+            if tdw == None:
+                return
+
         sdx, sdy = self.selection_rect.get_display_offset(tdw)
-        for i,cn in enumerate(self.nodes):
-            # Get boundary rectangle,to reduce processing segment
-            n = (i+1) % len(self.nodes)
-            nn = self.nodes[n]
-            cnx, cny = tdw.model_to_display(cn.x, cn.y)
-            if i in self.selected_nodes:
-                cnx+=sdx
-                cny+=sdy
-            nnx, nny = tdw.model_to_display(nn.x, nn.y)
-            if n in self.selected_nodes:
-                nnx+=sdx
-                nny+=sdy
+        
+        if len(self.nodes) < 2:
+            return
 
-            sx = min(cnx, nnx)
-            ex = max(cnx, nnx)
-            sy = min(cny, nny)
-            ey = max(cny, nny)
+        sx, sy, ex, ey = self._get_maximum_rect(tdw, sdx, sdy)
+        tdw.queue_draw_area(sx, sy, ex-sx+1, ey-sy+1)
 
-            cx, cy = tdw.model_to_display(*cn.get_control_handle(1))
-            if i in self.selected_nodes:
-                cx+=sdx
-                cy+=sdy
+    def _start_new_capture_phase_polyfill(self, tdw, rollback=False):
+        if rollback == False:
+            sx, sy, ex, ey = self._get_maximum_rect(None)
+            w = int(ex-sx+1)
+            h = int(ey-sy+1)
+            surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
+            cr = cairo.Context(surf)
+            _draw_node_polygon(cr, None, self.nodes, ox=sx, oy=sy,
+                    color=self.foreground_color)
+            surf.flush()
+            pixbuf = Gdk.pixbuf_get_from_surface(surf, 0, 0, w, h)
+            layer = lib.layer.PaintingLayer(name='')
+            layer.load_surface_from_pixbuf(pixbuf, int(sx), int(sy))
 
-            nx, ny = tdw.model_to_display(*nn.get_control_handle(0))
-            if n in self.selected_nodes:
-                nx+=sdx
-                ny+=sdy
+            tiles = set()
+            tiles.update(layer.get_tile_coords())
+            rootstack = self.doc.model.layer_stack
+            dstlayer= rootstack.deepget(rootstack.current_path)
+            dstsurf = dstlayer._surface
+            for tx, ty in tiles:
+                with dstsurf.tile_request(tx, ty, readonly=False) as dst:
+                    layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
 
-            sx = min(min(sx, cx), nx)
-            ex = max(max(ex, cx), nx)
-            sy = min(min(sy, cy), ny)
-            ey = max(max(ey, cy), ny)
+            if not self._stroke_from_history:
+                self.stroke_history.register(self.nodes)
 
-            tdw.queue_draw_area(sx, sy, ex-sx+1, ey-sy+1)
+        self._queue_draw_buttons()
+        self._queue_redraw_all_nodes()
+        self._reset_nodes()
+        self._reset_capture_data()
+        self._reset_adjust_data()
+        self.phase = _PhaseBezier.INITIAL
+
+        self._stroke_from_history = False
+        self.options_presenter.reset_stroke_history()
 
     ### Event handling
+    def scroll_cb(self, tdw, event):
+        return super(InkingMode, self).scroll_cb(tdw, event) # simply call super-superclass!
 
     ## Raw event handling (prelight & zone selection in adjust phase)
     def button_press_cb(self, tdw, event):
@@ -249,8 +398,7 @@ class PolyfillMode (BezierMode):
         if self.phase == _PhaseBezier.INITIAL: 
             self.phase = _PhaseBezier.CREATE_PATH
             # FALLTHRU: *do* start a drag 
-        elif self.phase in (_PhaseBezier.CREATE_PATH,
-                _PhaseBezier.ADJUST_PRESSURE):
+        elif self.phase in (_PhaseBezier.CREATE_PATH,)
             # Initial state - everything starts here!
        
             if (self.zone in (_EditZone_Bezier.REJECT_BUTTON, 
@@ -261,10 +409,10 @@ class PolyfillMode (BezierMode):
                         # To avoid some of visual glitches,
                         # we need to process button here.
                         if self.zone == _EditZone_Bezier.REJECT_BUTTON:
-                            self._start_new_capture_phase_bezier(rollback=True)
+                            self._start_new_capture_phase_polyfill(tdw, rollback=True)
                         elif self.zone == _EditZone_Bezier.ACCEPT_BUTTON:
                             self._queue_redraw_curve(tdw) # Redraw with hi-fidely curve
-                            self._start_new_capture_phase_bezier(rollback=False)
+                            self._start_new_capture_phase_polyfill(tdw, rollback=False)
                         self._reset_adjust_data()
                         return False
                     
@@ -274,52 +422,32 @@ class PolyfillMode (BezierMode):
                 button = event.button
                 if self.phase == _PhaseBezier.CREATE_PATH:
 
-                    if (self.current_node_index is not None and 
-                            button == 1 and
-                            event.state & self.__class__._PRESSURE_MOD_MASK == 
-                            self.__class__._PRESSURE_MOD_MASK):
-                        # It's 'Entering On-canvas Pressure Adjustment Phase'!
+                    # normal move node start
+                    self.phase = _PhaseBezier.MOVE_NODE
 
-                        self._returning_phase = self.phase
-                        self.phase = _PhaseBezier.ADJUST_PRESSURE_ONESHOT
-                
-                        # And do not forget,this can be a node selection.
-                        if not self.current_node_index in self.selected_nodes:
-                            # To avoid old selected nodes still lit.
-                            self._queue_draw_selected_nodes() 
-                            self._reset_selected_nodes(self.current_node_index)
-                        else:
-                            # The node is already included to self.selected_nodes
-                            pass
-                
-                        # FALLTHRU: *do* start a drag 
-                    else:
-                        # normal move node start
-                        self.phase = _PhaseBezier.MOVE_NODE
-
-                        if button == 1:
-                            if (event.state & Gdk.ModifierType.CONTROL_MASK):
-                                # Holding CONTROL key = adding or removing a node.
-                                if self.current_node_index in self.selected_nodes:
-                                    self.selected_nodes.remove(self.current_node_index)
-                                else:
-                                    self.selected_nodes.append(self.current_node_index)
-            
-                                self._queue_draw_selected_nodes() 
+                    if button == 1:
+                        if (event.state & Gdk.ModifierType.CONTROL_MASK):
+                            # Holding CONTROL key = adding or removing a node.
+                            if self.current_node_index in self.selected_nodes:
+                                self.selected_nodes.remove(self.current_node_index)
                             else:
-                                # no CONTROL Key holded.
-                                # If new solo node clicked without holding 
-                                # CONTROL key,then reset all selected nodes.
-            
-                                assert self.current_node_index != None
-            
-                                do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
-                                do_reset |= not (self.current_node_index in self.selected_nodes)
-            
-                                if do_reset:
-                                    # To avoid old selected nodes still lit.
-                                    self._queue_draw_selected_nodes() 
-                                    self._reset_selected_nodes(self.current_node_index)
+                                self.selected_nodes.append(self.current_node_index)
+        
+                            self._queue_draw_selected_nodes() 
+                        else:
+                            # no CONTROL Key holded.
+                            # If new solo node clicked without holding 
+                            # CONTROL key,then reset all selected nodes.
+        
+                            assert self.current_node_index != None
+        
+                            do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
+                            do_reset |= not (self.current_node_index in self.selected_nodes)
+        
+                            if do_reset:
+                                # To avoid old selected nodes still lit.
+                                self._queue_draw_selected_nodes() 
+                                self._reset_selected_nodes(self.current_node_index)
 
                 # FALLTHRU: *do* start a drag 
 
@@ -353,12 +481,6 @@ class PolyfillMode (BezierMode):
                                 self.phase = _PhaseBezier.PLACE_NODE
                                 return False # Cancel drag event
 
-                elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
-                    if self._returning_phase == None:
-                        self._returning_phase = _PhaseBezier.CREATE_PATH
-                        self._queue_redraw_all_nodes()
-                        self._queue_draw_buttons()
-                    self.phase = _PhaseBezier.CHANGE_PHASE
 
             elif self.zone == _EditZone_Bezier.CONTROL_HANDLE:
                 if self.phase == _PhaseBezier.CREATE_PATH:
@@ -372,11 +494,6 @@ class PolyfillMode (BezierMode):
             pass
         elif self.phase in (_PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
             pass
-        elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
-            # XXX in some cases,ADJUST_PRESSURE phase come here
-            # without reaching drag_stop_cb.(it might due to pen tablet...)
-            # so ignore this for now,or something should be done here?
-            pass 
         elif self.phase in (_PhaseBezier.MOVE_NODE, _PhaseBezier.CHANGE_PHASE):
             # THIS CANNOT BE HAPPEN...might be an evdev dropout.through it.
             pass
@@ -445,9 +562,6 @@ class PolyfillMode (BezierMode):
                 # Use selection_rect class as offset-information
                 self.selection_rect.start(mx, my)
         
-        elif self.phase in (_PhaseBezier.ADJUST_PRESSURE, 
-                _PhaseBezier.ADJUST_PRESSURE_ONESHOT):
-            pass
         elif self.phase == _PhaseBezier.ADJUST_SELECTING:
             self.selection_rect.start(mx, my)
             self.selection_rect.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
@@ -486,9 +600,6 @@ class PolyfillMode (BezierMode):
                 self.selection_rect.drag(mx, my)
                 self._queue_draw_selected_nodes()
                 self._queue_redraw_curve(tdw)
-        elif self.phase in (_PhaseBezier.ADJUST_PRESSURE,
-                _PhaseBezier.ADJUST_PRESSURE_ONESHOT):
-            self._adjust_pressure_with_motion(dx, dy)
         elif self.phase == _PhaseBezier.ADJUST_SELECTING:
             self._queue_draw_selection_rect() # to erase
             self.selection_rect.drag(mx, my)
@@ -561,9 +672,6 @@ class PolyfillMode (BezierMode):
 
             # phase returns the last phase 
 
-        elif self.phase in (_PhaseBezier.ADJUST_PRESSURE, 
-                _PhaseBezier.ADJUST_PRESSURE_ONESHOT):
-            self._queue_draw_buttons()
         elif self.phase == _PhaseBezier.CHANGE_PHASE:
             pass
 
@@ -614,46 +722,14 @@ class OverlayPolyfill (OverlayBezier):
         """Draw adjustable nodes to the screen"""
         # Control nodes
         mode = self._inkmode
-        radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
         dx, dy = mode.selection_rect.get_display_offset(self._tdw)
-        fill_flag = not mode.phase in (_PhaseBezier.ADJUST_PRESSURE,
-                _PhaseBezier.ADJUST_PRESSURE_ONESHOT)
-
 
         # drawing path
-        nodes = mode.nodes
-        if len(nodes) > 1:
-            cr.save()
-            color = gui.style.ACTIVE_ITEM_COLOR
-            cr.set_line_width(1)
-            cr.set_source_rgb(1.0,0,0)
-            for i, node, x, y in self._get_onscreen_nodes():
-                n = (i+1) % len(nodes)
-                if n == 0:
-                    cr.set_dash( (3.0, ) )
-
-                x1, y1 = self._tdw.model_to_display(*node.get_control_handle(1))
-                x2, y2 = self._tdw.model_to_display(*nodes[n].get_control_handle(0))
-                x3, y3 = self._tdw.model_to_display(nodes[n].x, nodes[n].y)
-
-                if i in mode.selected_nodes:
-                    x += dx
-                    y += dy
-                    x1 += dx
-                    y1 += dy
-
-                if n in mode.selected_nodes:
-                    x2 += dx
-                    y2 += dy
-                    x3 += dx
-                    y3 += dy
-
-                cr.move_to(x,y)
-                cr.curve_to(x1, y1, x2, y2, x3, y3) 
-                cr.stroke()
-
-            cr.restore()
+        _draw_node_polygon(cr, self._tdw, mode.nodes, 
+                selected_nodes=mode.selected_nodes, dx=dx, dy=dy, 
+                color = mode.foreground_color,
+                stroke=True)
 
         super(OverlayPolyfill, self).paint(cr)
                 
