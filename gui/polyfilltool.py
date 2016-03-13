@@ -41,10 +41,16 @@ from gui.beziertool import _Control_Handle, _Node_Bezier, _EditZone_Bezier, _Pha
 
 ## Module funcs
 
+
 def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None, 
         color=None, gradient=None,
         dx=0, dy=0, ox=0, oy=0, stroke=False):
     """ draw cairo polygon
+    :param color: color object of mypaint
+    :param gradient: Gradient object. cairo.LinearGradient or something
+
+    if both of color and gradient are null,polygon is not filled.
+
     :param selected_nodes: list of INDEX of selected nodes 
     :param dx,dy: offset position of selected nodes
     :param ox,oy: polygon origin position
@@ -54,8 +60,8 @@ def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None,
         cr.set_line_width(1)
         if color:
             cr.set_source_rgb(*color.get_rgb())
-        else:
-            cr.set_source_rgb(1.0,0,0) # test purpose
+        elif gradient:
+            cr.set_source(gradient)
 
         for i, node in enumerate(nodes):#self._get_onscreen_nodes():
 
@@ -106,7 +112,7 @@ def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None,
 
 
 
-        if len(nodes) > 2:
+        if len(nodes) > 2 and (gradient or color):
             cr.close_path()
             cr.fill_preserve()
 
@@ -139,7 +145,11 @@ class PolyfillMode (BezierMode):
 
     @property
     def foreground_color(self):
-        return self.doc.app.brush_color_manager.get_color()
+        if self.doc:
+            return self.doc.app.brush_color_manager.get_color()
+        else:
+            from application import get_app
+            return get_app().brush_color_manager.get_color()
 
     ## Class config vars
     stroke_history = StrokeHistory(6) # stroke history of polyfilltool 
@@ -334,18 +344,39 @@ class PolyfillMode (BezierMode):
         pass # do nothing
 
     def _queue_redraw_curve(self, tdw=None):
-        if tdw == None:
-            tdw = self._grab_widget
-            if tdw == None:
-                return
+       #if tdw == None:
+       #    if len(self._overlays) > 0:
+       #        tdw = self._overlays.keys()[-1]
+       #        if len(self._overlays) > 1:
+       #            print self._overlays
+       #    else:
+       #        logger.warning('polyfill redrawing: there is no tdw!!')
+       #        print('no tdw!')
+       #        return
+       #
+       #sdx, sdy = self.selection_rect.get_display_offset(tdw)
+       #
+       #if len(self.nodes) < 2:
+       #    return
+       #
+       #sx, sy, ex, ey = self._get_maximum_rect(tdw, sdx, sdy)
+       #tdw.queue_draw_area(sx, sy, ex-sx+1, ey-sy+1)
+        self._stop_task_queue_runner(complete=False)
+        self._queue_task(
+            self._redraw_polygon,
+        )
+        self._start_task_queue_runner()
 
-        sdx, sdy = self.selection_rect.get_display_offset(tdw)
-        
-        if len(self.nodes) < 2:
-            return
+    def _redraw_polygon(self):
+        for tdw in self._overlays:
+            
+            if len(self.nodes) < 2:
+                continue
 
-        sx, sy, ex, ey = self._get_maximum_rect(tdw, sdx, sdy)
-        tdw.queue_draw_area(sx, sy, ex-sx+1, ey-sy+1)
+            sdx, sdy = self.selection_rect.get_display_offset(tdw)
+
+            sx, sy, ex, ey = self._get_maximum_rect(tdw, sdx, sdy)
+            tdw.queue_draw_area(sx, sy, ex-sx+1, ey-sy+1)
 
     def _start_new_capture_phase_polyfill(self, tdw, rollback=False):
         if rollback == False:
@@ -356,12 +387,21 @@ class PolyfillMode (BezierMode):
             h = int(ey-sy+1)
             surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
             cr = cairo.Context(surf)
+
+           #linpat = cairo.LinearGradient(0, 0, w, h);
+           #linpat.add_color_stop_rgba(0.20,  1, 0, 0, 1);
+           #linpat.add_color_stop_rgba(0.50,  0, 1, 0, 1);
+           #linpat.add_color_stop_rgba( 0.80,  0, 0, 1, 1);
+           #
+           #_draw_node_polygon(cr, None, self.nodes, ox=sx, oy=sy,
+           #        gradient=linpat)
             _draw_node_polygon(cr, None, self.nodes, ox=sx, oy=sy,
                     color=self.foreground_color)
             surf.flush()
             pixbuf = Gdk.pixbuf_get_from_surface(surf, 0, 0, w, h)
             layer = lib.layer.PaintingLayer(name='')
             layer.load_surface_from_pixbuf(pixbuf, int(sx), int(sy))
+            del surf, cr
 
             tiles = set()
             tiles.update(layer.get_tile_coords())
@@ -374,6 +414,7 @@ class PolyfillMode (BezierMode):
 
             bbox = tuple(dstlayer.get_full_redraw_bbox())
             dstlayer.root.layer_content_changed(dstlayer, *bbox)
+
 
            #self.doc.model.invalidate_all() #canvas_area_modified(sx, sy, w, h)
 
@@ -389,6 +430,31 @@ class PolyfillMode (BezierMode):
 
         self._stroke_from_history = False
         self.options_presenter.reset_stroke_history()
+
+   #def checkpoint(self, flush=True, **kwargs):
+   #    """Sync pending changes from (and to) the model
+   #
+   #    If called with flush==False, this is an override which just
+   #    redraws the pending stroke with the current brush settings and
+   #    color. This is the behavior our testers expect:
+   #    https://github.com/mypaint/mypaint/issues/226
+   #
+   #    When this mode is left for another mode (see `leave()`), the
+   #    pending brushwork is committed properly.
+   #
+   #    """
+   #    if flush:
+   #        # Commit the pending work normally
+   #        self._start_new_capture_phase_polyfill(None, rollback=False)
+   #        super(InkingMode, self).checkpoint(flush=flush, **kwargs) # call super-superclass method
+   #    else:
+   #        # Queue a re-rendering with any new brush data
+   #        # No supercall
+   #        self._stop_task_queue_runner(complete=False)
+   #        self._queue_draw_buttons()
+   #        self._queue_redraw_all_nodes()
+   #        self._queue_redraw_curve()
+
 
     ### Event handling
     def scroll_cb(self, tdw, event):
