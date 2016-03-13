@@ -2180,6 +2180,8 @@ class StrokePressureSettings (object):
 
 
     def points_changed_cb(self, curve):
+        """ callback for when StrokeCurveWidget point has been changed.
+        """
 
         setting = self._settings[self.current_setting]
         for i in range(min(len(curve.points),4)):
