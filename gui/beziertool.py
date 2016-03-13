@@ -361,6 +361,8 @@ class BezierMode (InkingMode):
 
     stroke_history = StrokeHistory(6) # stroke history
 
+    DEFAULT_POINT_CORNER = False       # default point is curve,not corner
+
     ## Other class vars
 
     _OPTIONS_PRESENTER = None   #: Options presenter singleton
@@ -1207,7 +1209,7 @@ class BezierMode (InkingMode):
            #        self._DEFAULT_PRESSURE, 1.0), 
             pressure=self._DEFAULT_PRESSURE,
             xtilt=xtilt, ytilt=ytilt,
-            dtime=self._DEFAULT_DTIME
+            dtime=self._DEFAULT_DTIME,
             )
         
 
@@ -1301,7 +1303,8 @@ class BezierMode (InkingMode):
             pressure=(cn.pressure + nn.pressure) / 2.0,
             xtilt=(cn.xtilt + nn.xtilt) / 2.0, 
             ytilt=(cn.ytilt + nn.ytilt) / 2.0,
-            dtime=self._DEFAULT_DTIME
+            dtime=self._DEFAULT_DTIME,
+            curve=not self.DEFAULT_POINT_CORNER
         )
         self.nodes.insert(i+1,newnode)
 
@@ -1440,6 +1443,7 @@ class OverlayBezier (Overlay):
 
     def __init__(self, mode, tdw):
         super(OverlayBezier, self).__init__(mode, tdw)
+        self._draw_initial_handle_both = False
         
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
@@ -1470,7 +1474,7 @@ class OverlayBezier (Overlay):
             # to avoid buttons are overwrap on control handles,
             # treat control handles as nodes,when it is visible.
             if i == self._inkmode.current_node_index:
-                if i==0:
+                if i == 0 and self._draw_initial_handle_both == False:
                     seq = (1,)
                 else:
                     seq = (0,1)
@@ -1554,7 +1558,8 @@ class OverlayBezier (Overlay):
         cr.set_line_width(1)
         for hi in (0,1):                        
             if ((hi == 0 and i > 0) or
-                    (hi == 1 and i <= len(self._inkmode.nodes)-1)): 
+                    (hi == 1 and i <= len(self._inkmode.nodes)-1) or 
+                    self._draw_initial_handle_both): 
                 ch = node.get_control_handle(hi)
                 hx, hy = self._tdw.model_to_display(ch.x, ch.y)
                 hx += dx

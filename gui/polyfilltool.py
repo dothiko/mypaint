@@ -229,6 +229,8 @@ class PolyfillMode (BezierMode):
     ## Class config vars
     stroke_history = StrokeHistory(6) # stroke history of polyfilltool 
 
+    DEFAULT_POINT_CORNER = True       # default point is corner,not curve
+
     ## Other class vars
 
 
@@ -297,11 +299,7 @@ class PolyfillMode (BezierMode):
                             ignore_handle == False):
                         c_node = self.nodes[self.current_node_index]
                         self.current_handle_index = None
-                        if self.current_node_index == 0:
-                            seq = (1,)
-                        else:
-                            seq = (0, 1)
-                        for i in seq:
+                        for i in (0,1):
                             handle = c_node.get_control_handle(i)
                             hx, hy = tdw.model_to_display(handle.x, handle.y)
                             d = math.hypot(hx - x, hy - y)
@@ -510,6 +508,7 @@ class PolyfillMode (BezierMode):
 
     ### Event handling
     def scroll_cb(self, tdw, event):
+        # to cancelling scroll-wheel pressure modification.
         return super(InkingMode, self).scroll_cb(tdw, event) # simply call super-superclass!
 
     ## Raw event handling (prelight & zone selection in adjust phase)
@@ -749,10 +748,12 @@ class PolyfillMode (BezierMode):
       
             # At initialize handle phase, even if the node is not 'curve'
             # Set the handles as symmetry.
-            if (self.phase == _PhaseBezier.INIT_HANDLE and 
-                    len(self.nodes) > 1 and node.curve == False):
-                node.curve = True 
-                node.curve = False
+            if (self.phase == _PhaseBezier.INIT_HANDLE):
+               #if (len(self.nodes) > 1 and node.curve == False):
+               #    node.curve = True 
+               #    node.curve = False
+
+                node.curve = not self.DEFAULT_POINT_CORNER
 
             self._queue_redraw_all_nodes()
             self._queue_redraw_curve(tdw)
@@ -838,6 +839,7 @@ class OverlayPolyfill (OverlayBezier):
 
     def __init__(self, mode, tdw):
         super(OverlayPolyfill, self).__init__(mode, tdw)
+        self._draw_initial_handle_both = True
         
 
     
