@@ -38,6 +38,7 @@ from gui.inktool import *
 from gui.linemode import *
 from gui.beziertool import *
 from gui.beziertool import _Control_Handle, _Node_Bezier, _EditZone_Bezier, _PhaseBezier
+from lib.command import Command
 
 ## Module funcs
 
@@ -125,8 +126,82 @@ def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None,
 
         cr.restore()
 
+def _draw_polygon_to_layer(model, target_layer,nodes, color, gradient, bbox):
+    """
+    :param bbox: boundary box, in model coordinate
+    """
+    sx, sy, ex, ey = bbox
+    sx = int(sx)
+    sy = int(sy)
+    w = int(ex-sx+1)
+    h = int(ey-sy+1)
+    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
+    cr = cairo.Context(surf)
+
+   #linpat = cairo.LinearGradient(0, 0, w, h);
+   #linpat.add_color_stop_rgba(0.20,  1, 0, 0, 1);
+   #linpat.add_color_stop_rgba(0.50,  0, 1, 0, 1);
+   #linpat.add_color_stop_rgba( 0.80,  0, 0, 1, 1);
+   #
+   #_draw_node_polygon(cr, None, self.nodes, ox=sx, oy=sy,
+   #        gradient=linpat)
+    _draw_node_polygon(cr, None, nodes, ox=sx, oy=sy,
+            color=color)
+    surf.flush()
+    pixbuf = Gdk.pixbuf_get_from_surface(surf, 0, 0, w, h)
+    layer = lib.layer.PaintingLayer(name='')
+    layer.load_surface_from_pixbuf(pixbuf, int(sx), int(sy))
+    del surf, cr
+
+    tiles = set()
+    tiles.update(layer.get_tile_coords())
+    dstsurf = target_layer._surface
+    for tx, ty in tiles:
+        with dstsurf.tile_request(tx, ty, readonly=False) as dst:
+            layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+
+    bbox = tuple(target_layer.get_full_redraw_bbox())
+    target_layer.root.layer_content_changed(target_layer, *bbox)
+    del layer
 
 ## Class defs
+
+class PolyFill(Command):
+    """Polygon-fill on the current layer"""
+
+    display_name = _("Polygon Fill")
+
+    def __init__(self, doc, nodes, color, gradient,
+                 bbox, **kwds):
+        """
+        :param bbox: boundary rectangle,in model coordinate.
+        """
+        super(PolyFill, self).__init__(doc, **kwds)
+        self.nodes = nodes
+        self.color = color
+        self.gradient = gradient
+        self.bbox = bbox
+        self.snapshot = None
+
+    def redo(self):
+        # Pick a source
+        layers = self.doc.layer_stack
+        src_layer = layers.current
+        assert self.snapshot is None
+        self.snapshot = layers.current.save_snapshot()
+        dst_layer = layers.current
+        # Fill connected areas of the source into the destination
+        _draw_polygon_to_layer(self.doc, dst_layer, self.nodes,
+                self.color, self.gradient, self.bbox)
+
+    def undo(self):
+        layers = self.doc.layer_stack
+        assert self.snapshot is not None
+        layers.current.load_snapshot(self.snapshot)
+        self.snapshot = None
+       #curlayer = layers.current
+       #curlayer.root.layer_content_changed(curlayer, *self.bbox)
+
 
 
 class PolyfillMode (BezierMode):
@@ -171,6 +246,8 @@ class PolyfillMode (BezierMode):
             overlay = OverlayPolyfill(self, tdw)
             tdw.display_overlays.append(overlay)
             self._overlays[tdw] = overlay
+            if len(self.nodes) > 0:
+                self._queue_redraw_curve()
         return overlay
 
         
@@ -278,6 +355,9 @@ class PolyfillMode (BezierMode):
 
     def _get_maximum_rect(self, tdw, dx=0, dy=0):
         """ get possible maximum rectangle 
+        :param tdw: the target tileddrawwidget.if this is None,
+                    all values(includeing dx,dy) recognized as 
+                    model coordinate value.
         """
         if len(self.nodes) < 2:
             return (0,0,0,0)
@@ -344,116 +424,160 @@ class PolyfillMode (BezierMode):
         pass # do nothing
 
     def _queue_redraw_curve(self, tdw=None):
-       #if tdw == None:
-       #    if len(self._overlays) > 0:
-       #        tdw = self._overlays.keys()[-1]
-       #        if len(self._overlays) > 1:
-       #            print self._overlays
-       #    else:
-       #        logger.warning('polyfill redrawing: there is no tdw!!')
-       #        print('no tdw!')
-       #        return
-       #
-       #sdx, sdy = self.selection_rect.get_display_offset(tdw)
-       #
-       #if len(self.nodes) < 2:
-       #    return
-       #
-       #sx, sy, ex, ey = self._get_maximum_rect(tdw, sdx, sdy)
-       #tdw.queue_draw_area(sx, sy, ex-sx+1, ey-sy+1)
         self._stop_task_queue_runner(complete=False)
-        self._queue_task(
-            self._redraw_polygon,
-        )
-        self._start_task_queue_runner()
-
-    def _redraw_polygon(self):
         for tdw in self._overlays:
             
             if len(self.nodes) < 2:
                 continue
+        
+            self._queue_task(
+                    self._queue_polygon_area
+            )
+        self._start_task_queue_runner()
+        #----
+       #self._stop_task_queue_runner(complete=False)
+       #for tdw in self._overlays:
+       #    
+       #    if len(self.nodes) < 2:
+       #        continue
+       #
+       #    sdx, sdy = self.selection_rect.get_display_offset(tdw)
+       #    sx, sy, ex, ey = self._get_maximum_rect(tdw, sdx, sdy)
+       #
+       #    self._queue_task(
+       #        tdw.queue_draw_area,
+       #        sx, sy, ex-sx+1, ey-sy+1
+       #    )
+       #self._start_task_queue_runner()
+       # ---
+       #self._stop_task_queue_runner(complete=False)
+       #for tdw in self._overlays:
+       #    
+       #    if len(self.nodes) < 2:
+       #        continue
+       #
+       #    dx, dy = self.selection_rect.get_model_offset()
+       #    sx, sy, ex, ey = self._get_maximum_rect(None, dx, dy)
+       #
+       #    self._queue_task(
+       #        self._queue_polygon_area,
+       #        sx, sy, ex, ey
+       #    )
+       #self._start_task_queue_runner()
 
+    def _queue_polygon_area(self):
+        for tdw in self._overlays:
+            
+            if len(self.nodes) < 2:
+                continue
+    
             sdx, sdy = self.selection_rect.get_display_offset(tdw)
-
+    
             sx, sy, ex, ey = self._get_maximum_rect(tdw, sdx, sdy)
             tdw.queue_draw_area(sx, sy, ex-sx+1, ey-sy+1)
+   #def _queue_polygon_area(self, sx, sy, ex, ey):
+   #    for tdw in self._overlays:
+   #        sx, sy = tdw.model_to_display(sx, sy)
+   #        ex, ey = tdw.model_to_display(ex, ey)
+   #
+   #        if ex < sx:
+   #            sx,ex = ex,sx
+   #        if ey < sy:
+   #            sy,ey = ey,sy
+   #        tdw.queue_draw_area(sx, sy, ex-sx+1, ey-sy+1)
+
+   #def _fix_polygon_to_layer(self):
+   #    sx, sy, ex, ey = self._get_maximum_rect(None)
+   #    sx = int(sx)
+   #    sy = int(sy)
+   #    w = int(ex-sx+1)
+   #    h = int(ey-sy+1)
+   #    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
+   #    cr = cairo.Context(surf)
+   #
+   #   #linpat = cairo.LinearGradient(0, 0, w, h);
+   #   #linpat.add_color_stop_rgba(0.20,  1, 0, 0, 1);
+   #   #linpat.add_color_stop_rgba(0.50,  0, 1, 0, 1);
+   #   #linpat.add_color_stop_rgba( 0.80,  0, 0, 1, 1);
+   #   #
+   #   #_draw_node_polygon(cr, None, self.nodes, ox=sx, oy=sy,
+   #   #        gradient=linpat)
+   #    _draw_node_polygon(cr, None, self.nodes, ox=sx, oy=sy,
+   #            color=self.foreground_color)
+   #    surf.flush()
+   #    pixbuf = Gdk.pixbuf_get_from_surface(surf, 0, 0, w, h)
+   #    layer = lib.layer.PaintingLayer(name='')
+   #    layer.load_surface_from_pixbuf(pixbuf, int(sx), int(sy))
+   #    del surf, cr
+   #
+   #    tiles = set()
+   #    tiles.update(layer.get_tile_coords())
+   #    rootstack = self.doc.model.layer_stack
+   #    dstlayer= rootstack.deepget(rootstack.current_path)
+   #    dstsurf = dstlayer._surface
+   #    for tx, ty in tiles:
+   #        with dstsurf.tile_request(tx, ty, readonly=False) as dst:
+   #            layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+   #
+   #    bbox = tuple(dstlayer.get_full_redraw_bbox())
+   #    dstlayer.root.layer_content_changed(dstlayer, *bbox)
+   #
+   #
+   #   #self.doc.model.invalidate_all() #canvas_area_modified(sx, sy, w, h)
+
 
     def _start_new_capture_phase_polyfill(self, tdw, rollback=False):
-        if rollback == False:
-            sx, sy, ex, ey = self._get_maximum_rect(None)
-            sx = int(sx)
-            sy = int(sy)
-            w = int(ex-sx+1)
-            h = int(ey-sy+1)
-            surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
-            cr = cairo.Context(surf)
-
-           #linpat = cairo.LinearGradient(0, 0, w, h);
-           #linpat.add_color_stop_rgba(0.20,  1, 0, 0, 1);
-           #linpat.add_color_stop_rgba(0.50,  0, 1, 0, 1);
-           #linpat.add_color_stop_rgba( 0.80,  0, 0, 1, 1);
-           #
-           #_draw_node_polygon(cr, None, self.nodes, ox=sx, oy=sy,
-           #        gradient=linpat)
-            _draw_node_polygon(cr, None, self.nodes, ox=sx, oy=sy,
-                    color=self.foreground_color)
-            surf.flush()
-            pixbuf = Gdk.pixbuf_get_from_surface(surf, 0, 0, w, h)
-            layer = lib.layer.PaintingLayer(name='')
-            layer.load_surface_from_pixbuf(pixbuf, int(sx), int(sy))
-            del surf, cr
-
-            tiles = set()
-            tiles.update(layer.get_tile_coords())
-            rootstack = self.doc.model.layer_stack
-            dstlayer= rootstack.deepget(rootstack.current_path)
-            dstsurf = dstlayer._surface
-            for tx, ty in tiles:
-                with dstsurf.tile_request(tx, ty, readonly=False) as dst:
-                    layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
-
-            bbox = tuple(dstlayer.get_full_redraw_bbox())
-            dstlayer.root.layer_content_changed(dstlayer, *bbox)
-
-
-           #self.doc.model.invalidate_all() #canvas_area_modified(sx, sy, w, h)
+        if rollback:
+            self._stop_task_queue_runner(complete=False)
+        else:
+            self._stop_task_queue_runner(complete=True)
+            bbox = self._get_maximum_rect(None)
+            if self.doc.model.layer_stack.current.get_fillable():
+                cmd = PolyFill(self.doc.model,
+                        self.nodes,
+                        self.foreground_color,
+                        None,bbox)
+                self.doc.model.do(cmd)
 
             if not self._stroke_from_history:
                 self.stroke_history.register(self.nodes)
 
         self._queue_draw_buttons()
         self._queue_redraw_all_nodes()
+        self._queue_redraw_curve() 
         self._reset_nodes()
         self._reset_capture_data()
         self._reset_adjust_data()
         self.phase = _PhaseBezier.INITIAL
+        self._queue_redraw_curve() 
 
         self._stroke_from_history = False
         self.options_presenter.reset_stroke_history()
 
-   #def checkpoint(self, flush=True, **kwargs):
-   #    """Sync pending changes from (and to) the model
-   #
-   #    If called with flush==False, this is an override which just
-   #    redraws the pending stroke with the current brush settings and
-   #    color. This is the behavior our testers expect:
-   #    https://github.com/mypaint/mypaint/issues/226
-   #
-   #    When this mode is left for another mode (see `leave()`), the
-   #    pending brushwork is committed properly.
-   #
-   #    """
-   #    if flush:
-   #        # Commit the pending work normally
-   #        self._start_new_capture_phase_polyfill(None, rollback=False)
-   #        super(InkingMode, self).checkpoint(flush=flush, **kwargs) # call super-superclass method
-   #    else:
-   #        # Queue a re-rendering with any new brush data
-   #        # No supercall
-   #        self._stop_task_queue_runner(complete=False)
-   #        self._queue_draw_buttons()
-   #        self._queue_redraw_all_nodes()
-   #        self._queue_redraw_curve()
+    def checkpoint(self, flush=True, **kwargs):
+        """Sync pending changes from (and to) the model
+    
+        If called with flush==False, this is an override which just
+        redraws the pending stroke with the current brush settings and
+        color. This is the behavior our testers expect:
+        https://github.com/mypaint/mypaint/issues/226
+    
+        When this mode is left for another mode (see `leave()`), the
+        pending brushwork is committed properly.
+    
+        """
+        if flush:
+            # Commit the pending work normally
+           #if self._phase != _PhaseBezier.INITIAL:
+           #    self._start_new_capture_phase_polyfill(None, rollback=False)
+            super(InkingMode, self).checkpoint(flush=flush, **kwargs) # call super-superclass method
+        else:
+            # Queue a re-rendering with any new brush data
+            # No supercall
+            self._stop_task_queue_runner(complete=False)
+            self._queue_draw_buttons()
+            self._queue_redraw_all_nodes()
+            self._queue_redraw_curve()
 
 
     ### Event handling
@@ -485,7 +609,6 @@ class PolyfillMode (BezierMode):
                         if self.zone == _EditZone_Bezier.REJECT_BUTTON:
                             self._start_new_capture_phase_polyfill(tdw, rollback=True)
                         elif self.zone == _EditZone_Bezier.ACCEPT_BUTTON:
-                            self._queue_redraw_curve(tdw) # Redraw with hi-fidely curve
                             self._start_new_capture_phase_polyfill(tdw, rollback=False)
                         self._reset_adjust_data()
                         return False
