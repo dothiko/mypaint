@@ -228,7 +228,8 @@ class PolyfillMode (BezierMode):
                     # Test nodes for a hit, in reverse draw order
                     if new_target_node_index == None:
                         new_target_node_index = self._search_target_node(tdw, x, y)
-                        new_zone = _EditZone_Bezier.CONTROL_NODE
+                        if new_target_node_index != None:
+                            new_zone = _EditZone_Bezier.CONTROL_NODE
 
                     
                 # Update the prelit node, and draw changes to it
@@ -349,6 +350,8 @@ class PolyfillMode (BezierMode):
     def _start_new_capture_phase_polyfill(self, tdw, rollback=False):
         if rollback == False:
             sx, sy, ex, ey = self._get_maximum_rect(None)
+            sx = int(sx)
+            sy = int(sy)
             w = int(ex-sx+1)
             h = int(ey-sy+1)
             surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
@@ -368,6 +371,11 @@ class PolyfillMode (BezierMode):
             for tx, ty in tiles:
                 with dstsurf.tile_request(tx, ty, readonly=False) as dst:
                     layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+
+            bbox = tuple(dstlayer.get_full_redraw_bbox())
+            dstlayer.root.layer_content_changed(dstlayer, *bbox)
+
+           #self.doc.model.invalidate_all() #canvas_area_modified(sx, sy, w, h)
 
             if not self._stroke_from_history:
                 self.stroke_history.register(self.nodes)
@@ -398,7 +406,7 @@ class PolyfillMode (BezierMode):
         if self.phase == _PhaseBezier.INITIAL: 
             self.phase = _PhaseBezier.CREATE_PATH
             # FALLTHRU: *do* start a drag 
-        elif self.phase in (_PhaseBezier.CREATE_PATH,)
+        elif self.phase in (_PhaseBezier.CREATE_PATH,):
             # Initial state - everything starts here!
        
             if (self.zone in (_EditZone_Bezier.REJECT_BUTTON, 
@@ -425,7 +433,7 @@ class PolyfillMode (BezierMode):
                     # normal move node start
                     self.phase = _PhaseBezier.MOVE_NODE
 
-                    if button == 1:
+                    if button == 1 and self.current_node_index != None:
                         if (event.state & Gdk.ModifierType.CONTROL_MASK):
                             # Holding CONTROL key = adding or removing a node.
                             if self.current_node_index in self.selected_nodes:
@@ -438,8 +446,6 @@ class PolyfillMode (BezierMode):
                             # no CONTROL Key holded.
                             # If new solo node clicked without holding 
                             # CONTROL key,then reset all selected nodes.
-        
-                            assert self.current_node_index != None
         
                             do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
                             do_reset |= not (self.current_node_index in self.selected_nodes)
