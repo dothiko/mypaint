@@ -213,10 +213,6 @@ class PolyFill(Command):
         assert self.snapshot is not None
         layers.current.load_snapshot(self.snapshot)
         self.snapshot = None
-       #curlayer = layers.current
-       #curlayer.root.layer_content_changed(curlayer, *self.bbox)
-
-
 
 class PolyfillMode (BezierMode):
 
@@ -476,6 +472,7 @@ class PolyfillMode (BezierMode):
                         None,bbox)
                 self.doc.model.do(cmd)
 
+
             if not self._stroke_from_history:
                 self.stroke_history.register(self.nodes)
 
@@ -492,28 +489,20 @@ class PolyfillMode (BezierMode):
         self.options_presenter.reset_stroke_history()
 
     def leave(self):
-        if len(self.nodes) > 1:
-            # commit last pending work
+        if not self._is_active() and len(self.nodes) > 1:
+            # The modechange is not overriding.
+            # so commit last pending work
             self._start_new_capture_phase_polyfill(None, rollback=False)
 
         super(BezierMode, self).leave()
 
     def checkpoint(self, flush=True, **kwargs):
         """Sync pending changes from (and to) the model
-    
-        If called with flush==False, this is an override which just
-        redraws the pending polygon fill with the current gradient settings or
-        color. 
-
         When this mode is left for another mode (see `leave()`), the
         pending brushwork is committed properly.
     
         """
         if flush:
-            # Commit the pending work normally,
-            # ...but it makes crush undo...?
-           #if self._phase != _PhaseBezier.INITIAL:
-           #    self._start_new_capture_phase_polyfill(None, rollback=False)
             super(InkingMode, self).checkpoint(flush=flush, **kwargs) # call super-superclass method
         else:
             # Queue a re-rendering with any new brush data
