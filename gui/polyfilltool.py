@@ -114,8 +114,6 @@ def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None,
                     cr.move_to(x,y)
 
                 cr.curve_to(x1, y1, x2, y2, x3, y3) 
-            else:
-                final_curve=(x1, y1, x2, y2, x3, y3)
 
 
 
@@ -134,6 +132,7 @@ def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None,
             draw_dashed(3.0)
 
             if len(nodes) > 2:
+                cr.move_to(x,y)
                 cr.curve_to(x1, y1, x2, y2, x3, y3) 
                 draw_dashed(8.0)
 
