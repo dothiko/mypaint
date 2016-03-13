@@ -45,7 +45,7 @@ from lib.command import Command
 
 def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None, 
         color=None, gradient=None,
-        dx=0, dy=0, ox=0, oy=0, stroke=False):
+        dx=0, dy=0, ox=0, oy=0, stroke=False, fill=True):
     """ draw cairo polygon
     :param color: color object of mypaint
     :param gradient: Gradient object. cairo.LinearGradient or something
@@ -65,6 +65,9 @@ def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None,
             cr.set_source(gradient)
 
         for i, node in enumerate(nodes):#self._get_onscreen_nodes():
+
+            if i==len(nodes)-1 and len(nodes) < 3:
+                break
 
             if tdw:
                 x, y = tdw.model_to_display(node.x, node.y)
@@ -106,23 +109,34 @@ def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None,
                     x3 += dx
                     y3 += dy
 
-            if i==0:
-                cr.move_to(x,y)
+            if fill or i < len(nodes)-1:
+                if i==0:
+                    cr.move_to(x,y)
 
-            cr.curve_to(x1, y1, x2, y2, x3, y3) 
+                cr.curve_to(x1, y1, x2, y2, x3, y3) 
+            else:
+                final_curve=(x1, y1, x2, y2, x3, y3)
 
 
 
-        if len(nodes) > 2 and (gradient or color):
+        if fill and len(nodes) > 2 and (gradient or color):
             cr.close_path()
             cr.fill_preserve()
 
         if stroke:
-            cr.set_source_rgb(1,1,1)
-            cr.stroke_preserve()
-            cr.set_source_rgb(0,0,0)
-            cr.set_dash( (3.0, ) )
-            cr.stroke()
+            def draw_dashed(space):
+                cr.set_source_rgb(1,1,1)
+                cr.stroke_preserve()
+                cr.set_source_rgb(0,0,0)
+                cr.set_dash( (space, ) )
+                cr.stroke()
+
+            draw_dashed(3.0)
+
+            if len(nodes) > 2:
+                cr.curve_to(x1, y1, x2, y2, x3, y3) 
+                draw_dashed(8.0)
+
 
         cr.restore()
 
@@ -226,6 +240,7 @@ class PolyfillMode (BezierMode):
             from application import get_app
             return get_app().brush_color_manager.get_color()
 
+
     ## Class config vars
     stroke_history = StrokeHistory(6) # stroke history of polyfilltool 
 
@@ -238,6 +253,7 @@ class PolyfillMode (BezierMode):
 
     def __init__(self, **kwargs):
         super(PolyfillMode, self).__init__(**kwargs)
+        self._polygon_preview_fill = False
 
 
 
@@ -344,7 +360,9 @@ class PolyfillMode (BezierMode):
                     _PhaseBezier.MOVE_NODE):
                 if self.zone == _EditZone_Bezier.CONTROL_NODE:
                     cursor = self._crosshair_cursor
-               #elif self.zone != _EditZone_Bezier.EMPTY_CANVAS: # assume button
+                elif self.zone in (_EditZone_Bezier.ACCEPT_BUTTON,
+                        _EditZone_Bezier.REJECT_BUTTON): 
+                    cursor = self._crosshair_cursor
                 else:
                     cursor = self._arrow_cursor
             if cursor is not self._current_override_cursor:
@@ -831,7 +849,17 @@ class PolyfillMode (BezierMode):
         """
         return # do nothing
 
+    ## properties
 
+    @property
+    def polygon_preview_fill(self):
+        return self._polygon_preview_fill
+
+    @polygon_preview_fill.setter
+    def polygon_preview_fill(self, flag):
+        self._polygon_preview_fill = flag
+        self._queue_redraw_curve()
+    
 
 
 class OverlayPolyfill (OverlayBezier):
@@ -854,7 +882,8 @@ class OverlayPolyfill (OverlayBezier):
         _draw_node_polygon(cr, self._tdw, mode.nodes, 
                 selected_nodes=mode.selected_nodes, dx=dx, dy=dy, 
                 color = mode.foreground_color,
-                stroke=True)
+                stroke=True,
+                fill = mode.polygon_preview_fill)
 
         super(OverlayPolyfill, self).paint(cr)
                 
@@ -885,6 +914,10 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         self._delete_button.set_sensitive(False)
         self._check_curvepoint= builder.get_object("checkbutton_curvepoint")
         self._check_curvepoint.set_sensitive(False)
+        self._fill_polygon_checkbutton= builder.get_object("fill_checkbutton")
+        self._fill_polygon_checkbutton.set_sensitive(True)
+
+        
 
         combo = builder.get_object('path_history_combobox')
         combo.set_model(PolyfillMode.stroke_history.liststore)
@@ -924,8 +957,16 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
 
             self._insert_button.set_sensitive(polyfillmode.can_insert_node(cn_idx))
             self._delete_button.set_sensitive(polyfillmode.can_delete_node(cn_idx))
+            self._fill_polygon_checkbutton.set_active(polyfillmode.polygon_preview_fill)
         finally:
             self._updating_ui = False                               
+
+    def _toggle_fill_checkbutton_cb(self, button):
+        if self._updating_ui:
+            return
+        polymode, node_idx = self.target
+        if polymode:
+            polymode.polygon_preview_fill = button.get_active()
 
 
 

@@ -1405,7 +1405,6 @@ class BezierMode (InkingMode):
     def recall_nodes(self, idx):
         """ recall nodes from history
         """
-        print idx
         if 0 < idx < len(self.stroke_history.liststore):
             self._queue_draw_buttons()
             self._queue_redraw_all_nodes()
@@ -1424,6 +1423,7 @@ class BezierMode (InkingMode):
             self._queue_redraw_curve()
             self._queue_redraw_all_nodes()
             self._queue_draw_buttons()
+            self.phase = _PhaseBezier.CREATE_PATH
 
     def toggle_current_node_curve(self):
         """ mainly called from Callback of gui.document
