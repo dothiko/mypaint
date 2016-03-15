@@ -40,9 +40,21 @@ from gui.linemode import *
 from gui.beziertool import *
 from gui.beziertool import _Control_Handle, _Node_Bezier, _EditZone_Bezier, _PhaseBezier
 from lib.command import Command
+import lib.mypaintlib
+
+## Module constants
+
+POLYFILLMODES = (
+    (lib.mypaintlib.CombineNormal, _("Normal")),
+    (lib.mypaintlib.CombineDestinationOut, _("Erase")),
+    (lib.mypaintlib.CombineDestinationIn, _("Erase Outside")),
+    (lib.mypaintlib.CombineSourceAtop, _("Clipped")),
+    )
+
+## Enum defs
+
 
 ## Module funcs
-
 
 def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None, 
         color=None, gradient=None,
@@ -140,9 +152,12 @@ def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None,
 
         cr.restore()
 
-def _draw_polygon_to_layer(model, target_layer,nodes, color, gradient, bbox):
+def _draw_polygon_to_layer(model, target_layer,nodes, 
+        color, gradient, bbox, mode=lib.mypaintlib.CombineNormal):
     """
     :param bbox: boundary box, in model coordinate
+    :param mode: polygon drawing mode(enum _POLYDRAWMODE). 
+                 * NOT layer composite mode*
     """
     sx, sy, ex, ey = bbox
     sx = int(sx)
@@ -168,15 +183,31 @@ def _draw_polygon_to_layer(model, target_layer,nodes, color, gradient, bbox):
     del surf, cr
 
     tiles = set()
-    tiles.update(layer.get_tile_coords())
-    dstsurf = target_layer._surface
-    for tx, ty in tiles:
-        with dstsurf.tile_request(tx, ty, readonly=False) as dst:
-            layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+    layer.mode = mode
+
+    if mode == lib.mypaintlib.CombineDestinationIn:
+        layer.mode = lib.mypaintlib.CombineDestinationIn
+        tiles.update(target_layer.get_tile_coords())
+        dstsurf = target_layer._surface
+        srcsurf = layer._surface
+        for tx, ty in tiles:
+            with dstsurf.tile_request(tx, ty, readonly=False) as dst:
+                if srcsurf.tile_request(tx, ty, readonly=False) == None:
+                    lib.mypaintlib.tile_clear_rgba16(dst)
+                else:
+                    layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+    else:
+        tiles.update(layer.get_tile_coords())
+        dstsurf = target_layer._surface
+        for tx, ty in tiles:
+            with dstsurf.tile_request(tx, ty, readonly=False) as dst:
+                layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+
 
     bbox = tuple(target_layer.get_full_redraw_bbox())
     target_layer.root.layer_content_changed(target_layer, *bbox)
     del layer
+
 
 ## Class defs
 
@@ -186,7 +217,7 @@ class PolyFill(Command):
     display_name = _("Polygon Fill")
 
     def __init__(self, doc, nodes, color, gradient,
-                 bbox, **kwds):
+                 bbox, mode, **kwds):
         """
         :param bbox: boundary rectangle,in model coordinate.
         """
@@ -196,6 +227,7 @@ class PolyFill(Command):
         self.gradient = gradient
         self.bbox = bbox
         self.snapshot = None
+        self.composite_mode = mode
 
     def redo(self):
         # Pick a source
@@ -206,7 +238,8 @@ class PolyFill(Command):
         dst_layer = layers.current
         # Fill connected areas of the source into the destination
         _draw_polygon_to_layer(self.doc, dst_layer, self.nodes,
-                self.color, self.gradient, self.bbox)
+                self.color, self.gradient, self.bbox,
+                self.composite_mode)
 
     def undo(self):
         layers = self.doc.layer_stack
@@ -243,7 +276,7 @@ class PolyfillMode (BezierMode):
     DEFAULT_POINT_CORNER = True       # default point is corner,not curve
 
     ## Other class vars
-
+    _composite_mode = lib.mypaintlib.CombineNormal
 
     ## Initialization & lifecycle methods
 
@@ -428,6 +461,15 @@ class PolyfillMode (BezierMode):
 
         return (sx, sy, ex, ey)
 
+    ## Properties
+
+    @property
+    def composite_mode(self):
+        return PolyfillMode._composite_mode
+
+    def set_composite_mode_index(self, mode_idx):
+        PolyfillMode._composite_mode = POLYFILLMODES[mode_idx][0]
+        self.options_presenter.changed_composite_mode(mode_idx)
 
     ## Redraws
     
@@ -469,7 +511,8 @@ class PolyfillMode (BezierMode):
                 cmd = PolyFill(self.doc.model,
                         self.nodes,
                         self.foreground_color,
-                        None,bbox)
+                        None,bbox,
+                        self.composite_mode)
                 self.doc.model.do(cmd)
 
 
@@ -992,8 +1035,6 @@ class GradientRenderer(Gtk.CellRenderer):
         if len(self.gradient[0][1]) > 3:
             self.draw_background(cr, cell_area)
 
-        print (cell_area.x, cell_area.y, 
-                cell_area.width, cell_area.height)
         cr.rectangle(cell_area.x, cell_area.y, 
                 cell_area.width, cell_area.height)
         cr.set_source(self.get_gradient(self.id, self.gradient, cell_area))
@@ -1087,7 +1128,6 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         self._stroke_history_combo = combo
 
         base_grid = builder.get_object("points_editing_grid")
-        self._updating_ui = False
 
         # Creating gradient sample
         store = self.gradient_preset_store.liststore
@@ -1112,6 +1152,21 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         sample_grid.attach(exp, 0, 0, 2, 1)
         self._gradientview = treeview
         exp.set_expanded(True)
+
+        # Creating composite mode combo
+        combo = builder.get_object('composite_combobox')
+        liststore = Gtk.ListStore(object, str)
+        for cmode in POLYFILLMODES:
+            liststore.append(cmode)
+        combo.set_model(liststore)
+        cell=Gtk.CellRendererText()
+        combo.pack_start(cell,True)
+        combo.add_attribute(cell,'text',1)
+        self._composite_combo = combo
+        self.changed_composite_mode(0)
+
+        # the last line
+        self._updating_ui = False
 
     @property
     def target(self):
@@ -1145,12 +1200,32 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         finally:
             self._updating_ui = False                               
 
+    def changed_composite_mode(self, mode_idx):
+        original_updating_ui = self._updating_ui
+
+        if not self._updating_ui:
+            self._updating_ui = True
+
+        if self._composite_combo.get_active() != mode_idx:
+            self._composite_combo.set_active(mode_idx)
+
+        self._updating_ui = original_updating_ui
+
+    ## callback handlers
+
     def _toggle_fill_checkbutton_cb(self, button):
         if self._updating_ui:
             return
         polymode, node_idx = self.target
         if polymode:
             polymode.polygon_preview_fill = button.get_active()
+
+    def _composite_mode_changed_cb(self, combo):
+        if self._updating_ui:
+            return
+        polymode, node_idx = self.target
+        if polymode:
+            polymode.set_composite_mode_index(self._composite_combo.get_active())
 
 
 
