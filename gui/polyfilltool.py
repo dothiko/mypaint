@@ -1132,7 +1132,6 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         # Creating gradient sample
         store = self.gradient_preset_store.liststore
 
-        sample_grid = builder.get_object('gradient_sample_grid')
         treeview = Gtk.TreeView()
         treeview.set_size_request(175, 125)
         treeview.set_model(store)
@@ -1149,7 +1148,7 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         exp.set_label(_("Gradient Presets..."))
         exp.set_use_markup(False)
         exp.add(treeview)
-        sample_grid.attach(exp, 0, 0, 2, 1)
+        base_grid.attach(exp, 0, 2, 2, 1)
         self._gradientview = treeview
         exp.set_expanded(True)
 
