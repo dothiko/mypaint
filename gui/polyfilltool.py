@@ -24,6 +24,7 @@ import gi
 from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GLib
+from gi.repository import GObject
 import cairo
 
 import gui.mode
@@ -875,10 +876,182 @@ class OverlayPolyfill (OverlayBezier):
 
         super(OverlayPolyfill, self).paint(cr)
                 
+class GradientStore(object):
+
+    # default gradents.
+    # a gradient consists from ( 'name', (color sequence), id )
+    #
+    # 'color sequence' is a sequence,which consists from color step
+    # (position, (R, G, B)) or (position, (R, G, B, A))
+    # -1 means foreground color, -2 means background color.
+    # if you use RGBA format,every color sequence must have alpha value.
+    #
+    # 'id' is integer, this should be unique, to distinguish cache.
+
+    DEFAULT_GRADIENTS = [ 
+            (
+                'Foreground to Transparent', 
+                (
+                    (0.0, (-1, -1, -1, 1)), (1.0, (-1, -1, -1, 0))
+                ),
+                0,
+            ),
+            (
+                'Foreground to Background', 
+                (
+                    (0.0, (-1, -1, -1)) , (1.0, (-2, -2, -2))
+                ),
+                1
+            ),
+            (
+                'Rainbow', 
+                (
+                    (0.0, (1.0, 0.0, 0.0)) , 
+                    (0.25, (1.0, 1.0, 0.0)) , 
+                    (0.5, (0.0, 1.0, 0.0)) , 
+                    (0.75, (0.0, 1.0, 1.0)) , 
+                    (1.0, (0.0, 0.0, 1.0))  
+                ),
+                2
+            ),
+        ]
+
+    def __init__(self): 
+        self._gradients = Gtk.ListStore(str,object,int)
+        for cg in self.DEFAULT_GRADIENTS:
+            self._gradients.append(cg)
+
+        # _cairograds is a cache of cairo.pattern
+        # key is Gtk.Treeiter
+        self._cairograds = {}
+
+    @property
+    def liststore(self):
+        return self._gradients
+
+
+    def get_cairo_gradient(self, iter, sx, sy, ex, ey, fg, bg):
+        return self.get_cairo_gradient_raw(self._gradients[iter])
+
+    def get_cairo_gradient_raw(self, graddata, sx, sy, ex, ey, fg, bg):
+        cg=cairo.LinearGradient(sx, sy, ex, ey)
+        for pos, rgba in graddata:
+            if len(rgba) == 4:
+                r, g, b, a = rgba
+            else:
+                r, g, b = rgba
+
+            if r == -1:
+                r, g, b = fg
+            elif r == -2:
+                r, g, b = bg
+
+            if len(rgba) == 4:
+                cg.add_color_stop_rgba(pos, r, g, b, a)
+            else:
+                cg.add_color_stop_rgb(pos, r, g, b)
+
+        return cg
+
+    def get_gradient_for_treeview(self, iter):
+        if not iter in self._cairograds or self._cairograd[iter] == None:
+            cg, variable = self.get_cairo_gradient(
+                    iter, 0, 8, 175, 8,
+                    (1.0, 1.0, 1.0), (0.0, 0.0, 0.0))# dummy fg/bg
+            self._cairograd[iter]=cg
+            return cg
+        else:
+            return self._cairograd[iter]
+
+
+
+
+class GradientRenderer(Gtk.CellRenderer):
+    gradient = GObject.property(type=GObject.TYPE_PYOBJECT, default=None)
+    id = GObject.property(type=int , default=-1)
+
+    def __init__(self, gradient_store):
+        super(GradientRenderer, self).__init__()
+        self.gradient_store = gradient_store
+        self.cg={}
+
+    def do_set_property(self, pspec, value):
+        print pspec
+        setattr(self, pspec.name, value)
+
+    def do_get_property(self, pspec):
+        return getattr(self, pspec.name)
+
+    def do_render(self, cr, widget, background_area, cell_area, flags):
+        """
+        :param cell_area: RectangleInt class
+        """
+        cr.translate(0,0)
+
+        # first colorstep has alpha = it uses alpha value = need background 
+        if len(self.gradient[0][1]) > 3:
+            self.draw_background(cr, cell_area)
+
+        print (cell_area.x, cell_area.y, 
+                cell_area.width, cell_area.height)
+        cr.rectangle(cell_area.x, cell_area.y, 
+                cell_area.width, cell_area.height)
+        cr.set_source(self.get_gradient(self.id, self.gradient, cell_area))
+        cr.fill()
+        # selected = (flags & Gtk.CellRendererState.SELECTED) != 0
+        # prelit = (flags & Gtk.CellRendererState.PRELIT) != 0
+
+    def get_gradient(self, id, gradient, cell_area):
+        if not id in self.cg:
+            halftop = cell_area.y + cell_area.height/2
+            cg = self.gradient_store.get_cairo_gradient_raw(
+                gradient,
+                cell_area.x, halftop, 
+                cell_area.x + cell_area.width - 1, halftop,
+                (1.0, 1.0, 1.0),
+                (0.0, 0.0, 0.0)
+                )
+            self.cg[id] = cg
+            return cg
+        return self.cg[id]
+
+    def draw_background(self, cr, cell_area):
+        h = 0
+        tile_size = 8
+        idx = 0
+        cr.save()
+        tilecolor = ( (0.3, 0.3, 0.3) , (0.7, 0.7, 0.7) )
+        while h < cell_area.height:
+            w = 0
+
+            if h + tile_size > cell_area.height:
+                h = cell_area.height - h
+
+            while w < cell_area.width:
+
+                if w + tile_size > cell_area.width:
+                    w = cell_area.width - w
+
+                cr.rectangle(cell_area.x + w, cell_area.y + h, 
+                        tile_size, tile_size)
+                cr.set_source_rgb(*tilecolor[idx%2])
+                cr.fill()
+                idx+=1
+                w += tile_size
+            h += tile_size
+            idx += 1
+        cr.restore()
+
+
+
+
+
 
 
 class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
     """Presents UI for directly editing point values etc."""
+
+    gradient_preset_store = GradientStore()
 
     def __init__(self):
         super(OptionsPresenter_Polyfill, self).__init__()
@@ -905,8 +1078,7 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         self._fill_polygon_checkbutton= builder.get_object("fill_checkbutton")
         self._fill_polygon_checkbutton.set_sensitive(True)
 
-        
-
+        # Creating history combo
         combo = builder.get_object('path_history_combobox')
         combo.set_model(PolyfillMode.stroke_history.liststore)
         cell = Gtk.CellRendererText()
@@ -916,6 +1088,30 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
 
         base_grid = builder.get_object("points_editing_grid")
         self._updating_ui = False
+
+        # Creating gradient sample
+        store = self.gradient_preset_store.liststore
+
+        sample_grid = builder.get_object('gradient_sample_grid')
+        treeview = Gtk.TreeView()
+        treeview.set_size_request(175, 125)
+        treeview.set_model(store)
+        col = Gtk.TreeViewColumn(_('Name'), cell, text=0)
+        treeview.append_column(col)
+
+        cell = GradientRenderer(self.gradient_preset_store)
+        col = Gtk.TreeViewColumn(_('Gradient'), cell, gradient=1, id=2)
+        # and it is appended to the treeview
+        treeview.append_column(col)
+        treeview.set_hexpand(True)
+
+        exp = Gtk.Expander()
+        exp.set_label(_("Gradient Presets..."))
+        exp.set_use_markup(False)
+        exp.add(treeview)
+        sample_grid.attach(exp, 0, 0, 2, 1)
+        self._gradientview = treeview
+        exp.set_expanded(True)
 
     @property
     def target(self):
