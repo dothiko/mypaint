@@ -403,8 +403,12 @@ class FileHandler (object):
             save1st_cb.set_vexpand(False)
             save1st_cb.set_margin_top(12)
             save1st_cb.set_margin_bottom(12)
-            save1st_cb.set_margin_start(12)
-            save1st_cb.set_margin_end(12)
+            try: # workaround for pre gtk-3.12 library
+                save1st_cb.set_margin_start(12)
+                save1st_cb.set_margin_end(12)
+            except AttributeError:
+                save1st_cb.set_margin_left(12)
+                save1st_cb.set_margin_right(12)
             save1st_cb.set_can_focus(False)  # set back again in show handler
             d.connect(
                 "show",

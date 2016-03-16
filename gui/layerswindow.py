@@ -372,7 +372,12 @@ class LayersTool (SizedVBoxToolWidget):
         label, desc = lib.layer.MODE_STRINGS.get(mode)
         docmodel.set_current_layer_mode(mode)
 
-    ## Utility methods
+    ## Popup Menu callbacks
+
+    def _popup_menu_cb(self, widget, event=None):
+        """Handler for "popup-menu" GtkEvents, and the view's @event"""
+        self._popup_context_menu(event=event)
+        return True
 
     def _popup_context_menu(self, event=None):
         """Display the popup context menu"""
@@ -382,9 +387,5 @@ class LayersTool (SizedVBoxToolWidget):
         else:
             time = event.time
             button = event.button
-        self._menu.popup(None, None, None, None, button, time)
+        self._menu.popup(None,None, None, None, button, time)
 
-    def _popup_menu_cb(self, widget, event=None):
-        """Handler for "popup-menu" GtkEvents, and the view's @event"""
-        self._popup_context_menu(event=event)
-        return True

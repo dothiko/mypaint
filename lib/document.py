@@ -862,6 +862,20 @@ class Document (object):
         cmd = command.RestackLayer(self, src_path, targ_path)
         self.do(cmd)
 
+    def restack_multiple_layers(self, src_path_list, targ_path):
+        """Moves a layer within the layer stack by path, undoably
+
+        :param tuple src_path: path of the layer to be moved
+        :param tuple targ_path: target insert path
+
+        The source path must identify an existing layer. The target
+        path must be a valid insertion path at the time this method is
+        called.
+        """
+        logger.debug("Restack multiple layers at %r to %r", src_path_list, targ_path)
+        cmd = command.RestackMultipleLayers(self, src_path_list, targ_path)
+        self.do(cmd)
+
     def bubble_current_layer_up(self):
         """Moves the current layer up in the stack (undoable)"""
         cmd = command.BubbleLayerUp(self)
@@ -1130,6 +1144,22 @@ class Document (object):
         """Combine all visible layers into a new one & keep originals"""
         self.do(command.NewLayerMergedFromVisible(self))
 
+    ## Multiple Layers operations
+
+    def merge_selected_layers(self):
+        selected_path = self.layer_stack.get_selected_layers()
+        if len(selected_path) >= 2:
+            self.do(command.MergeSelectedLayers(self, selected_path))
+            return True
+        return False
+
+    def group_selected_layers(self):
+        selected_path = self.layer_stack.get_selected_layers()
+        if len(selected_path) >= 2:
+            self.do(command.GroupSelectedLayers(self, selected_path))
+            return True
+        return False
+
     ## Layer import/export
 
     def load_layer_from_pixbuf(self, pixbuf, x=0, y=0):
@@ -1176,6 +1206,19 @@ class Document (object):
         else:
             cmd = cmd_class(self, locked, layer)
             self.do(cmd)
+
+    def set_selected_layers_visibility(self, visible, layers):
+        """Sets the visibility of selected layers."""
+        assert len(layers) >= 2
+        cmd = command.SetMultipleLayersVisibility(self, visible, layers)
+        self.do(cmd)
+
+    def set_selected_layers_locked(self, locked, layers):
+        """Sets the input-lock status of selected layers."""
+        assert len(layers) >= 2
+        cmd = command.SetMultipleLayersLocked(self, locked, layers)
+        self.do(cmd)
+
 
     def set_current_layer_opacity(self, opacity):
         """Sets the opacity of the current layer
