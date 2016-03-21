@@ -534,9 +534,13 @@ class BezierMode (InkingMode):
 
 
     ## Stroke related
-
     def _detect_on_stroke(self, x, y, allow_distance = 4.0):
         """ detect the assigned coordinate is on stroke or not
+        currently implemented very silly way (scan entire
+        bezier segment until find most closer point)
+
+        it must done with newton's method
+
         :param x: cursor x position in MODEL coord
         :param y: cursor y position in MODEL coord
         """
