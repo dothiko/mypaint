@@ -997,7 +997,8 @@ class BezierMode (InkingMode):
             pass
         elif self.phase in (_PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
             pass
-        elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
+        elif self.phase in (_PhaseBezier.ADJUST_PRESSURE, 
+                _PhaseBezier.ADJUST_PRESSURE_ONESHOT):
             # XXX in some cases,ADJUST_PRESSURE phase come here
             # without reaching drag_stop_cb.(it might due to pen tablet...)
             # so ignore this for now,or something should be done here?
