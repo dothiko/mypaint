@@ -1325,7 +1325,19 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             path = layers.path_below(path, insert=True)
         assert path is not None
 
+        if "Import" in action.get_name():
+            app = self.app
+            try:
+                dlg = app.filehandler.get_open_dialog(file_filters=app.filehandler.file_filters)
+                if dlg.run() == gtk.RESPONSE_OK:
+                    layer_kwds["import-filename"] = dlg.get_filename().decode('utf-8')
+                else:
+                    return
+            finally:
+                dlg.destroy()
+            
         self.model.add_layer(path, layer_class=layer_class, **layer_kwds)
+
         self.layerblink_state.activate(action)
         if edit_externally:
             self._begin_external_layer_edit()
@@ -1372,6 +1384,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         new_name = dialogs.ask_for_name(win, _("Layer Name"), old_name)
         if new_name:
             self.model.rename_current_layer(new_name)
+
 
     ## Per-layer flag toggles
 

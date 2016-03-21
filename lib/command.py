@@ -805,6 +805,15 @@ class AddLayer (Command):
         self._layer_class = layer_class
         self._layer_kwds = kwds
         self._layer = layer_class(name=name, **kwds)
+        if 'import-filename' in kwds:
+            assert isinstance(self._layer, lib.layer.PaintingLayer)
+            self.import_filename= kwds['import-filename']
+            filename = kwds['import-filename']
+            pixbuf = lib.pixbuf.load_from_file(filename)
+            arr = helpers.gdkpixbuf2numpy(pixbuf)
+            s = tiledsurface.Surface()
+            bbox = s.load_from_numpy(arr, 0, 0)
+            self._layer.load_from_surface(s)
 
     @property
     def display_name(self):

@@ -634,6 +634,20 @@ Vocabulary
           <signal name="activate" handler="group_selected_layers_cb"/>
         </object>
       </child>
+      <child>
+        <object class="GtkAction" id="ImportLayerFromFileAbove">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Import Layer From File Above</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Import a new layer above from a file.</property>
+          <signal name="activate" handler="new_layer_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="ImportLayerFromFileBelow">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Import Layer From File Below</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Import a new layer below from a file.</property>
+          <signal name="activate" handler="new_layer_cb"/>
+        </object>
+      </child>
       <!-- }}} -->
       <!-- {{{ View manipulation -->
       <child>
