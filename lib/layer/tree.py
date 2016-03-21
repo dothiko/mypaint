@@ -119,6 +119,7 @@ class RootLayerStack (group.LayerStack):
         self._current_layer_previewing = False
         # Current layer
         self._current_path = ()
+        self._current_path_str = ''
         # Self-observation
         self.layer_content_changed += self._clear_render_cache
         self.layer_properties_changed += self._clear_render_cache
@@ -164,6 +165,7 @@ class RootLayerStack (group.LayerStack):
             layer = layer_class()
             self.append(layer)
             self._current_path = (0,)
+            self._current_path_str = '0'
         return layer
 
     ## Terminal root access
@@ -537,6 +539,14 @@ class RootLayerStack (group.LayerStack):
             return ()
         return self._current_path
 
+    def get_current_path_str(self):
+        """To Easily and as possible as fast compare with Gtk.TreeIter
+        """
+        if not self._current_path_str:
+            return ''
+        else:
+            return self._current_path_str
+
     def set_current_path(self, path):
         """Set the current layer path
 
@@ -545,6 +555,7 @@ class RootLayerStack (group.LayerStack):
         """
         if len(self) == 0:
             self._current_path = None
+            self._current_path_str = ''
             self.current_path_updated(())
             return
         path = tuple(path)
@@ -558,6 +569,7 @@ class RootLayerStack (group.LayerStack):
             path = None
         self._current_path = path
         self.current_path_updated(path)
+        self._current_path_str=":".join([str(x) for x in path])
 
     current_path = property(get_current_path, set_current_path)
 
@@ -1961,6 +1973,13 @@ class RootLayerStack (group.LayerStack):
         stack_elem.append(bg_elem)
         return stack_elem
 
+    ## Multiple layer selection
+
+    def get_selected_layers(self):
+        selected_list=[]
+        self.query_selected_layers(selected_list)
+        return selected_list
+
     ## Notification mechanisms
 
     @event
@@ -2013,6 +2032,11 @@ class RootLayerStack (group.LayerStack):
         """Snapshots the state of the layer, for undo purposes"""
         return RootLayerStackSnapshot(self)
 
+    @event
+    def query_selected_layers(self, selected_list):
+        """ Query currently selected layers and 
+        add/filter them into argument selected_list.
+        This notification is mainly used from gui.layers.RootStackTree"""
 
 class RootLayerStackSnapshot (group.LayerStackSnapshot):
     """Snapshot of a root layer stack's state"""

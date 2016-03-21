@@ -620,6 +620,20 @@ Vocabulary
           <signal name="activate" handler="show_background_toggle_cb"/>
         </object>
       </child>
+      <child>
+        <object class="GtkAction" id="MergeSelectedLayers">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Merge Selected Layers</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Merge the selected layers into one layer.</property>
+          <signal name="activate" handler="merge_selected_layers_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="GroupSelectedLayers">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Group Selected Layers</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Move the selected layers into the new group layer.</property>
+          <signal name="activate" handler="group_selected_layers_cb"/>
+        </object>
+      </child>
       <!-- }}} -->
       <!-- {{{ View manipulation -->
       <child>

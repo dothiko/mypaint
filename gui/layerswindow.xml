@@ -28,6 +28,8 @@
       <menuitem action='NewLayerMergedFromVisible'/>
       <menuitem action='NormalizeLayerMode'/>
       <separator/>
+      <menuitem action='MergeSelectedLayers'/>
+      <menuitem action='GroupSelectedLayers'/>
     </placeholder>
     <separator/>
     <placeholder name="AdvancedListActions"/>

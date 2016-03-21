@@ -341,11 +341,12 @@ class RootStackTreeView (Gtk.TreeView):
         root.collapse_layer += self._collapse_layer_cb
         root.layer_content_changed += self._layer_content_changed_cb
         root.current_layer_solo_changed += lambda *a: self.queue_draw()
+        root.query_selected_layers += self._query_selected_layer_cb
 
         # View behaviour and appearance
         self.set_headers_visible(False)
         selection = self.get_selection()
-        selection.set_mode(Gtk.SelectionMode.SINGLE)
+        selection.set_mode(Gtk.SelectionMode.MULTIPLE)
         self.set_size_request(100, 100)
 
         # Type column
@@ -401,6 +402,9 @@ class RootStackTreeView (Gtk.TreeView):
         self.set_enable_tree_lines(True)
         self.set_expander_column(self._name_col)
 
+        # Context menu workaround 
+        self._context_menu_leave = False # to detect exitting context menu
+
     ## Low-level GDK event handlers
 
     def _button_press_cb(self, view, event):
@@ -419,9 +423,37 @@ class RootStackTreeView (Gtk.TreeView):
             return True
         treemodel = self.get_model()
         click_treepath, click_col, cell_x, cell_y = click_info
+
+        # To ease referring with rootstack.current_path
+        # make tuple version of click_treepath(Gtk.TreePath)
+        click_treepath_tuple = tuple(click_treepath.get_indices())
+
         layer = treemodel.get_layer(treepath=click_treepath)
         docmodel = self._docmodel
         rootstack = docmodel.layer_stack
+        selection = self.get_selection()
+        selected = None
+        current = selection.get_selected_rows()
+        if current:
+            selected = current[1]
+
+        # If multiple selection undergo,
+        # It might for drag-dropping.
+        if (event.button == 1 and selected and len(selected) > 1 and 
+                click_treepath in selected and click_col is self._name_col):
+            if not double_click:
+                if not event.state & (Gdk.ModifierType.CONTROL_MASK or
+                        Gdk.ModifierType.SHIFT_MASK):
+                    click_layerpath = tuple(click_treepath.get_indices())
+                    if click_layerpath != rootstack.current_path:
+                        docmodel.select_layer(path=click_layerpath)
+                        self.current_layer_changed()
+                    return True
+            else:
+                if event.state & Gdk.ModifierType.CONTROL_MASK:
+                    self.cancel_multiple_selection()
+                    return True
+            
         # Eye/visibility column toggles kinds of visibility
         if (click_col is self._visible_col) and not is_menu and single_click:
             if event.state & Gdk.ModifierType.CONTROL_MASK:
@@ -432,6 +464,20 @@ class RootStackTreeView (Gtk.TreeView):
             else:
                 new_visible = not layer.visible
                 docmodel.set_layer_visibility(new_visible, layer)
+            return True
+        # Multiple layer selection  
+        elif event.state & Gdk.ModifierType.CONTROL_MASK:
+            if click_treepath in selected:
+                if rootstack.current_path != click_treepath_tuple:
+                    selection.unselect_path(click_treepath)
+                return True
+            selection.select_path(click_treepath)
+            return True
+        elif event.state & Gdk.ModifierType.SHIFT_MASK:
+            if selected:
+                selection.select_range(selected[0],click_treepath)
+            else:
+                selection.select_path(click_treepath)
             return True
         # Layer lock column
         elif (click_col is self._locked_col) and not is_menu and single_click:
@@ -444,10 +490,11 @@ class RootStackTreeView (Gtk.TreeView):
                 self.current_layer_rename_requested()
                 return True
         # Click an un-selected layer row to select it
-        click_layerpath = tuple(click_treepath.get_indices())
-        if click_layerpath != rootstack.current_path:
-            docmodel.select_layer(path=click_layerpath)
-            self.current_layer_changed()
+        if (selected == None or  not click_treepath in selected):
+            click_layerpath = tuple(click_treepath.get_indices())
+            if click_layerpath != rootstack.current_path:
+                docmodel.select_layer(path=click_layerpath)
+                self.current_layer_changed()
         # The type icon column acts as an extra expander.
         # Some themes' expander arrows are very small.
         if (click_col is self._type_col) and not is_menu:
@@ -626,7 +673,11 @@ class RootStackTreeView (Gtk.TreeView):
                     src_path,
                     dest_insert_path,
                 )
-                self._docmodel.restack_layer(src_path, dest_insert_path)
+                current = self.get_selection().get_selected_rows()
+                if len(current[1]) > 1:
+                    self._docmodel.restack_multiple_layers(current[1], dest_insert_path)
+                else:
+                    self._docmodel.restack_layer(src_path, dest_insert_path)
             Gtk.drag_finish(context, True, False, t)
             return True
         return False
@@ -637,6 +688,15 @@ class RootStackTreeView (Gtk.TreeView):
         self._drag_src_path = None
         self._drag_dest_path = None
         self.drag_ended()
+
+    def _query_selected_layer_cb(self, rootstack, selected_list):
+        """ to query selected layers from rootstack(lib.document.layer_stack).
+        """
+        selection = self.get_selection()
+        current = selection.get_selected_rows()
+        if current:
+            selected_list+=current[1]
+        return False
 
     ## Model change tracking
 
@@ -671,6 +731,7 @@ class RootStackTreeView (Gtk.TreeView):
         if not layerpath:
             sel.unselect_all()
             return
+        gtkpath = Gtk.TreePath(layerpath) 
         old_layerpath = None
         model, selected_paths = sel.get_selected_rows()
         if len(selected_paths) > 0:
@@ -679,11 +740,15 @@ class RootStackTreeView (Gtk.TreeView):
                 old_layerpath = tuple(old_treepath.get_indices())
         if layerpath == old_layerpath:
             return
-        sel.unselect_all()
+        elif selected_paths and gtkpath in selected_paths:
+            pass
+        else:
+            sel.unselect_all()
+
         if len(layerpath) > 1:
             self.expand_to_path(Gtk.TreePath(layerpath[:-1]))
         if len(layerpath) > 0:
-            sel.select_path(Gtk.TreePath(layerpath))
+            sel.select_path(gtkpath)
             self.scroll_to_current_layer()
 
     def scroll_to_current_layer(self, *_ignored):
@@ -717,6 +782,22 @@ class RootStackTreeView (Gtk.TreeView):
     def drag_ended(self):
         """Event: a drag has just ended"""
 
+    ## utility methods
+
+    def cancel_multiple_selection(self):
+        """ Cancel(Clear) multiple selection,
+        and select only currently active layer.
+        """
+        self._processing_model_updates = True
+        root = self._docmodel.layer_stack
+        oldcurrent = root.current
+        sel = self.get_selection()
+        sel.unselect_all()
+        root.current_path = root.deepindex(oldcurrent)
+        self._processing_model_updates = False
+        
+
+
 
 ## Helpers for views
 
@@ -740,6 +821,11 @@ def layer_name_text_datafunc(column, cell, model, it, data):
         markup = lib.xml.escape(layer.name)
     if isinstance(layer, lib.layer.LayerStack):
         markup = u"<i>%s</i>" % (markup,)
+
+    rootstack = model._root
+    if rootstack.get_current_path_str() == model.get_string_from_iter(it):
+        markup = u"<u><b>%s</b></u>" % (markup,)
+
     attrs = Pango.AttrList()
     parse_result = Pango.parse_markup(markup, -1, '\000')
     parse_ok, attrs, text, accel_char = parse_result
@@ -856,6 +942,7 @@ def _test():
     view_scroll.set_policy(scroll_pol, scroll_pol)
     view_scroll.add(view)
     view_scroll.set_size_request(-1, 100)
+    view.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE)
 
     win = Gtk.Window()
     win.set_title(unicode(__package__))
