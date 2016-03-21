@@ -2436,7 +2436,7 @@ class OptionsPresenter (object):
         combo.set_sensitive(True) # variation preset always can be changed
         if ref_button:
             combo.set_margin_top(ref_button.get_margin_top())
-            combo.set_margin_end(4)
+            combo.set_margin_right(4)
             combo.set_margin_bottom(ref_button.get_margin_bottom())
             box.attach(combo, 0, row, 1, 1)
         else:
