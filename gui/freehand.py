@@ -479,16 +479,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         x = event.x
         y = event.y
 
-        # Stabilizer event position fetch & apply
-        self.assist = tdw.app.get_assistant()
-        if self.assist:
-            self.assist.fetch(event.x, event.y)
-            if self.doc.stabilizer_mode:
-                pos = self.assist.get_current()
-                if not pos:
-                    return super(FreehandMode, self).motion_notify_cb(tdw, event)
-                else:
-                    x, y = pos
 
         time = event.time
         pressure = event.get_axis(gdk.AXIS_PRESSURE)
@@ -593,40 +583,43 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             # Remove the last item: it should be the one corresponding
             # to the current motion-notify-event.
             hx0, hy0, ht0 = drawstate.evhack_positions.pop(-1)
-            if self.doc.stabilizer_mode:
-                if (hx0, hy0, ht0) == (event.x, event.y, time):
-                    for hx, hy, ht in drawstate.evhack_positions:
-                        self.assist.fetch(hx,hy)
-                        pos = self.assist.get_current()
-                        if pos:
-                            hx, hy = tdw.display_to_model(pos[0], pos[1])
-                            event_data = (ht, hx, hy, None, None, None)
-                            drawstate.queue_motion(event_data)
-                else:
-                    # FIXME code duplication
-                    logger.warning(
-                        "Final evhack event (%0.2f, %0.2f, %d) doesn't match its "
-                        "corresponding motion-notify-event (%0.2f, %0.2f, %d). "
-                        "This can be ignored if it's just a one-off occurrence.",
-                        hx0, hy0, ht0, event.x, event.y, time)
+            # Check that we can use the eventhack data uncorrected
+            if (hx0, hy0, ht0) == (x, y, time):
+                for hx, hy, ht in drawstate.evhack_positions:
+                    if self.assist:
+                        self.assist.fetch(hx, hy)
+                        if self.doc.stabilizer_mode:
+                            pos = self.assist.get_current()
+                            if not pos:
+                                continue
+                            else:
+                                hx, hy = pos
+                    hx, hy = tdw.display_to_model(hx, hy)
+                    event_data = (ht, hx, hy, None, None, None)
+                    drawstate.queue_motion(event_data)
             else:
-                # Check that we can use the eventhack data uncorrected
-                if (hx0, hy0, ht0) == (x, y, time):
-                    for hx, hy, ht in drawstate.evhack_positions:
-                        hx, hy = tdw.display_to_model(hx, hy)
-                        event_data = (ht, hx, hy, None, None, None)
-                        drawstate.queue_motion(event_data)
-                else:
-                    logger.warning(
-                        "Final evhack event (%0.2f, %0.2f, %d) doesn't match its "
-                        "corresponding motion-notify-event (%0.2f, %0.2f, %d). "
-                        "This can be ignored if it's just a one-off occurrence.",
-                        hx0, hy0, ht0, x, y, time)
+                logger.warning(
+                    "Final evhack event (%0.2f, %0.2f, %d) doesn't match its "
+                    "corresponding motion-notify-event (%0.2f, %0.2f, %d). "
+                    "This can be ignored if it's just a one-off occurrence.",
+                    hx0, hy0, ht0, x, y, time)
         # Reset the eventhack queue
         if len(drawstate.evhack_positions) > 0:
             drawstate.evhack_positions = []
 
         # Queue this event
+
+        # Stabilizer event position fetch & apply
+        self.assist = tdw.app.get_assistant()
+        if self.assist:
+            self.assist.fetch(event.x, event.y)
+            if self.doc.stabilizer_mode:
+                pos = self.assist.get_current()
+                if not pos:
+                    return super(FreehandMode, self).motion_notify_cb(tdw, event)
+                else:
+                    x, y = pos
+
         x, y = tdw.display_to_model(x, y)
         event_data = (time, x, y, pressure, xtilt, ytilt)
         drawstate.queue_motion(event_data)
