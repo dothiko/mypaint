@@ -1416,13 +1416,15 @@ class FileHandler (object):
                 cmenu.set_visible(False)
 
     def register_recent_project(self, projectpath):
+        if len(self.recent_projects_info) == 0:
+            self.recent_projects_info.append(projectpath)
+        else:
+            if (projectpath in self.recent_projects_info and
+                    self.recent_projects_info[0] != projectpath):
+                self.recent_projects_info.remove(projectpath)
 
-        if (projectpath in self.recent_projects_info and
-                self.recent_projects_info[0] != projectpath):
-            self.recent_projects_info.remove(projectpath)
-
-        if (self.recent_projects_info[0] != projectpath):
-            self.recent_projects_info.insert(0,projectpath)
+            if (self.recent_projects_info[0] != projectpath):
+                self.recent_projects_info.insert(0,projectpath)
 
         self._refresh_recent_project_menu()
 
