@@ -1317,7 +1317,10 @@ class FileHandler (object):
             False
             )
             
-        junk, ext = os.path.splitext(self.filename)
+        if self.filename:
+            junk, ext = os.path.splitext(self.filename)
+        else:
+            ext = ''
                 
 
         if ext != "":

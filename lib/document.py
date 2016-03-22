@@ -1703,7 +1703,7 @@ class Document (object):
                     # 1. move currentry marked as autosave_dirty files
                     #    into 'backup' directory,which named with 
                     #    'yyyy-mm-dd/uuid' format. 
-                    #    for example,if you saved it at 2016.3.3,
+                    #    for example,if you saved it at 2016.march.3,
                     #    the directory name should be
                     #    such as 'backup/2016-03-03/281c4ff(snip)'
                     # 2. copy current stack.xml file into backup dir.
@@ -1732,6 +1732,16 @@ class Document (object):
                                     source_dir,
                                     cl.src                            
                                     )
+                            else:
+                                testfname = os.path.join(
+                                        source_dir,
+                                        'data',
+                                        cl.autosave_uuid + ".png")
+                                if os.path.exists(testfname):
+                                    filepath = testfname
+                                    logger.info("Layer %s is dirty but has no file-entity information.but uuid-png file found." % cl.name )
+                                else:
+                                    logger.info("Layer %s is dirty but has no file-entity information. and uuid-png file also not found." % cl.name )
            
                             if filepath: 
                                 assert os.path.exists(filepath)
@@ -1793,6 +1803,7 @@ class Document (object):
             self._as_project = True
               
         finally:
+            self._autosave_dirty = False 
             pass
     
 
@@ -1851,7 +1862,6 @@ class Document (object):
         if not os.path.exists(newdir):
             os.makedirs(newdir)       
 
-        
         for csf in filelist:
             # csf(current source file) is FULLPATH.
             basename = os.path.basename(csf)
@@ -1865,6 +1875,7 @@ class Document (object):
             ext = ext.lower()
             if ext == '.png':
                 # .png might have some strokemaps.
+                # if so, copy it too.
                 if basename[-5:] == '-tile':
                     uuidbase = basename[:-5]
                 else:
