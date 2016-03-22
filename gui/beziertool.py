@@ -365,7 +365,7 @@ class BezierMode (InkingMode):
 
     ## Other class vars
 
-    _OPTIONS_PRESENTER = None   #: Options presenter singleton
+    _OPTIONS_PRESENTER_BEZIER = None   #: Options presenter singleton
     _PRESSURE_MAP = None #: Pressure mapping object singleton
 
     ## Initialization & lifecycle methods
@@ -1224,9 +1224,9 @@ class BezierMode (InkingMode):
     def options_presenter(self):
         """MVP presenter object for the node editor panel"""
         cls = self.__class__
-        if cls._OPTIONS_PRESENTER is None:
-            cls._OPTIONS_PRESENTER = OptionsPresenter_Bezier()
-        return cls._OPTIONS_PRESENTER
+        if cls._OPTIONS_PRESENTER_BEZIER is None:
+            cls._OPTIONS_PRESENTER_BEZIER = OptionsPresenter_Bezier()
+        return cls._OPTIONS_PRESENTER_BEZIER
 
     @property
     def pressure_map(self):

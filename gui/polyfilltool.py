@@ -277,6 +277,7 @@ class PolyfillMode (BezierMode):
 
     ## Other class vars
     _composite_mode = lib.mypaintlib.CombineNormal
+    _OPTIONS_PRESENTER_POLY = None 
 
     ## Initialization & lifecycle methods
 
@@ -868,9 +869,9 @@ class PolyfillMode (BezierMode):
     def options_presenter(self):
         """MVP presenter object for the node editor panel"""
         cls = self.__class__
-        if cls._OPTIONS_PRESENTER is None:
-            cls._OPTIONS_PRESENTER = OptionsPresenter_Polyfill()
-        return cls._OPTIONS_PRESENTER
+        if cls._OPTIONS_PRESENTER_POLY is None:
+            cls._OPTIONS_PRESENTER_POLY = OptionsPresenter_Polyfill()
+        return cls._OPTIONS_PRESENTER_POLY
 
                                                 
     def apply_pressure_from_curve_widget(self):
