@@ -25,6 +25,19 @@ With This feature,you can use Krita-like oncanvas brush size change on MyPaint!!
 
 Kritaライクなキャンバス上でのブラシサイズ変更を可能にします。
 
+#### multiple layer selection : レイヤの複数選択
+From now, we can select multiple layers.
+With this feature, you can ...
+
+ * drag-drop layers into group
+ * merge selected layers
+ * delete selected layers
+ * group selected layers
+ * erase a active layer contents with opaque pixels of other selected layers.
+
+Although, You can draw only currently **active** layer, which shown bold and underlined at layers panel.
+
+
 #### incremental version save : バージョンセーブ機能
 This menu action will add version number to filename automatically and save it.
 If filename has a version number already, such as 'foobar_002.ora',
@@ -70,10 +83,6 @@ This would be quite useful when I want to draw extreamly slow and weak stroke.
 消しゴムブラシボタンの横に新設されたトグルボタンを押すことで、
 通常の手ブレ補正を最大にするより強い手ブレ補正がかかります。
 
-#### inktool nodes auto-culling : インクツールの自動間引き
-This is obsoluted.
-
-廃止しました。
 
 #### inktool - oncanvas node pressure editing : インクツールの制御点の筆圧をキャンバス上で修正可能
 With holding down and drag the selected node, you can change it's pressure.
@@ -151,6 +160,10 @@ futhermore,you can set nodes pressure at once by using Pressure Variation curve 
 CTRLキーを押しながらストロークをクリックすることで、その部分に制御点を追加出来ます。
 
 さらに、オプションプレゼンターのPressure Variationウィジェットと、Apply Variationボタン（もしくは ApplyPressureVariationNodes アクションをキーボードから発動）で、現在のストロークの筆圧を一度に設定できます！
+
+#### Polygon fill tool - fill a region surrounded with a (curved) path. : ポリゴンフィルツール
+Polygon fill tool, which enable to fill/erase/only fill current opaque pixel with curved polygon.
+
 
 #### Per device mode change : デバイスごとのモード変更
 A 'Device' referred to here is, for example, Pen tablet styls,or Pen tablet tail eraser,etc.
