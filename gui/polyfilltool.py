@@ -872,8 +872,6 @@ class PolyfillMode (BezierMode):
             cls._OPTIONS_PRESENTER = OptionsPresenter_Polyfill()
         return cls._OPTIONS_PRESENTER
 
-
-
                                                 
     def apply_pressure_from_curve_widget(self):
         """ apply pressure reprenting points
@@ -1171,7 +1169,7 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
     def target(self):
         # this is exactly same as OptionsPresenter_Bezier,
         # but we need this to define @target.setter
-        return super(OptionsPresenter_Bezier, self).target
+        return super(OptionsPresenter_Polyfill, self).target
 
     @target.setter
     def target(self, targ):
