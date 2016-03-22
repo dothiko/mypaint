@@ -647,7 +647,7 @@ class RootStackTreeView (Gtk.TreeView):
             elif drop_pos == GTVDP.INTO_OR_AFTER:
                 n = len(dest_layer)
 
-            if is_expanded_group:
+            if is_expanded_group and len(dest_layer) > 0:
                 return tuple(list(dest_path) + [n])
             else:
                 return tuple(dest_path)
