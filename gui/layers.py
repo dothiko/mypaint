@@ -633,21 +633,28 @@ class RootStackTreeView (Gtk.TreeView):
         assert len(dest_path) > 0
         dest_layer = root.deepget(dest_path)
         GTVDP = Gtk.TreeViewDropPosition
+
+        is_expanded_group = (
+            isinstance(dest_layer, lib.layer.LayerStack) and
+            self.row_expanded(dest_treepath)
+        )
+
         if isinstance(dest_layer, lib.layer.LayerStack):
             # Interpret Gtk's "into or before" as "into AND at the
             # start". Similar for "into or after".
             if drop_pos == GTVDP.INTO_OR_BEFORE:
-                return tuple(list(dest_path) + [0])
+                n = 0
             elif drop_pos == GTVDP.INTO_OR_AFTER:
                 n = len(dest_layer)
+
+            if is_expanded_group:
                 return tuple(list(dest_path) + [n])
+            else:
+                return tuple(dest_path)
+
         if drop_pos == GTVDP.BEFORE:
             return dest_path
         elif drop_pos == GTVDP.AFTER:
-            is_expanded_group = (
-                isinstance(dest_layer, lib.layer.LayerStack) and
-                self.row_expanded(dest_treepath)
-            )
             if is_expanded_group:
                 # This highlights like an insert before its first item
                 return tuple(list(dest_path) + [0])
@@ -927,6 +934,7 @@ def _test():
         ((6, 4), PaintingLayer(name="Layer 6:4")),
         ((6, 5), PaintingLayer(name="Layer 6:5")),
         ((7,), PaintingLayer(name="Layer 7")),
+        ((8,), LayerStack(name="Group 8")),
         ]
     for path, layer in layer_info:
         root.deepinsert(path, layer)

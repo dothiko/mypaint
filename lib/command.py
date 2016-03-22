@@ -1515,6 +1515,7 @@ class RestackMultipleLayers (Command):
         path must exist too.
         """
         super(RestackMultipleLayers, self).__init__(doc, **kwds)
+        print targ_path
         targ_path = tuple(targ_path)
         rootstack = self.doc.layer_stack
         self._src_path_list = []
@@ -1559,15 +1560,15 @@ class RestackMultipleLayers (Command):
             after_prev_pathes.append(current_src_path[:-1] + (src_index,))
 
             rootstack.deeppop(current_src_path)
-
-            targ_path = rootstack.deepindex(target)
-            targ_index = targ_path[-1]
-
             affected.append(src)
 
             if self._new_parent != None:
                 self._new_parent.append(src)
+            elif isinstance(target, lib.layer.LayerStack):
+                target.append(src)
             elif isinstance(targ_parent, lib.layer.LayerStack):
+                targ_path = rootstack.deepindex(target)
+                targ_index = targ_path[-1]
                 targ_parent.insert(targ_index, src)
             else:
                 assert len(targ_path) > 1
