@@ -2306,8 +2306,11 @@ class StrokeCurveWidget (gui.curve.CurveWidget):
             bp = self.points[2]
             cp = self.points[3]
 
-        return gui.drawutils.get_bezier_segment(ap, bp, cp, 
-                t_step)
+        return ( gui.drawutils.get_bezier(
+                    ap[0], bp[0], cp[0], t_step),
+                 gui.drawutils.get_bezier(
+                    ap[1], bp[1], cp[1], t_step))
+        
 
     def get_pressure_value(self, step):
         junk, value = self._get_curve_value(step)

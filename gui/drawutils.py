@@ -588,65 +588,45 @@ def get_drop_shadow_offsets(line_width, z=2):
     ])
 
 ## Bezier curve
-BEZIER_OFFSET_NONE = (0, 0)
+def get_bezier(p0, p1, p2, t):
+    dt = 1-t
+    return (dt**2)*p0 + 2.0*t*dt*p1 + (t**2)*p2                       
 
-def get_bezier_pt(v0, v1, step):
-    return v0 + ((v1-v0) * step)
+def get_cubic_bezier(p0, p1, p2, p3, t):
+    dt = 1-t
+    return (dt**3.0)*p0 + 3.0*(dt**2)*t*p1 + 3.0*dt*(t**2)*p2 + (t**3)*p3
 
-def get_bezier_segment_raw(p0, p1, p2, step):
-    return ( (get_bezier_pt(p0[0], p1[0], step),
-              get_bezier_pt(p0[1], p1[1], step)),
-             (get_bezier_pt(p1[0], p2[0], step),
-              get_bezier_pt(p1[1], p2[1], step)) )
+def get_minmax_bezier(x1, x2, x3, x4):
+    a = x4-3*(x3-x2)-x1;
+    b = 3*(x3-2*x2+x1);
+    c = 3*(x2-x1);
+    delta = b*b - 3*a*c;
+    left = min(x1, x4);
+    right = max(x1, x4);
+    if 0 < delta:
+        try:
+            t0 = (-b+math.sqrt(delta))/(3*a)
+        except ZeroDivisionError:
+            pass
+        else:
+            if (0 <= t0 and t0 <= 1):
+                tp = 1-t0;
+                tx0 = (tp**3)*x1 + 3*(tp**2)*t0*x2 + 3*tp*(t0**2)*x3 + (t0**3)*x4
+                if tx0 < left: 
+                    left = tx0
 
-def get_bezier_segment(p0, p1, p2, step):
-    """ get bezier point from points.
-    each points should be sequence,
-    [0] is x, [1] is y
-    
-    :param p0: the first point
-    :param p1: control point from first point
-    :param p2: control point to next point
-    :param p1: the next point
-    :param step: bezier curve step.
-                 this should be in a range(0.0 - 1.0)
-    """
-    p0, p1 = get_bezier_segment_raw(p0, p1, p2, step)
-    
-    return (get_bezier_pt(p0[0], p1[0], step),
-            get_bezier_pt(p0[1], p1[1], step))
+        try:
+            t1 = (-b-math.sqrt(delta))/(3*a)
+        except ZeroDivisionError:
+            pass
+        else:
+            if (0 <= t1 and t1 <= 1): 
+                tp = 1-t1
+                tx1 = (tp**3)*x1 + 3*(tp**2)*t1*x2 + 3*tp*(t1**2)*x3 + (t1**3)*x4
+                if right < tx1: 
+                    right = tx1
 
-def get_cubic_bezier_segment_raw(p0, p1, p2, p3, step, 
-        o0=BEZIER_OFFSET_NONE, o3=BEZIER_OFFSET_NONE):
-    return ( (get_bezier_pt(p0[0] + o0[0], p1[0] + o0[0], step), 
-              get_bezier_pt(p0[1] + o0[1], p1[1] + o0[1], step)),
-             (get_bezier_pt(p1[0] + o0[0], p2[0] + o3[0], step),
-              get_bezier_pt(p1[1] + o0[1], p2[1] + o3[1], step)),
-             (get_bezier_pt(p2[0] + o3[0], p3[0] + o3[0], step),
-              get_bezier_pt(p2[1] + o3[1], p3[1] + o3[1], step)) )
-
-
-def get_cubic_bezier_segment(p0, p1, p2, p3, step, o0=BEZIER_OFFSET_NONE, o3=BEZIER_OFFSET_NONE):
-    """ get cubic bezier point from points.
-    each points should be sequence,
-    [0] is x, [1] is y
-    
-    :param p0: the first point
-    :param p1: control point from first point
-    :param p2: control point to next point
-    :param p1: the next point
-    :param step: bezier curve step.
-                 this should be in a range(0.0 - 1.0)
-    :param o0: the offset of first point 
-    :param o3: the offset of next point
-    """
-
-
-    p0, p1, p2 = get_cubic_bezier_segment_raw(
-            p0, p1, p2, p3, step, o0, o3)
-
-
-    return get_bezier_segment(p0, p1, p2, step)
+    return (left, right)
 
 ## Linear interpolation
 def linear_interpolation(base, dest, step):

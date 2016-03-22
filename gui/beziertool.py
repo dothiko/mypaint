@@ -532,7 +532,6 @@ class BezierMode (InkingMode):
         self._stroke_from_history = False
         self.options_presenter.reset_stroke_history()
 
-
     ## Stroke related
     def _detect_on_stroke(self, x, y, allow_distance = 4.0):
         """ detect the assigned coordinate is on stroke or not
@@ -548,113 +547,83 @@ class BezierMode (InkingMode):
         for i,cn in enumerate(self.nodes[:-1]):
             # Get boundary rectangle,to reduce processing segment
             nn = self.nodes[i+1]
-            sx = min(cn.x, nn.x)
-            ex = max(cn.x, nn.x)
-            sy = min(cn.y, nn.y)
-            ey = max(cn.y, nn.y)
-            for t in (0,1):
-                cx = cn.get_control_handle(t).x
-                nx = nn.get_control_handle(t).x
-                sx = min(min(sx, cx), nx)
-                ex = max(max(ex, cx), nx)
-                cy = cn.get_control_handle(t).y
-                ny = nn.get_control_handle(t).y
-                sy = min(min(sy, cy), ny)
-                ey = max(max(ey, cy), ny)
+            p0 = cn.x
+            p1 = cn.get_control_handle(1).x
+            p2 = nn.get_control_handle(0).x
+            p3 = nn.x
 
-            if sx <= x <= ex and sy <= y <= ey:
+            q0 = cn.y
+            q1 = cn.get_control_handle(1).y
+            q2 = nn.get_control_handle(0).y
+            q3 = nn.y
 
-                def get_distance_and_step(start_step, end_step, increase_step):
-                    ox, oy = gui.drawutils.get_cubic_bezier_segment(cn, cn.get_control_handle(1),
-                                nn.get_control_handle(0), nn, start_step)
-                    cur_step = start_step
-                    while cur_step <= end_step:
-
-                        cx, cy = gui.drawutils.get_cubic_bezier_segment(cn, cn.get_control_handle(1),
-                                nn.get_control_handle(0), nn, cur_step)
-
-                        # vpx/vpy : vector of assigned point
-                        # vsx/vsy : vector of segment
-                        # TODO this is same as 'simplify nodes'
-                        # so these can be commonize.
-                        vpx = x - ox
-                        vpy = y - oy
-                        vsx = cx - ox
-                        vsy = cy - oy
-                        scaler_p = math.sqrt(vpx**2 + vpy**2)
-                        scaler_s = math.sqrt(vsx**2 + vsy**2)
-                        if scaler_s > 0:
-                            if scaler_p <= scaler_s:
-                                nsx = vsx / scaler_s
-                                nsy = vsy / scaler_s
-                                dot_vp_v = nsx * vpx + nsy * vpy
-                                vsx = (vsx * dot_vp_v) / scaler_s
-                                vsy = (vsy * dot_vp_v) / scaler_s
-                                vsx -= vpx
-                                vsy -= vpy
-                                # now,vsx/vsy is the vector of distance between
-                                # vpx/vpx and vsx/vsy
-                                distance = math.sqrt(vsx**2 + vsy**2)
-                            elif scaler_s < allow_distance:
-                                # Too close step.
-                                distance = scaler_p
-                            else:
-                                # Invalid step segment
-                                distance = allow_distance 
-                        else:
-                            distance = scaler_p
-
-                        if distance < allow_distance:
-                            return (distance, cur_step)
-
-                        ox = cx
-                        oy = cy
-                        cur_step += increase_step
-                        
-                lowest_distance = allow_distance
-                cur_step = 0.0
-                distance = None
+            sx, ex = gui.drawutils.get_minmax_bezier(p0, p1, p2, p3)
+            sy, ey = gui.drawutils.get_minmax_bezier(q0, q1, q2, q3)
             
-                while cur_step < 1.0:
-                    dist_and_step = get_distance_and_step(
-                                        cur_step, 
-                                        1.0, 
-                                        BezierMode.DRAFT_STEP)
-                    if dist_and_step:
-                        distance, tmp_step = dist_and_step
-                        if distance < lowest_distance:
-                            lowest_distance = distance
-                            cur_step = tmp_step
-                            if lowest_distance == 0:
-                                return (i, cur_step)
+            if sx <= x <= ex and sy <= y <= ey:
+                # first, detect from 
+                limitDt = 0.001
+                t = 0
+                loop = 0
+                A = (3.0*p1 + p3 - 3.0*p2 - p0)
+                B = 3.0 * (p0 - 2*p1 + p2)
+                C = 3.0 * (p1 - p0)
+                while loop < 2:
+                    cnt = 0
+                    while cnt < 10:
+                        dx = gui.drawutils.get_cubic_bezier(
+                                p0, p1, p2, p3, t) - x
+                                
                         
-                    else:
+                        if (abs(dx) < limitDt):
+                            break
                         
-                        if (lowest_distance == allow_distance and 
-                                distance == None):
-                            # This means 'No any point on stroke found 
-                            # inside current node segment'.
+                        slope = 3.0 * A * (t**2) + 2.0 * B * t + C
+                        
+                        if slope != 0.0:
+                            t = (slope*t - dx)/slope;
+                        else:
+                            t += 0.001
 
-                            break # Proceed to next node segment
+                        cnt+=1
 
-                        elif distance != None:
-                            # This means 'previously found point(step) is 
-                            # what we need to pick'
-                            return (i, cur_step)
+                    if (cnt < 10 and 0.0 <= t <= 1.0): 
+                        dy = gui.drawutils.get_cubic_bezier(
+                                q0, q1, q2, q3, t)
+                        if dy - allow_distance < y < dy + allow_distance:
+                            return (i, t)
 
-                    cur_step += BezierMode.DRAFT_STEP
+                    t = 1.0
+                    loop+=1
 
-                # Loop has end.but,The last step might hit? 
-                if lowest_distance < allow_distance:
-                    return (i, cur_step)
+                ## Failthrogh, and doing full search
+                t = 0
+                candidate_t = None
+                least_diff = None
+                while t < 1.0:
+                    cx = gui.drawutils.get_cubic_bezier(
+                            p0, p1, p2, p3, t) 
+                    cy = gui.drawutils.get_cubic_bezier(
+                            q0, q1, q2, q3, t)
 
+                    cur_diff = math.hypot(cx-x,cy-y)
+                   #if ((cy - allow_distance < y < cy + allow_distance) and
+                   #        (cx - allow_distance < x < cx + allow_distance)):
+                   #    cur_diff = math.hypot(cx-x,cy-y)
+                    if cur_diff < allow_distance:
+                        if least_diff != None:
+                            if (least_diff > cur_diff):
+                                least_diff = cur_diff
+                                candidate_t = t
+                        else:
+                            least_diff = cur_diff
+                            candidate_t = t
 
-                
+                    t += 0.001
 
-                # We need search entire the stroke     
-                # because it might be intersected.
+                if candidate_t:
+                    return (i, candidate_t)
 
-        return None
 
     ## Redraws
     
@@ -818,17 +787,23 @@ class BezierMode (InkingMode):
         if sidx in self.selected_nodes:
             o0 = offset
         else:
-            o0 = gui.drawutils.BEZIER_OFFSET_NONE
+            o0 = (0, 0)
         
         if eidx in self.selected_nodes:
             o3 = offset
         else:
-            o3 = gui.drawutils.BEZIER_OFFSET_NONE
+            o3 = (0, 0)
         
         def draw_single_segment(cur_step):
             
-            x, y = gui.drawutils.get_cubic_bezier_segment(
-                p0, p1, p2, p3, cur_step, o0, o3)
+           #x, y = gui.drawutils.get_cubic_bezier_segment(
+           #    p0, p1, p2, p3, cur_step, o0, o3)
+            x = gui.drawutils.get_cubic_bezier(
+               p0.x + o0[0] , p1.x + o0[0], 
+               p2.x + o3[0] , p3.x + o3[0], cur_step)
+            y = gui.drawutils.get_cubic_bezier(
+               p0.y + o0[1], p1.y + o0[1], 
+               p2.y + o3[1], p3.y + o3[1], cur_step)
 
 
             if pressure_src and internode_steps:
@@ -1233,9 +1208,7 @@ class BezierMode (InkingMode):
         """pressure map object for stroke drawing with pressure mapping"""
         cls = self.__class__
         if cls._PRESSURE_MAP is None:
-            if cls._OPTIONS_PRESENTER == None:
-                t = cls.options_presenter
-            cls._PRESSURE_MAP = PressureMap(cls._OPTIONS_PRESENTER.curve)
+            cls._PRESSURE_MAP = PressureMap(self.options_presenter.curve)
         return cls._PRESSURE_MAP
 
     def _divide_bezier(self, index, step):
