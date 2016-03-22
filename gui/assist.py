@@ -9,8 +9,7 @@
 ## Imports
 
 import math
-from numpy import array
-from numpy import isfinite
+import array
 from lib.helpers import clamp
 import logging
 from collections import deque
@@ -33,11 +32,17 @@ class Assistbase(object):
 
     # Stablizer ring buffer
     _sampling_max = 32
-    _samples = [None] * _sampling_max 
+   #_samples = [None] * _sampling_max 
+    _samples_x = array.array('f')
+    _samples_y = array.array('f')
     _sample_index = 0
     _sample_count = 0
 
     def __init__(self):
+        if len(Assistbase._samples_x) < Assistbase._sampling_max:
+            for i in range(Assistbase._sampling_max):
+                Assistbase._samples_x.append(0.0) 
+                Assistbase._samples_y.append(0.0) 
         self.reset()
 
     def reset(self):
@@ -50,7 +55,8 @@ class Assistbase(object):
 
     def fetch(self, x, y):
         """Fetch samples"""
-        Assistbase._samples[Assistbase._sample_index] = (x, y)
+        Assistbase._samples_x[Assistbase._sample_index] = x
+        Assistbase._samples_y[Assistbase._sample_index] = y
         Assistbase._sample_index+=1
         Assistbase._sample_index%=Assistbase._sampling_max
         Assistbase._sample_count+=1
@@ -72,15 +78,18 @@ class Stabilizer(Assistbase):
         oy = 0
         idx = 0
         while idx < self._sampling_max:
-            cx, cy = self._get_stabilize_element(idx)
+            cx = self._get_stabilized_x(idx)
+            cy = self._get_stabilized_y(idx)
             ox += cx
             oy += cy
             idx += 1
 
         return (ox / self._sampling_max, oy / self._sampling_max)
 
-    def _get_stabilize_element(self, idx):
-        return self._samples[(self._sample_index + idx) % self._sampling_max]
+    def _get_stabilized_x(self, idx):
+        return self._samples_x[(self._sample_index + idx) % self._sampling_max]
     
+    def _get_stabilized_y(self, idx):
+        return self._samples_y[(self._sample_index + idx) % self._sampling_max]
         
 
