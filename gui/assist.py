@@ -22,6 +22,8 @@ import gtk
 from gtk import gdk
 from gtk import keysyms
 
+import gui.drawutils
+
 ## Module settings
 
 
@@ -32,9 +34,9 @@ class Assistbase(object):
 
     # Stablizer ring buffer
     _sampling_max = 32
-   #_samples = [None] * _sampling_max 
     _samples_x = array.array('f')
     _samples_y = array.array('f')
+    _samples_p = array.array('f')
     _sample_index = 0
     _sample_count = 0
 
@@ -43,23 +45,27 @@ class Assistbase(object):
             for i in range(Assistbase._sampling_max):
                 Assistbase._samples_x.append(0.0) 
                 Assistbase._samples_y.append(0.0) 
+                Assistbase._samples_p.append(0.0) 
         self.reset()
 
     def reset(self):
         Assistbase._sample_index = 0
         Assistbase._sample_count = 0
 
-    def get_current(self, x, y):
+    def get_current(self):
         """only stub"""
-        return (x, y)
+        pass
 
-    def fetch(self, x, y):
+    def fetch(self, x, y, pressure):
         """Fetch samples"""
-        Assistbase._samples_x[Assistbase._sample_index] = x
-        Assistbase._samples_y[Assistbase._sample_index] = y
+        Assistbase._samples_x[Assistbase._sample_index] = x 
+        Assistbase._samples_y[Assistbase._sample_index] = y 
+        Assistbase._samples_p[Assistbase._sample_index] = pressure 
         Assistbase._sample_index+=1
         Assistbase._sample_index%=Assistbase._sampling_max
         Assistbase._sample_count+=1
+
+            
 
 class Stabilizer(Assistbase):
     """ Stabilizer class, which fetches 
@@ -74,22 +80,27 @@ class Stabilizer(Assistbase):
         if self._sample_count < self._sampling_max:
             return None
 
-        ox = 0
-        oy = 0
+        rx = 0
+        ry = 0
+        rp = 0
         idx = 0
         while idx < self._sampling_max:
-            cx = self._get_stabilized_x(idx)
-            cy = self._get_stabilized_y(idx)
-            ox += cx
-            oy += cy
+            rx += self._get_stabilized_x(idx)
+            ry += self._get_stabilized_y(idx)
+            rp += self._get_stabilized_pressure(idx)
             idx += 1
 
-        return (ox / self._sampling_max, oy / self._sampling_max)
+        return (rx / self._sampling_max, 
+                ry / self._sampling_max,
+                rp / self._sampling_max)
 
     def _get_stabilized_x(self, idx):
         return self._samples_x[(self._sample_index + idx) % self._sampling_max]
     
     def _get_stabilized_y(self, idx):
         return self._samples_y[(self._sample_index + idx) % self._sampling_max]
+
+    def _get_stabilized_pressure(self, idx):
+        return self._samples_p[(self._sample_index + idx) % self._sampling_max]
         
 

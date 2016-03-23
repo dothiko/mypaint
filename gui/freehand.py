@@ -113,11 +113,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         self._cursor_hidden_tdws = set()
         self._cursor_hidden = None
 
-        # Assistant
-        
-        # need this,because attribute error raise in initial 
-        # state.
-        self.assist = None 
 
     ## Metadata
 
@@ -269,11 +264,9 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         self._drawing_state = {}
         self._reset_drawing_state()
         self._debug = (logger.getEffectiveLevel() == logging.DEBUG)
-
+               
     def leave(self, **kwds):
         """Leave freehand mode"""
-        if self.assist:
-            self.assist.reset()
         self._reset_drawing_state()
         self._reinstate_drawing_cursor(tdw=None)
         super(FreehandMode, self).leave(**kwds)
@@ -435,8 +428,11 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
             result = True
 
-        # Stablize
-       #self.assist.reset()  # comment out for non-abrupt-like glitch
+            # Stablize
+            assistant = tdw.app.get_assistant()
+            if assistant:
+                assistant.reset()
+
 
         
         return (super(FreehandMode, self).button_release_cb(tdw, event)
@@ -466,6 +462,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
 
+
         # Disable or work around GDK's motion event compression
         if self._event_compression_supported is None:
             win = tdw.get_window()
@@ -474,6 +471,11 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         drawstate = self._get_drawing_state(tdw)
         if drawstate.event_compression_workaround is None:
             self._add_event_compression_workaround(tdw)
+
+        if drawstate.button_down == 1:
+            assistant = tdw.app.get_assistant()
+        else:
+            assistant = None
 
         # Extract the raw readings for this event
         x = event.x
@@ -586,16 +588,17 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             # Check that we can use the eventhack data uncorrected
             if (hx0, hy0, ht0) == (x, y, time):
                 for hx, hy, ht in drawstate.evhack_positions:
-                    if self.assist:
-                        self.assist.fetch(hx, hy)
+                    h_pressure = None
+                    if assistant:
+                        assistant.fetch(hx, hy, pressure)
                         if self.doc.stabilizer_mode:
-                            pos = self.assist.get_current()
-                            if not pos:
+                            info = assistant.get_current()
+                            if not info:
                                 continue
                             else:
-                                hx, hy = pos
+                                hx, hy, h_pressure = info
                     hx, hy = tdw.display_to_model(hx, hy)
-                    event_data = (ht, hx, hy, None, None, None)
+                    event_data = (ht, hx, hy, h_pressure, None, None)
                     drawstate.queue_motion(event_data)
             else:
                 logger.warning(
@@ -607,19 +610,18 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         if len(drawstate.evhack_positions) > 0:
             drawstate.evhack_positions = []
 
-        # Queue this event
 
-        # Stabilizer event position fetch & apply
-        self.assist = tdw.app.get_assistant()
-        if self.assist:
-            self.assist.fetch(event.x, event.y)
+        # Assitant event position fetch & apply
+        if assistant:
+            assistant.fetch(event.x, event.y, pressure)
             if self.doc.stabilizer_mode:
-                pos = self.assist.get_current()
-                if not pos:
+                info = assistant.get_current()
+                if not info:
                     return super(FreehandMode, self).motion_notify_cb(tdw, event)
                 else:
-                    x, y = pos
+                    x, y, pressure = info
 
+        # Queue this event
         x, y = tdw.display_to_model(x, y)
         event_data = (time, x, y, pressure, xtilt, ytilt)
         drawstate.queue_motion(event_data)
