@@ -1445,22 +1445,38 @@ class OverlayBezier (Overlay):
         # points corresponding to the nodes the user manipulates.
         fixed = []
 
-        for i, node in enumerate(nodes):
-            x, y = self._tdw.model_to_display(node.x, node.y)
+       #for i, node in enumerate(nodes):
+       #    x, y = self._tdw.model_to_display(node.x, node.y)
+       #    fixed.append(_LayoutNode(x, y))
+       #    # ADDED CODES FOR BEZIERTOOL: 
+       #    # to avoid buttons are overwrap on control handles,
+       #    # treat control handles as nodes,when it is visible.
+       #    if i == self._inkmode.current_node_index:
+       #        if i == 0 and self._draw_initial_handle_both == False:
+       #            seq = (1,)
+       #        else:
+       #            seq = (0,1)
+       #        for t in seq:
+       #            handle = node.get_control_handle(t)
+       #            x, y = self._tdw.model_to_display(handle.x, handle.y)
+       #            fixed.append(_LayoutNode(x, y))
+       #    # ADDED CODES END.
+
+       #for i, node in enumerate(nodes):
+        node = nodes[0]
+
+        x, y = self._tdw.model_to_display(node.x, node.y)
+        fixed.append(_LayoutNode(x, y))
+        if self._draw_initial_handle_both == False:
+            seq = (1,)
+        else:
+            seq = (0,1)
+        for t in (0,1):
+            handle = node.get_control_handle(t)
+            x, y = self._tdw.model_to_display(handle.x, handle.y)
             fixed.append(_LayoutNode(x, y))
-            # ADDED CODES FOR BEZIERTOOL: 
-            # to avoid buttons are overwrap on control handles,
-            # treat control handles as nodes,when it is visible.
-            if i == self._inkmode.current_node_index:
-                if i == 0 and self._draw_initial_handle_both == False:
-                    seq = (1,)
-                else:
-                    seq = (0,1)
-                for t in seq:
-                    handle = node.get_control_handle(t)
-                    x, y = self._tdw.model_to_display(handle.x, handle.y)
-                    fixed.append(_LayoutNode(x, y))
-            # ADDED CODES END.
+
+        # ADDED CODES END.
 
         # The reject and accept buttons are connected to different nodes
         # in the stroke by virtual springs.
