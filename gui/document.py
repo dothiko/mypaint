@@ -2196,6 +2196,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
     ##+ Assist modifier
 
     def assist_mode_stabilizer_cb(self, action):
+        self.app.get_assistant().reset()
         self.stabilizer_mode=action.get_active()
 
     def assist_mode_normal_cb(self, action):

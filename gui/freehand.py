@@ -271,6 +271,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         self._reinstate_drawing_cursor(tdw=None)
         super(FreehandMode, self).leave(**kwds)
 
+    
+
     ## Special cursor state while there's pressure
 
     def _hide_drawing_cursor(self, tdw):
@@ -402,7 +404,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             self._hide_drawing_cursor(tdw)
 
 
-
             result = True
         return (super(FreehandMode, self).button_press_cb(tdw, event)
                 or result)
@@ -428,13 +429,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
             result = True
 
-            # Stablize
-            assistant = tdw.app.get_assistant()
-            if assistant:
-                assistant.reset()
-
-
-        
         return (super(FreehandMode, self).button_release_cb(tdw, event)
                 or result)
 
@@ -463,6 +457,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             return False
 
 
+
         # Disable or work around GDK's motion event compression
         if self._event_compression_supported is None:
             win = tdw.get_window()
@@ -472,10 +467,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         if drawstate.event_compression_workaround is None:
             self._add_event_compression_workaround(tdw)
 
-        if drawstate.button_down == 1:
-            assistant = tdw.app.get_assistant()
-        else:
-            assistant = None
 
         # Extract the raw readings for this event
         x = event.x
@@ -487,6 +478,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         xtilt = event.get_axis(gdk.AXIS_XTILT)
         ytilt = event.get_axis(gdk.AXIS_YTILT)
         state = event.state
+
+        assistant = tdw.app.get_assistant()
 
         # Workaround for buggy evdev behaviour.
         # Events sometimes get a zero raw pressure reading when the
@@ -573,6 +566,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         else:
             self._reinstate_drawing_cursor(tdw)
 
+
         # HACK: straight line mode?
         # TEST: Does this ever happen?
         if state & gdk.SHIFT_MASK:
@@ -588,17 +582,16 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             # Check that we can use the eventhack data uncorrected
             if (hx0, hy0, ht0) == (x, y, time):
                 for hx, hy, ht in drawstate.evhack_positions:
-                    h_pressure = None
                     if assistant:
                         assistant.fetch(hx, hy, pressure)
                         if self.doc.stabilizer_mode:
-                            info = assistant.get_current()
+                            info = assistant.get_current(drawstate.button_down, time)
                             if not info:
                                 continue
                             else:
-                                hx, hy, h_pressure = info
+                                hx, hy, junk = info
                     hx, hy = tdw.display_to_model(hx, hy)
-                    event_data = (ht, hx, hy, h_pressure, None, None)
+                    event_data = (ht, hx, hy, None, None, None)
                     drawstate.queue_motion(event_data)
             else:
                 logger.warning(
@@ -606,21 +599,19 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                     "corresponding motion-notify-event (%0.2f, %0.2f, %d). "
                     "This can be ignored if it's just a one-off occurrence.",
                     hx0, hy0, ht0, x, y, time)
+
         # Reset the eventhack queue
         if len(drawstate.evhack_positions) > 0:
             drawstate.evhack_positions = []
 
-
         # Assitant event position fetch & apply
         if assistant:
-            assistant.fetch(event.x, event.y, pressure)
+            assistant.fetch(x, y, pressure)
             if self.doc.stabilizer_mode:
-                info = assistant.get_current()
-                if not info:
-                    return super(FreehandMode, self).motion_notify_cb(tdw, event)
-                else:
+                info = assistant.get_current(drawstate.button_down, time)
+                if info:
                     x, y, pressure = info
-
+            
         # Queue this event
         x, y = tdw.display_to_model(x, y)
         event_data = (time, x, y, pressure, xtilt, ytilt)
@@ -664,6 +655,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         drawstate = self._get_drawing_state(tdw)
         time, x, y, pressure, xtilt, ytilt = event_data
         model = tdw.doc
+
 
         # Calculate time delta for the brush engine
         last_event_time = drawstate.last_handled_event_time

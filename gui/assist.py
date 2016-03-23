@@ -52,7 +52,7 @@ class Assistbase(object):
         Assistbase._sample_index = 0
         Assistbase._sample_count = 0
 
-    def get_current(self):
+    def get_current(self, button, time):
         """only stub"""
         pass
 
@@ -76,23 +76,48 @@ class Stabilizer(Assistbase):
     def __init__(self):
         super(Stabilizer, self).__init__()
 
-    def get_current(self):
+    def get_current(self, button, time):
         if self._sample_count < self._sampling_max:
             return None
+
 
         rx = 0
         ry = 0
         rp = 0
         idx = 0
         while idx < self._sampling_max:
-            rx += self._get_stabilized_x(idx)
-            ry += self._get_stabilized_y(idx)
+            rx += self._get_stabilized_x(idx) 
+            ry += self._get_stabilized_y(idx) 
             rp += self._get_stabilized_pressure(idx)
             idx += 1
 
-        return (rx / self._sampling_max, 
-                ry / self._sampling_max,
-                rp / self._sampling_max)
+
+        rx /= self._sampling_max 
+        ry /= self._sampling_max
+        rp /= self._sampling_max
+
+        if button == None:
+            if (self._prev_button != None):
+                if (self._prev_rx and 
+                    math.hypot(rx - self._prev_rx, ry - self._prev_ry) > 2): 
+                    # From my experience, 2 is good value to make trail.
+                    self._prev_rx = rx
+                    self._prev_ry = ry
+                    return (rx, ry, rp)
+            rp = 0.0 
+
+        self._prev_button = button
+        self._prev_rx = rx
+        self._prev_ry = ry
+
+
+        return (rx, ry, rp)
+
+    def reset(self):
+        super(Stabilizer, self).reset()
+        self._prev_rx = None
+        self._prev_ry = None
+        self._prev_button = None
 
     def _get_stabilized_x(self, idx):
         return self._samples_x[(self._sample_index + idx) % self._sampling_max]
