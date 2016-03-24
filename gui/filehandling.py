@@ -1437,7 +1437,13 @@ class FileHandler (object):
                 'recent_projects.txt')
 
         with open(recent_project_path, 'w') as ifp:
-            for cdir in self.recent_projects_info:
-                ifp.write(cdir) 
-                ifp.write('\n') 
+            try:
+                for i, cdir in enumerate(self.recent_projects_info):
+                    ifp.write(cdir) 
+                    ifp.write('\n') 
+            except Exception,e:
+                print "********** [CHANCE TO DEBUG!!] ***************"
+                print str(e)
+                print type(cdir)
+                print i
 

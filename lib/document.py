@@ -293,6 +293,7 @@ class Document (object):
 
         if not painting_only:
             self._autosave_processor = lib.idletask.Processor()
+            self.command_stack.stack_updated += self._command_stack_updated_cb
             self.effective_bbox_changed += self._effective_bbox_changed_cb
 
         # Optional page area and resolution information
