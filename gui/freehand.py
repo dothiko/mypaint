@@ -403,6 +403,10 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             # Hide the cursor if configured to
             self._hide_drawing_cursor(tdw)
 
+            assistant = tdw.app.get_assistant()
+            if assistant:
+                assistant.reset()
+
 
             result = True
         return (super(FreehandMode, self).button_press_cb(tdw, event)
@@ -582,16 +586,17 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             # Check that we can use the eventhack data uncorrected
             if (hx0, hy0, ht0) == (x, y, time):
                 for hx, hy, ht in drawstate.evhack_positions:
+                    hp = None
                     if assistant:
-                        assistant.fetch(hx, hy, pressure)
+                        assistant.fetch(hx, hy, pressure, time)
                         if self.doc.stabilizer_mode:
                             info = assistant.get_current(drawstate.button_down, time)
                             if not info:
                                 continue
                             else:
-                                hx, hy, junk = info
+                                hx, hy, hp = info
                     hx, hy = tdw.display_to_model(hx, hy)
-                    event_data = (ht, hx, hy, None, None, None)
+                    event_data = (ht, hx, hy, hp, None, None)
                     drawstate.queue_motion(event_data)
             else:
                 logger.warning(
@@ -606,11 +611,14 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
         # Assitant event position fetch & apply
         if assistant:
-            assistant.fetch(x, y, pressure)
+            assistant.fetch(x, y, pressure, time)
             if self.doc.stabilizer_mode:
                 info = assistant.get_current(drawstate.button_down, time)
                 if info:
                     x, y, pressure = info
+                else:
+                    return False
+
             
         # Queue this event
         x, y = tdw.display_to_model(x, y)

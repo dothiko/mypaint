@@ -39,6 +39,7 @@ class Assistbase(object):
     _samples_p = array.array('f')
     _sample_index = 0
     _sample_count = 0
+    _current_index = 0
 
     def __init__(self):
         if len(Assistbase._samples_x) < Assistbase._sampling_max:
@@ -56,15 +57,18 @@ class Assistbase(object):
         """only stub"""
         pass
 
-    def fetch(self, x, y, pressure):
+    def fetch(self, x, y, pressure, time):
         """Fetch samples"""
         Assistbase._samples_x[Assistbase._sample_index] = x 
         Assistbase._samples_y[Assistbase._sample_index] = y 
         Assistbase._samples_p[Assistbase._sample_index] = pressure 
+        Assistbase._current_index = Assistbase._sample_index
         Assistbase._sample_index+=1
         Assistbase._sample_index%=Assistbase._sampling_max
         Assistbase._sample_count+=1
 
+    def get_current_index(self, offset):
+        return (self._current_index + offset) % self._sampling_max
             
 
 class Stabilizer(Assistbase):
@@ -80,14 +84,13 @@ class Stabilizer(Assistbase):
         if self._sample_count < self._sampling_max:
             return None
 
-
         rx = 0
         ry = 0
         rp = 0
         idx = 0
         while idx < self._sampling_max:
-            rx += self._get_stabilized_x(idx) 
-            ry += self._get_stabilized_y(idx) 
+            rx += self._get_stabilized_x(idx)
+            ry += self._get_stabilized_y(idx)
             rp += self._get_stabilized_pressure(idx)
             idx += 1
 
@@ -96,15 +99,15 @@ class Stabilizer(Assistbase):
         ry /= self._sampling_max
         rp /= self._sampling_max
 
+        # Heading / Trailing glitch workaround
         if button == None:
             if (self._prev_button != None):
-                if (self._prev_rx and 
-                    math.hypot(rx - self._prev_rx, ry - self._prev_ry) > 2): 
-                    # From my experience, 2 is good value to make trail.
-                    self._prev_rx = rx
-                    self._prev_ry = ry
-                    return (rx, ry, rp)
+                pass
             rp = 0.0 
+        elif button == 1:
+            if (self._prev_button == None):
+                rp = 0.0
+
 
         self._prev_button = button
         self._prev_rx = rx
@@ -118,14 +121,26 @@ class Stabilizer(Assistbase):
         self._prev_rx = None
         self._prev_ry = None
         self._prev_button = None
-
-    def _get_stabilized_x(self, idx):
-        return self._samples_x[(self._sample_index + idx) % self._sampling_max]
-    
-    def _get_stabilized_y(self, idx):
-        return self._samples_y[(self._sample_index + idx) % self._sampling_max]
-
-    def _get_stabilized_pressure(self, idx):
-        return self._samples_p[(self._sample_index + idx) % self._sampling_max]
+        self._prev_time = None
         
 
+    def _get_stabilized_x(self, idx):
+        return self._samples_x[self.get_current_index(idx)]
+    
+    def _get_stabilized_y(self, idx):
+        return self._samples_y[self.get_current_index(idx)]
+
+    def _get_stabilized_pressure(self, idx):
+        return self._samples_p[self.get_current_index(idx)]
+
+    def fetch(self, x, y, pressure, time):
+        """Fetch samples"""
+        
+        # To reject extreamly slow and near samples
+        if self._prev_time == None or time - self._prev_time > 8:
+            px = self._get_stabilized_x(0)
+            py = self._get_stabilized_x(0)
+            if math.hypot(x - px, y - py) > 4:
+                super(self.__class__, self).fetch(x, y, pressure, time)
+            self._prev_time = time
+        
