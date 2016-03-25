@@ -485,26 +485,29 @@ class PolyfillMode (BezierMode):
             
             if len(self.nodes) < 2:
                 continue
-        
-            self._queue_task(
-                    self._queue_polygon_area
-            )
-        self._start_task_queue_runner()
 
-    def _queue_polygon_area(self):
-        for tdw in self._overlays:
-            
-            if len(self.nodes) < 2:
-                continue
-    
             sdx, sdy = self.selection_rect.get_display_offset(tdw)
     
             sx, sy, ex, ey = self._get_maximum_rect(tdw, sdx, sdy)
+        
+            self._queue_task(
+                    self._queue_polygon_area,
+                    sx, sy, ex, ey
+            )
+
+        self._start_task_queue_runner()
+
+    def _queue_polygon_area(self, sx, sy, ex, ey):
+        for tdw in self._overlays:
             tdw.queue_draw_area(sx, sy, ex-sx+1, ey-sy+1)
 
     def _start_new_capture_phase_polyfill(self, tdw, rollback=False):
         if rollback:
             self._stop_task_queue_runner(complete=False)
+           #sdx, sdy = self.selection_rect.get_display_offset(tdw)
+           #sx, sy, ex, ey = self._get_maximum_rect(tdw, sdx, sdy)
+           #self._queue_polygon_area(
+           #        sx, sy, ex, ey)
         else:
             self._stop_task_queue_runner(complete=True)
             bbox = self._get_maximum_rect(None)
@@ -588,6 +591,7 @@ class PolyfillMode (BezierMode):
                             self._start_new_capture_phase_polyfill(tdw, rollback=True)
                         elif self.zone == _EditZone_Bezier.ACCEPT_BUTTON:
                             self._start_new_capture_phase_polyfill(tdw, rollback=False)
+                        
                         self._reset_adjust_data()
                         return False
                     
