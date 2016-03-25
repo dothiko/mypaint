@@ -1156,7 +1156,10 @@ class RestackLayer (Command):
         # Do the insert
         targ_index = targ_path[-1]
         targ_parent = rootstack.deepget(targ_path[:-1])
-        if isinstance(targ_parent, lib.layer.LayerStack):
+        targ_instance = rootstack.deepget(targ_path)
+        if isinstance(targ_instance, lib.layer.LayerStack):
+            targ_instance.insert(targ_index, src)
+        elif isinstance(targ_parent, lib.layer.LayerStack):
             targ_parent.insert(targ_index, src)
         else:
             # The target path is a nonexistent path one level deeper
@@ -1208,8 +1211,6 @@ class RestackLayer (Command):
             affected.append(oldleaf)
         else:
             src = rootstack.deeppop(src_path_after)
-            print src
-            print list(rootstack)
         self._src_path_after = None
         # Insert it back where it came from
         rootstack.deepinsert(src_path, src)
