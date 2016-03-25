@@ -582,6 +582,9 @@ class Document (object):
         )
         manifest.add(stackfile_rel)
         self._autosave_launch_cleanup(oradir, manifest)
+
+    def get_autosave_processor(self):
+        return self._autosave_processor
     
     def _autosave_launch_cleanup(self, oradir, manifest, taskproc=None):
         """The common method of launching autosave cleanup task.
@@ -1685,7 +1688,7 @@ class Document (object):
         try:
             
             if self._autosave_processor.has_work():
-                logger.info('autosave processor still have pending work')
+                logger.info('autosave processor still have pending works')
                 self._autosave_processor.finish_all()
             
             # If 'save as another project', set _autosave_dirty flag
@@ -1800,13 +1803,11 @@ class Document (object):
                 
             # After all files copied,
             # ordinary autosave processing should be launched.
-            self._queue_autosave_writes(dirname)
             self._as_project = True
-              
+            self._queue_autosave_writes(dirname)
         finally:
             self._autosave_dirty = False 
-            pass
-    
+
 
     def load_project(self, dirname,feedback_cb=None,**kwargs):
         """ load a directory as a project

@@ -59,6 +59,7 @@ import lib.xml
 import lib.glib
 from lib.gettext import gettext as _
 from lib.gettext import C_
+import gui.projectsave_progress
 
 
 ## Module constants
@@ -684,7 +685,15 @@ class DrawWindow (Gtk.Window):
     ## Miscellaneous actions
 
     def quit_cb(self, *junk):
-        self.app.doc.model.sync_pending_changes()
+        model = self.app.doc.model
+        model.sync_pending_changes()
+        proc = model.get_autosave_processor()
+        if proc.has_work():
+            progress = gui.projectsave_progress.ProjectSave_progress(proc, self)
+            # Projectsave_progress.run() returns False when cancelled
+            if progress.run() == False: 
+                return True
+
         self.app.save_gui_config()  # FIXME: should do this periodically, not only on quit
 
         ok_to_quit = self.app.filehandler.confirm_destructive_action(
@@ -700,8 +709,11 @@ class DrawWindow (Gtk.Window):
         if not ok_to_quit:
             return True
 
-        self.app.doc.model.cleanup()
+
+
+
         self.app.profiler.cleanup()
+        model.cleanup()
         Gtk.main_quit()
         return False
 
