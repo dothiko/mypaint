@@ -186,7 +186,6 @@ def _draw_polygon_to_layer(model, target_layer,nodes,
     layer.mode = mode
 
     if mode == lib.mypaintlib.CombineDestinationIn:
-        layer.mode = lib.mypaintlib.CombineDestinationIn
         tiles.update(target_layer.get_tile_coords())
         dstsurf = target_layer._surface
         srcsurf = layer._surface
@@ -232,7 +231,6 @@ class PolyFill(Command):
     def redo(self):
         # Pick a source
         layers = self.doc.layer_stack
-        src_layer = layers.current
         assert self.snapshot is None
         self.snapshot = layers.current.save_snapshot()
         dst_layer = layers.current
