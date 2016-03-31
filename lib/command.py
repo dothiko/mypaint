@@ -17,6 +17,7 @@ from observable import event
 import tiledsurface
 import lib.stroke
 from warnings import warn
+import lib.mypaintlib
 
 
 from copy import deepcopy
@@ -1572,6 +1573,7 @@ class RestackMultipleLayers (Command):
                 targ_index = targ_path[-1]
                 targ_parent.insert(targ_index, src)
             else:
+                # TODO could this case happens...?
                 assert len(targ_path) > 1
                 targ_parent_index = targ_path[-2]
                 targ_parent = rootstack.deepget(targ_path[:-2])
@@ -1797,4 +1799,112 @@ class SetMultipleLayersLocked (Command):
         else:
             return _("Unlock Selected Layers")
 
+
+class CutCurrentLayer (Command):
+    """Cut current editing layer with 
+    other selected layer(s) ,by using 
+    lib.mypaintlib.CombineDestinationOut (= to cut with opaque area) or 
+    lib.mypaintlib.CombineDestinationin (= to cut with transparent area) 
+    """
+
+    display_name = _("Cut Current layer")
+
+    def __init__(self, doc, opaque, layerpaths,
+                 **kwds):
+        assert len(layerpaths) >= 2
+        super(CutCurrentLayer, self).__init__(doc, **kwds)
+
+        rootstack = self.doc.layer_stack
+        self._target_path = rootstack.current_path
+        target = rootstack.deepget(self._target_path)
+        assert not isinstance(target, lib.layer.LayerStack)
+
+        self._layerpaths = layerpaths
+        self._opaque_operation = opaque
+        self._merged = False
+        if not opaque:
+            if len(layerpaths) == 2:
+                # Special case: no need to merge
+                self._merged = True
+                self._merged_layer = None
+            else:
+                self._merged_layer = lib.layer.PaintingLayer(name='')
+        self._target_snapshot = None
+
+    @staticmethod
+    def _merge(target_layer, layer, mode):
+        tiles = set()
+        tiles.update(layer.get_tile_coords())
+        dstsurf = target_layer._surface
+        for tx, ty in tiles:
+            with dstsurf.tile_request(tx, ty, readonly=False) as dst:
+                layer._surface.composite_tile(dst, True, tx, ty, mipmap_level=0,
+                        mode=mode)
+
+    def _cut_opaque(self, target_layer, cutting_layer):
+        oldmode = cutting_layer.mode
+       #cutting_layer.mode = lib.mypaintlib.CombineDestinationOut
+        CutCurrentLayer._merge(target_layer, cutting_layer,
+                lib.mypaintlib.CombineDestinationOut)
+       #cutting_layer.mode = oldmode
+
+    def _cut_transparent(self, target_layer):
+        tiles = set()
+        cutting_layer = self._merged_layer
+
+        # Mode preserving needed here too, 
+        # because when length of self._layerpaths is 1
+        # this command utilizes an existing layer as self._merged_layer.
+        oldmode = cutting_layer.mode
+       #cutting_layer.mode = lib.mypaintlib.CombineDestinationIn
+
+        tiles.update(target_layer.get_tile_coords())
+        dstsurf = target_layer._surface
+        srcsurf = cutting_layer._surface
+        for tx, ty in tiles:
+            with dstsurf.tile_request(tx, ty, readonly=False) as dst:
+                if srcsurf.tile_request(tx, ty, readonly=False) == None:
+                    lib.mypaintlib.tile_clear_rgba16(dst)
+                else:
+                    cutting_layer._surface.composite_tile(dst, True, tx, ty, mipmap_level=0,
+                            mode = lib.mypaintlib.CombineDestinationIn)
+       #cutting_layer.mode = oldmode
+
+
+    def redo(self):
+        rootstack = self.doc.layer_stack
+        target = rootstack.deepget(self._target_path)
+        self._target_snapshot = target.save_snapshot()
+        for path in self._layerpaths:
+            layer = rootstack.deepget(path)
+            if layer != target:
+                if isinstance(layer, lib.layer.LayerStack):
+                    layer = rootstack.layer_new_normalized(path)
+
+                if self._opaque_operation:
+                    self._cut_opaque(target, layer)
+                elif self._merged == False:
+                    CutCurrentLayer._merge(self._merged_layer, layer,
+                            lib.mypaintlib.CombineNormal)
+                elif len(self._layerpaths) == 2:
+                    self._merged_layer = layer
+                else:
+                    raise NotImplementedError("Unknown case for cut layer")
+
+        if not self._opaque_operation:
+            self._merged = True
+            self._cut_transparent(target)
+
+        # Redraw target layer 
+        self._notify_canvas_observers( (target.get_full_redraw_bbox(), ) )
+
+    def undo(self):
+        rootstack = self.doc.layer_stack
+        target = rootstack.current
+        assert self._target_snapshot != None
+        target.load_snapshot(self._target_snapshot)
+        self._target_snapshot = None
+
+        # Redraw target layer 
+        self._notify_canvas_observers( (target.get_full_redraw_bbox(), ) )
 

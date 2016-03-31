@@ -867,12 +867,12 @@ class Document (object):
         self.do(cmd)
 
     def restack_multiple_layers(self, src_path_list, targ_path):
-        """Moves a layer within the layer stack by path, undoably
+        """Moves multiple layers within the layer stack by path, undoably
 
-        :param tuple src_path: path of the layer to be moved
+        :param tuple src_path_list: a list of path of the layers to be moved
         :param tuple targ_path: target insert path
 
-        The source path must identify an existing layer. The target
+        The source paths must identify an existing layer. The target
         path must be a valid insertion path at the time this method is
         called.
         """
@@ -1163,6 +1163,16 @@ class Document (object):
             self.do(command.GroupSelectedLayers(self, selected_path))
             return True
         return False
+
+    def cut_current_layer(self, opaque):
+        """Sets the input-lock status of selected layers."""
+        selected_path = self.layer_stack.get_selected_layers()
+        if len(selected_path) >= 2:
+            cmd = command.CutCurrentLayer(self, opaque, selected_path)
+            self.do(cmd)
+            return True
+        else:
+            return False
 
     ## Layer import/export
 

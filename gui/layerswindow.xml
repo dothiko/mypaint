@@ -30,6 +30,9 @@
       <separator/>
       <menuitem action='MergeSelectedLayers'/>
       <menuitem action='GroupSelectedLayers'/>
+      <separator/>
+      <menuitem action='CutLayerWithSelectedOpaque'/>
+      <menuitem action='CutLayerWithSelectedTransparent'/>
     </placeholder>
     <separator/>
     <placeholder name="AdvancedListActions"/>

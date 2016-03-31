@@ -1432,6 +1432,18 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         if self.model.group_selected_layers():
             self.layerblink_state.activate(action)
 
+    def cut_layer_with_selected_cb(self, action):
+        action_name = action.get_name()
+        if action_name.endswith("Opaque"):
+            if not self.model.cut_current_layer(True):
+                return False
+        elif action_name.endswith("Transparent"):
+            if not self.model.cut_current_layer(False):
+                return False
+        else:
+            raise NotImplementedError("Unknown action %r" % action_name)
+        self.layerblink_state.activate(action)
+
     ## Brush settings callbacks
 
     def brush_bigger_cb(self, action):

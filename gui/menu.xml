@@ -263,6 +263,8 @@
       <menuitem action='MergeVisibleLayers'/>
       <menuitem action='NewLayerMergedFromVisible'/>
       <menuitem action='NormalizeLayerMode'/>
+      <menuitem action='CutLayerWithSelectedOpaque'/>
+      <menuitem action='CutLayerWithSelectedTransparent'/>
       <!-- Current layer: external editing -->
       <separator/>
       <menuitem action='BeginExternalLayerEdit'/>

@@ -648,6 +648,20 @@ Vocabulary
           <signal name="activate" handler="new_layer_cb"/>
         </object>
       </child>
+      <child>
+        <object class="GtkAction" id="CutLayerWithSelectedOpaque">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Cut Layer with Selected Opaque</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Cut current layer with opaque area of selected layer(s)</property>
+          <signal name="activate" handler="cut_layer_with_selected_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="CutLayerWithSelectedTransparent">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Cut Layer with Selected Transparent</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Cut current layer with transparent area of selected layer(s)</property>
+          <signal name="activate" handler="cut_layer_with_selected_cb"/>
+        </object>
+      </child>
       <!-- }}} -->
       <!-- {{{ View manipulation -->
       <child>
