@@ -460,6 +460,16 @@ class PolyfillMode (BezierMode):
 
         return (sx, sy, ex, ey)
 
+    def _reset_all_internal_state(self):
+        self._queue_draw_buttons()
+        self._queue_redraw_all_nodes()
+        self._queue_redraw_curve() 
+        self._reset_nodes()
+        self._reset_capture_data()
+        self._reset_adjust_data()
+        self.phase = _PhaseBezier.INITIAL
+        self._stroke_from_history = False
+
     ## Properties
 
     @property
@@ -499,39 +509,18 @@ class PolyfillMode (BezierMode):
         for tdw in self._overlays:
             tdw.queue_draw_area(sx, sy, ex-sx+1, ey-sy+1)
 
-    def _start_new_capture_phase_polyfill(self, tdw, rollback=False):
+    def _start_new_capture_phase_polyfill(self, tdw, mode, rollback=False):
         if rollback:
             self._stop_task_queue_runner(complete=False)
            #sdx, sdy = self.selection_rect.get_display_offset(tdw)
            #sx, sy, ex, ey = self._get_maximum_rect(tdw, sdx, sdy)
            #self._queue_polygon_area(
            #        sx, sy, ex, ey)
+            self._reset_all_internal_state()
         else:
             self._stop_task_queue_runner(complete=True)
-            bbox = self._get_maximum_rect(None)
-            if self.doc.model.layer_stack.current.get_fillable():
-                cmd = PolyFill(self.doc.model,
-                        self.nodes,
-                        self.foreground_color,
-                        None,bbox,
-                        self.composite_mode)
-                self.doc.model.do(cmd)
+            self.execute_draw_polygon(mode=mode)
 
-
-            if not self._stroke_from_history:
-                self.stroke_history.register(self.nodes)
-
-        self._queue_draw_buttons()
-        self._queue_redraw_all_nodes()
-        self._queue_redraw_curve() 
-        self._reset_nodes()
-        self._reset_capture_data()
-        self._reset_adjust_data()
-        self.phase = _PhaseBezier.INITIAL
-       #self._queue_redraw_curve() 
-
-        self._stroke_from_history = False
-        self.options_presenter.reset_stroke_history()
 
     def leave(self):
         if not self._is_active() and len(self.nodes) > 1:
@@ -864,6 +853,42 @@ class PolyfillMode (BezierMode):
     ## Interrogating events
 
     
+    ## Interface methods which call from callbacks
+
+    def execute_draw_polygon(self, mode=None, fill=True, fill_atop=False,
+            erase_outside=False):
+
+        if self.doc.model.layer_stack.current.get_fillable():
+            if mode:
+                composite_mode = mode
+            else:
+                if fill:
+                    if fill_atop:
+                        composite_mode = lib.mypaintlib.CombineSourceAtop
+                    else:
+                        composite_mode = lib.mypaintlib.CombineNormal
+                else:
+                    if erase_outside:
+                        composite_mode = lib.mypaintlib.CombineDestinationIn
+                    else:
+                        composite_mode = lib.mypaintlib.CombineDestinationOut
+
+                    
+            bbox = self._get_maximum_rect(None)
+            cmd = PolyFill(self.doc.model,
+                    self.nodes,
+                    self.foreground_color,
+                    None,bbox,
+                    composite_mode)
+            self.doc.model.do(cmd)
+
+            if not self._stroke_from_history:
+                self.stroke_history.register(self.nodes)
+                self.options_presenter.reset_stroke_history()
+        else:
+            logger.debug("Polyfilltool: target is not fillable layer.nothing done.")
+
+        self._reset_all_internal_state()
 
     ## Node editing
 
@@ -1120,6 +1145,21 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         self._fill_polygon_checkbutton= builder.get_object("fill_checkbutton")
         self._fill_polygon_checkbutton.set_sensitive(True)
 
+        # Creating toolbar
+        base_grid = builder.get_object("polygon_operation_grid")
+        toolbar = gui.widgets.inline_toolbar(
+            self._app,
+            [
+                ("PolygonFill", "mypaint-add-symbolic"),
+                ("PolygonErase", "mypaint-remove-symbolic"),
+                ("PolygonEraseOutside", "mypaint-up-symbolic"),
+                ("PolygonFillAtop", "mypaint-down-symbolic"),
+            ]
+        )
+        style = toolbar.get_style_context()
+        style.set_junction_sides(Gtk.JunctionSides.TOP)
+        base_grid.attach(toolbar, 0, 0, 2, 1)
+
         # Creating history combo
         combo = builder.get_object('path_history_combobox')
         combo.set_model(PolyfillMode.stroke_history.liststore)
@@ -1128,7 +1168,6 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         combo.add_attribute(cell,'text',0)
         self._stroke_history_combo = combo
 
-        base_grid = builder.get_object("points_editing_grid")
 
         # Creating gradient sample
         store = self.gradient_preset_store.liststore
@@ -1153,17 +1192,17 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         self._gradientview = treeview
         exp.set_expanded(True)
 
-        # Creating composite mode combo
-        combo = builder.get_object('composite_combobox')
-        liststore = Gtk.ListStore(object, str)
-        for cmode in POLYFILLMODES:
-            liststore.append(cmode)
-        combo.set_model(liststore)
-        cell=Gtk.CellRendererText()
-        combo.pack_start(cell,True)
-        combo.add_attribute(cell,'text',1)
-        self._composite_combo = combo
-        self.changed_composite_mode(0)
+       ## Creating composite mode combo
+       #combo = builder.get_object('composite_combobox')
+       #liststore = Gtk.ListStore(object, str)
+       #for cmode in POLYFILLMODES:
+       #    liststore.append(cmode)
+       #combo.set_model(liststore)
+       #cell=Gtk.CellRendererText()
+       #combo.pack_start(cell,True)
+       #combo.add_attribute(cell,'text',1)
+       #self._composite_combo = combo
+       #self.changed_composite_mode(0)
 
         # the last line
         self._updating_ui = False

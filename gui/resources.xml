@@ -902,6 +902,36 @@ Vocabulary
         </object>
       </child>
       <!-- }}} -->
+      <!-- {{{ polygon fill related actions -->
+      <child>
+        <object class="GtkAction" id="PolygonFill">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Polygon Fill</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Fill a polygon area with current foreground color or selected gradient</property>
+          <signal name="activate" handler="polygon_fill_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="PolygonErase">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Polygon Erase</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Erase inside polygon from current layer.</property>
+          <signal name="activate" handler="polygon_erase_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="PolygonEraseOutside">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Polygon Erase Outside</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Erase outside polygon from current layer.</property>
+          <signal name="activate" handler="polygon_erase_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="PolygonFillAtop">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Polygon Fill Atop</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Fill polygon with current foreground color or selected gradient, only currently opaque area.</property>
+          <signal name="activate" handler="polygon_fill_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
     </object>
   </child>
   <!--}}} -->

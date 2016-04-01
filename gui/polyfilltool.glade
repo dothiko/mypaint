@@ -106,7 +106,7 @@
       </packing>
     </child>
     <child>
-      <object class="GtkGrid" id="points_editing_grid">
+      <object class="GtkGrid" id="polygon_operation_grid">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
         <property name="margin_left">4</property>
@@ -160,6 +160,19 @@
           </packing>
         </child>
         <child>
+          <object class="GtkLabel" id="gradient_type_label">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="halign">start</property>
+            <property name="margin_right">6</property>
+            <property name="label" translatable="yes">Gradient Type:</property>
+          </object>
+          <packing>
+            <property name="left_attach">0</property>
+            <property name="top_attach">1</property>
+          </packing>
+        </child>
+        <child>
           <object class="GtkComboBoxText" id="gradient_type_combobox">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
@@ -174,47 +187,17 @@
           </object>
           <packing>
             <property name="left_attach">1</property>
-            <property name="top_attach">0</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkLabel" id="gradient_type_label">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="halign">start</property>
-            <property name="margin_right">6</property>
-            <property name="label" translatable="yes">Gradient Type:</property>
-          </object>
-          <packing>
-            <property name="left_attach">0</property>
-            <property name="top_attach">0</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkLabel" id="composite_mode_label">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="halign">start</property>
-            <property name="margin_right">6</property>
-            <property name="label" translatable="yes">Composite Mode:</property>
-          </object>
-          <packing>
-            <property name="left_attach">0</property>
             <property name="top_attach">1</property>
           </packing>
         </child>
         <child>
-          <object class="GtkComboBox" id="composite_combobox">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="tooltip_text" translatable="yes">Composite mode against current layer.</property>
-            <property name="margin_top">4</property>
-            <signal name="changed" handler="_composite_mode_changed_cb" swapped="no"/>
-          </object>
-          <packing>
-            <property name="left_attach">1</property>
-            <property name="top_attach">1</property>
-          </packing>
+          <placeholder/>
+        </child>
+        <child>
+          <placeholder/>
+        </child>
+        <child>
+          <placeholder/>
         </child>
         <child>
           <placeholder/>

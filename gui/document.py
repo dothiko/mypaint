@@ -2203,6 +2203,21 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             # but its hiding state changed from
             # inside of the mode class.
             mode.toggle_current_node_curve()
+
+    ##+ Polygon fill 
+    def polygon_fill_cb(self, action):
+        mode=self.modes.top
+        if hasattr(mode, 'execute_draw_polygon'):
+            mode.execute_draw_polygon(
+                    fill=True,
+                    fill_atop=action.get_name().endswith('Atop'))
+
+    def polygon_erase_cb(self, action):
+        mode=self.modes.top
+        if hasattr(mode, 'execute_draw_polygon'):
+            mode.execute_draw_polygon(
+                    fill=False,
+                    erase_outside=action.get_name().endswith('Outside'))
     
 
     ##+ Assist modifier
