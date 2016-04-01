@@ -1842,22 +1842,12 @@ class CutCurrentLayer (Command):
                         mode=mode)
 
     def _cut_opaque(self, target_layer, cutting_layer):
-        oldmode = cutting_layer.mode
-       #cutting_layer.mode = lib.mypaintlib.CombineDestinationOut
         CutCurrentLayer._merge(target_layer, cutting_layer,
                 lib.mypaintlib.CombineDestinationOut)
-       #cutting_layer.mode = oldmode
 
     def _cut_transparent(self, target_layer):
         tiles = set()
         cutting_layer = self._merged_layer
-
-        # Mode preserving needed here too, 
-        # because when length of self._layerpaths is 1
-        # this command utilizes an existing layer as self._merged_layer.
-        oldmode = cutting_layer.mode
-       #cutting_layer.mode = lib.mypaintlib.CombineDestinationIn
-
         tiles.update(target_layer.get_tile_coords())
         dstsurf = target_layer._surface
         srcsurf = cutting_layer._surface
@@ -1868,7 +1858,6 @@ class CutCurrentLayer (Command):
                 else:
                     cutting_layer._surface.composite_tile(dst, True, tx, ty, mipmap_level=0,
                             mode = lib.mypaintlib.CombineDestinationIn)
-       #cutting_layer.mode = oldmode
 
 
     def redo(self):
