@@ -1238,27 +1238,28 @@ class BezierMode (InkingMode):
         assert index < len(self.nodes)-1
         cn = self.nodes[index]
         nn = self.nodes[index+1]
+        
 
-        p0, p1, p2=gui.drawutils.get_cubic_bezier_segment_raw(
-                cn, cn.get_control_handle(1),
-                nn.get_control_handle(0), nn,
+        xa, xb, xc=gui.drawutils.get_cubic_bezier_raw(
+                cn.x, cn.get_control_handle(1).x,
+                nn.get_control_handle(0).x, nn.x,
+                step)
+        ya, yb, yc=gui.drawutils.get_cubic_bezier_raw(
+                cn.y, cn.get_control_handle(1).y,
+                nn.get_control_handle(0).y, nn.y,
                 step)
 
-        xa, ya = p0
-        xc, yc = p2
+        xd, xe=gui.drawutils.get_bezier_raw(xa, xb, xc, step)
+        yd, ye=gui.drawutils.get_bezier_raw(ya, yb, yc, step)
 
-        p0, p1=gui.drawutils.get_bezier_segment_raw(p0, p1, p2, step)
-
-        xd, yd = p0
-        xe, ye = p1
 
         # The nodes around a new node changed to 'not curve' node,
         # to retain original shape.
         cn.curve = False
         cn.set_control_handle(1, xa, ya)
         new_node = _Node_Bezier(
-                    gui.drawutils.get_bezier_pt(xd, xe, step), 
-                    gui.drawutils.get_bezier_pt(yd, ye, step),
+                    gui.drawutils.linear_interpolation(xd, xe, step), 
+                    gui.drawutils.linear_interpolation(yd, ye, step),
                     pressure = cn.pressure + ((nn.pressure - cn.pressure) * step),
                     xtilt = cn.xtilt + (nn.xtilt - cn.xtilt) * step,
                     ytilt = cn.ytilt + (nn.ytilt - cn.ytilt) * step,

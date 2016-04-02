@@ -596,6 +596,15 @@ def get_cubic_bezier(p0, p1, p2, p3, t):
     dt = 1-t
     return (dt**3.0)*p0 + 3.0*(dt**2)*t*p1 + 3.0*dt*(t**2)*p2 + (t**3)*p3
 
+def get_bezier_raw(p0, p1, p2, t):
+    return ( linear_interpolation(p0, p1 , t), 
+             linear_interpolation(p1, p2 , t) )
+
+def get_cubic_bezier_raw(p0, p1, p2, p3, t):
+    return ( linear_interpolation(p0, p1 , t), 
+             linear_interpolation(p1, p2 , t),
+             linear_interpolation(p2, p3 , t))
+
 def get_minmax_bezier(x1, x2, x3, x4):
     a = x4-3*(x3-x2)-x1;
     b = 3*(x3-2*x2+x1);
