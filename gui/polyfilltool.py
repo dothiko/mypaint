@@ -623,6 +623,9 @@ class PolyfillMode (BezierMode):
                 x, y = pos
                 tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
 
+    def is_drawn_handle(self, i, hi):
+        return True # All handle should be drawn, in Polyfill tool
+
     def _start_new_capture_phase_polyfill(self, tdw, mode, rollback=False):
         if rollback:
             self._stop_task_queue_runner(complete=False)

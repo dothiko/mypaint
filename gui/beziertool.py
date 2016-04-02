@@ -664,7 +664,7 @@ class BezierMode (InkingMode):
             # Active control handles also should be queued.
             for hi in (0,1):
                 # But,the first node only shows 2nd(index 1) handle.
-                if (hi == 0 and i > 0) or (hi == 1 and i <= len(self.nodes)-1):
+                if self.is_drawn_handle(i, hi):
                     handle = node.get_control_handle(hi)
                     area = get_area(i, 
                         handle.x, handle.y,
@@ -673,6 +673,10 @@ class BezierMode (InkingMode):
             tdw.queue_draw_area(area[0], area[1], 
                     area[2] - area[0] + 1, 
                     area[3] - area[1] + 1)
+
+    def is_drawn_handle(self, node_idx, hndl_idx):
+        return ((hndl_idx == 0 and node_idx > 0) or 
+                (hndl_idx == 1 and node_idx <= len(self.nodes)-1))
 
 
     def redraw_curve_cb(self, erase=False):
