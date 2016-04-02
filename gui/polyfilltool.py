@@ -209,6 +209,107 @@ def _draw_polygon_to_layer(model, target_layer,nodes,
 
 
 ## Class defs
+class _EditZone_Polyfill(_EditZone_Bezier):
+    """Enumeration of what the pointer is on in the ADJUST phase"""
+    FILL_ATOP_BUTTON = 201
+    ERASE_BUTTON = 202
+    ERASE_OUTSIDE_BUTTON = 203
+
+class _ButtonInfo(object):
+    """ Buttons infomation management class.
+    In Polyfill tool, Buttons increased and eventually 
+    become difficult to manage.
+    """
+
+    button_info = (
+                ( 0, 'mypaint-ok-symbolic',
+                    _EditZone_Polyfill.ACCEPT_BUTTON ),
+                ( 1, 'mypaint-trash-symbolic',
+                    _EditZone_Polyfill.REJECT_BUTTON ),
+                ( 2, 'mypaint-eraser-symbolic', 
+                    _EditZone_Polyfill.ERASE_BUTTON ),
+                ( 3, 'mypaint-cut-symbolic', 
+                    _EditZone_Polyfill.ERASE_OUTSIDE_BUTTON ),
+                ( 4, 'mypaint-add-symbolic',
+                    _EditZone_Polyfill.FILL_ATOP_BUTTON ),
+            )
+
+    button_zones = {
+        _EditZone_Polyfill.ACCEPT_BUTTON:lib.mypaintlib.CombineNormal,
+        _EditZone_Polyfill.ERASE_BUTTON:lib.mypaintlib.CombineDestinationOut,
+        _EditZone_Polyfill.ERASE_OUTSIDE_BUTTON:lib.mypaintlib.CombineDestinationIn,
+        _EditZone_Polyfill.FILL_ATOP_BUTTON:lib.mypaintlib.CombineSourceAtop,
+        }
+
+    def __init__(self):
+        self._pos = [None] * len(self.button_info)
+
+    def get_mode_from_zone(self, zone):
+        if zone in self.button_zones:
+            return self.button_zones[zone]
+        else:
+            return None
+
+    def setup_round_position(self, tdw, pos, count=None):
+        """ setup button position,rotating around (x,y)
+        
+        :param pos:   center position,in display coordinate.
+        :param count: maximum button count, if we need 
+                      minimum (only ACCEPT/REJECT buttons),
+                      use this argument as 2
+                      by default,this is None
+        """
+        x, y = pos
+        button_radius = gui.style.FLOATING_BUTTON_RADIUS
+        margin = 1.5 * button_radius
+        alloc = tdw.get_allocation()
+        view_x0, view_y0 = alloc.x, alloc.y
+        view_x1, view_y1 = view_x0+alloc.width, view_y0+alloc.height
+
+        area_radius = 64 + margin #gui.style.BUTTON_PALETTE_RADIUS
+
+        if x + area_radius > view_x1:
+            x = view_x1 - area_radius
+        elif x + area_radius < view_x0:
+            x = view_x0 + area_radius
+        
+        if y + area_radius > view_y1:
+            y = view_y1 - area_radius
+        elif y + area_radius < view_y0:
+            y = view_y0 + area_radius
+
+        if count == None:
+            self._valid_count = len(self.button_info)
+        else:
+            self._valid_count = count
+
+        for i in xrange(self._valid_count):
+            rad = (math.pi / self._valid_count) * 2.0 * i
+            dx = - area_radius*math.sin(rad)
+            dy = area_radius*math.cos(rad)
+            self._pos[i] = (x + dx, y - dy) 
+            print self._pos[i]
+
+
+    def set_position(self, *positions):
+        """ setup button position 
+        :param positions: positions of buttons,according to self.button_info.
+        each of this argument can be 'None', when button is hidden.
+        NOTE: valid button is limited to count of this variable argument.
+        """
+        for i, pos in enumerate(positions):
+            self._pos[i] = pos
+            print pos
+        self._valid_count = len(positions)
+
+    def get_position(self, idx):
+        return self._pos[idx]
+
+    def enumurate_buttons(self):
+        for i in xrange(self._valid_count):
+            yield (self._pos[i], self.button_info[i])
+
+
 
 class PolyFill(Command):
     """Polygon-fill on the current layer"""
@@ -277,6 +378,8 @@ class PolyfillMode (BezierMode):
     _composite_mode = lib.mypaintlib.CombineNormal
     _OPTIONS_PRESENTER_POLY = None 
 
+    button_info = _ButtonInfo()       # button infomation class
+
     ## Initialization & lifecycle methods
 
     def __init__(self, **kwargs):
@@ -314,24 +417,18 @@ class PolyfillMode (BezierMode):
                 new_target_node_index = None
                 
                 # Test buttons for hits
-                overlay = self._ensure_overlay_for_tdw(tdw)
                 hit_dist = gui.style.FLOATING_BUTTON_RADIUS
 
                 if len(self.nodes) > 1:
-                    button_info = [
-                        (_EditZone_Bezier.ACCEPT_BUTTON, overlay.accept_button_pos),
-                        (_EditZone_Bezier.REJECT_BUTTON, overlay.reject_button_pos),
-                    ]
-                    for btn_zone, btn_pos in button_info:
-                        if btn_pos is None:
+                    for pos, info in self.button_info.enumurate_buttons():
+                        if pos is None:
                             continue
-                        btn_x, btn_y = btn_pos
+                        btn_x, btn_y = pos
                         d = math.hypot(btn_x - x, btn_y - y)
                         if d <= hit_dist:
                             new_target_node_index = None
-                            new_zone = btn_zone
+                            new_zone = info[2]
                             break
-
 
                 if (new_zone == _EditZone_Bezier.EMPTY_CANVAS):
 
@@ -388,8 +485,7 @@ class PolyfillMode (BezierMode):
                     _PhaseBezier.MOVE_NODE):
                 if self.zone == _EditZone_Bezier.CONTROL_NODE:
                     cursor = self._crosshair_cursor
-                elif self.zone in (_EditZone_Bezier.ACCEPT_BUTTON,
-                        _EditZone_Bezier.REJECT_BUTTON): 
+                elif self.zone in self.button_info.button_zones:
                     cursor = self._crosshair_cursor
                 else:
                     cursor = self._arrow_cursor
@@ -469,6 +565,7 @@ class PolyfillMode (BezierMode):
         self._reset_adjust_data()
         self.phase = _PhaseBezier.INITIAL
         self._stroke_from_history = False
+        self.forced_button_pos = None
 
     ## Properties
 
@@ -509,13 +606,25 @@ class PolyfillMode (BezierMode):
         for tdw in self._overlays:
             tdw.queue_draw_area(sx, sy, ex-sx+1, ey-sy+1)
 
+    def _queue_draw_buttons(self):
+        for tdw, overlay in self._overlays.items():
+            overlay.update_button_positions()
+            for pos, info in self.button_info.enumurate_buttons():
+           #for idx, pos in enumerate(overlay.button_pos):
+                if pos is None:
+                    continue
+                r = gui.style.FLOATING_BUTTON_ICON_SIZE
+                r += max(
+                    gui.style.DROP_SHADOW_X_OFFSET,
+                    gui.style.DROP_SHADOW_Y_OFFSET,
+                )
+                r += gui.style.DROP_SHADOW_BLUR
+                x, y = pos
+                tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
+
     def _start_new_capture_phase_polyfill(self, tdw, mode, rollback=False):
         if rollback:
             self._stop_task_queue_runner(complete=False)
-           #sdx, sdy = self.selection_rect.get_display_offset(tdw)
-           #sx, sy, ex, ey = self._get_maximum_rect(tdw, sdx, sdy)
-           #self._queue_polygon_area(
-           #        sx, sy, ex, ey)
             self._reset_all_internal_state()
         else:
             self._stop_task_queue_runner(complete=True)
@@ -561,23 +670,30 @@ class PolyfillMode (BezierMode):
         self._update_zone_and_target(tdw, event.x, event.y,
                 event.state & Gdk.ModifierType.MOD1_MASK)
         self._update_current_node_index()
+
+        shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
+        ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
+
         if self.phase == _PhaseBezier.INITIAL: 
             self.phase = _PhaseBezier.CREATE_PATH
             # FALLTHRU: *do* start a drag 
         elif self.phase in (_PhaseBezier.CREATE_PATH,):
             # Initial state - everything starts here!
        
-            if (self.zone in (_EditZone_Bezier.REJECT_BUTTON, 
-                        _EditZone_Bezier.ACCEPT_BUTTON)):
+            if (self.zone in self.button_info.button_zones): 
                 if (event.button == 1 and 
                         event.type == Gdk.EventType.BUTTON_PRESS):
 
                         # To avoid some of visual glitches,
                         # we need to process button here.
                         if self.zone == _EditZone_Bezier.REJECT_BUTTON:
-                            self._start_new_capture_phase_polyfill(tdw, rollback=True)
-                        elif self.zone == _EditZone_Bezier.ACCEPT_BUTTON:
-                            self._start_new_capture_phase_polyfill(tdw, rollback=False)
+                            self._start_new_capture_phase_polyfill(
+                                tdw, None, rollback=True)
+                        else:
+                            self._start_new_capture_phase_polyfill(
+                                tdw, 
+                                self.button_info.get_mode_from_zone(self.zone),
+                                rollback=False)
                         
                         self._reset_adjust_data()
                         return False
@@ -619,15 +735,19 @@ class PolyfillMode (BezierMode):
                 
                 if self.phase == _PhaseBezier.CREATE_PATH:
                     if (len(self.nodes) > 0): 
-
-                        if (event.state & Gdk.ModifierType.SHIFT_MASK):
+                        if shift_state and ctrl_state:
+                            self._queue_draw_buttons() 
+                            self.forced_button_pos = (event.x, event.y)
+                            self.phase = _PhaseBezier.CHANGE_PHASE 
+                            self._returning_phase = _PhaseBezier.CREATE_PATH
+                        elif shift_state:
                             # selection box dragging start!!
                             if self._returning_phase == None:
                                 self._returning_phase = self.phase
                             self.phase = _PhaseBezier.ADJUST_SELECTING
                             self.selection_rect.start(
                                     *tdw.display_to_model(event.x, event.y))
-                        elif (event.state & Gdk.ModifierType.CONTROL_MASK):
+                        elif ctrl_state:
                             mx, my = tdw.display_to_model(event.x, event.y)
                             pressed_segment = self._detect_on_stroke(mx, my)
                             if pressed_segment:
@@ -791,10 +911,6 @@ class PolyfillMode (BezierMode):
             # At initialize handle phase, even if the node is not 'curve'
             # Set the handles as symmetry.
             if (self.phase == _PhaseBezier.INIT_HANDLE):
-               #if (len(self.nodes) > 1 and node.curve == False):
-               #    node.curve = True 
-               #    node.curve = False
-
                 node.curve = not self.DEFAULT_POINT_CORNER
 
             self._queue_redraw_all_nodes()
@@ -849,6 +965,7 @@ class PolyfillMode (BezierMode):
         if self._returning_phase != None:
             self.phase = self._returning_phase
             self._returning_phase = None
+            self._queue_draw_buttons() 
 
     ## Interrogating events
 
@@ -923,12 +1040,22 @@ class PolyfillMode (BezierMode):
 class OverlayPolyfill (OverlayBezier):
     """Overlay for an BezierMode's adjustable points"""
 
+
     def __init__(self, mode, tdw):
         super(OverlayPolyfill, self).__init__(mode, tdw)
         self._draw_initial_handle_both = True
         
 
-    
+    def update_button_positions(self):
+        mode = self._inkmode
+        if mode.forced_button_pos:
+            mode.button_info.setup_round_position(
+                    self._tdw, mode.forced_button_pos)
+        else:
+            super(OverlayPolyfill, self).update_button_positions()
+            mode.button_info.set_position(
+                    self.reject_button_pos, self.accept_button_pos)
+
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
         # Control nodes
@@ -943,8 +1070,29 @@ class OverlayPolyfill (OverlayBezier):
                 stroke=True,
                 fill = mode.polygon_preview_fill)
 
-        super(OverlayPolyfill, self).paint(cr)
+        super(OverlayPolyfill, self).paint(cr, draw_buttons=False)
                 
+        if (not mode.in_drag and len(mode.nodes) > 1):
+            self.update_button_positions()
+            radius = gui.style.FLOATING_BUTTON_RADIUS
+
+            for pos, info in mode.button_info.enumurate_buttons():
+                if pos is None:
+                    continue
+                x, y = pos
+                id, icon_name, zone = info
+                if mode.zone == zone:
+                    color = gui.style.ACTIVE_ITEM_COLOR
+                else:
+                    color = gui.style.EDITABLE_ITEM_COLOR
+                icon_pixbuf = self._get_button_pixbuf(icon_name)
+                gui.drawutils.render_round_floating_button(
+                    cr=cr, x=x, y=y,
+                    color=color,
+                    pixbuf=icon_pixbuf,
+                    radius=radius,
+                )
+
 class GradientStore(object):
 
     # default gradents.

@@ -1448,7 +1448,7 @@ class OverlayBezier (Overlay):
         if num_nodes == 0:
             self.reject_button_pos = None
             self.accept_button_pos = None
-            return
+            return False
 
         button_radius = gui.style.FLOATING_BUTTON_RADIUS
         margin = 1.5 * button_radius
@@ -1587,6 +1587,7 @@ class OverlayBezier (Overlay):
 
             self.accept_button_pos = accept_button.x, accept_button.y
             self.reject_button_pos = reject_button.x, reject_button.y
+        return True
 
     def paint_control_handle(self, cr, i, node, x, y, dx, dy, draw_line):
         cr.save()
@@ -1613,7 +1614,7 @@ class OverlayBezier (Overlay):
         cr.restore()
 
     
-    def paint(self, cr):
+    def paint(self, cr, draw_buttons=True):
         """Draw adjustable nodes to the screen"""
         # Control nodes
         mode = self._inkmode
@@ -1679,7 +1680,8 @@ class OverlayBezier (Overlay):
     
                 
         # Buttons
-        if not mode.in_drag and len(self._inkmode.nodes) > 1:
+        if (draw_buttons and 
+                not mode.in_drag and len(self._inkmode.nodes) > 1):
             self.update_button_positions()
             radius = gui.style.FLOATING_BUTTON_RADIUS
             button_info = [
