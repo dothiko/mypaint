@@ -1821,14 +1821,6 @@ class CutCurrentLayer (Command):
 
         self._layerpaths = layerpaths
         self._opaque_operation = opaque
-        self._merged = False
-        if not opaque:
-            if len(layerpaths) == 2:
-                # Special case: no need to merge
-                self._merged = True
-                self._merged_layer = None
-            else:
-                self._merged_layer = lib.layer.PaintingLayer(name='')
         self._target_snapshot = None
 
     @staticmethod
@@ -1845,9 +1837,8 @@ class CutCurrentLayer (Command):
         CutCurrentLayer._merge(target_layer, cutting_layer,
                 lib.mypaintlib.CombineDestinationOut)
 
-    def _cut_transparent(self, target_layer):
+    def _cut_transparent(self, target_layer, cutting_layer):
         tiles = set()
-        cutting_layer = self._merged_layer
         tiles.update(target_layer.get_tile_coords())
         dstsurf = target_layer._surface
         srcsurf = cutting_layer._surface
@@ -1864,6 +1855,10 @@ class CutCurrentLayer (Command):
         rootstack = self.doc.layer_stack
         target = rootstack.deepget(self._target_path)
         self._target_snapshot = target.save_snapshot()
+
+        if not self._opaque_operation and len(self._layerpaths) > 2:
+            _merged_layer = lib.layer.PaintingLayer(name='')
+
         for path in self._layerpaths:
             layer = rootstack.deepget(path)
             if layer != target:
@@ -1872,17 +1867,18 @@ class CutCurrentLayer (Command):
 
                 if self._opaque_operation:
                     self._cut_opaque(target, layer)
-                elif self._merged == False:
-                    CutCurrentLayer._merge(self._merged_layer, layer,
+                elif len(self._layerpaths) > 2:
+                    CutCurrentLayer._merge(_merged_layer, layer,
                             lib.mypaintlib.CombineNormal)
                 elif len(self._layerpaths) == 2:
-                    self._merged_layer = layer
+                    _merged_layer = layer
                 else:
                     raise NotImplementedError("Unknown case for cut layer")
 
         if not self._opaque_operation:
-            self._merged = True
-            self._cut_transparent(target)
+            assert _merged_layer != None
+            self._cut_transparent(target, _merged_layer)
+            _merged_layer = None
 
         # Redraw target layer 
         self._notify_canvas_observers( (target.get_full_redraw_bbox(), ) )
