@@ -266,16 +266,17 @@ class _ButtonInfo(object):
         view_x0, view_y0 = alloc.x, alloc.y
         view_x1, view_y1 = view_x0+alloc.width, view_y0+alloc.height
 
-        area_radius = 64 + margin #gui.style.BUTTON_PALETTE_RADIUS
+        palette_radius = 64 #gui.style.BUTTON_PALETTE_RADIUS
+        area_radius = palette_radius + margin 
 
         if x + area_radius > view_x1:
             x = view_x1 - area_radius
-        elif x + area_radius < view_x0:
+        elif x - area_radius < view_x0:
             x = view_x0 + area_radius
         
         if y + area_radius > view_y1:
             y = view_y1 - area_radius
-        elif y + area_radius < view_y0:
+        elif y - area_radius < view_y0:
             y = view_y0 + area_radius
 
         if count == None:
@@ -285,8 +286,8 @@ class _ButtonInfo(object):
 
         for i in xrange(self._valid_count):
             rad = (math.pi / self._valid_count) * 2.0 * i
-            dx = - area_radius*math.sin(rad)
-            dy = area_radius*math.cos(rad)
+            dx = - palette_radius * math.sin(rad)
+            dy = palette_radius * math.cos(rad)
             self._pos[i] = (x + dx, y - dy) 
             print self._pos[i]
 
