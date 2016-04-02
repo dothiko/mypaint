@@ -215,6 +215,17 @@ class _EditZone_Polyfill(_EditZone_Bezier):
     ERASE_BUTTON = 202
     ERASE_OUTSIDE_BUTTON = 203
 
+class _Shape:
+    """Enumeration of shape. 
+    this is same as contents of shape_type_combobox of 
+    OptionsPresenter_Polyfill
+    """
+    Bezier = 0
+    Polyline = 1
+    Rectangle = 2
+    Elipse = 3
+
+
 class _ButtonInfo(object):
     """ Buttons infomation management class.
     In Polyfill tool, Buttons increased and eventually 
@@ -289,7 +300,6 @@ class _ButtonInfo(object):
             dx = - palette_radius * math.sin(rad)
             dy = palette_radius * math.cos(rad)
             self._pos[i] = (x + dx, y - dy) 
-            print self._pos[i]
 
 
     def set_position(self, *positions):
@@ -300,7 +310,6 @@ class _ButtonInfo(object):
         """
         for i, pos in enumerate(positions):
             self._pos[i] = pos
-            print pos
         self._valid_count = len(positions)
 
     def get_position(self, idx):
@@ -347,6 +356,103 @@ class PolyFill(Command):
         layers.current.load_snapshot(self.snapshot)
         self.snapshot = None
 
+class _Mode_Bezier(object):
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def render(self, cr):
+        pass
+
+    def button_press_cb(self, tdw, event):
+        pass
+
+    def button_release_cb(self, tdw, event):
+        pass
+
+    def drag_start_cb(self, tdw, event):
+        pass
+
+    def drag_update_cb(self, tdw, event, dx, dy):
+        pass
+
+    def drag_stop_cb(self, tdw):
+        pass
+
+class _Mode_Polyline(object):
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def render(self, cr):
+        pass
+
+    def button_press_cb(self, tdw, event):
+        pass
+
+    def button_release_cb(self, tdw, event):
+        pass
+
+    def drag_start_cb(self, tdw, event):
+        pass
+
+    def drag_update_cb(self, tdw, event, dx, dy):
+        pass
+
+    def drag_stop_cb(self, tdw):
+        pass
+
+class _Mode_Rectangle(object):
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def render(self, cr):
+        pass
+
+    def button_press_cb(self, tdw, event):
+        pass
+
+    def button_release_cb(self, tdw, event):
+        pass
+
+    def drag_start_cb(self, tdw, event):
+        pass
+
+    def drag_update_cb(self, tdw, event, dx, dy):
+        pass
+
+    def drag_stop_cb(self, tdw):
+        pass
+
+class _Mode_Elipse(object):
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def render(self, cr):
+        pass
+
+    def button_press_cb(self, tdw, event):
+        pass
+
+    def button_release_cb(self, tdw, event):
+        pass
+
+    def drag_start_cb(self, tdw, event):
+        pass
+
+    def drag_update_cb(self, tdw, event, dx, dy):
+        pass
+
+    def drag_stop_cb(self, tdw):
+        pass
+
+
 class PolyfillMode (BezierMode):
 
     ## Metadata properties
@@ -386,6 +492,7 @@ class PolyfillMode (BezierMode):
     def __init__(self, **kwargs):
         super(PolyfillMode, self).__init__(**kwargs)
         self._polygon_preview_fill = False
+        self._shape_type = _Shape.Bezier
 
 
 
@@ -577,6 +684,9 @@ class PolyfillMode (BezierMode):
     def set_composite_mode_index(self, mode_idx):
         PolyfillMode._composite_mode = POLYFILLMODES[mode_idx][0]
         self.options_presenter.changed_composite_mode(mode_idx)
+
+    def set_shape(self, shape_type):
+        self._shape_type = shape_type
 
     ## Redraws
     
@@ -1197,7 +1307,6 @@ class GradientRenderer(Gtk.CellRenderer):
         self.cg={}
 
     def do_set_property(self, pspec, value):
-        print pspec
         setattr(self, pspec.name, value)
 
     def do_get_property(self, pspec):
@@ -1292,10 +1401,13 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         self._insert_button.set_sensitive(False)
         self._delete_button = builder.get_object("delete_point_button")
         self._delete_button.set_sensitive(False)
-        self._check_curvepoint= builder.get_object("checkbutton_curvepoint")
+        self._check_curvepoint = builder.get_object("checkbutton_curvepoint")
         self._check_curvepoint.set_sensitive(False)
-        self._fill_polygon_checkbutton= builder.get_object("fill_checkbutton")
+        self._fill_polygon_checkbutton = builder.get_object("fill_checkbutton")
         self._fill_polygon_checkbutton.set_sensitive(True)
+
+        self._shape_type_combobox = builder.get_object("shape_type_combobox")
+        self._shape_type_combobox.set_sensitive(True)
 
         # Creating toolbar
         base_grid = builder.get_object("polygon_operation_grid")
@@ -1380,7 +1492,8 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
             self._ensure_ui_populated()
             if 0 <= cn_idx < len(polyfillmode.nodes):
                 cn = polyfillmode.nodes[cn_idx]
-                self._check_curvepoint.set_sensitive(True)
+                self._check_curvepoint.set_sensitive(
+                    self._shape_type_combobox.get_active() != _Shape.Bezier)
                 self._check_curvepoint.set_active(cn.curve)
             else:
                 self._check_curvepoint.set_sensitive(False)
@@ -1417,6 +1530,14 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         polymode, node_idx = self.target
         if polymode:
             polymode.set_composite_mode_index(self._composite_combo.get_active())
+
+    def shape_type_combobox_changed_cb(self, combo):
+        if self._updating_ui:
+            return
+        polymode, junk = self.target
+        if polymode:
+            logger.warning("shape_type is not implemented yet")
+            polymode.set_shape(combo.get_active())
 
 
 

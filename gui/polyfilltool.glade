@@ -114,33 +114,6 @@
         <property name="margin_bottom">6</property>
         <property name="hexpand">True</property>
         <child>
-          <object class="GtkLabel" id="path_history_label">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="halign">start</property>
-            <property name="margin_right">6</property>
-            <property name="margin_top">4</property>
-            <property name="label" translatable="yes">Path History:</property>
-          </object>
-          <packing>
-            <property name="left_attach">0</property>
-            <property name="top_attach">4</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkComboBox" id="path_history_combobox">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="margin_top">4</property>
-            <property name="hexpand">True</property>
-            <signal name="changed" handler="stroke_history_combobox_changed_cb" swapped="no"/>
-          </object>
-          <packing>
-            <property name="left_attach">1</property>
-            <property name="top_attach">4</property>
-          </packing>
-        </child>
-        <child>
           <object class="GtkCheckButton" id="fill_checkbutton">
             <property name="label" translatable="yes">Fill polygon at preview</property>
             <property name="related_action"/>
@@ -188,6 +161,62 @@
           <packing>
             <property name="left_attach">1</property>
             <property name="top_attach">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="path_history_label">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="halign">start</property>
+            <property name="margin_right">6</property>
+            <property name="margin_top">4</property>
+            <property name="label" translatable="yes">Path History:</property>
+          </object>
+          <packing>
+            <property name="left_attach">0</property>
+            <property name="top_attach">5</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkComboBox" id="path_history_combobox">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="margin_top">4</property>
+            <property name="hexpand">True</property>
+            <signal name="changed" handler="stroke_history_combobox_changed_cb" swapped="no"/>
+          </object>
+          <packing>
+            <property name="left_attach">1</property>
+            <property name="top_attach">5</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="shape_type_label">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="halign">start</property>
+            <property name="label" translatable="yes">Shape Type:</property>
+          </object>
+          <packing>
+            <property name="left_attach">0</property>
+            <property name="top_attach">4</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkComboBoxText" id="shape_type_combobox">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="active">0</property>
+            <items>
+              <item id="0" translatable="yes">Bezier curve</item>
+              <item id="1" translatable="yes">Polyline</item>
+              <item id="2" translatable="yes">Rectangle</item>
+              <item id="3" translatable="yes">Elipse</item>
+            </items>
+          </object>
+          <packing>
+            <property name="left_attach">1</property>
+            <property name="top_attach">4</property>
           </packing>
         </child>
         <child>
