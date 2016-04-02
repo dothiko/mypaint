@@ -482,7 +482,6 @@ class PolyfillMode (BezierMode):
     DEFAULT_POINT_CORNER = True       # default point is corner,not curve
 
     ## Other class vars
-    _composite_mode = lib.mypaintlib.CombineNormal
     _OPTIONS_PRESENTER_POLY = None 
 
     button_info = _ButtonInfo()       # button infomation class
@@ -676,15 +675,6 @@ class PolyfillMode (BezierMode):
         self.forced_button_pos = None
 
     ## Properties
-
-    @property
-    def composite_mode(self):
-        return PolyfillMode._composite_mode
-
-    def set_composite_mode_index(self, mode_idx):
-        PolyfillMode._composite_mode = POLYFILLMODES[mode_idx][0]
-        self.options_presenter.changed_composite_mode(mode_idx)
-
     def set_shape(self, shape_type):
         self._shape_type = shape_type
 
@@ -1456,18 +1446,6 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         self._gradientview = treeview
         exp.set_expanded(True)
 
-       ## Creating composite mode combo
-       #combo = builder.get_object('composite_combobox')
-       #liststore = Gtk.ListStore(object, str)
-       #for cmode in POLYFILLMODES:
-       #    liststore.append(cmode)
-       #combo.set_model(liststore)
-       #cell=Gtk.CellRendererText()
-       #combo.pack_start(cell,True)
-       #combo.add_attribute(cell,'text',1)
-       #self._composite_combo = combo
-       #self.changed_composite_mode(0)
-
         # the last line
         self._updating_ui = False
 
@@ -1504,16 +1482,6 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         finally:
             self._updating_ui = False                               
 
-    def changed_composite_mode(self, mode_idx):
-        original_updating_ui = self._updating_ui
-
-        if not self._updating_ui:
-            self._updating_ui = True
-
-        if self._composite_combo.get_active() != mode_idx:
-            self._composite_combo.set_active(mode_idx)
-
-        self._updating_ui = original_updating_ui
 
     ## callback handlers
 
@@ -1523,13 +1491,6 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         polymode, node_idx = self.target
         if polymode:
             polymode.polygon_preview_fill = button.get_active()
-
-    def _composite_mode_changed_cb(self, combo):
-        if self._updating_ui:
-            return
-        polymode, node_idx = self.target
-        if polymode:
-            polymode.set_composite_mode_index(self._composite_combo.get_active())
 
     def shape_type_combobox_changed_cb(self, combo):
         if self._updating_ui:
