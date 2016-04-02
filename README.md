@@ -164,6 +164,9 @@ CTRLキーを押しながらストロークをクリックすることで、そ�
 #### Polygon fill tool - fill a region surrounded with a (curved) path. : ポリゴンフィルツール
 Polygon fill tool, which enable to fill/erase/only fill current opaque pixel with curved polygon.
 
+with holding shift+ctrl and click empty canvas, we can popup "round button palette" around cursor.
+and with clicking that button , do fill(check icon)/erase(eraser icon)/erase outside(cut icon)/fill atop(plus icon) operation immidiately.
+
 
 #### Per device mode change : デバイスごとのモード変更
 A 'Device' referred to here is, for example, Pen tablet styls,or Pen tablet tail eraser,etc.
