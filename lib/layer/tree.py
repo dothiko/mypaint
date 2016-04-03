@@ -569,7 +569,10 @@ class RootLayerStack (group.LayerStack):
             path = None
         self._current_path = path
         self.current_path_updated(path)
-        self._current_path_str=":".join([str(x) for x in path])
+        if self._current_path != None:
+            self._current_path_str=":".join([str(x) for x in self._current_path])
+        else:
+            self._current_path_str=''
 
     current_path = property(get_current_path, set_current_path)
 
