@@ -1719,11 +1719,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
 
     ## Node selection
-    def select_all_nodes(self):
+    def select_all(self):
         self.selected_nodes = range(0, len(self.nodes))
         self._queue_redraw_all_nodes()
 
-    def deselect_all_nodes(self):
+    def deselect_all(self):
         self._reset_selected_nodes(None)
         self._queue_redraw_all_nodes()
 

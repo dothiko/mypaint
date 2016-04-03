@@ -2158,17 +2158,15 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         if getattr(mode, 'average_nodes_pressure', False):
             mode.average_nodes_pressure()
 
-    def select_all_nodes_cb(self, action):
+    def select_all_cb(self, action):
         """Callback: mark all inktool nodes as selected"""
         mode=self.modes.top
-        if getattr(mode, 'select_all_nodes', False):
-            mode.select_all_nodes()
+        if (action.get_name().startswith('De')
+                and getattr(mode, 'deselect_all', False)):
+            mode.deselect_all()
+        elif getattr(mode, 'select_all', False):
+            mode.select_all()
 
-    def deselect_all_nodes_cb(self, action):
-        """Callback: clear selected state of all inktool nodes"""
-        mode=self.modes.top
-        if getattr(mode, 'deselect_all_nodes', False):
-            mode.deselect_all_nodes()
 
     def apply_pressure_variation_nodes_cb(self, action):
         """Callback: Apply current OptionWidget's pressure variation 
