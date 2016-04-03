@@ -65,6 +65,7 @@ def _nodes_deletion_decorator(method):
         assert type(result) == int
 
         if result > 0:
+            self.options_presenter.target = (self, self.current_node_index)
             self._queue_redraw_curve()
             self._queue_redraw_all_nodes()
             self._queue_draw_buttons()
@@ -1473,10 +1474,20 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if sidx > idx:
                 self.selected_nodes[i] = sidx - 1
 
-        if self.current_node_index == idx:
-            self.current_node_index = None
-        if self.target_node_index == idx:
-            self.target_node_index = None
+        def adjust_index(cur_idx, targ_idx):
+            if cur_idx == targ_idx:
+                cur_idx = -1
+            elif cur_idx > targ_idx:
+                cur_idx -= 1
+
+            if cur_idx < 0:
+                return None
+            return cur_idx
+
+
+        self.current_node_index = adjust_index(self.current_node_index,idx)
+        self.target_node_index = adjust_index(self.target_node_index,idx)
+
         return self.nodes.pop(idx)
 
     def _simplify_nodes(self, tolerance):
