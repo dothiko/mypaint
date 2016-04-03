@@ -48,6 +48,30 @@ _PRESSURE_VARIATIONS = [
         ('Tail'   , [(0.0, 0.6), (0.25, 0.4), (0.75, 0.1), (1.0, 0.4)] ),
         ]
 
+
+## Function defs
+
+def _nodes_deletion_decorator(method):
+    """ Decorator for deleting multiple nodes methods
+    """
+    def _decorator(self, *args):
+        # To ensure redraw entire overlay,avoiding glitches.
+        self._queue_redraw_curve()
+        self._queue_redraw_all_nodes()
+        self._queue_draw_buttons()
+
+        # the method should return deleted nodes count
+        result = method(self, *args)
+        assert type(result) == int
+
+        if result > 0:
+            self._queue_redraw_curve()
+            self._queue_redraw_all_nodes()
+            self._queue_draw_buttons()
+        return result
+    return _decorator
+
+
 ## Class defs
 
 
@@ -1330,7 +1354,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_draw_buttons()
         self._queue_draw_node(i)
 
-       #self.nodes.pop(i)
         self._pop_node(i)
 
         # Limit the current node.
@@ -1502,26 +1525,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         for i in xrange(len(self.nodes)/2):
             self._pop_node(idx)
             idx+=1
-
-       #curcnt=len(self.nodes)
-       #lastnode=self.nodes[-1]
-       #self.nodes=self.nodes[:-1:2]
-       #self.nodes.append(lastnode)
         return curcnt-len(self.nodes)
 
-    def _nodes_deletion_operation(self, callable, args):
-        """Internal method for delete-related operation of multiple nodes."""
-        # To ensure redraw entire overlay,avoiding glitches.
-        self._queue_redraw_curve()
-        self._queue_redraw_all_nodes()
-        self._queue_draw_buttons()
-
-        if callable(*args) > 0:
-
-            # Issue redraws for the changed on-canvas elements
-            self._queue_redraw_curve()
-            self._queue_redraw_all_nodes()
-            self._queue_draw_buttons()
 
     def _queue_all_visual_redraw(self):
         """Redraw all overlay objects"""
@@ -1529,15 +1534,18 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
+    @_nodes_deletion_decorator
     def simplify_nodes(self):
         """User interface method of simplify nodes."""
-        # For now, parameter is fixed value.
+        # XXX For now, parameter is fixed value.
         # tolerance is 8, in model coords.
-        self._nodes_deletion_operation(self._simplify_nodes, (8,))
+        # this value should be configureable...?
+        return self._simplify_nodes(8)
 
+    @_nodes_deletion_decorator
     def cull_nodes(self):
         """User interface method of cull nodes."""
-        self._nodes_deletion_operation(self._cull_nodes, ())
+        return self._cull_nodes()
 
 
     ## nodes average
