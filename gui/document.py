@@ -2166,6 +2166,8 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             mode.deselect_all()
         elif getattr(mode, 'select_all', False):
             mode.select_all()
+        else:
+            logger.debug("select/deselect all: the action %r does not have such method.", action)
 
 
     def apply_pressure_variation_nodes_cb(self, action):
