@@ -454,6 +454,10 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         available when motion compression is active.
         """
 
+        def queue_motion(time, x, y, pressure, xtilt, ytilt):
+            x, y = tdw.display_to_model(x, y)
+            event_data = (time, x, y, pressure, xtilt, ytilt)
+            drawstate.queue_motion(event_data)
 
         # Do nothing if painting is inactivated
         current_layer = tdw.doc._layers.current
@@ -586,18 +590,17 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             # Check that we can use the eventhack data uncorrected
             if (hx0, hy0, ht0) == (x, y, time):
                 for hx, hy, ht in drawstate.evhack_positions:
-                    hp = None
                     if assistant:
                         assistant.fetch(hx, hy, pressure, time)
                         if self.doc.stabilizer_mode:
                             info = assistant.get_current(drawstate.button_down, time)
                             if not info:
                                 continue
-                            else:
-                                hx, hy, hp = info
-                    hx, hy = tdw.display_to_model(hx, hy)
-                    event_data = (ht, hx, hy, hp, None, None)
-                    drawstate.queue_motion(event_data)
+                    else:
+                        info=((hx, hy, None), )
+
+                    for hx, hy, hp in info:
+                        queue_motion(ht, hx, hy, hp, None,None)
             else:
                 logger.warning(
                     "Final evhack event (%0.2f, %0.2f, %d) doesn't match its "
@@ -609,21 +612,22 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         if len(drawstate.evhack_positions) > 0:
             drawstate.evhack_positions = []
 
-        # Assitant event position fetch & apply
+        # Assitant event position fetch and/or queue motion
         if assistant:
             assistant.fetch(x, y, pressure, time)
             if self.doc.stabilizer_mode:
                 info = assistant.get_current(drawstate.button_down, time)
                 if info:
-                    x, y, pressure = info
+                    for x, y, pressure in info:
+                        queue_motion(time, x, y, pressure, xtilt, ytilt)
                 else:
                     return False
+            else:
+                queue_motion(time, x, y, pressure, xtilt, ytilt)
 
-            
-        # Queue this event
-        x, y = tdw.display_to_model(x, y)
-        event_data = (time, x, y, pressure, xtilt, ytilt)
-        drawstate.queue_motion(event_data)
+        else:
+            queue_motion(time, x, y, pressure, xtilt, ytilt)
+
         # Start the motion event processor, if it isn't already running
         if not drawstate.motion_processing_cbid:
             cbid = GLib.idle_add(

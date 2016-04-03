@@ -99,22 +99,21 @@ class Stabilizer(Assistbase):
         ry /= self._sampling_max
         rp /= self._sampling_max
 
-        # Heading / Trailing glitch workaround
-        if button == None:
-            if (self._prev_button != None):
-                pass
-            rp = 0.0 
-        elif button == 1:
-            if (self._prev_button == None):
-                rp = 0.0
-
-
+        _prev_button = self._prev_button
         self._prev_button = button
         self._prev_rx = rx
         self._prev_ry = ry
 
+        # Heading / Trailing glitch workaround
+        if button == 1:
+            if (_prev_button == None):
+                return ((rx, ry, 0.0), (rx, ry, rp))
+        elif button == None:
+            if (_prev_button != None):
+                return ((rx, ry, rp), (rx, ry, 0.0))
+            rp = 0.0
 
-        return (rx, ry, rp)
+        return ((rx, ry, rp), )
 
     def reset(self):
         super(Stabilizer, self).reset()
