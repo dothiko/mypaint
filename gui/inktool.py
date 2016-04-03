@@ -1330,12 +1330,13 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_draw_buttons()
         self._queue_draw_node(i)
 
-        self.nodes.pop(i)
+       #self.nodes.pop(i)
+        self._pop_node(i)
 
         # Limit the current node.
         # this processing may vary in inherited classes,
         # so wrap this.
-        self._adjust_current_node_index()
+       #self._adjust_current_node_index()
 
         self.options_presenter.target = (self, self.current_node_index)
         # Issue redraws for the changed on-canvas elements
@@ -1438,10 +1439,28 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         if self.can_insert_node(self.current_node_index):
             self.insert_node(self.current_node_index)
 
+    def _pop_node(self, idx):
+        """ wrapper method of popping(delete) node.
+        to ensure not included in self.selected_nodes.
+        """
+        if idx in self.selected_nodes:
+            self.selected_nodes.remove(idx)
+
+        for i, sidx  in enumerate(self.selected_nodes):
+            if sidx > idx:
+                self.selected_nodes[i] = sidx - 1
+
+        if self.current_node_index == idx:
+            self.current_node_index = None
+        if self.target_node_index == idx:
+            self.target_node_index = None
+        return self.nodes.pop(idx)
+
     def _simplify_nodes(self, tolerance):
         """Internal method of simplify nodes.
 
         """
+
         # Algorithm: Reumann-Witkam.
         i=0
         oldcnt=len(self.nodes)
@@ -1463,7 +1482,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     hy=(vey*dp)-py
 
                     if math.sqrt(hx*hx + hy*hy) < tolerance:
-                        self.nodes.pop(i+1)
+                        self._pop_node(i+1)
                     else:
                         break
 
@@ -1479,9 +1498,15 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def _cull_nodes(self):
         """Internal method of cull nodes."""
         curcnt=len(self.nodes)
-        lastnode=self.nodes[-1]
-        self.nodes=self.nodes[:-1:2]
-        self.nodes.append(lastnode)
+        idx = 1
+        for i in xrange(len(self.nodes)/2):
+            self._pop_node(idx)
+            idx+=1
+
+       #curcnt=len(self.nodes)
+       #lastnode=self.nodes[-1]
+       #self.nodes=self.nodes[:-1:2]
+       #self.nodes.append(lastnode)
         return curcnt-len(self.nodes)
 
     def _nodes_deletion_operation(self, callable, args):
@@ -1492,16 +1517,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_draw_buttons()
 
         if callable(*args) > 0:
-
-            new_cn = self.current_node_index
-            if new_cn >= len(self.nodes):
-                new_cn = len(self.nodes) - 2
-                self.current_node_index = new_cn
-                self.current_node_changed(new_cn)
-                self.options_presenter.target = (self, new_cn)
-
-            # FIXME: Quick hack,to avoid indexerror
-            self.target_node_index=None
 
             # Issue redraws for the changed on-canvas elements
             self._queue_redraw_curve()
