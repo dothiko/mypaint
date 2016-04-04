@@ -24,6 +24,7 @@ import gi
 from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GLib
+import cairo
 
 import gui.mode
 import gui.overlays
@@ -1525,7 +1526,6 @@ class OverlayBezier (Overlay):
 
     def paint_control_handle(self, cr, i, node, x, y, dx, dy, draw_line):
         cr.save()
-        cr.set_source_rgb(0,0,1)
         cr.set_line_width(1)
         for hi in (0,1):                        
             if ((hi == 0 and i > 0) or
@@ -1541,8 +1541,13 @@ class OverlayBezier (Overlay):
                     gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
                     fill=(hi==self._inkmode.current_handle_index)) 
                 if draw_line:
+                    cr.set_source_rgb(0,0,0)
+                    cr.set_dash((), 0)
                     cr.move_to(x, y)
                     cr.line_to(hx, hy)
+                    cr.stroke_preserve()
+                    cr.set_source_rgb(1,1,1)
+                    cr.set_dash((3, ))
                     cr.stroke()
 
         cr.restore()

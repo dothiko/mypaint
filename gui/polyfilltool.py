@@ -135,19 +135,21 @@ def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None,
             cr.fill_preserve()
 
         if stroke:
-            def draw_dashed(space):
+
+            def draw_dash(dot):
+                cr.set_dash((), 0)
                 cr.set_source_rgb(1,1,1)
                 cr.stroke_preserve()
                 cr.set_source_rgb(0,0,0)
-                cr.set_dash( (space, ) )
+                cr.set_dash((dot, ) )
                 cr.stroke()
 
-            draw_dashed(3.0)
+            draw_dash(4)
 
             if len(nodes) > 2:
                 cr.move_to(x,y)
                 cr.curve_to(x1, y1, x2, y2, x3, y3) 
-                draw_dashed(8.0)
+                draw_dash(10)
 
 
         cr.restore()
