@@ -231,10 +231,38 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
             if self.base_x != None:
                 cur_radius = self.get_cursor_radius(tdw)
                 areasize = cur_radius*2 + space*2 +1
-                tdw.queue_draw_area(
-                        self.base_x - cur_radius - space,  
-                        self.base_y - cur_radius - space,
-                        areasize, areasize)
+                if areasize < 32:
+                    tdw.queue_draw_area(
+                            self.base_x - cur_radius - space,  
+                            self.base_y - cur_radius - space,
+                            areasize, areasize)
+                else:
+                    dx = cur_radius * math.sin(math.pi / 4.0)
+                    dw = dx * 2
+                    dh = cur_radius - dx
+                    margin = 3
+                    dw += margin * 2
+                    dh += margin * 2
+                    # Top
+                    tdw.queue_draw_area(
+                            self.base_x - dx - margin,
+                            self.base_y - cur_radius - margin,
+                            dw, dh)
+                    # Left
+                    tdw.queue_draw_area(
+                            self.base_x - cur_radius - margin,
+                            self.base_y - dx - margin,
+                            dh, dw)
+                    # Right
+                    tdw.queue_draw_area(
+                            self.base_x + dx - margin,
+                            self.base_y - dx - margin,
+                            dh, dw)
+                    # Bottom
+                    tdw.queue_draw_area(
+                            self.base_x - dx - margin,
+                            self.base_y + dx - margin,
+                            dw, dh)
 
     ## Mode options
 
