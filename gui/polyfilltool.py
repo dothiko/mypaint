@@ -207,6 +207,7 @@ def _draw_polygon_to_layer(model, target_layer,nodes,
 
     bbox = tuple(target_layer.get_full_redraw_bbox())
     target_layer.root.layer_content_changed(target_layer, *bbox)
+    target_layer.autosave_dirty = True
     del layer
 
 

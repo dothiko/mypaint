@@ -1330,6 +1330,13 @@ Vocabulary
           <signal name="activate" handler="crash_program_cb"/>
         </object>
       </child>
+      <child>
+        <object class="GtkAction" id="PrintAutosaveDirty">
+          <property name="label" translatable="yes" context="Menu→Help→Debug (labels), Accel Editor (labels)">Print Autosave-Dirty</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Print Autosave-Dirty status of all layers.</property>
+          <signal name="activate" handler="print_autosave_dirty_cb"/>
+        </object>
+      </child>
       <!--}}} /debugging menu -->
       <!--{{{ View menu and its submenus -->
       <child>

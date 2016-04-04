@@ -1845,9 +1845,9 @@ class CutCurrentLayer (Command):
                 if srcsurf.tile_request(tx, ty, readonly=False) == None:
                     lib.mypaintlib.tile_clear_rgba16(dst)
                 else:
-                    cutting_layer._surface.composite_tile(dst, True, tx, ty, mipmap_level=0,
+                    cutting_layer._surface.composite_tile(
+                            dst, True, tx, ty, mipmap_level=0,
                             mode = lib.mypaintlib.CombineDestinationIn)
-
 
     def redo(self):
         rootstack = self.doc.layer_stack
