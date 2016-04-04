@@ -1525,6 +1525,11 @@ class OverlayBezier (Overlay):
         return True
 
     def paint_control_handle(self, cr, i, node, x, y, dx, dy, draw_line):
+        """ Paint Control Handles
+        :param x,y: center(node) position,in display coordinate
+        :param dx,dy: delta x/y, these are used for moving control handle
+        :param boolean draw_line: draw line of handle, when this is True
+        """
         cr.save()
         cr.set_line_width(1)
         for hi in (0,1):                        
@@ -1555,7 +1560,6 @@ class OverlayBezier (Overlay):
     
     def paint(self, cr, draw_buttons=True):
         """Draw adjustable nodes to the screen"""
-        # Control nodes
         mode = self._inkmode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
@@ -1614,7 +1618,8 @@ class OverlayBezier (Overlay):
                     fill=fill_flag
                 )
                 if show_handle and fill_flag:
-                    self.paint_control_handle(cr, i, node, x, y, dx, dy, True)
+                    self.paint_control_handle(cr, i, node, 
+                            x, y, dx, dy, True)
                                     
     
                 

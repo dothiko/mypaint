@@ -237,6 +237,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
                             self.base_y - cur_radius - space,
                             areasize, areasize)
                 else:
+                    # To reduce redrawing area
                     dx = cur_radius * math.sin(math.pi / 4.0)
                     dw = dx * 2
                     dh = cur_radius - dx
@@ -295,6 +296,9 @@ class _Overlay (gui.overlays.Overlay):
                 self._sizemode.get_cursor_radius(self._tdw),
                 0.0,
                 2*math.pi)
+        cr.stroke_preserve()
+        cr.set_dash( (10,) )
+        cr.set_source_rgb(1, 1, 1)
         cr.stroke()
         cr.restore()
 
