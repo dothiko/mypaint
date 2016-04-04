@@ -642,9 +642,11 @@ class RootStackTreeView (Gtk.TreeView):
         if isinstance(dest_layer, lib.layer.LayerStack):
             # Interpret Gtk's "into or before" as "into AND at the
             # start". Similar for "into or after".
-            if drop_pos == GTVDP.INTO_OR_BEFORE:
+            if drop_pos in (GTVDP.INTO_OR_BEFORE,
+                    GTVDP.BEFORE):
                 n = 0
-            elif drop_pos == GTVDP.INTO_OR_AFTER:
+            elif drop_pos in (GTVDP.INTO_OR_AFTER,
+                    GTVDP.AFTER):
                 n = len(dest_layer)
 
             if is_expanded_group and len(dest_layer) > 0:

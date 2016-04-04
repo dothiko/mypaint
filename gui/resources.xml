@@ -867,22 +867,22 @@ Vocabulary
         </object>
       </child>
       <child>
-        <object class="GtkAction" id="SelectAllNodes">
-          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Select all nodes</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Mark all InkingMode nodes as selected.</property>
-          <signal name="activate" handler="select_all_nodes_cb"/>
+        <object class="GtkAction" id="SelectAll">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Select All</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Select all selectable objects on canvas.</property>
+          <signal name="activate" handler="select_all_cb"/>
         </object>
       </child>
       <child>
-        <object class="GtkAction" id="DeselectAllNodes">
-          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Deselect all nodes</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Clear selected state of all nodes.</property>
-          <signal name="activate" handler="deselect_all_nodes_cb"/>
+        <object class="GtkAction" id="DeselectAll">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Deselect All</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Clear selected state of all selectable objects.</property>
+          <signal name="activate" handler="select_all_cb"/>
         </object>
       </child>
       <child>
         <object class="GtkAction" id="ApplyPressureVariationNodes">
-          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Deselect all nodes</property>
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Apply Pressure Variation</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Apply Pressure Variation curve into current control points.</property>
           <signal name="activate" handler="apply_pressure_variation_nodes_cb"/>
         </object>
@@ -1328,6 +1328,13 @@ Vocabulary
           <property name="label" translatable="yes" context="Menu→Help→Debug (labels), Accel Editor (labels)">Simulate a Crash…</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Raise a Python exception, to test the crash dialog.</property>
           <signal name="activate" handler="crash_program_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="PrintAutosaveDirty">
+          <property name="label" translatable="yes" context="Menu→Help→Debug (labels), Accel Editor (labels)">Print Autosave-Dirty</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Print Autosave-Dirty status of all layers.</property>
+          <signal name="activate" handler="print_autosave_dirty_cb"/>
         </object>
       </child>
       <!--}}} /debugging menu -->

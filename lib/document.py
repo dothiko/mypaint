@@ -290,6 +290,7 @@ class Document (object):
         # Project flag.place here to avoid exception
         # from _command_stack_updated_cb
         self._as_project = False
+        self._pending_project_copy = False
 
         if not painting_only:
             self._autosave_processor = lib.idletask.Processor()
@@ -518,7 +519,10 @@ class Document (object):
             # backup or unchanged layer copy of new project save.
             # FYI, all pending task flashed right after
             # project-save method starts.
-            assert self._autosave_processor.get_work_count() <= 1
+            if self._pending_project_copy:
+                assert self._autosave_processor.get_work_count() <= 1
+            else:
+                assert not self._autosave_processor.has_work()
             oradir = dirname
         else:
             assert not self._autosave_processor.has_work()
@@ -1166,13 +1170,18 @@ class Document (object):
 
     def cut_current_layer(self, opaque):
         """Sets the input-lock status of selected layers."""
-        selected_path = self.layer_stack.get_selected_layers()
-        if len(selected_path) >= 2:
-            cmd = command.CutCurrentLayer(self, opaque, selected_path)
-            self.do(cmd)
-            return True
+        rootstack = self.layer_stack
+        if not isinstance(rootstack.current, lib.layer.LayerStack):
+            selected_path = rootstack.get_selected_layers()
+            if len(selected_path) >= 2:
+                rootstack.current.autosave_dirty = True
+                cmd = command.CutCurrentLayer(self, opaque, selected_path)
+                self.do(cmd)
+                return True
+            else:
+                return False
         else:
-            return False
+            logger.warning("cut_current_layer called for layergroup.this should not be happen.")
 
     ## Layer import/export
 
@@ -1731,7 +1740,7 @@ class Document (object):
                             source_dir,
                             'backup',
                             '%04d-%02d-%02d' % (lt.tm_year, lt.tm_mon, lt.tm_mday),
-                            str(uuid.uuid4()))
+                            '%02d-%02d-%02d' % (lt.tm_hour, lt.tm_min, lt.tm_sec))
 
                     assert not os.path.exists(destdirname)
 
@@ -1802,6 +1811,7 @@ class Document (object):
                         logger.warning('at new save_project, copy_list is empty!')
 
                 if len(copy_list) > 0:
+                    self._pending_project_copy = True
                     assert os.path.exists(source_dir)
                     taskproc = self._autosave_processor
                     taskproc.add_work(
@@ -1903,6 +1913,7 @@ class Document (object):
                     
                 
     
+        self._pending_project_copy = False
         return False
 
 

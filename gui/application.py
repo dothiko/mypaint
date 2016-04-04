@@ -824,6 +824,14 @@ class Application (object):
         """Tests exception handling."""
         raise Exception("This is a crash caused by the user.")
 
+    def print_autosave_dirty_cb(self, action):
+        """Show autosave-dirty status of all layers"""
+        rootstack = self.doc.model.layer_stack
+        print('---- check dirty state ----')
+        for path, cl in rootstack.walk():
+            if cl.autosave_dirty:
+                print("Layer %s is dirty" % cl.name)
+        print('---- dirty state end ----\n')
     #--------------------------------------------------
     ### My local addtion
 

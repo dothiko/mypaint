@@ -315,6 +315,8 @@
         <menuitem action='PrintInputs'/>
         <menuitem action='CrashProgram'/>
         <separator/>
+        <menuitem action='PrintAutosaveDirty'/>
+        <separator/>
         <menuitem action='VisualizeRendering'/>
         <menuitem action='NoDoubleBuffereing'/>
         <separator/>

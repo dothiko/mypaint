@@ -1655,7 +1655,7 @@ class GroupSelectedLayers(Command):
         """ setup internal status from self.selected_path
         """
         rootstack = self.doc.layer_stack
-        first_layer_path = self.selected_path[0]
+        self._first_layer_path = self.selected_path[0]
         before_pop_path = []
         after_path = []
 
@@ -1667,11 +1667,10 @@ class GroupSelectedLayers(Command):
         # because pop/remove might changes layer's path.
         for clayer in self._group:
             layer_path = rootstack.deepindex(clayer)
-            before_pop_path.append(layer_path)
+            before_pop_path.append( (layer_path, clayer) )
             rootstack.deeppop(layer_path)
 
-        self._first_layer_path = first_layer_path
-        self._before_pop_path = before_pop_path
+        self._before_pop_path = sorted(before_pop_path, reverse=True)
 
 
     def _do_insert_group(self):
@@ -1695,9 +1694,8 @@ class GroupSelectedLayers(Command):
         rootstack = self.doc.layer_stack
         group = rootstack.deeppop(self._after_group_pos)
 
-        for i, before_path in enumerate(self._before_pop_path):
-            clayer = self._group[i]
-            rootstack.deepinsert(before_path, clayer)
+        for before_path, layer in self._before_pop_path:
+            rootstack.deepinsert(before_path, layer)
 
         rootstack.current_path = self._first_layer_path
 
@@ -1847,9 +1845,9 @@ class CutCurrentLayer (Command):
                 if srcsurf.tile_request(tx, ty, readonly=False) == None:
                     lib.mypaintlib.tile_clear_rgba16(dst)
                 else:
-                    cutting_layer._surface.composite_tile(dst, True, tx, ty, mipmap_level=0,
+                    cutting_layer._surface.composite_tile(
+                            dst, True, tx, ty, mipmap_level=0,
                             mode = lib.mypaintlib.CombineDestinationIn)
-
 
     def redo(self):
         rootstack = self.doc.layer_stack

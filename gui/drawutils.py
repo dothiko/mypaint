@@ -507,7 +507,6 @@ def render_square_floating_color_chip(cr, x, y, color, size, fill, z=2):
     cr.set_line_width(0)
 
     base_col = RGBColor(color=color)
-    #hi_col = _get_paint_chip_highlight(base_col)
 
     cr.set_line_width(1)
     cr.set_source_rgb(*base_col.get_rgb())
@@ -516,10 +515,6 @@ def render_square_floating_color_chip(cr, x, y, color, size, fill, z=2):
     cr.stroke_preserve()
     if fill:
         cr.fill()
-    cr.clip_preserve()
-
-    #cr.set_source_rgb(*hi_col.get_rgb())
-    #cr.stroke()
 
     cr.restore()
 

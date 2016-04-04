@@ -48,6 +48,31 @@ _PRESSURE_VARIATIONS = [
         ('Tail'   , [(0.0, 0.6), (0.25, 0.4), (0.75, 0.1), (1.0, 0.4)] ),
         ]
 
+
+## Function defs
+
+def _nodes_deletion_decorator(method):
+    """ Decorator for deleting multiple nodes methods
+    """
+    def _decorator(self, *args):
+        # To ensure redraw entire overlay,avoiding glitches.
+        self._queue_redraw_curve()
+        self._queue_redraw_all_nodes()
+        self._queue_draw_buttons()
+
+        # the method should return deleted nodes count
+        result = method(self, *args)
+        assert type(result) == int
+
+        if result > 0:
+            self.options_presenter.target = (self, self.current_node_index)
+            self._queue_redraw_curve()
+            self._queue_redraw_all_nodes()
+            self._queue_draw_buttons()
+        return result
+    return _decorator
+
+
 ## Class defs
 
 
@@ -1330,12 +1355,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_draw_buttons()
         self._queue_draw_node(i)
 
-        self.nodes.pop(i)
+        self._pop_node(i)
 
         # Limit the current node.
         # this processing may vary in inherited classes,
         # so wrap this.
-        self._adjust_current_node_index()
+       #self._adjust_current_node_index()
 
         self.options_presenter.target = (self, self.current_node_index)
         # Issue redraws for the changed on-canvas elements
@@ -1438,10 +1463,38 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         if self.can_insert_node(self.current_node_index):
             self.insert_node(self.current_node_index)
 
+    def _pop_node(self, idx):
+        """ wrapper method of popping(delete) node.
+        to ensure not included in self.selected_nodes.
+        """
+        if idx in self.selected_nodes:
+            self.selected_nodes.remove(idx)
+
+        for i, sidx  in enumerate(self.selected_nodes):
+            if sidx > idx:
+                self.selected_nodes[i] = sidx - 1
+
+        def adjust_index(cur_idx, targ_idx):
+            if cur_idx == targ_idx:
+                cur_idx = -1
+            elif cur_idx > targ_idx:
+                cur_idx -= 1
+
+            if cur_idx < 0:
+                return None
+            return cur_idx
+
+
+        self.current_node_index = adjust_index(self.current_node_index,idx)
+        self.target_node_index = adjust_index(self.target_node_index,idx)
+
+        return self.nodes.pop(idx)
+
     def _simplify_nodes(self, tolerance):
         """Internal method of simplify nodes.
 
         """
+
         # Algorithm: Reumann-Witkam.
         i=0
         oldcnt=len(self.nodes)
@@ -1463,7 +1516,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     hy=(vey*dp)-py
 
                     if math.sqrt(hx*hx + hy*hy) < tolerance:
-                        self.nodes.pop(i+1)
+                        self._pop_node(i+1)
                     else:
                         break
 
@@ -1479,34 +1532,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def _cull_nodes(self):
         """Internal method of cull nodes."""
         curcnt=len(self.nodes)
-        lastnode=self.nodes[-1]
-        self.nodes=self.nodes[:-1:2]
-        self.nodes.append(lastnode)
+        idx = 1
+        for i in xrange(len(self.nodes)/2):
+            self._pop_node(idx)
+            idx+=1
         return curcnt-len(self.nodes)
 
-    def _nodes_deletion_operation(self, callable, args):
-        """Internal method for delete-related operation of multiple nodes."""
-        # To ensure redraw entire overlay,avoiding glitches.
-        self._queue_redraw_curve()
-        self._queue_redraw_all_nodes()
-        self._queue_draw_buttons()
-
-        if callable(*args) > 0:
-
-            new_cn = self.current_node_index
-            if new_cn >= len(self.nodes):
-                new_cn = len(self.nodes) - 2
-                self.current_node_index = new_cn
-                self.current_node_changed(new_cn)
-                self.options_presenter.target = (self, new_cn)
-
-            # FIXME: Quick hack,to avoid indexerror
-            self.target_node_index=None
-
-            # Issue redraws for the changed on-canvas elements
-            self._queue_redraw_curve()
-            self._queue_redraw_all_nodes()
-            self._queue_draw_buttons()
 
     def _queue_all_visual_redraw(self):
         """Redraw all overlay objects"""
@@ -1514,15 +1545,18 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
+    @_nodes_deletion_decorator
     def simplify_nodes(self):
         """User interface method of simplify nodes."""
-        # For now, parameter is fixed value.
+        # XXX For now, parameter is fixed value.
         # tolerance is 8, in model coords.
-        self._nodes_deletion_operation(self._simplify_nodes, (8,))
+        # this value should be configureable...?
+        return self._simplify_nodes(8)
 
+    @_nodes_deletion_decorator
     def cull_nodes(self):
         """User interface method of cull nodes."""
-        self._nodes_deletion_operation(self._cull_nodes, ())
+        return self._cull_nodes()
 
 
     ## nodes average
@@ -1685,11 +1719,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
 
     ## Node selection
-    def select_all_nodes(self):
+    def select_all(self):
         self.selected_nodes = range(0, len(self.nodes))
         self._queue_redraw_all_nodes()
 
-    def deselect_all_nodes(self):
+    def deselect_all(self):
         self._reset_selected_nodes(None)
         self._queue_redraw_all_nodes()
 
