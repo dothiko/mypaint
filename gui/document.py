@@ -1328,7 +1328,13 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         if "Import" in action.get_name():
             app = self.app
             try:
-                dlg = app.filehandler.get_open_dialog(file_filters=app.filehandler.file_filters)
+                dlg = app.filehandler.get_open_dialog(
+                        file_filters=app.filehandler.file_filters)
+                preview = gtk.Image()
+                dlg.set_preview_widget(preview)
+                dlg.connect("update-preview", 
+                        app.filehandler.update_preview_cb, preview)
+
                 if dlg.run() == gtk.RESPONSE_OK:
                     layer_kwds["import-filename"] = dlg.get_filename().decode('utf-8')
                 else:
