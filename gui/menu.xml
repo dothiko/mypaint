@@ -49,6 +49,7 @@
       <menuitem action='FlipSequenceMode'/>
       <menuitem action='FlipEllipseMode'/>
       <menuitem action='FlipSymmetryEditMode'/>
+      <menuitem action='FlipStampMode'/>
       <!-- All radio modes, in case somebody wants to bind those -->
       <separator/>
       <menuitem action='RevealModeOptionsTool'/>

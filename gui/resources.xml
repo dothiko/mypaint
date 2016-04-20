@@ -2015,6 +2015,26 @@ Vocabulary
         </object>
       </child>
       <!-- }}} -->
+      <!-- {{{ Stamp tool and flip actions -->
+      <child>
+        <object class="GtkRadioAction" id="StampMode">
+          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">Stamp Tool</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">Stamp</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Stamp bitmap file,clipboard or portion of a layer.</property>
+          <property name="group">StampMode</property>
+          <property name="icon-name">mypaint-tool-bezier-symbolic</property>
+          <property name="value">15</property>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="FlipStampMode">
+          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">Stamp Tool</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">draw bitmap stamp</property>
+          <property name="icon-name">mypaint-tool-bezier-symbolic</property>
+          <signal name="activate" handler="mode_flip_action_activated_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
     </object>
   </child>
   <!-- }}} -->
