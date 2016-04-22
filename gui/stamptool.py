@@ -35,6 +35,7 @@ from lib import mypaintlib
 from gui.inktool import *
 from gui.inktool import _LayoutNode, _Phase, _EditZone
 from gui.linemode import *
+from lib.command import Command
 
 ## Module settings
 
@@ -49,19 +50,19 @@ EVCOMPRESSION_WORKAROUND_NONE = 999
 
 ## Functions
 
-def _draw_stamp_to_layer(target_layer, stamp, bbox):
+def _draw_stamp_to_layer(target_layer, stamp, nodes, bbox):
     """
     :param bbox: boundary box, in model coordinate
     """
-    sx, sy, ex, ey = bbox
-    sx = int(sx)
-    sy = int(sy)
-    w = int(ex-sx+1)
-    h = int(ey-sy+1)
-    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
+    sx, sy, w, h = bbox
+    print (w,h)
+    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, int(w), int(h))
     cr = cairo.Context(surf)
 
-    stamp.draw(cr, sx, sy)
+    for cn in nodes:
+        stamp.draw(None, cr, cn.x - sx, cn.y - sy,
+                cn.angle, cn.scale_x, cn.scale_y, True)
+
     surf.flush()
     pixbuf = Gdk.pixbuf_get_from_surface(surf, 0, 0, w, h)
     layer = lib.layer.PaintingLayer(name='')
@@ -82,10 +83,49 @@ def _draw_stamp_to_layer(target_layer, stamp, bbox):
 
 
 
-## Module constants
+def get_barycentric_point(x, y, triangle):
+    """
+    Get barycentric point of a point(x,y) in a triangle.
+    :param triangle: a sequential of 3 points, which compose a triangle.
+    """
+    p0, p1, p2 = triangle
+    v1x = p1[0] - p2[0]
+    v1y = p1[1] - p2[1]
+    v2x = p0[0] - p2[0]
+    v2y = p0[1] - p2[1]
+
+    d = v2y * v1x - v1y * v2x
+    if d == 0.0:
+        return False
+
+    p2x = x - p2[0] 
+    p2y = y - p2[1] 
+    p0x = x - p0[0] 
+    p0y = y - p0[1] 
+
+    b0 = (p2y * v1x + v1y * -p2x) / d
+    b1 = (p0y * -v2x + v2y * -p0x) / d
+    return (b0, b1, 1.0 - b0 - b1)
+
+#def is_inside_triangle(x, y, triangle):
+#    b0, b1, b2 = get_barycentric_point(x, y, triangle)
+#    return (0.0 <= b0 <= 1.0 and 
+#            0.0 <= b1 <= 1.0 and 
+#            0.0 <= b2 <= 1.0)
 
 
-## Function defs
+def is_inside_triangle(x, y, triangle):
+    """ from stackoverflow
+    """
+    def sign(p1, p2, p3):
+        return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
+
+    b1 = sign((x,y) , triangle[0], triangle[1]) < 0.0
+    b2 = sign((x,y) , triangle[1], triangle[2]) < 0.0
+    b3 = sign((x,y) , triangle[2], triangle[0]) < 0.0
+    return b1 == b2 == b3
+
+
 
 ## Class defs
 
@@ -106,9 +146,8 @@ class Stamp(object):
         self._stamp_src = GdkPixbuf.Pixbuf.new_from_file(filename)
 
 
-    def draw(self, cr, x, y, angle, scale_x, scale_y, save_context=False):
+    def draw(self, tdw, cr, x, y, angle, scale_x, scale_y, save_context=False):
         """ draw this stamp into cairo surface.
-        cairo surface merged into a MyPaint surface later.
         """
         if save_context:
             cr.save()
@@ -122,10 +161,17 @@ class Stamp(object):
         oy = -(h / 2)
 
         cr.translate(x,y)
-        if angle != 0.0:
+        if ((tdw and tdw.renderer.rotation != 0.0) or 
+                angle != 0.0):
+            if tdw:
+                angle += tdw.renderer.rotation
             cr.rotate(angle)
 
-        if scale_x != 1.0 and scale_y != 1.0:
+        if ((tdw and tdw.renderer.scale != 1.0) or 
+                (scale_x != 1.0 and scale_y != 1.0)):
+            if tdw:
+                scale_x *= tdw.renderer.scale
+                scale_y *= tdw.renderer.scale
             cr.scale(scale_x, scale_y)
 
         Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
@@ -137,50 +183,85 @@ class Stamp(object):
         if save_context:
             cr.restore()
 
-    def get_boundary_positions(self, tdw, mx, my, angle, scale_x, scale_y):
-        w = self._stamp_src.get_width() * scale_x 
-        h = self._stamp_src.get_height() * scale_y
+    def is_inside(self, mx, my, node):
+        """ Check whether the point(mx, my) is inside of the stamp
+        which placed as node information.
+        """
+        pos = self.get_boundary_points(node)
+        if not is_inside_triangle(mx, my, (pos[0], pos[1], pos[2])):
+            return is_inside_triangle(mx, my, (pos[0], pos[2], pos[3]))
+        else:
+            return True
+
+    def get_boundary_points(self, node, tdw=None, dx=0.0, dy=0.0):
+        """ Get boundary corner points, when this stamp is
+        placed/rotated/scaled into the node.
+
+        The return value is a list of 'boundary corner points'.
+        The stamp might be rotated, so boundary might not be 'rectangle'. 
+        so this method returns a list of 4 corner points.
+
+        Each corner points are model coordinate.
+        But, when parameter 'tdw' assigned, returned corner points are 
+        converted to display coordinate.
+
+        :param mx, my: the center point in model coordinate.
+        :param tdw: tiledrawwidget, to get display coordinate. 
+                    By default this is None.
+        """
+        w = self._stamp_src.get_width() * node.scale_x 
+        h = self._stamp_src.get_height() * node.scale_y
         sx = - w / 2
         sy = - h / 2
         ex = w+sx
         ey = h+sy
+        bx = node.x + dx
+        by = node.y + dy
 
-        if angle != 0.0:
-            positions = [ (sx, sy),
+        if node.angle != 0.0:
+            points = [ (sx, sy),
                           (ex, sy),
                           (ex, ey),
                           (sx, ey) ]
-            cos_s = math.cos(angle)
-            sin_s = math.sin(angle)
+            cos_s = math.cos(node.angle)
+            sin_s = math.sin(node.angle)
             for i in xrange(4):
-                x = positions[i][0]
-                y = positions[i][1]
-                tx = (cos_s * x - sin_s * y) + mx
-                ty = (sin_s * x + cos_s * y) + my
-                positions[i] = (tx, ty) 
+                x = points[i][0]
+                y = points[i][1]
+                tx = (cos_s * x - sin_s * y) + bx
+                ty = (sin_s * x + cos_s * y) + by
+                points[i] = (tx, ty) 
         else:
-            sx += mx
-            ex += mx
-            sy += my
-            ey += my
-            positions = [ (sx, sy),
+            sx += bx
+            ex += bx
+            sy += by
+            ey += by
+            points = [ (sx, sy),
                           (ex, sy),
                           (ex, ey),
                           (sx, ey) ]
 
         if tdw:
-            positions = [ tdw.model_to_display(x,y) for x,y in positions ]
+            points = [ tdw.model_to_display(x,y) for x,y in points ]
 
-        return positions
+        return points
 
-    def get_bbox(self, tdw, mx, my, angle, scale_x, scale_y):
-        pos = self.get_boundary_positions(None, mx, my, 
-                angle, scale_x, scale_y)
-        sx, sy = tdw.model_to_display(*pos[0])
+    def get_bbox(self, tdw, node, dx=0.0, dy=0.0):
+        """ Get outmost boundary box, to get displaying area or 
+        to do initial collision detection.
+        return value is a tuple of rectangle,
+        (x, y, width, height)
+        """
+        pos = self.get_boundary_points(node, dx=dx, dy=dy)
+        if tdw:
+            sx, sy = tdw.model_to_display(*pos[0])
+        else:
+            sx, sy = pos[0]
         ex = sx
         ey = sy
         for x, y in pos[1:]:
-            x, y = tdw.model_to_display(x, y)
+            if tdw:
+                x, y = tdw.model_to_display(x, y)
             sx = min(sx, x)
             sy = min(sy, y)
             ex = max(ex, x)
@@ -202,6 +283,37 @@ class _StampNode (collections.namedtuple("_StampNode", _NODE_FIELDS)):
     * scale_h: float in [0.0, 3.0]
     """
 
+
+class DrawStamp(Command):
+    """Draw a stamp(pixbuf) on the current layer"""
+
+    display_name = _("Draw stamp(s)")
+
+    def __init__(self, model, stamp, nodes, bbox, **kwds):
+        """
+        :param bbox: boundary rectangle,in model coordinate.
+        """
+        super(DrawStamp, self).__init__(model, **kwds)
+        self.nodes = nodes
+        self.stamp = stamp
+        self.bbox = bbox
+        self.snapshot = None
+
+    def redo(self):
+        # Pick a source
+        target = self.doc.layer_stack.current
+        assert target is not None
+        self.snapshot = target.save_snapshot()
+        target.autosave_dirty = True
+        # Draw stamp at each nodes location 
+        _draw_stamp_to_layer(target,
+                self.stamp, self.nodes, self.bbox)
+
+    def undo(self):
+        layers = self.doc.layer_stack
+        assert self.snapshot is not None
+        layers.current.load_snapshot(self.snapshot)
+        self.snapshot = None
 
 
 
@@ -282,18 +394,55 @@ class StampMode (InkingMode):
         pending brushwork is committed properly.
 
         """
-        return
-       #if flush:
-       #    # Commit the pending work normally
-       #    self._start_new_capture_phase(rollback=False)
-       #    super(InkingMode, self).checkpoint(flush=flush, **kwargs)
-       #else:
-       #    # Queue a re-rendering with any new brush data
-       #    # No supercall
-       #    self._stop_task_queue_runner(complete=False)
-       #    self._queue_draw_buttons()
-       #    self._queue_redraw_all_nodes()
-       #    self._queue_redraw_stamps()
+
+        # FIXME almost copyied from polyfilltool.py
+        if flush:
+            # Commit the pending work normally
+            super(InkingMode, self).checkpoint(flush=flush, **kwargs) # call super-superclass method
+        else:
+            # Queue a re-rendering with any new brush data
+            # No supercall
+            self._stop_task_queue_runner(complete=False)
+            self._queue_draw_buttons()
+            self._queue_redraw_all_nodes()
+            self._queue_redraw_stamps()
+        
+    def _commit_all(self):
+        sx, sy, ex, ey = self.stamp.get_bbox(None, self.nodes[0])
+        for cn in self.nodes[1:]:
+            tsx, tsy, tex, tey = self.stamp.get_bbox(None, cn)
+            sx = min(sx, tsx)
+            sy = min(sy, tsy)
+            ex = max(ex, tex)
+            ey = max(ey, tey)
+
+        cmd = DrawStamp(self.doc.model,
+                self.stamp,
+                self.nodes,
+                (sx, sy, ex, ey))
+        self.doc.model.do(cmd)
+
+
+
+    def _start_new_capture_phase(self, rollback=False):
+        """Let the user capture a new ink stroke"""
+        if rollback:
+           #self._stop_task_queue_runner(complete=False)
+           #self.brushwork_rollback_all()
+            pass
+        else:
+            self._stop_task_queue_runner(complete=True)
+            self._commit_all()
+           #self.brushwork_commit_all()
+            pass
+            
+        self.options_presenter.target = (self, None)
+        self._queue_draw_buttons()
+        self._queue_redraw_all_nodes()
+        self._reset_nodes()
+        self._reset_capture_data()
+        self._reset_adjust_data()
+        self.phase = _Phase.CAPTURE
 
     def _ensure_overlay_for_tdw(self, tdw):
         overlay = self._overlays.get(tdw)
@@ -567,33 +716,43 @@ class StampMode (InkingMode):
    #    for i in xrange(len(self.nodes)):
    #        self._queue_draw_node(i)
    #
+    def _search_target_node(self, tdw, x, y):
+        """ utility method: to commonize processing,
+        even in inherited classes.
+        """
+        hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 12
+        new_target_node_index = None
+        stamp = self.stamp
+        mx, my = tdw.display_to_model(x, y)
+        for i, node in reversed(list(enumerate(self.nodes))):
+            if stamp.is_inside(mx, my, node):
+                new_target_node_index = i
+                break
+        return new_target_node_index
+
+    def _queue_draw_node(self, i):
+        """Redraws a specific control node on all known view TDWs"""
+        node = self.nodes[i]
+        dx,dy = self.selection_rect.get_model_offset()
+        for tdw in self._overlays:
+            tdw.queue_draw_area(
+                    *self.stamp.get_bbox(tdw, node, dx, dy))
 
     def _queue_redraw_stamps(self):
         """Redraws the entire curve on all known view TDWs"""
-       #self._stop_task_queue_runner(complete=False)
+
         dx, dy = self.selection_rect.get_model_offset()
+
         for tdw in self._overlays:
-           #model = tdw.doc
-           #interp_state = {"t_abs": self.nodes[0].time}
+
             for i, cn in enumerate(self.nodes):
                 if i in self.selected_nodes:
-                    x, y, w, h = self.stamp.get_bbox(tdw, 
-                            cn.x + dx , cn.y + dy, 
-                            cn.angle, cn.scale_x, cn.scale_y)
-                   #tdw.queue_draw_area(
-                   #     *self.stamp.get_bbox(tdw, dx + cn.x, dy + cn.y))
+                    tdw.queue_draw_area(
+                            *self.stamp.get_bbox(tdw, cn, dx, dy))
                 else:
-                    x, y, w, h = self.stamp.get_bbox(tdw, cn.x , cn.y, 
-                            cn.angle, cn.scale_x, cn.scale_y)
-                   #tdw.queue_draw_area(
-                   #     *self.stamp.get_bbox(tdw, cn.x, cn.y))
-               #tdw.queue_draw_area(
-               #        0, 0, w, h)
-                tdw.queue_draw_area(
-                        x, y, w, h)
+                    tdw.queue_draw_area(
+                            *self.stamp.get_bbox(tdw, cn))
 
-
-       #self._start_task_queue_runner()
 
 
     ## Drag handling (both capture and adjust phases)
@@ -714,13 +873,15 @@ class Overlay_Stamp (Overlay):
     def __init__(self, mode, tdw):
         super(Overlay_Stamp, self).__init__(mode, tdw)
 
-    def draw_stamp(self, cr, node, x, y):
+    def draw_stamp(self, cr, node, x, y, active):
         mode = self._inkmode
-        pos = mode.stamp.get_boundary_positions(self._tdw,
-                node.x, node.y, node.angle, node.scale_x, node.scale_y) 
+        pos = mode.stamp.get_boundary_points(node, tdw=self._tdw)
         cr.save()
         cr.set_line_width(1)
-        cr.set_source_rgb(0, 0, 0)
+        if active:
+            cr.set_source_rgb(1, 0, 0)
+        else:
+            cr.set_source_rgb(0, 0, 0)
         cr.move_to(pos[0][0], pos[0][1])
         for lx, ly in pos[1:]:
             cr.line_to(lx, ly)
@@ -728,7 +889,7 @@ class Overlay_Stamp (Overlay):
         cr.stroke()
         cr.restore()
 
-        mode.stamp.draw(cr, x, y, 
+        mode.stamp.draw(self._tdw, cr, x, y, 
                 node.angle, node.scale_x, node.scale_y,
                 True)
 
@@ -772,7 +933,7 @@ class Overlay_Stamp (Overlay):
                     color=color,
                     radius=radius,
                     fill=fill_flag)
-                self.draw_stamp(cr, node, x, y)
+                self.draw_stamp(cr, node, x, y, i == mode.target_node_index)
 
         # Buttons
         if (mode.phase in
@@ -1107,3 +1268,6 @@ class OptionsPresenter_Stamp (object):
                 inkmode.apply_pressure_from_curve_widget()
 
 
+if __name__ == '__main__':
+    triangle=( (0.0, 0.0), (10.0,12.0), (15.0, -2.0) )
+    print get_barycentric_point(2.0, 0.4, triangle)
