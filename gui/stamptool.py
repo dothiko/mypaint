@@ -55,7 +55,6 @@ def _draw_stamp_to_layer(target_layer, stamp, nodes, bbox):
     :param bbox: boundary box, in model coordinate
     """
     sx, sy, w, h = bbox
-    print (w,h)
     surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, int(w), int(h))
     cr = cairo.Context(surf)
 
@@ -282,10 +281,16 @@ class _StampNode (collections.namedtuple("_StampNode", _NODE_FIELDS)):
     * scale_w: float in [0.0, 3.0]
     * scale_h: float in [0.0, 3.0]
     """
+class _PhaseStamp(_Phase):
+    """Enumeration of the states that an BezierCurveMode can be in"""
+    MOVE   = 100         #: Moving stamp
+    ROTATE = 101         #: Rotate
+    SCALE  = 102         #: Scale
+    CALL_BUTTONS = 106      #: call buttons around clicked point. 
 
 
 class DrawStamp(Command):
-    """Draw a stamp(pixbuf) on the current layer"""
+    """Command : Draw a stamp(pixbuf) on the current layer"""
 
     display_name = _("Draw stamp(s)")
 
@@ -367,6 +372,8 @@ class StampMode (InkingMode):
         self._stamp = Stamp()
         #! test code
         self._stamp.load_from_file('/home/dull/python/src/mypaint/mypaint/stamptest.png')
+        self.current_handle_index = -1
+        self.forced_button_pos = False
 
     @property
     def stamp(self):
@@ -405,7 +412,7 @@ class StampMode (InkingMode):
             self._stop_task_queue_runner(complete=False)
             self._queue_draw_buttons()
             self._queue_redraw_all_nodes()
-            self._queue_redraw_stamps()
+            self._queue_redraw_curve()
         
     def _commit_all(self):
         sx, sy, ex, ey = self.stamp.get_bbox(None, self.nodes[0])
@@ -452,171 +459,6 @@ class StampMode (InkingMode):
             self._overlays[tdw] = overlay
         return overlay
 
-    ## Raw event handling (prelight & zone selection in adjust phase)
-    def button_press_cb(self, tdw, event):
-        self._ensure_overlay_for_tdw(tdw)
-        current_layer = tdw.doc._layers.current
-        if not (tdw.is_sensitive and current_layer.get_paintable()):
-            return False
-        self._update_zone_and_target(tdw, event.x, event.y)
-        self._update_current_node_index()
-
-        shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
-        ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
-
-        if self.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE):
-            button = event.button
-            # Normal ADJUST/ADJUST_PRESSURE Phase.
-
-            if self.zone in (_EditZone.REJECT_BUTTON,
-                             _EditZone.ACCEPT_BUTTON):
-                if (button == 1 and
-                        event.type == Gdk.EventType.BUTTON_PRESS):
-                    self._click_info = (button, self.zone)
-                    return False
-                # FALLTHRU: *do* allow drags to start with other buttons
-            elif self.zone == _EditZone.EMPTY_CANVAS:
-                if shift_state:
-                    # selection box dragging start!!
-                    if self._returning_phase == None:
-                        self._returning_phase = self.phase
-                    self.phase = _Phase.ADJUST_SELECTING
-                    self.selection_rect.start(
-                            *tdw.display_to_model(event.x, event.y))
-                else:
-                   #self._start_new_capture_phase(rollback=False)
-                   #assert self.phase == _Phase.CAPTURE
-                    self.phase = _Phase.CAPTURE
-                    self._queue_draw_buttons() # To erase button!
-                    self._queue_redraw_stamps()
-
-                # FALLTHRU: *do* start a drag
-            else:
-                # clicked a node.
-
-                if button == 1:
-                    # 'do_reset' is a selection reset flag
-                    do_reset = False
-                    if (event.state & Gdk.ModifierType.CONTROL_MASK):
-                        # Holding CONTROL key = adding or removing a node.
-                        # But it is done at button_release_cb for now,
-                        pass
-
-                    else:
-                        # no CONTROL Key holded.
-                        # If new solo node clicked without holding
-                        # CONTROL key,then reset all selected nodes.
-
-                        assert self.current_node_index != None
-
-                        do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
-                        do_reset |= not (self.current_node_index in self.selected_nodes)
-
-                    if do_reset:
-                        # To avoid old selected nodes still lit.
-                        self._queue_draw_selected_nodes()
-                        self._reset_selected_nodes(self.current_node_index)
-
-                # FALLTHRU: *do* start a drag
-
-
-        elif self.phase == _Phase.CAPTURE:
-            # XXX Not sure what to do here.
-            # XXX Click to append nodes?
-            # XXX  but how to stop that and enter the adjust phase?
-            # XXX Click to add a 1st & 2nd (=last) node only?
-            # XXX  but needs to allow a drag after the 1st one's placed.
-            pass
-        elif self.phase == _Phase.ADJUST_PRESSURE_ONESHOT:
-            # XXX Not sure what to do here.
-            pass
-        elif self.phase == _Phase.ADJUST_SELECTING:
-            # XXX Not sure what to do here.
-            pass
-        else:
-            raise NotImplementedError("Unrecognized zone %r", self.zone)
-        # Update workaround state for evdev dropouts
-        self._button_down = event.button
-        self._last_good_raw_pressure = 0.0
-        self._last_good_raw_xtilt = 0.0
-        self._last_good_raw_ytilt = 0.0
-
-        # Supercall: start drags etc
-        return super(InkingMode, self).button_press_cb(tdw, event)
-
-    def button_release_cb(self, tdw, event):
-        self._ensure_overlay_for_tdw(tdw)
-        current_layer = tdw.doc._layers.current
-        if not (tdw.is_sensitive and current_layer.get_paintable()):
-            return False
-
-        if self.phase in (_Phase.ADJUST , _Phase.ADJUST_PRESSURE):
-            if self._click_info:
-                button0, zone0 = self._click_info
-                if event.button == button0:
-                    if self.zone == zone0:
-                        if zone0 == _EditZone.REJECT_BUTTON:
-                            self._start_new_capture_phase(rollback=True)
-                            assert self.phase == _Phase.CAPTURE
-                        elif zone0 == _EditZone.ACCEPT_BUTTON:
-                            self._start_new_capture_phase(rollback=False)
-                            assert self.phase == _Phase.CAPTURE
-                    self._click_info = None
-                    self._update_zone_and_target(tdw, event.x, event.y)
-                    self._update_current_node_index()
-                    return False
-            else:
-                # Clicked node and button released.
-                # Add or Remove selected node
-                # when control key is pressed
-                if event.button == 1:
-                    if event.state & Gdk.ModifierType.CONTROL_MASK:
-                        tidx = self.target_node_index
-                        if tidx != None:
-                            if not tidx in self.selected_nodes:
-                                self.selected_nodes.append(tidx)
-                            else:
-                                self.selected_nodes.remove(tidx)
-                                self.target_node_index = None
-                                self.current_node_index = None
-                    else:
-                        # Single node click.
-                        pass
-
-                    ## fall throgh
-
-                self._update_zone_and_target(tdw, event.x, event.y)
-
-            # (otherwise fall through and end any current drag)
-        elif self.phase == _Phase.ADJUST_SELECTING:
-            # XXX Not sure what to do here.
-            pass
-        elif self.phase == _Phase.CAPTURE:
-            # Update options_presenter when capture phase end
-            self.options_presenter.target = (self, None)
-
-        # Update workaround state for evdev dropouts
-        self._button_down = None
-        self._last_good_raw_pressure = 0.0
-        self._last_good_raw_xtilt = 0.0
-        self._last_good_raw_ytilt = 0.0
-
-
-        # other processing 
-        if self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
-            self.options_presenter.target = (self, self.current_node_index)
-
-        # Supercall: stop current drag
-        return super(InkingMode, self).button_release_cb(tdw, event)
-
-    def motion_notify_cb(self, tdw, event):
-        self._ensure_overlay_for_tdw(tdw)
-        current_layer = tdw.doc._layers.current
-        if not (tdw.is_sensitive and current_layer.get_paintable()):
-            return False
-
-        self._update_zone_and_target(tdw, event.x, event.y)
-        return super(InkingMode, self).motion_notify_cb(tdw, event)
 
     def _update_zone_and_target(self, tdw, x, y):
         """Update the zone and target node under a cursor position"""
@@ -738,14 +580,15 @@ class StampMode (InkingMode):
             tdw.queue_draw_area(
                     *self.stamp.get_bbox(tdw, node, dx, dy))
 
-    def _queue_redraw_stamps(self):
+    def _queue_redraw_curve(self):
         """Redraws the entire curve on all known view TDWs"""
 
         dx, dy = self.selection_rect.get_model_offset()
 
         for tdw in self._overlays:
-
+            print '---'
             for i, cn in enumerate(self.nodes):
+                print cn
                 if i in self.selected_nodes:
                     tdw.queue_draw_area(
                             *self.stamp.get_bbox(tdw, cn, dx, dy))
@@ -755,6 +598,173 @@ class StampMode (InkingMode):
 
 
 
+    ## Raw event handling (prelight & zone selection in adjust phase)
+    def button_press_cb(self, tdw, event):
+        self._ensure_overlay_for_tdw(tdw)
+        current_layer = tdw.doc._layers.current
+        if not (tdw.is_sensitive and current_layer.get_paintable()):
+            return False
+        self._update_zone_and_target(tdw, event.x, event.y)
+        self._update_current_node_index()
+
+        shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
+        ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
+
+        if self.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE):
+            button = event.button
+            # Normal ADJUST/ADJUST_PRESSURE Phase.
+
+            if self.zone in (_EditZone.REJECT_BUTTON,
+                             _EditZone.ACCEPT_BUTTON):
+                if (button == 1 and
+                        event.type == Gdk.EventType.BUTTON_PRESS):
+                    self._click_info = (button, self.zone)
+                    return False
+                # FALLTHRU: *do* allow drags to start with other buttons
+            elif self.zone == _EditZone.EMPTY_CANVAS:
+                if shift_state:
+                    # selection box dragging start!!
+                    if self._returning_phase == None:
+                        self._returning_phase = self.phase
+                    self.phase = _Phase.ADJUST_SELECTING
+                    self.selection_rect.start(
+                            *tdw.display_to_model(event.x, event.y))
+                else:
+                   #self._start_new_capture_phase(rollback=False)
+                   #assert self.phase == _Phase.CAPTURE
+                    self.phase = _Phase.CAPTURE
+                    self._queue_draw_buttons() # To erase button!
+                    self._queue_redraw_curve()
+
+                # FALLTHRU: *do* start a drag
+            elif self.zone == _EditZone.CONTROL_NODE:
+                # clicked a node.
+
+                if button == 1:
+                    # 'do_reset' is a selection reset flag
+                    do_reset = False
+                    if ctrl_state:
+                        # Holding CONTROL key = adding or removing a node.
+                        # But it is done at button_release_cb for now,
+                        pass
+
+                    else:
+                        # no CONTROL Key holded.
+                        # If new solo node clicked without holding
+                        # CONTROL key,then reset all selected nodes.
+
+                        assert self.current_node_index != None
+
+                        do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
+                        do_reset |= not (self.current_node_index in self.selected_nodes)
+
+                    if do_reset:
+                        # To avoid old selected nodes still lit.
+                        self._queue_draw_selected_nodes()
+                        self._reset_selected_nodes(self.current_node_index)
+
+                # FALLTHRU: *do* start a drag
+            else:
+                raise NotImplementedError("Unrecognized zone %r", self.zone)
+
+
+        elif self.phase == _Phase.CAPTURE:
+            # XXX Not sure what to do here.
+            # XXX Click to append nodes?
+            # XXX  but how to stop that and enter the adjust phase?
+            # XXX Click to add a 1st & 2nd (=last) node only?
+            # XXX  but needs to allow a drag after the 1st one's placed.
+            pass
+        elif self.phase == _Phase.ADJUST_PRESSURE_ONESHOT:
+            # XXX Not sure what to do here.
+            pass
+        elif self.phase == _Phase.ADJUST_SELECTING:
+            # XXX Not sure what to do here.
+            pass
+        else:
+            raise NotImplementedError("Unrecognized zone %r", self.zone)
+        # Update workaround state for evdev dropouts
+        self._button_down = event.button
+        self._last_good_raw_pressure = 0.0
+        self._last_good_raw_xtilt = 0.0
+        self._last_good_raw_ytilt = 0.0
+
+        # Supercall: start drags etc
+        return super(InkingMode, self).button_press_cb(tdw, event)
+
+    def button_release_cb(self, tdw, event):
+        self._ensure_overlay_for_tdw(tdw)
+        current_layer = tdw.doc._layers.current
+        if not (tdw.is_sensitive and current_layer.get_paintable()):
+            return False
+
+        if self.phase in (_Phase.ADJUST , _Phase.ADJUST_PRESSURE):
+            if self._click_info:
+                button0, zone0 = self._click_info
+                if event.button == button0:
+                    if self.zone == zone0:
+                        if zone0 == _EditZone.REJECT_BUTTON:
+                            self._start_new_capture_phase(rollback=True)
+                            assert self.phase == _Phase.CAPTURE
+                        elif zone0 == _EditZone.ACCEPT_BUTTON:
+                            self._start_new_capture_phase(rollback=False)
+                            assert self.phase == _Phase.CAPTURE
+                    self._click_info = None
+                    self._update_zone_and_target(tdw, event.x, event.y)
+                    self._update_current_node_index()
+                    return False
+            else:
+                # Clicked node and button released.
+                # Add or Remove selected node
+                # when control key is pressed
+                if event.button == 1:
+                    if event.state & Gdk.ModifierType.CONTROL_MASK:
+                        tidx = self.target_node_index
+                        if tidx != None:
+                            if not tidx in self.selected_nodes:
+                                self.selected_nodes.append(tidx)
+                            else:
+                                self.selected_nodes.remove(tidx)
+                                self.target_node_index = None
+                                self.current_node_index = None
+                    else:
+                        # Single node click.
+                        pass
+
+                    ## fall throgh
+
+                self._update_zone_and_target(tdw, event.x, event.y)
+
+            # (otherwise fall through and end any current drag)
+        elif self.phase == _Phase.ADJUST_SELECTING:
+            # XXX Not sure what to do here.
+            pass
+        elif self.phase == _Phase.CAPTURE:
+            # Update options_presenter when capture phase end
+            self.options_presenter.target = (self, None)
+
+        # Update workaround state for evdev dropouts
+        self._button_down = None
+        self._last_good_raw_pressure = 0.0
+        self._last_good_raw_xtilt = 0.0
+        self._last_good_raw_ytilt = 0.0
+
+
+        # other processing 
+        if self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
+            self.options_presenter.target = (self, self.current_node_index)
+
+        # Supercall: stop current drag
+        return super(InkingMode, self).button_release_cb(tdw, event)
+
+    def motion_notify_cb(self, tdw, event):
+        self._ensure_overlay_for_tdw(tdw)
+        current_layer = tdw.doc._layers.current
+        if not (tdw.is_sensitive and current_layer.get_paintable()):
+            return False
+
+        self._update_zone_and_target(tdw, event.x, event.y)
+        return super(InkingMode, self).motion_notify_cb(tdw, event)
     ## Drag handling (both capture and adjust phases)
 
     def drag_start_cb(self, tdw, event):
@@ -799,13 +809,14 @@ class StampMode (InkingMode):
         self._ensure_overlay_for_tdw(tdw)
         mx, my = tdw.display_to_model(event.x ,event.y)
         if self.phase == _Phase.CAPTURE:
-            node = _StampNode(event.x, event.y, 0.0, 1.0, 1.0)
-            self._last_event_node = node
 
-            self._queue_redraw_stamps()
+            self._queue_redraw_curve()
 
              # [TODO] below line can be reformed to minimize redrawing
             self._queue_draw_node(len(self.nodes)-1) 
+        elif self.phase == _Phase.ADJUST:
+            self._queue_redraw_curve()
+            super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
         else:
             super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
 
@@ -818,7 +829,6 @@ class StampMode (InkingMode):
                 # call super-superclass directly to bypass this phase
                 return super(InkingMode, self).drag_stop_cb(tdw) 
 
-            self.nodes.append(self._last_event_node)
 
 
             self._reset_capture_data()
@@ -826,7 +836,7 @@ class StampMode (InkingMode):
             if len(self.nodes) > 0:
                 self.phase = _Phase.ADJUST
                 self._queue_redraw_all_nodes()
-                self._queue_redraw_stamps()
+                self._queue_redraw_curve()
                 self._queue_draw_buttons()
             else:
                 self._reset_nodes()
@@ -834,7 +844,7 @@ class StampMode (InkingMode):
         elif self.phase == _Phase.ADJUST:
             super(StampMode, self).drag_stop_cb(tdw)
             self._queue_redraw_all_nodes()
-            self._queue_redraw_stamps()
+            self._queue_redraw_curve()
             self._queue_draw_buttons()
         else:
             return super(StampMode, self).drag_stop_cb(tdw)
@@ -873,12 +883,102 @@ class Overlay_Stamp (Overlay):
     def __init__(self, mode, tdw):
         super(Overlay_Stamp, self).__init__(mode, tdw)
 
-    def draw_stamp(self, cr, node, x, y, active):
+    def update_button_positions(self):
+        """Recalculates the positions of the mode's buttons."""
+        # FIXME mostly copied from inktool.Overlay.update_button_positions
+        # The difference is for-loop of nodes , to deal with control handles.
+        mode = self._inkmode
+        nodes = mode.nodes
+        num_nodes = len(nodes)
+        if num_nodes == 0:
+            self.reject_button_pos = None
+            self.accept_button_pos = None
+            return False
+
+        button_radius = gui.style.FLOATING_BUTTON_RADIUS
+        margin = 1.5 * button_radius
+        alloc = self._tdw.get_allocation()
+        view_x0, view_y0 = alloc.x, alloc.y
+        view_x1, view_y1 = view_x0+alloc.width, view_y0+alloc.height
+        
+        def adjust_button_inside(cx, cy, radius):
+            if cx + radius > view_x1:
+                cx = view_x1 - radius
+            elif cx - radius < view_x0:
+                cx = view_x0 + radius
+            
+            if cy + radius > view_y1:
+                cy = view_y1 - radius
+            elif cy - radius < view_y0:
+                cy = view_y0 + radius
+            return cx, cy
+
+        if mode.forced_button_pos:
+            # User deceided button position 
+            cx, cy = mode.forced_button_pos
+            area_radius = 64 + margin #gui.style.FLOATING_TOOL_RADIUS
+
+            cx, cy = adjust_button_inside(cx, cy, area_radius)
+
+            pos_list = []
+            count = 2
+            for i in range(count):
+                rad = (math.pi / count) * 2.0 * i
+                x = - area_radius*math.sin(rad)
+                y = area_radius*math.cos(rad)
+                pos_list.append( (x + cx, - y + cy) )
+
+            self.accept_button_pos = pos_list[0][0], pos_list[0][1]
+            self.reject_button_pos = pos_list[1][0], pos_list[1][1]
+        else:
+            # Usually, Bezier tool needs to keep extending control points.
+            # So when buttons placed around the tail(newest) node, 
+            # it is something frastrating to manipulate new node...
+            # Thus,different to Inktool, place buttons around 
+            # the first(oldest) nodes.
+            
+            node = nodes[0]
+            cx, cy = self._tdw.model_to_display(node.x, node.y)
+
+           #handle = node.get_control_handle(1)
+           #nx, ny = self._tdw.model_to_display(handle.x, handle.y)
+            nx = cx + button_radius
+            ny = cx - button_radius
+
+            vx = nx-cx
+            vy = ny-cy
+            s  = math.hypot(vx, vy)
+            if s > 0.0:
+                vx /= s
+                vy /= s
+            else:
+                pass
+
+            margin = 4.0 * button_radius
+            dx = vx * margin
+            dy = vy * margin
+            
+            self.accept_button_pos = adjust_button_inside(
+                    cx + dy, cy - dx, button_radius * 1.5)
+            self.reject_button_pos = adjust_button_inside(
+                    cx - dy, cy + dx, button_radius * 1.5)
+
+        return True
+
+
+    def draw_stamp(self, cr, idx, node, x, y):
+        """ Draw a stamp as overlay preview.
+
+        :param idx: index of node in mode.nodes[] 
+        :param node: current node.this holds some information
+                     such as stamp scaling ratio and rotation.
+        :param x,y: display coordinate position of node.
+        """
         mode = self._inkmode
         pos = mode.stamp.get_boundary_points(node, tdw=self._tdw)
         cr.save()
         cr.set_line_width(1)
-        if active:
+        if idx == mode.current_node_index:
             cr.set_source_rgb(1, 0, 0)
         else:
             cr.set_source_rgb(0, 0, 0)
@@ -887,6 +987,14 @@ class Overlay_Stamp (Overlay):
             cr.line_to(lx, ly)
         cr.line_to(pos[0][0], pos[0][1])
         cr.stroke()
+
+        if idx == mode.current_node_index:
+            for hi, pt in enumerate(pos):
+                gui.drawutils.render_square_floating_color_chip(
+                    cr, pt[0], pt[1],
+                    gui.style.ACTIVE_ITEM_COLOR, 
+                    gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
+                    fill=(hi==mode.current_handle_index)) 
         cr.restore()
 
         mode.stamp.draw(self._tdw, cr, x, y, 
@@ -933,7 +1041,7 @@ class Overlay_Stamp (Overlay):
                     color=color,
                     radius=radius,
                     fill=fill_flag)
-                self.draw_stamp(cr, node, x, y, i == mode.target_node_index)
+                self.draw_stamp(cr, i, node, x, y)
 
         # Buttons
         if (mode.phase in
