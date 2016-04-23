@@ -245,7 +245,7 @@ class Stamp(object):
 
         return points
 
-    def get_bbox(self, tdw, node, dx=0.0, dy=0.0):
+    def get_bbox(self, tdw, node, dx=0.0, dy=0.0, margin = 0):
         """ Get outmost boundary box, to get displaying area or 
         to do initial collision detection.
         return value is a tuple of rectangle,
@@ -266,7 +266,9 @@ class Stamp(object):
             ex = max(ex, x)
             ey = max(ey, y)
 
-        return (sx, sy, (ex - sx) + 1, (ey - sy) + 1)
+        return (sx - margin, sy - margin, 
+                (ex - sx) + 1 + margin * 2, 
+                (ey - sy) + 1 + margin * 2)
 
 
 _NODE_FIELDS = ("x", "y", "angle", "scale_x", "scale_y")
@@ -329,6 +331,12 @@ class StampMode (InkingMode):
     ## Metadata properties
 
     ACTION_NAME = "StampMode"
+
+    permitted_switch_actions = set(gui.mode.BUTTON_BINDING_ACTIONS).union([
+            'RotateViewMode',
+            'ZoomViewMode',
+            'PanViewMode',
+        ])
 
     ## Metadata methods
 
@@ -575,10 +583,15 @@ class StampMode (InkingMode):
     def _queue_draw_node(self, i):
         """Redraws a specific control node on all known view TDWs"""
         node = self.nodes[i]
+        if i == self.target_node_index:
+            margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 4
+        else:
+            margin = 4
+
         dx,dy = self.selection_rect.get_model_offset()
         for tdw in self._overlays:
             tdw.queue_draw_area(
-                    *self.stamp.get_bbox(tdw, node, dx, dy))
+                    *self.stamp.get_bbox(tdw, node, dx, dy, margin=margin))
 
     def _queue_redraw_curve(self):
         """Redraws the entire curve on all known view TDWs"""
@@ -586,16 +599,13 @@ class StampMode (InkingMode):
         dx, dy = self.selection_rect.get_model_offset()
 
         for tdw in self._overlays:
-            print '---'
             for i, cn in enumerate(self.nodes):
-                print cn
                 if i in self.selected_nodes:
                     tdw.queue_draw_area(
                             *self.stamp.get_bbox(tdw, cn, dx, dy))
                 else:
                     tdw.queue_draw_area(
                             *self.stamp.get_bbox(tdw, cn))
-
 
 
     ## Raw event handling (prelight & zone selection in adjust phase)
@@ -643,7 +653,12 @@ class StampMode (InkingMode):
                 if button == 1:
                     # 'do_reset' is a selection reset flag
                     do_reset = False
-                    if ctrl_state:
+                    if shift_state:
+                        # Holding SHIFT key
+                        self.phase = _PhaseStamp.ROTATE
+                        self._queue_redraw_curve()
+                        
+                    elif ctrl_state:
                         # Holding CONTROL key = adding or removing a node.
                         # But it is done at button_release_cb for now,
                         pass
@@ -675,19 +690,15 @@ class StampMode (InkingMode):
             # XXX Click to add a 1st & 2nd (=last) node only?
             # XXX  but needs to allow a drag after the 1st one's placed.
             pass
-        elif self.phase == _Phase.ADJUST_PRESSURE_ONESHOT:
-            # XXX Not sure what to do here.
-            pass
-        elif self.phase == _Phase.ADJUST_SELECTING:
+        elif self.phase in (_Phase.ADJUST_PRESSURE_ONESHOT,
+                            _Phase.ADJUST_SELECTING,
+                            _PhaseStamp.ROTATE):
             # XXX Not sure what to do here.
             pass
         else:
             raise NotImplementedError("Unrecognized zone %r", self.zone)
         # Update workaround state for evdev dropouts
         self._button_down = event.button
-        self._last_good_raw_pressure = 0.0
-        self._last_good_raw_xtilt = 0.0
-        self._last_good_raw_ytilt = 0.0
 
         # Supercall: start drags etc
         return super(InkingMode, self).button_press_cb(tdw, event)
@@ -745,9 +756,6 @@ class StampMode (InkingMode):
 
         # Update workaround state for evdev dropouts
         self._button_down = None
-        self._last_good_raw_pressure = 0.0
-        self._last_good_raw_xtilt = 0.0
-        self._last_good_raw_ytilt = 0.0
 
 
         # other processing 
@@ -801,6 +809,8 @@ class StampMode (InkingMode):
             self._queue_draw_selection_rect() # to start
         elif self.phase == _Phase.CHANGE_PHASE:
             pass
+        elif self.phase == _PhaseStamp.ROTATE:
+            pass
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -817,6 +827,24 @@ class StampMode (InkingMode):
         elif self.phase == _Phase.ADJUST:
             self._queue_redraw_curve()
             super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
+        elif self.phase == _PhaseStamp.ROTATE:
+            assert self.target_node_index is not None
+            self._queue_redraw_curve()
+            node = self.nodes[self.target_node_index]
+            bx, by = tdw.display_to_model(node.x, node.y)
+
+           #nsx, nsy = normal(self.start_x, self.start_y,
+           #        bx, by)
+           #ncx, ncy = normal(event.x, event.y,
+           #        bx, by)
+           #rad = get_radian(nsx, nsy, ncx, ncy)
+            
+            rad = (event.x - self.start_x) / 800.0
+                             
+
+            node = node._replace(angle = node.angle + rad)
+            self.nodes[self.target_node_index] = node
+            self._queue_redraw_curve()
         else:
             super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
 
@@ -846,6 +874,8 @@ class StampMode (InkingMode):
             self._queue_redraw_all_nodes()
             self._queue_redraw_curve()
             self._queue_draw_buttons()
+        elif self.phase == _PhaseStamp.ROTATE:
+            self.phase = _Phase.ADJUST
         else:
             return super(StampMode, self).drag_stop_cb(tdw)
 
@@ -966,7 +996,7 @@ class Overlay_Stamp (Overlay):
         return True
 
 
-    def draw_stamp(self, cr, idx, node, x, y):
+    def draw_stamp(self, cr, idx, node, x, y, dx, dy):
         """ Draw a stamp as overlay preview.
 
         :param idx: index of node in mode.nodes[] 
@@ -977,29 +1007,37 @@ class Overlay_Stamp (Overlay):
         mode = self._inkmode
         pos = mode.stamp.get_boundary_points(node, tdw=self._tdw)
         cr.save()
-        cr.set_line_width(1)
-        if idx == mode.current_node_index:
-            cr.set_source_rgb(1, 0, 0)
-        else:
-            cr.set_source_rgb(0, 0, 0)
-        cr.move_to(pos[0][0], pos[0][1])
-        for lx, ly in pos[1:]:
-            cr.line_to(lx, ly)
-        cr.line_to(pos[0][0], pos[0][1])
-        cr.stroke()
 
         if idx == mode.current_node_index:
+            self.draw_stamp_rect(cr, idx, pos, dx, dy)
             for hi, pt in enumerate(pos):
                 gui.drawutils.render_square_floating_color_chip(
-                    cr, pt[0], pt[1],
+                    cr, pt[0] + dx, pt[1] + dy,
                     gui.style.ACTIVE_ITEM_COLOR, 
                     gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
                     fill=(hi==mode.current_handle_index)) 
+        else:
+            self.draw_stamp_rect(cr, idx, pos, 0, 0)
+
         cr.restore()
 
         mode.stamp.draw(self._tdw, cr, x, y, 
                 node.angle, node.scale_x, node.scale_y,
                 True)
+
+    def draw_stamp_rect(self, cr, idx, pos, dx, dy):
+        mode = self._inkmode
+        cr.set_line_width(1)
+        if idx == mode.current_node_index:
+            cr.set_source_rgb(1, 0, 0)
+        else:
+            cr.set_source_rgb(0, 0, 0)
+
+        cr.move_to(pos[0][0] + dx, pos[0][1] + dy)
+        for lx, ly in pos[1:]:
+            cr.line_to(lx+dx, ly+dy)
+        cr.line_to(pos[0][0] + dx, pos[0][1] + dy)
+        cr.stroke()
 
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
@@ -1041,7 +1079,7 @@ class Overlay_Stamp (Overlay):
                     color=color,
                     radius=radius,
                     fill=fill_flag)
-                self.draw_stamp(cr, i, node, x, y)
+                self.draw_stamp(cr, i, node, x, y, dx, dy)
 
         # Buttons
         if (mode.phase in

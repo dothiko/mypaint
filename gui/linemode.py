@@ -835,6 +835,14 @@ def get_angle(x1, y1, x2, y2):
         angle = 0.0
     return angle
 
+def get_radian(x1, y1, x2, y2):
+    dot = dot_product(x1, y1, x2, y2)
+    if abs(dot) < 1.0:
+        radian = math.acos(dot) 
+    else:
+        radian = 0.0
+    return radian
+
 
 def constrain_to_angle(x, y, sx, sy):
     length, nx, ny = length_and_normal(sx, sy, x, y)
