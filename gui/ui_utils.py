@@ -17,8 +17,9 @@ def get_drag_direction(bx, by, cx, cy, margin=0):
     """ get mouse drag direction,as
     0 = up
     1 = right
-    2 = left
-    3 = down
+    2 = down
+    3 = left
+    (i.e. clockwise)
     -1 = not moved.
 
     return value is a tuple, (direction, length)
@@ -32,7 +33,7 @@ def get_drag_direction(bx, by, cx, cy, margin=0):
         return (-1, 0)
 
     # Getting angle against straight vertical identity vector.
-    # That straight vector is (0.0 , 1.0),so it is downward.
+    # That straight vector is (0.0 , 1.0)
     length, nx, ny = gui.linemode.length_and_normal(bx, by, cx, cy)
     angle = math.acos(ny)  
 
@@ -40,15 +41,15 @@ def get_drag_direction(bx, by, cx, cy, margin=0):
         return (-1, 0)
     
 
-    # direction 0 = up, 1 = right, 2 = left 3 = down
+    # direction 0 = up, 1 = right, 2=down,3 = left
     if angle < math.pi * 0.25:
-        direction = 3
-    elif angle < math.pi * 0.75:
         direction = 2
+    elif angle < math.pi * 0.75:
+        direction = 3
     else:
         direction = 0
 
-    if nx > 0.0 and direction == 2:
+    if nx > 0.0 and direction == 3:
         direction = 1
 
     return (direction, length - margin)

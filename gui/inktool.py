@@ -1381,9 +1381,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
         if direction >= 0:
             if direction in (0 , 1):
-                diff = length / 64.0
-            else:
                 diff = length / 128.0
+            else:
+                diff = length / 256.0
 
             if direction in (0 , 3):
                 diff *= -1

@@ -155,7 +155,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
             if direction == 0:
                 # decrease 
                 diff *= -1.0 
-            elif direction == 2:
+            elif direction == 3:
                 # large decrease for side-motion
                 diff *= -2.0 
             elif direction == 1:
