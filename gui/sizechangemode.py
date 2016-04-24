@@ -27,6 +27,7 @@ from curve import CurveWidget
 import gui.mode
 import gui.cursor
 import gui.overlays
+import gui.ui_utils
 
 
 ## Module constants
@@ -142,31 +143,14 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
     def drag_update_cb(self, tdw, event, dx, dy):
 
         self._ensure_overlay_for_tdw(tdw)
-        cx = event.x - self.start_x
-        cy = event.y - self.start_y
-        cs = math.hypot(cx, cy)
-        if cs > 0.0:
-            # Getting angle against straight vertical identity vector.
-            # That straight vector is (0.0 , 1.0),so it is downward.
-            nx = cx / cs # normalized x
-            ny = cy / cs # normalized y
-            angle = math.acos(ny)  
-            
-
-            # direction 0 = up, 1 = right, 2 = left 3 = down
-            if angle < math.pi * 0.25:
-                direction = 3
-            elif angle < math.pi * 0.75:
-                direction = 2
-            else:
-                direction = 0
-
-            if nx > 0.0 and direction == 2:
-                direction = 1
+        direction,length = gui.ui_utils.get_drag_direction(
+                self.start_x, self.start_y,
+                event.x, event.y)
+        if direction >= 0:
 
             # setting differencial of size.
             # 0.003 is not theorical number,it's my feeling
-            diff = cs * 0.004
+            diff = length * 0.004
 
             if direction == 0:
                 # decrease 

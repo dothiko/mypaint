@@ -33,6 +33,7 @@ import lib.observable
 import gui.curve
 import gui.widgets
 from gui.linemode import *
+import gui.ui_utils
 
 ## Module constants
 
@@ -1375,21 +1376,24 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
         :param dx/dy: currently dragging position,in display coord.
         """
+        direction,length = gui.ui_utils.get_drag_direction(
+                0, 0, dx, dy)
 
-        cs = math.sqrt(dx * dx + dy * dy)
-        if cs > 0.0:
-            nx = dx / cs
-            ny = dy / cs
-            angle = math.acos(ny)  # Getting angle
-            diff = cs / 128.0  # XXX around 128.0 pixel is good..? 
-                               # it might be change at HiDPI system
+        if direction >= 0:
+            if direction in (0 , 1):
+                diff = length / 64.0
+            else:
+                diff = length / 128.0
 
-            if math.pi / 4 < angle < math.pi / 4 + math.pi / 2:
-                if nx < 0.0:
-                    diff *= -1
-            elif ny < 0.0:
+            if direction in (0 , 3):
                 diff *= -1
 
+            # XXX divide dragged length with 64pixel(large change)/128pixel
+            # to convert dragged length into pressure differencial.
+            # This valus is not theorical.so this should be configured
+            # by user...?
+            # Also it might be change at HiDPI system
+                
             if (self.target_node_index != None and 
                     not self.target_node_index in self.selected_nodes):
                 cn = self.nodes[self.target_node_index]
