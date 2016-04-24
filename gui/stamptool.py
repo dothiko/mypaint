@@ -36,6 +36,7 @@ from gui.inktool import *
 from gui.inktool import _LayoutNode, _Phase, _EditZone
 from gui.linemode import *
 from lib.command import Command
+from gui.ui_utils import *
 
 ## Module settings
 
@@ -582,6 +583,7 @@ class StampMode (InkingMode):
 
     def _queue_draw_node(self, i):
         """Redraws a specific control node on all known view TDWs"""
+        return
         node = self.nodes[i]
         if i == self.target_node_index:
             margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 4
@@ -595,18 +597,22 @@ class StampMode (InkingMode):
 
     def _queue_redraw_curve(self):
         """Redraws the entire curve on all known view TDWs"""
-
         dx, dy = self.selection_rect.get_model_offset()
-
+        
         for tdw in self._overlays:
             for i, cn in enumerate(self.nodes):
+                if i == self.target_node_index:
+                    margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 4
+                else:
+                    margin = 4
+
                 if i in self.selected_nodes:
                     tdw.queue_draw_area(
-                            *self.stamp.get_bbox(tdw, cn, dx, dy))
+                            *self.stamp.get_bbox(tdw, cn, dx, dy, margin=margin))
                 else:
                     tdw.queue_draw_area(
-                            *self.stamp.get_bbox(tdw, cn))
-
+                            *self.stamp.get_bbox(tdw, cn, margin=margin))
+        
 
     ## Raw event handling (prelight & zone selection in adjust phase)
     def button_press_cb(self, tdw, event):
@@ -655,7 +661,11 @@ class StampMode (InkingMode):
                     do_reset = False
                     if shift_state:
                         # Holding SHIFT key
-                        self.phase = _PhaseStamp.ROTATE
+                        if ctrl_state:
+                            self.phase = _PhaseStamp.ROTATE
+                        else:
+                            self.phase = _PhaseStamp.SCALE
+                            
                         self._queue_redraw_curve()
                         
                     elif ctrl_state:
@@ -692,7 +702,8 @@ class StampMode (InkingMode):
             pass
         elif self.phase in (_Phase.ADJUST_PRESSURE_ONESHOT,
                             _Phase.ADJUST_SELECTING,
-                            _PhaseStamp.ROTATE):
+                            _PhaseStamp.ROTATE,
+                            _PhaseStamp.SCALE):
             # XXX Not sure what to do here.
             pass
         else:
@@ -809,7 +820,8 @@ class StampMode (InkingMode):
             self._queue_draw_selection_rect() # to start
         elif self.phase == _Phase.CHANGE_PHASE:
             pass
-        elif self.phase == _PhaseStamp.ROTATE:
+        elif self.phase in (_PhaseStamp.ROTATE,
+                            _PhaseStamp.SCALE):
             pass
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
@@ -827,24 +839,33 @@ class StampMode (InkingMode):
         elif self.phase == _Phase.ADJUST:
             self._queue_redraw_curve()
             super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
-        elif self.phase == _PhaseStamp.ROTATE:
+        elif self.phase in (_PhaseStamp.SCALE,
+                            _PhaseStamp.ROTATE):
             assert self.target_node_index is not None
             self._queue_redraw_curve()
             node = self.nodes[self.target_node_index]
-            bx, by = tdw.display_to_model(node.x, node.y)
+            bx, by = tdw.model_to_display(node.x, node.y)
+            dir, length = get_drag_direction(
+                    self.start_x, self.start_y,
+                    event.x, event.y)
 
-           #nsx, nsy = normal(self.start_x, self.start_y,
-           #        bx, by)
-           #ncx, ncy = normal(event.x, event.y,
-           #        bx, by)
-           #rad = get_radian(nsx, nsy, ncx, ncy)
-            
-            rad = (event.x - self.start_x) / 800.0
-                             
+            if dir >= 0:
+                if self.phase == _PhaseStamp.ROTATE:
+                    rad = length * 0.005
+                    if dir in (0, 3):
+                        rad *= -1
+                    node = node._replace(angle = node.angle + rad)
+                else:
+                    scale = length * 0.005
+                    if dir in (0, 3):
+                        scale *= -1
+                    node = node._replace(scale_x = node.scale_x + scale,
+                            scale_y = node.scale_y + scale)
 
-            node = node._replace(angle = node.angle + rad)
-            self.nodes[self.target_node_index] = node
-            self._queue_redraw_curve()
+                self.nodes[self.target_node_index] = node
+                self._queue_redraw_curve()
+                self.start_x = event.x
+                self.start_y = event.y
         else:
             super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
 
@@ -874,7 +895,8 @@ class StampMode (InkingMode):
             self._queue_redraw_all_nodes()
             self._queue_redraw_curve()
             self._queue_draw_buttons()
-        elif self.phase == _PhaseStamp.ROTATE:
+        elif self.phase in (_PhaseStamp.ROTATE,
+                            _PhaseStamp.SCALE):
             self.phase = _Phase.ADJUST
         else:
             return super(StampMode, self).drag_stop_cb(tdw)
