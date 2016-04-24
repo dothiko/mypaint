@@ -352,6 +352,16 @@ class StampMode (InkingMode):
     def inactive_cursor(self):
         return None
 
+    _OPTIONS_PRESENTER = None
+
+    @property
+    def options_presenter(self):
+        """MVP presenter object for the node editor panel"""
+        cls = self.__class__
+        if cls._OPTIONS_PRESENTER is None:
+            cls._OPTIONS_PRESENTER = OptionsPresenter_Stamp()
+        return cls._OPTIONS_PRESENTER
+
    #@property
    #def active_cursor(self):
    #    if self.phase == _Phase.ADJUST:
@@ -424,18 +434,20 @@ class StampMode (InkingMode):
             self._queue_redraw_curve()
         
     def _commit_all(self):
-        sx, sy, ex, ey = self.stamp.get_bbox(None, self.nodes[0])
+        sx, sy, w, h = self.stamp.get_bbox(None, self.nodes[0])
+        ex = sx+w
+        ey = sy+h
         for cn in self.nodes[1:]:
-            tsx, tsy, tex, tey = self.stamp.get_bbox(None, cn)
+            tsx, tsy, tw, th = self.stamp.get_bbox(None, cn)
             sx = min(sx, tsx)
             sy = min(sy, tsy)
-            ex = max(ex, tex)
-            ey = max(ey, tey)
+            ex = max(ex, tsx + tw)
+            ey = max(ey, tsy + th)
 
         cmd = DrawStamp(self.doc.model,
                 self.stamp,
                 self.nodes,
-                (sx, sy, ex, ey))
+                (sx, sy, ex - sx + 1, ey - sy + 1))
         self.doc.model.do(cmd)
 
 
@@ -453,6 +465,7 @@ class StampMode (InkingMode):
             pass
             
         self.options_presenter.target = (self, None)
+        self._queue_redraw_curve(force_margin=True)  # call this before reset node
         self._queue_draw_buttons()
         self._queue_redraw_all_nodes()
         self._reset_nodes()
@@ -595,13 +608,13 @@ class StampMode (InkingMode):
             tdw.queue_draw_area(
                     *self.stamp.get_bbox(tdw, node, dx, dy, margin=margin))
 
-    def _queue_redraw_curve(self):
+    def _queue_redraw_curve(self, force_margin=False):
         """Redraws the entire curve on all known view TDWs"""
         dx, dy = self.selection_rect.get_model_offset()
         
         for tdw in self._overlays:
             for i, cn in enumerate(self.nodes):
-                if i == self.target_node_index:
+                if i == self.target_node_index or force_margin:
                     margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 4
                 else:
                     margin = 4
@@ -917,13 +930,6 @@ class StampMode (InkingMode):
 
     ## Node editing
 
-    @property
-    def options_presenter(self):
-        """MVP presenter object for the node editor panel"""
-        cls = self.__class__
-        if cls._OPTIONS_PRESENTER is None:
-            cls._OPTIONS_PRESENTER = OptionsPresenter_Stamp()
-        return cls._OPTIONS_PRESENTER
 
 
 
