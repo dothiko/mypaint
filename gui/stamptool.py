@@ -172,7 +172,9 @@ class Stamp(object):
             if tdw:
                 scale_x *= tdw.renderer.scale
                 scale_y *= tdw.renderer.scale
-            cr.scale(scale_x, scale_y)
+
+            if scale_x != 0.0 and scale_y != 0.0:
+                cr.scale(scale_x, scale_y)
 
         Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
         cr.rectangle(ox, oy, w, h) 
@@ -989,6 +991,8 @@ class StampMode (InkingMode):
                     pos[1][1] - pos[0][1]) / 2.0
 
             # Replace the attributes and redraw.
+            assert top_length != 0.0
+            assert side_length != 0.0
             self.nodes[self.target_node_index] = node._replace(
                     scale_x=h_length / top_length,
                     scale_y=v_length / side_length)
