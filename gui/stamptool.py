@@ -809,7 +809,7 @@ class StampMode (InkingMode):
                 self._last_event_node = None
                 return super(InkingMode, self).drag_start_cb(tdw, event)
             else:
-                node = _StampNode(event.x, event.y, 1.6, 1.0, 1.0)
+                node = _StampNode(mx, my, 0.0, 1.0, 1.0)
                 self.nodes.append(node)
                 self._queue_draw_node(0)
                 self._last_node_evdata = (event.x, event.y, event.time)
