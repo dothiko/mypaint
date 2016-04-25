@@ -184,7 +184,9 @@ class Stamp(object):
             cr.restore()
 
     def is_inside(self, mx, my, node):
-        """ Check whether the point(mx, my) is inside of the stamp
+        """ 
+        THIS METHOD IS OBSOLUTED,USE get_handle_index INSTEAD.
+        Check whether the point(mx, my) is inside of the stamp
         which placed as node information.
         """
         pos = self.get_boundary_points(node)
@@ -193,7 +195,38 @@ class Stamp(object):
         else:
             return True
 
-    def get_boundary_points(self, node, tdw=None, dx=0.0, dy=0.0):
+    def get_handle_index(self, mx, my, node, margin):
+        """
+        Get control handle index
+        :param mx,my: Cursor position in model coordination.
+        :param node: Target node,which contains scale/angle information.
+        :param margin: i.e. the half of control handle rectangle
+
+        :rtype: integer, whitch is targetted handle index.
+                Normally it should be either one of targetted handle index (0 to 3),
+                or -1 (cursor is not on this node)
+                When 'node is targetted but not on control handle',
+                return 4.
+
+        """
+        pos = self.get_boundary_points(node)
+
+        for i,cp in enumerate(pos):
+            cx, cy = cp
+            if (cx - margin < mx < cx + margin and
+                    cy - margin < my < cy + margin):
+                return i
+
+        # Returning 4 means 'inside but not on a handle'
+        if not is_inside_triangle(mx, my, (pos[0], pos[1], pos[2])):
+            if is_inside_triangle(mx, my, (pos[0], pos[2], pos[3])):
+                return 4 
+        else:
+            return 4
+
+        return -1
+
+    def get_boundary_points(self, node, tdw=None, dx=0.0, dy=0.0, no_scale=False):
         """ Get boundary corner points, when this stamp is
         placed/rotated/scaled into the node.
 
@@ -209,8 +242,11 @@ class Stamp(object):
         :param tdw: tiledrawwidget, to get display coordinate. 
                     By default this is None.
         """
-        w = self._stamp_src.get_width() * node.scale_x 
-        h = self._stamp_src.get_height() * node.scale_y
+        w = self._stamp_src.get_width() 
+        h = self._stamp_src.get_height()
+        if not no_scale:
+            w *= node.scale_x 
+            h *= node.scale_y
         sx = - w / 2
         sy = - h / 2
         ex = w+sx
@@ -287,9 +323,19 @@ class _StampNode (collections.namedtuple("_StampNode", _NODE_FIELDS)):
 class _PhaseStamp(_Phase):
     """Enumeration of the states that an BezierCurveMode can be in"""
     MOVE   = 100         #: Moving stamp
-    ROTATE = 101         #: Rotate
-    SCALE  = 102         #: Scale
+    ROTATE = 101         #: Rotate with mouse drag 
+    SCALE  = 102         #: Scale with mouse drag 
+    ROTATE_BY_HANDLE = 103 #: Rotate with handle of GUI
+    SCALE_BY_HANDLE = 104  #: Scale  with handle of GUI
     CALL_BUTTONS = 106      #: call buttons around clicked point. 
+
+class _EditZone_Stamp:
+    """Enumeration of what the pointer is on in phases"""
+    CONTROL_HANDLE_0 = 100
+    CONTROL_HANDLE_1 = 101
+    CONTROL_HANDLE_2 = 102
+    CONTROL_HANDLE_3 = 103
+    CONTROL_HANDLE_BASE = 100
 
 
 class DrawStamp(Command):
@@ -455,14 +501,12 @@ class StampMode (InkingMode):
     def _start_new_capture_phase(self, rollback=False):
         """Let the user capture a new ink stroke"""
         if rollback:
-           #self._stop_task_queue_runner(complete=False)
-           #self.brushwork_rollback_all()
-            pass
+            self._stop_task_queue_runner(complete=False)
+            # Currently, this tool uses overlay(cairo) to preview stamps.
+            # so we need no rollback action to the current layer.
         else:
             self._stop_task_queue_runner(complete=True)
             self._commit_all()
-           #self.brushwork_commit_all()
-            pass
             
         self.options_presenter.target = (self, None)
         self._queue_redraw_curve(force_margin=True)  # call this before reset node
@@ -512,9 +556,14 @@ class StampMode (InkingMode):
 
                 # Test nodes for a hit, in reverse draw order
                 if new_zone == _EditZone.EMPTY_CANVAS:
-                    new_target_node_index = self._search_target_node(tdw, x, y)
+                    new_target_node_index, control_node_idx = \
+                            self._search_target_node(tdw, x, y)
                     if new_target_node_index != None:
-                        new_zone = _EditZone.CONTROL_NODE
+                        if  0<= control_node_idx <= 3:
+                            new_zone = _EditZone_Stamp.CONTROL_HANDLE_BASE + \
+                                        control_node_idx
+                        else:
+                            new_zone = _EditZone.CONTROL_NODE
 
                 # Update the prelit node, and draw changes to it
                 if new_target_node_index != self.target_node_index:
@@ -586,13 +635,19 @@ class StampMode (InkingMode):
         """
         hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 12
         new_target_node_index = None
+        handle_idx = -1
         stamp = self.stamp
         mx, my = tdw.display_to_model(x, y)
         for i, node in reversed(list(enumerate(self.nodes))):
-            if stamp.is_inside(mx, my, node):
+            handle_idx = stamp.get_handle_index(mx, my, node,
+                   gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
+           #if stamp.is_inside(mx, my, node):
+            if handle_idx >= 0:
                 new_target_node_index = i
+                if handle_idx >= 4:
+                    handle_idx = -1
                 break
-        return new_target_node_index
+        return new_target_node_index, handle_idx
 
     def _queue_draw_node(self, i):
         """Redraws a specific control node on all known view TDWs"""
@@ -702,6 +757,10 @@ class StampMode (InkingMode):
                         self._reset_selected_nodes(self.current_node_index)
 
                 # FALLTHRU: *do* start a drag
+
+            elif _EditZone_Stamp.CONTROL_HANDLE_0 <= self.zone <= _EditZone_Stamp.CONTROL_HANDLE_3:
+                if button == 1:
+                    self.phase = _PhaseStamp.SCALE_BY_HANDLE
             else:
                 raise NotImplementedError("Unrecognized zone %r", self.zone)
 
@@ -716,7 +775,9 @@ class StampMode (InkingMode):
         elif self.phase in (_Phase.ADJUST_PRESSURE_ONESHOT,
                             _Phase.ADJUST_SELECTING,
                             _PhaseStamp.ROTATE,
-                            _PhaseStamp.SCALE):
+                            _PhaseStamp.SCALE,
+                            _PhaseStamp.ROTATE_BY_HANDLE,
+                            _PhaseStamp.SCALE_BY_HANDLE):
             # XXX Not sure what to do here.
             pass
         else:
@@ -834,7 +895,9 @@ class StampMode (InkingMode):
         elif self.phase == _Phase.CHANGE_PHASE:
             pass
         elif self.phase in (_PhaseStamp.ROTATE,
-                            _PhaseStamp.SCALE):
+                            _PhaseStamp.SCALE,
+                            _PhaseStamp.ROTATE_BY_HANDLE,
+                            _PhaseStamp.SCALE_BY_HANDLE):
             pass
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
@@ -879,6 +942,59 @@ class StampMode (InkingMode):
                 self._queue_redraw_curve()
                 self.start_x = event.x
                 self.start_y = event.y
+        elif self.phase in (_PhaseStamp.SCALE_BY_HANDLE,
+                            _PhaseStamp.ROTATE_BY_HANDLE):
+
+            assert self.target_node_index is not None
+            self._queue_redraw_curve()
+            node = self.nodes[self.target_node_index]
+            pos = self.stamp.get_boundary_points(node, no_scale=True)
+
+
+            cur_index = self.zone - _EditZone_Stamp.CONTROL_HANDLE_BASE
+
+            # At here, we consider the movement of control handle(i.e. cursor)
+            # as a Triangle from origin.
+
+            # 1. Get new(=cursor position) vector from origin(node.x,node.y)
+            mx, my = tdw.display_to_model(event.x, event.y)
+            length, nx, ny = length_and_normal(
+                    node.x, node.y,
+                    mx, my)
+
+            bx = node.x - mx
+            by = node.y - my
+
+            # 2. Get 'original' leg of triangle,
+            # it is equal the half of 'side' ridge of stamp rectangle
+            side_length, snx, sny = length_and_normal(
+                    pos[2][0], pos[2][1],
+                    pos[1][0], pos[1][1])
+            side_length /= 2.0
+
+            # 3. Use the identity vector of side ridge from above
+            # to get 'current' base leg of triangle.
+            dp = dot_product(snx, sny, bx, by)
+            vx = dp * snx
+            vy = dp * sny
+            v_length = vector_length(vx, vy)
+
+            # 4. Then, get another leg of triangle.
+            hx = bx - vx
+            hy = by - vy
+            h_length = vector_length(hx, hy)
+
+            # 5. Finally, we can get the new scaling ratios.
+            top_length = vector_length(pos[1][0] - pos[0][0],
+                    pos[1][1] - pos[0][1]) / 2.0
+
+            # Replace the attributes and redraw.
+            self.nodes[self.target_node_index] = node._replace(
+                    scale_x=h_length / top_length,
+                    scale_y=v_length / side_length)
+
+            self._queue_redraw_curve()
+
         else:
             super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
 
@@ -909,7 +1025,9 @@ class StampMode (InkingMode):
             self._queue_redraw_curve()
             self._queue_draw_buttons()
         elif self.phase in (_PhaseStamp.ROTATE,
-                            _PhaseStamp.SCALE):
+                            _PhaseStamp.SCALE,
+                            _PhaseStamp.ROTATE_BY_HANDLE,
+                            _PhaseStamp.SCALE_BY_HANDLE):
             self.phase = _Phase.ADJUST
         else:
             return super(StampMode, self).drag_stop_cb(tdw)
@@ -1038,12 +1156,13 @@ class Overlay_Stamp (Overlay):
 
         if idx == mode.current_node_index:
             self.draw_stamp_rect(cr, idx, pos, dx, dy)
-            for hi, pt in enumerate(pos):
+            for i, pt in enumerate(pos):
+                handle_idx = _EditZone_Stamp.CONTROL_HANDLE_BASE + i
                 gui.drawutils.render_square_floating_color_chip(
                     cr, pt[0] + dx, pt[1] + dy,
                     gui.style.ACTIVE_ITEM_COLOR, 
                     gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
-                    fill=(hi==mode.current_handle_index)) 
+                    fill=(handle_idx==mode.zone)) 
         else:
             self.draw_stamp_rect(cr, idx, pos, 0, 0)
 
