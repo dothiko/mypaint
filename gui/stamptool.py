@@ -156,7 +156,6 @@ class Stamp(object):
         w = self._stamp_src.get_width() 
         h = self._stamp_src.get_height()
 
-        # ---- non-work code
         ox = -(w / 2)
         oy = -(h / 2)
 
@@ -215,8 +214,8 @@ class Stamp(object):
 
         for i,cp in enumerate(pos):
             cx, cy = cp
-            if (cx - margin < mx < cx + margin and
-                    cy - margin < my < cy + margin):
+            if (cx - margin <= mx <= cx + margin and
+                    cy - margin <= my <= cy + margin):
                 return i
 
         # Returning 4 means 'inside but not on a handle'
@@ -237,12 +236,18 @@ class Stamp(object):
         so this method returns a list of 4 corner points.
 
         Each corner points are model coordinate.
-        But, when parameter 'tdw' assigned, returned corner points are 
+
+        When parameter 'tdw' assigned, returned corner points are 
         converted to display coordinate.
 
         :param mx, my: the center point in model coordinate.
         :param tdw: tiledrawwidget, to get display coordinate. 
                     By default this is None.
+        :param dx, dy: offsets, in model coordinate.
+        :param no_transform: boolean flag, when this is True,
+                             rotation and scaling are cancelled.
+
+        :rtype: a list of tuple,[ (pt0.x, pt0.y) ... (pt3.x, pt3.y) ]
         """
         w = self._stamp_src.get_width() 
         h = self._stamp_src.get_height()
@@ -567,6 +572,9 @@ class StampMode (InkingMode):
                         else:
                             new_zone = _EditZone.CONTROL_NODE
 
+                        if new_zone != self.zone:
+                            self._queue_draw_node(new_target_node_index)
+
                 # Update the prelit node, and draw changes to it
                 if new_target_node_index != self.target_node_index:
                     if self.target_node_index is not None:
@@ -653,17 +661,30 @@ class StampMode (InkingMode):
 
     def _queue_draw_node(self, i):
         """Redraws a specific control node on all known view TDWs"""
-        return
+       #node = self.nodes[i]
+       #
+       #if i == self.target_node_index:
+       #    margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 4
+       #else:
+       #    margin = 4
+       #
+        if i in self.selected_nodes:
+            dx,dy = self.selection_rect.get_model_offset()
+        else:
+            dx = dy = 0.0
+
+        for tdw in self._overlays:
+            self._queue_draw_node_internal(tdw, i, dx, dy)
+
+    def _queue_draw_node_internal(self, tdw, i, dx, dy):
         node = self.nodes[i]
         if i == self.target_node_index:
             margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 4
         else:
             margin = 4
 
-        dx,dy = self.selection_rect.get_model_offset()
-        for tdw in self._overlays:
-            tdw.queue_draw_area(
-                    *self.stamp.get_bbox(tdw, node, dx, dy, margin=margin))
+        tdw.queue_draw_area(
+                *self.stamp.get_bbox(tdw, node, dx, dy, margin=margin))
 
     def _queue_redraw_curve(self, force_margin=False):
         """Redraws the entire curve on all known view TDWs"""
@@ -671,17 +692,16 @@ class StampMode (InkingMode):
         
         for tdw in self._overlays:
             for i, cn in enumerate(self.nodes):
-                if i == self.target_node_index or force_margin:
-                    margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 4
-                else:
-                    margin = 4
-
+                self._queue_draw_node(i)
+               #if i == self.target_node_index or force_margin:
+               #    margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 4
+               #else:
+               #    margin = 4
+               #
                 if i in self.selected_nodes:
-                    tdw.queue_draw_area(
-                            *self.stamp.get_bbox(tdw, cn, dx, dy, margin=margin))
+                    self._queue_draw_node_internal(tdw, i, dx, dy)
                 else:
-                    tdw.queue_draw_area(
-                            *self.stamp.get_bbox(tdw, cn, margin=margin))
+                    self._queue_draw_node_internal(tdw, i, 0.0, 0.0)
         
 
     ## Raw event handling (prelight & zone selection in adjust phase)
@@ -1047,6 +1067,8 @@ class StampMode (InkingMode):
             self._reset_adjust_data()
             if len(self.nodes) > 0:
                 self.phase = _Phase.ADJUST
+                self.target_node_index = len(self.nodes) -1
+                self.current_node_index = self.target_node_index
                 self._queue_redraw_all_nodes()
                 self._queue_redraw_curve()
                 self._queue_draw_buttons()
@@ -1186,7 +1208,6 @@ class Overlay_Stamp (Overlay):
         """
         mode = self._inkmode
         pos = mode.stamp.get_boundary_points(node, tdw=self._tdw)
-        cr.save()
 
         if idx == mode.current_node_index:
             self.draw_stamp_rect(cr, idx, pos, dx, dy)
@@ -1200,13 +1221,12 @@ class Overlay_Stamp (Overlay):
         else:
             self.draw_stamp_rect(cr, idx, pos, 0, 0)
 
-        cr.restore()
-
         mode.stamp.draw(self._tdw, cr, x, y, 
                 node.angle, node.scale_x, node.scale_y,
                 True)
 
     def draw_stamp_rect(self, cr, idx, pos, dx, dy):
+        cr.save()
         mode = self._inkmode
         cr.set_line_width(1)
         if idx == mode.current_node_index:
@@ -1217,8 +1237,9 @@ class Overlay_Stamp (Overlay):
         cr.move_to(pos[0][0] + dx, pos[0][1] + dy)
         for lx, ly in pos[1:]:
             cr.line_to(lx+dx, ly+dy)
-        cr.line_to(pos[0][0] + dx, pos[0][1] + dy)
+        cr.close_path()
         cr.stroke()
+        cr.restore()
 
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
@@ -1255,11 +1276,11 @@ class Overlay_Stamp (Overlay):
                     y += dy
 
             if show_node:
-                gui.drawutils.render_round_floating_color_chip(
-                    cr=cr, x=x, y=y,
-                    color=color,
-                    radius=radius,
-                    fill=fill_flag)
+               #gui.drawutils.render_round_floating_color_chip(
+               #    cr=cr, x=x, y=y,
+               #    color=color,
+               #    radius=radius,
+               #    fill=fill_flag)
                 self.draw_stamp(cr, i, node, x, y, dx, dy)
 
         # Buttons
