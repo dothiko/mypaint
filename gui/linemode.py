@@ -904,6 +904,9 @@ def distance(x1, y1, x2, y2):
 def dot_product(x1, y1, x2, y2):
     return x1*x2 + y1*y2
 
+def cross_product(x1, y1, x2, y2):
+    return x1*y2 - x2*y1
+
 
 def multiply_add(x1, y1, x2, y2, d):
     x3, y3 = multiply(x2, y2, d)

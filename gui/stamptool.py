@@ -228,7 +228,7 @@ class Stamp(object):
 
         return -1
 
-    def get_boundary_points(self, node, tdw=None, dx=0.0, dy=0.0, no_scale=False):
+    def get_boundary_points(self, node, tdw=None, dx=0.0, dy=0.0, no_transform=False):
         """ Get boundary corner points, when this stamp is
         placed/rotated/scaled into the node.
 
@@ -246,7 +246,7 @@ class Stamp(object):
         """
         w = self._stamp_src.get_width() 
         h = self._stamp_src.get_height()
-        if not no_scale:
+        if not no_transform:
             w *= node.scale_x 
             h *= node.scale_y
         sx = - w / 2
@@ -256,7 +256,7 @@ class Stamp(object):
         bx = node.x + dx
         by = node.y + dy
 
-        if node.angle != 0.0:
+        if node.angle != 0.0 and not no_transform:
             points = [ (sx, sy),
                           (ex, sy),
                           (ex, ey),
@@ -760,9 +760,17 @@ class StampMode (InkingMode):
 
                 # FALLTHRU: *do* start a drag
 
-            elif _EditZone_Stamp.CONTROL_HANDLE_0 <= self.zone <= _EditZone_Stamp.CONTROL_HANDLE_3:
+            elif (_EditZone_Stamp.CONTROL_HANDLE_0 <= 
+                    self.zone <= _EditZone_Stamp.CONTROL_HANDLE_3):
                 if button == 1:
-                    self.phase = _PhaseStamp.SCALE_BY_HANDLE
+
+                    self.current_handle_index = \
+                            self.zone - _EditZone_Stamp.CONTROL_HANDLE_BASE
+
+                    if ctrl_state:
+                        self.phase = _PhaseStamp.ROTATE_BY_HANDLE
+                    else:
+                        self.phase = _PhaseStamp.SCALE_BY_HANDLE
             else:
                 raise NotImplementedError("Unrecognized zone %r", self.zone)
 
@@ -950,10 +958,8 @@ class StampMode (InkingMode):
             assert self.target_node_index is not None
             self._queue_redraw_curve()
             node = self.nodes[self.target_node_index]
-            pos = self.stamp.get_boundary_points(node, no_scale=True)
-
-
-            cur_index = self.zone - _EditZone_Stamp.CONTROL_HANDLE_BASE
+            pos = self.stamp.get_boundary_points(node, 
+                    no_transform=True)
 
             # At here, we consider the movement of control handle(i.e. cursor)
             # as a Triangle from origin.
@@ -967,35 +973,59 @@ class StampMode (InkingMode):
             bx = node.x - mx
             by = node.y - my
 
-            # 2. Get 'original' leg of triangle,
-            # it is equal the half of 'side' ridge of stamp rectangle
-            side_length, snx, sny = length_and_normal(
-                    pos[2][0], pos[2][1],
-                    pos[1][0], pos[1][1])
-            side_length /= 2.0
+            if self.phase == _PhaseStamp.SCALE_BY_HANDLE:
 
-            # 3. Use the identity vector of side ridge from above
-            # to get 'current' base leg of triangle.
-            dp = dot_product(snx, sny, bx, by)
-            vx = dp * snx
-            vy = dp * sny
-            v_length = vector_length(vx, vy)
+                # 2. Get 'original' leg of triangle,
+                # it is equal the half of 'side' ridge of stamp rectangle
+                side_length, snx, sny = length_and_normal(
+                        pos[2][0], pos[2][1],
+                        pos[1][0], pos[1][1])
+                side_length /= 2.0
 
-            # 4. Then, get another leg of triangle.
-            hx = bx - vx
-            hy = by - vy
-            h_length = vector_length(hx, hy)
 
-            # 5. Finally, we can get the new scaling ratios.
-            top_length = vector_length(pos[1][0] - pos[0][0],
-                    pos[1][1] - pos[0][1]) / 2.0
+                # 3. Use the identity vector of side ridge from above
+                # to get 'current' base leg of triangle.
+                dp = dot_product(snx, sny, bx, by)
+                vx = dp * snx
+                vy = dp * sny
+                v_length = vector_length(vx, vy)
 
-            # Replace the attributes and redraw.
-            assert top_length != 0.0
-            assert side_length != 0.0
-            self.nodes[self.target_node_index] = node._replace(
-                    scale_x=h_length / top_length,
-                    scale_y=v_length / side_length)
+                # 4. Then, get another leg of triangle.
+                hx = bx - vx
+                hy = by - vy
+                h_length = vector_length(hx, hy)
+
+                # 5. Finally, we can get the new scaling ratios.
+                top_length = vector_length(pos[1][0] - pos[0][0],
+                        pos[1][1] - pos[0][1]) / 2.0
+
+                # Replace the attributes and redraw.
+                assert top_length != 0.0
+                assert side_length != 0.0
+                self.nodes[self.target_node_index] = node._replace(
+                        scale_x=h_length / top_length,
+                        scale_y=v_length / side_length)
+
+            else:
+                # 2. Get angle between current cursor position
+                # to the 'origin - handle vector'.
+
+                ox, oy = pos[self.current_handle_index]
+                
+                ox, oy = normal(node.x, node.y, ox, oy)
+                cx, cy = normal(node.x, node.y, mx, my)
+
+                rad = get_radian(cx, cy, ox, oy)
+
+                # 3. Get a cross product of them to
+                # identify which direction user want to rotate.
+               #if cross_product(ox, oy, cx, cy) < 0.0:
+                if cross_product(cx, cy, ox, oy) >= 0.0:
+                    rad = -rad
+
+                self.nodes[self.target_node_index] = node._replace(
+                        angle = rad)
+                      
 
             self._queue_redraw_curve()
 
