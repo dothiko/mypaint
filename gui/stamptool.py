@@ -455,6 +455,10 @@ class StampMode (InkingMode):
 
     def enter(self, doc, **kwds):
         """Enters the mode: called by `ModeStack.push()` etc."""
+        self._blank_cursor = doc.app.cursors.get_action_cursor(
+            self.ACTION_NAME,
+            gui.cursor.Name.ADD,
+        )
         super(StampMode, self).enter(doc, **kwds)
 
     def leave(self, **kwds):
@@ -607,6 +611,11 @@ class StampMode (InkingMode):
                     cursor = self._crosshair_cursor
                 elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
                     cursor = self._arrow_cursor
+                else:
+                    cursor = self._blank_cursor
+            else:
+                cursor = self._blank_cursor
+
             if cursor is not self._current_override_cursor:
                 tdw.set_override_cursor(cursor)
                 self._current_override_cursor = cursor
