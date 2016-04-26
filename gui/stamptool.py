@@ -59,9 +59,11 @@ def _draw_stamp_to_layer(target_layer, stamp, nodes, bbox):
     surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, int(w), int(h))
     cr = cairo.Context(surf)
 
+    stamp.initialize_draw(cr)
     for cn in nodes:
         stamp.draw(None, cr, cn.x - sx, cn.y - sy,
                 cn.angle, cn.scale_x, cn.scale_y, True)
+    stamp.finalize_draw(cr)
 
     surf.flush()
     pixbuf = Gdk.pixbuf_get_from_surface(surf, 0, 0, w, h)
@@ -141,9 +143,35 @@ class Stamp(object):
     def __init__(self):
         self._stamp_src = None
         self._mat = cairo.Matrix()
+        self._prev_src = {}
 
     def load_from_file(self, filename):
         self._stamp_src = GdkPixbuf.Pixbuf.new_from_file(filename)
+
+    def initialize_draw(self, cr):
+        """ Initialize draw calls.
+        Call this method prior to draw stamps loop.
+        """
+        self._prev_src[cr] = None
+
+    def finalize_draw(self, cr):
+        """ Finalize draw calls.
+        Call this method after draw stamps loop.
+        """
+        del self._prev_src[cr]
+
+    def fetch_pixbuf(self, cr):
+        if ((not cr in self._prev_src) or 
+                self._prev_src[cr] != self._stamp_src):
+            w = self._stamp_src.get_width() 
+            h = self._stamp_src.get_height()
+            ox = -(w / 2)
+            oy = -(h / 2)
+            Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
+            self._cached_cairo_src = cr.get_source()
+            self._prev_src[cr] = self._stamp_src
+        else:
+            cr.set_source(self._cached_cairo_src)
 
 
     def draw(self, tdw, cr, x, y, angle, scale_x, scale_y, save_context=False):
@@ -175,7 +203,8 @@ class Stamp(object):
             if scale_x != 0.0 and scale_y != 0.0:
                 cr.scale(scale_x, scale_y)
 
-        Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
+       #Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
+        self.fetch_pixbuf(cr)
         cr.rectangle(ox, oy, w, h) 
 
         cr.clip()
@@ -457,7 +486,7 @@ class StampMode (InkingMode):
         """Enters the mode: called by `ModeStack.push()` etc."""
         self._blank_cursor = doc.app.cursors.get_action_cursor(
             self.ACTION_NAME,
-            gui.cursor.Name.ADD,
+            gui.cursor.Name.ADD
         )
         super(StampMode, self).enter(doc, **kwds)
 
@@ -1258,6 +1287,8 @@ class Overlay_Stamp (Overlay):
         alloc = self._tdw.get_allocation()
         dx,dy = mode.selection_rect.get_display_offset(self._tdw)
         fill_flag = not mode.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT)
+        mode.stamp.initialize_draw(cr)
+
         for i, node, x, y in self._get_onscreen_nodes():
             color = gui.style.EDITABLE_ITEM_COLOR
             show_node = not mode.hide_nodes
@@ -1291,6 +1322,8 @@ class Overlay_Stamp (Overlay):
                #    radius=radius,
                #    fill=fill_flag)
                 self.draw_stamp(cr, i, node, x, y, dx, dy)
+
+        mode.stamp.finalize_draw(cr)
 
         # Buttons
         if (mode.phase in
