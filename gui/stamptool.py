@@ -344,7 +344,11 @@ class Stamp(object):
                 (ey - sy) + 1 + margin * 2)
 
 
-_NODE_FIELDS = ("x", "y", "angle", "scale_x", "scale_y")
+    def get_tile_count(self):
+        return 1 # currently only stab
+
+
+_NODE_FIELDS = ("x", "y", "angle", "scale_x", "scale_y", "tile_index")
 
 class _StampNode (collections.namedtuple("_StampNode", _NODE_FIELDS)):
     """Recorded control point, as a namedtuple.
@@ -938,7 +942,7 @@ class StampMode (InkingMode):
                 self._last_event_node = None
                 return super(InkingMode, self).drag_start_cb(tdw, event)
             else:
-                node = _StampNode(mx, my, 0.0, 1.0, 1.0)
+                node = _StampNode(mx, my, 0.0, 1.0, 1.0, 0)
                 self.nodes.append(node)
                 self._queue_draw_node(0)
                 self._last_node_evdata = (event.x, event.y, event.time)
@@ -1372,14 +1376,15 @@ class OptionsPresenter_Stamp (object):
     variation_preset_store = None
 
     @classmethod
-    def init_variation_preset_store(cls):
-        if cls.variation_preset_store == None:
-            from application import get_app
-            _app = get_app()
-            store = Gtk.ListStore(str, int)
-            for i,name in enumerate(_app.stroke_pressure_settings.settings):
-                store.append((name,i))
-            cls.variation_preset_store = store
+    def init_stamp_presets(cls):
+        return
+       #if cls.variation_preset_store == None:
+       #    from application import get_app
+       #    _app = get_app()
+       #    store = Gtk.ListStore(str, int)
+       #    for i,name in enumerate(_app.stroke_pressure_settings.settings):
+       #        store.append((name,i))
+       #    cls.variation_preset_store = store
 
     def __init__(self):
         super(OptionsPresenter_Stamp, self).__init__()
@@ -1388,15 +1393,13 @@ class OptionsPresenter_Stamp (object):
         self._options_grid = None
         self._point_values_grid = None
         self._pressure_adj = None
-        self._xtilt_adj = None
-        self._ytilt_adj = None
-        self._dtime_adj = None
-        self._dtime_label = None
-        self._dtime_scale = None
-        self._insert_button = None
-        self._delete_button = None
-        self._apply_variation_button = None
-        self._variation_preset_combo = None
+        self._xscale_adj = None
+        self._yscale_adj = None
+        self._tile_adj = None
+        self._tile_label = None
+        self._tile_scale = None
+        self._random_tile_button = None
+        self._stamp_preset_view = None
 
         self._updating_ui = False
         self._target = (None, None)
@@ -1407,7 +1410,7 @@ class OptionsPresenter_Stamp (object):
     def _ensure_ui_populated(self):
         if self._options_grid is not None:
             return
-        return
+
         builder_xml = os.path.splitext(__file__)[0] + ".glade"
         builder = Gtk.Builder()
         builder.set_translation_domain("mypaint")
@@ -1416,44 +1419,18 @@ class OptionsPresenter_Stamp (object):
         self._options_grid = builder.get_object("options_grid")
         self._point_values_grid = builder.get_object("point_values_grid")
         self._point_values_grid.set_sensitive(False)
-        self._pressure_adj = builder.get_object("pressure_adj")
-        self._xtilt_adj = builder.get_object("xtilt_adj")
-        self._ytilt_adj = builder.get_object("ytilt_adj")
-        self._dtime_adj = builder.get_object("dtime_adj")
-        self._dtime_label = builder.get_object("dtime_label")
-        self._dtime_scale = builder.get_object("dtime_scale")
-        self._insert_button = builder.get_object("insert_point_button")
-        self._insert_button.set_sensitive(False)
-        self._delete_button = builder.get_object("delete_point_button")
-        self._delete_button.set_sensitive(False)
-        self._period_adj = builder.get_object("period_adj")
-        self._period_scale = builder.get_object("period_scale")
-        self._period_adj.set_value(self._app.preferences.get(
-            "inktool.capture_period_factor", 1))
-        self._hide_nodes_check = builder.get_object("hide_nodes_checkbutton")
+        self._rotate_adj = builder.get_object("rotate_adj")
+        self._xscale_adj = builder.get_object("xscale_adj")
+        self._yscale_adj = builder.get_object("yscale_adj")
+        self._tile_adj = builder.get_object("tile_adj")
+        self._tile_scale = builder.get_object("tile_scale")
+        self._random_tile_button = builder.get_object("random_tile_button")
+        self._random_tile_button.set_sensitive(False)
 
-        apply_btn = builder.get_object("apply_variation_button")
-        apply_btn.set_sensitive(False)
-        self._apply_variation_button = apply_btn
+        base_grid = builder.get_object("addtional_editing_grid")
 
-        base_grid = builder.get_object("points_editing_grid")
-        toolbar = gui.widgets.inline_toolbar(
-            self._app,
-            [
-                ("SimplifyNodes", "mypaint-layer-group-new-symbolic"),
-                ("CullNodes", "mypaint-add-symbolic"),
-                ("AverageNodesAngle", "mypaint-remove-symbolic"),
-                ("AverageNodesDistance", "mypaint-up-symbolic"),
-                ("AverageNodesPressure", "mypaint-down-symbolic"),
-            ]
-        )
-        style = toolbar.get_style_context()
-        style.set_junction_sides(Gtk.JunctionSides.TOP)
-        base_grid.attach(toolbar, 0, 0, 2, 1)
-
-        self.init_linecurve_widget(1, base_grid)
-        self.init_variation_preset_combo(2, base_grid,
-                self._apply_variation_button)
+        self.init_stamp_preset_view(0, base_grid)
+                
 
        #hide_nodes_act = self._app.find_action('HideNodes')
        #if hide_nodes_act:
@@ -1467,21 +1444,7 @@ class OptionsPresenter_Stamp (object):
 
 
 
-    def init_linecurve_widget(self, row, box):
-        return #! REMOVEME
-
-        # XXX code duplication from gui.linemode.LineModeOptionsWidget
-        curve = StrokeCurveWidget()
-        curve.set_size_request(175, 125)
-        self.curve = curve
-        exp = Gtk.Expander()
-        exp.set_label(_("Pressure variation..."))
-        exp.set_use_markup(False)
-        exp.add(curve)
-        box.attach(exp, 0, row, 2, 1)
-        exp.set_expanded(True)
-
-    def init_variation_preset_combo(self, row, box, ref_button=None):
+    def init_stamp_preset_view(self, row, box):
         return #! REMOVEME
         combo = Gtk.ComboBox.new_with_model(
                 OptionsPresenter.variation_preset_store)
@@ -1501,7 +1464,7 @@ class OptionsPresenter_Stamp (object):
         self._variation_preset_combo = combo
 
         # set last active setting.
-        last_used = self._app.stroke_pressure_settings.last_used_setting
+        last_used = self._app.stroke_rotate_settings.last_used_setting
         def walk_combo_cb(model, path, iter, user_data):
             if self.variation_preset_store[iter][0] == last_used:
                 combo.set_active_iter(iter)
@@ -1535,127 +1498,80 @@ class OptionsPresenter_Stamp (object):
 
     @target.setter
     def target(self, targ):
-        inkmode, cn_idx = targ
-        inkmode_ref = None
-        if inkmode:
-            inkmode_ref = weakref.ref(inkmode)
-        self._target = (inkmode_ref, cn_idx)
+        mode, cn_idx = targ
+        mode_ref = None
+        if mode:
+            mode_ref = weakref.ref(mode)
+        self._target = (mode_ref, cn_idx)
         # Update the UI
         if self._updating_ui:
             return
-        return #! REMOVEME
+
         self._updating_ui = True
         try:
             self._ensure_ui_populated()
-            if 0 <= cn_idx < len(inkmode.nodes):
-                cn = inkmode.nodes[cn_idx]
-                self._pressure_adj.set_value(cn.pressure)
-                self._xtilt_adj.set_value(cn.xtilt)
-                self._ytilt_adj.set_value(cn.ytilt)
-                if cn_idx > 0:
-                    sensitive = True
-                    dtime = inkmode.get_node_dtime(cn_idx)
-                else:
-                    sensitive = False
-                    dtime = 0.0
-                for w in (self._dtime_scale, self._dtime_label):
-                    w.set_sensitive(sensitive)
-                self._dtime_adj.set_value(dtime)
+            tile_adj = None
+            if mode.stamp.get_tile_count() > 1:
+                self._tile_adj.set_upper(mode.stamp.get_tile_count()-1)
+                tile_adj = self._tile_adj
+            else:
+                self._tile_adj.set_upper(0)
+                self._tile_scale.set_sensitive(False)
+
+            if 0 <= cn_idx < len(mode.nodes):
+                cn = mode.nodes[cn_idx]
+                self._rotate_adj.set_value(cn.rotate)
+                self._xscale_adj.set_value(cn.xscale)
+                self._yscale_adj.set_value(cn.yscale)
                 self._point_values_grid.set_sensitive(True)
+                if tile_adj:
+                    tile_adj.set_value(cn.tile_index)
             else:
                 self._point_values_grid.set_sensitive(False)
-            self._insert_button.set_sensitive(inkmode.can_insert_node(cn_idx))
-            self._delete_button.set_sensitive(inkmode.can_delete_node(cn_idx))
-            self._period_adj.set_value(self._app.preferences.get(
-                "inktool.capture_period_factor", 1))
-
-            self._apply_variation_button.set_sensitive(len(inkmode.nodes) > 2)
+            self._random_tile_button.set_sensitive(
+                    mode.stamp.get_tile_count() > 1)
+           #self._delete_button.set_sensitive(len(mode.nodes) > 0)
         finally:
             self._updating_ui = False
 
-    def _variation_preset_combo_changed_cb(self, widget):
-        iter = self._variation_preset_combo.get_active_iter()
-        self._app.stroke_pressure_settings.current_setting = \
-                self.variation_preset_store[iter][0]
-        self.curve.setting_changed_cb()
 
-    def _pressure_adj_value_changed_cb(self, adj):
+    def _rotate_adj_value_changed_cb(self, adj):
         if self._updating_ui:
             return
-        inkmode, node_idx = self.target
-        inkmode.update_node(node_idx, pressure=float(adj.get_value()))
+        mode, node_idx = self.target
+        mode.update_node(node_idx, rotate=float(adj.get_value()))
 
-    def _dtime_adj_value_changed_cb(self, adj):
+    def _tile_adj_value_changed_cb(self, adj):
         if self._updating_ui:
             return
-        inkmode, node_idx = self.target
-        inkmode.set_node_dtime(node_idx, adj.get_value())
+        mode, node_idx = self.target
+        mode.set_node_tile(node_idx, adj.get_value())
 
-    def _xtilt_adj_value_changed_cb(self, adj):
+    def _xscale_adj_value_changed_cb(self, adj):
         if self._updating_ui:
             return
         value = adj.get_value()
-        inkmode, node_idx = self.target
-        inkmode.update_node(node_idx, xtilt=float(adj.get_value()))
+        mode, node_idx = self.target
+        mode.update_node(node_idx, xscale=float(adj.get_value()))
 
-    def _ytilt_adj_value_changed_cb(self, adj):
+    def _yscale_adj_value_changed_cb(self, adj):
         if self._updating_ui:
             return
         value = adj.get_value()
-        inkmode, node_idx = self.target
-        inkmode.update_node(node_idx, ytilt=float(adj.get_value()))
+        mode, node_idx = self.target
+        mode.update_node(node_idx, yscale=float(adj.get_value()))
 
-    def _insert_point_button_clicked_cb(self, button):
-        inkmode, node_idx = self.target
-        if inkmode.can_insert_node(node_idx):
-            inkmode.insert_node(node_idx)
+    def _random_tile_button_clicked_cb(self, button):
+        mode, node_idx = self.target
+        if mode.stamp.get_tile_count() > 1:
+            mode.set_current_tile(
+                    random.randint(0, mode.stamp.get_tile_count()))
 
     def _delete_point_button_clicked_cb(self, button):
-        inkmode, node_idx = self.target
-        if inkmode.can_delete_node(node_idx):
-            inkmode.delete_node(node_idx)
+        mode, node_idx = self.target
+        if mode.can_delete_node(node_idx):
+            mode.delete_node(node_idx)
 
-    def _simplify_points_button_clicked_cb(self, button):
-        inkmode, node_idx = self.target
-        if len(inkmode.nodes) > 3:
-            inkmode.simplify_nodes()
-
-    def _cull_points_button_clicked_cb(self, button):
-        inkmode, node_idx = self.target
-        if len(inkmode.nodes) > 2:
-            inkmode.cull_nodes()
-
-    def _period_adj_value_changed_cb(self, adj):
-        if self._updating_ui:
-            return
-        self._app.preferences['inktool.capture_period_factor'] = adj.get_value()
-        InkingMode.CAPTURE_SETTING.set_factor(adj.get_value())
-
-    def _period_scale_format_value_cb(self, scale, value):
-        return "%.1fx" % value
-
-    def _average_angle_clicked_cb(self,button):
-        inkmode, node_idx = self.target
-        if inkmode:
-            inkmode.average_nodes_angle()
-
-    def _average_distance_clicked_cb(self,button):
-        inkmode, node_idx = self.target
-        if inkmode:
-            inkmode.average_nodes_distance()
-
-    def _average_pressure_clicked_cb(self,button):
-        inkmode, node_idx = self.target
-        if inkmode:
-            inkmode.average_nodes_pressure()
-
-    def _apply_variation_button_cb(self, button):
-        inkmode, node_idx = self.target
-        if inkmode:
-            if len(inkmode.nodes) > 1:
-                # To LineModeCurveWidget,
-                # we can access control points as "points" attribute.
-                inkmode.apply_pressure_from_curve_widget()
 
 
 if __name__ == '__main__':
