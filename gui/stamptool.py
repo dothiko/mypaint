@@ -1063,7 +1063,6 @@ class StampMode (InkingMode):
 
                 # 3. Get a cross product of them to
                 # identify which direction user want to rotate.
-               #if cross_product(ox, oy, cx, cy) < 0.0:
                 if cross_product(cx, cy, ox, oy) >= 0.0:
                     rad = -rad
 
@@ -1145,7 +1144,7 @@ class Overlay_Stamp (Overlay):
         alloc = self._tdw.get_allocation()
         dx,dy = mode.selection_rect.get_display_offset(self._tdw)
         for i, node in enumerate(mode.nodes):
-           #x, y = self._tdw.model_to_display(node.x, node.y)
+
             if i in mode.selected_nodes:
                 tx = dx
                 ty = dy
@@ -1432,19 +1431,6 @@ class OptionsPresenter_Stamp (object):
         base_grid = builder.get_object("addtional_editing_grid")
 
         self.init_stamp_preset_view(0, base_grid)
-                
-
-       #hide_nodes_act = self._app.find_action('HideNodes')
-       #if hide_nodes_act:
-       #    self._app.ui_manager.do_connect_proxy(
-       #            hide_nodes_act,
-       #            self._hide_nodes_check)
-       #            
-       #   #hide_nodes_act.connect_proxy(self._hide_nodes_check)
-       #else:
-       #    print('no such hide!')
-
-
 
     def init_stamp_preset_view(self, row, box):
         return #! REMOVEME
