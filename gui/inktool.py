@@ -2578,14 +2578,12 @@ class OptionsPresenter (object):
     def _xtilt_adj_value_changed_cb(self, adj):
         if self._updating_ui:
             return
-        value = adj.get_value()
         inkmode, node_idx = self.target
         inkmode.update_node(node_idx, xtilt=float(adj.get_value()))
 
     def _ytilt_adj_value_changed_cb(self, adj):
         if self._updating_ui:
             return
-        value = adj.get_value()
         inkmode, node_idx = self.target
         inkmode.update_node(node_idx, ytilt=float(adj.get_value()))
 
