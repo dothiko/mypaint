@@ -1428,39 +1428,39 @@ class OptionsPresenter_Stamp (object):
         self._tile_scale = builder.get_object("tile_scale")
         self._random_tile_button = builder.get_object("random_tile_button")
         self._random_tile_button.set_sensitive(False)
-        base_grid = builder.get_object("addtional_editing_grid")
+        base_grid = builder.get_object("preset_editing_grid")
 
-        self.init_stamp_preset_view(0, base_grid)
+        self.init_stamp_preset_view(1, base_grid)
 
     def init_stamp_preset_view(self, row, box):
+        # XXX we'll need reconsider fixed value 
+        # such as item width of 48 or icon size of 32 
+        # in hidpi environment
+        liststore = Gtk.ListStore(GdkPixbuf.Pixbuf, str)
+        iconview = Gtk.IconView.new()
+        iconview.set_model(liststore)
+        iconview.set_pixbuf_column(0)
+        iconview.set_text_column(1)
+        iconview.set_item_width(48) 
+
+        icons = ["edit-cut", "edit-paste", "edit-copy"]
+        for icon in icons:
+            pixbuf = Gtk.IconTheme.get_default().load_icon(icon, 32, 0)
+            liststore.append([pixbuf, "Label"])
+
+        sw = Gtk.ScrolledWindow()
+        sw.set_margin_top(4)
+        sw.set_shadow_type(Gtk.SHADOW_ETCHED_IN)
+        sw.set_policy(Gtk.POLICY_AUTOMATIC, Gtk.POLICY_AUTOMATIC)            
+        sw.set_hexpand(True)
+        sw.set_vexpand(True)
+        sw.set_halign(Gtk.Align.FILL)
+        sw.set_valign(Gtk.Align.FILL)
+        sw.add(iconview)
+        box.attach(sw, 0, row, 2, 1)
+       #combo.connect('changed', self._variation_preset_combo_changed_cb)
+        self.preset_view = iconview
         return #! REMOVEME
-        combo = Gtk.ComboBox.new_with_model(
-                OptionsPresenter.variation_preset_store)
-        cell = Gtk.CellRendererText()
-        combo.pack_start(cell,True)
-        combo.add_attribute(cell,'text',0)
-        combo.set_active(0)
-        combo.set_sensitive(True) # variation preset always can be changed
-        if ref_button:
-            combo.set_margin_top(ref_button.get_margin_top())
-            combo.set_margin_right(4)
-            combo.set_margin_bottom(ref_button.get_margin_bottom())
-            box.attach(combo, 0, row, 1, 1)
-        else:
-            box.attach(combo, 0, row, 2, 1)
-        combo.connect('changed', self._variation_preset_combo_changed_cb)
-        self._variation_preset_combo = combo
-
-        # set last active setting.
-        last_used = self._app.stroke_angle_settings.last_used_setting
-        def walk_combo_cb(model, path, iter, user_data):
-            if self.variation_preset_store[iter][0] == last_used:
-                combo.set_active_iter(iter)
-                return True
-
-        self.variation_preset_store.foreach(walk_combo_cb,None)
-
-
 
     @property
     def widget(self):
