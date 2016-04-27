@@ -657,21 +657,6 @@ class StampMode (InkingMode):
     ## Redraws
 
 
-   #def _queue_draw_node(self, i):
-   #    """Redraws a specific control node on all known view TDWs"""
-   #    node = self.nodes[i]
-   #    dx,dy = self.selection_rect.get_model_offset()
-   #    for tdw in self._overlays:
-   #        if i in self.selected_nodes:
-   #            x, y = tdw.model_to_display(
-   #                    node.x + dx, node.y + dy)
-   #        else:
-   #            x, y = tdw.model_to_display(node.x, node.y)
-   #        x = math.floor(x)
-   #        y = math.floor(y)
-   #        size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
-   #        tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
-
    #def _queue_draw_selected_nodes(self):
    #    for i in self.selected_nodes:
    #        self._queue_draw_node(i)
@@ -701,7 +686,7 @@ class StampMode (InkingMode):
                 break
         return new_target_node_index, handle_idx
 
-    def _queue_draw_node(self, i):
+    def _queue_draw_node(self, i, force_margin=False):
         """Redraws a specific control node on all known view TDWs"""
        #node = self.nodes[i]
        #
@@ -715,12 +700,14 @@ class StampMode (InkingMode):
         else:
             dx = dy = 0.0
 
-        for tdw in self._overlays:
-            self._queue_draw_node_internal(tdw, i, dx, dy)
-
-    def _queue_draw_node_internal(self, tdw, i, dx, dy):
-        node = self.nodes[i]
         if i == self.target_node_index:
+            force_margin = True
+
+        for tdw in self._overlays:
+            self._queue_draw_node_internal(tdw, self.nodes[i], dx, dy, force_margin)
+
+    def _queue_draw_node_internal(self, tdw, node, dx, dy, add_margin):
+        if add_margin:
             margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 4
         else:
             margin = 4
@@ -734,16 +721,11 @@ class StampMode (InkingMode):
         
         for tdw in self._overlays:
             for i, cn in enumerate(self.nodes):
-                self._queue_draw_node(i)
-               #if i == self.target_node_index or force_margin:
-               #    margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 4
-               #else:
-               #    margin = 4
-               #
+                targetted = (i == self.current_node_index)
                 if i in self.selected_nodes:
-                    self._queue_draw_node_internal(tdw, i, dx, dy)
+                    self._queue_draw_node_internal(tdw, cn, dx, dy, targetted)
                 else:
-                    self._queue_draw_node_internal(tdw, i, 0.0, 0.0)
+                    self._queue_draw_node_internal(tdw, cn, 0.0, 0.0, targetted)
         
 
     ## Raw event handling (prelight & zone selection in adjust phase)
@@ -1145,10 +1127,10 @@ class StampMode (InkingMode):
     ## Interrogating events
 
     ## Node editing
-
-
-
-
+    def update_node(self, i, **kwargs):
+        self._queue_draw_node(i, force_margin=True) 
+        self.nodes[i] = self.nodes[i]._replace(**kwargs)
+        self._queue_draw_node(i, force_margin=True) 
 
 
 class Overlay_Stamp (Overlay):
@@ -1156,6 +1138,29 @@ class Overlay_Stamp (Overlay):
 
     def __init__(self, mode, tdw):
         super(Overlay_Stamp, self).__init__(mode, tdw)
+
+    def _get_onscreen_nodes(self):
+        """Iterates across only the on-screen nodes."""
+        mode = self._inkmode
+        alloc = self._tdw.get_allocation()
+        dx,dy = mode.selection_rect.get_display_offset(self._tdw)
+        for i, node in enumerate(mode.nodes):
+           #x, y = self._tdw.model_to_display(node.x, node.y)
+            if i in mode.selected_nodes:
+                tx = dx
+                ty = dy
+            else:
+                tx = ty = 0.0
+            x, y, w, h = mode.stamp.get_bbox(self._tdw, node, tx, ty)
+    
+            node_on_screen = (
+                x > alloc.x  and
+                y > alloc.y  and
+                x < alloc.x + alloc.width + w and
+                y < alloc.y + alloc.height + h
+            )
+            if node_on_screen:
+                yield (i, node)
 
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
@@ -1214,8 +1219,6 @@ class Overlay_Stamp (Overlay):
             node = nodes[0]
             cx, cy = self._tdw.model_to_display(node.x, node.y)
 
-           #handle = node.get_control_handle(1)
-           #nx, ny = self._tdw.model_to_display(handle.x, handle.y)
             nx = cx + button_radius
             ny = cx - button_radius
 
@@ -1240,7 +1243,7 @@ class Overlay_Stamp (Overlay):
         return True
 
 
-    def draw_stamp(self, cr, idx, node, x, y, dx, dy):
+    def draw_stamp(self, cr, idx, node, dx, dy):
         """ Draw a stamp as overlay preview.
 
         :param idx: index of node in mode.nodes[] 
@@ -1250,9 +1253,12 @@ class Overlay_Stamp (Overlay):
         """
         mode = self._inkmode
         pos = mode.stamp.get_boundary_points(node, tdw=self._tdw)
+        x, y = self._tdw.model_to_display(node.x, node.y)
 
-        if idx == mode.current_node_index:
-            self.draw_stamp_rect(cr, idx, pos, dx, dy)
+        if idx == mode.current_node_index or idx in mode.selected_nodes:
+            self.draw_stamp_rect(cr, idx, dx, dy, position=pos)
+            x+=dx
+            y+=dy
             for i, pt in enumerate(pos):
                 handle_idx = _EditZone_Stamp.CONTROL_HANDLE_BASE + i
                 gui.drawutils.render_square_floating_color_chip(
@@ -1261,13 +1267,12 @@ class Overlay_Stamp (Overlay):
                     gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
                     fill=(handle_idx==mode.zone)) 
         else:
-            self.draw_stamp_rect(cr, idx, pos, 0, 0)
+            self.draw_stamp_rect(cr, idx, 0, 0, position=pos)
 
-        mode.stamp.draw(self._tdw, cr, x, y, 
-                node.angle, node.scale_x, node.scale_y,
-                True)
+        mode.stamp.draw(self._tdw, cr, x, y,
+                node.angle, node.scale_x, node.scale_y, True)
 
-    def draw_stamp_rect(self, cr, idx, pos, dx, dy):
+    def draw_stamp_rect(self, cr, idx, dx, dy, position=None):
         cr.save()
         mode = self._inkmode
         cr.set_line_width(1)
@@ -1276,8 +1281,13 @@ class Overlay_Stamp (Overlay):
         else:
             cr.set_source_rgb(0, 0, 0)
 
-        cr.move_to(pos[0][0] + dx, pos[0][1] + dy)
-        for lx, ly in pos[1:]:
+        if not position:
+            position = mode.stamp.get_boundary_points(
+                    mode.nodes[idx], tdw=self._tdw)
+
+        cr.move_to(position[0][0] + dx,
+                position[0][1] + dy)
+        for lx, ly in position[1:]:
             cr.line_to(lx+dx, ly+dy)
         cr.close_path()
         cr.stroke()
@@ -1293,7 +1303,7 @@ class Overlay_Stamp (Overlay):
         fill_flag = not mode.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT)
         mode.stamp.initialize_draw(cr)
 
-        for i, node, x, y in self._get_onscreen_nodes():
+        for i, node in self._get_onscreen_nodes():
             color = gui.style.EDITABLE_ITEM_COLOR
             show_node = not mode.hide_nodes
             if (mode.phase in
@@ -1314,13 +1324,11 @@ class Overlay_Stamp (Overlay):
                         show_node = True
                         color = gui.style.PRELIT_ITEM_COLOR
 
-                if (color != gui.style.EDITABLE_ITEM_COLOR and
-                        mode.phase == _Phase.ADJUST):
-                    x += dx
-                    y += dy
-
             if show_node:
-                self.draw_stamp(cr, i, node, x, y, dx, dy)
+                self.draw_stamp(cr, i, node, dx, dy)
+            else:
+                self.draw_stamp_rect(cr, i, node, dx, dy)
+
 
         mode.stamp.finalize_draw(cr)
 
