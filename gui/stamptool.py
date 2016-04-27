@@ -908,8 +908,8 @@ class StampMode (InkingMode):
             # XXX Not sure what to do here.
             pass
         elif self.phase == _Phase.CAPTURE:
-            # Update options_presenter when capture phase end
-            self.options_presenter.target = (self, None)
+            # Updating options_presenter is done at drag_stop_cb()
+            pass
 
         # Update workaround state for evdev dropouts
         self._button_down = None
@@ -1110,7 +1110,7 @@ class StampMode (InkingMode):
             if len(self.nodes) > 0:
                 self.phase = _Phase.ADJUST
                 self.target_node_index = len(self.nodes) -1
-                self.current_node_index = self.target_node_index
+                self._update_current_node_index()
                 self._queue_redraw_all_nodes()
                 self._queue_redraw_curve()
                 self._queue_draw_buttons()
@@ -1320,11 +1320,6 @@ class Overlay_Stamp (Overlay):
                     y += dy
 
             if show_node:
-               #gui.drawutils.render_round_floating_color_chip(
-               #    cr=cr, x=x, y=y,
-               #    color=color,
-               #    radius=radius,
-               #    fill=fill_flag)
                 self.draw_stamp(cr, i, node, x, y, dx, dy)
 
         mode.stamp.finalize_draw(cr)
@@ -1392,7 +1387,7 @@ class OptionsPresenter_Stamp (object):
         self._app = get_app()
         self._options_grid = None
         self._point_values_grid = None
-        self._pressure_adj = None
+        self._angle_adj = None
         self._xscale_adj = None
         self._yscale_adj = None
         self._tile_adj = None
@@ -1419,14 +1414,13 @@ class OptionsPresenter_Stamp (object):
         self._options_grid = builder.get_object("options_grid")
         self._point_values_grid = builder.get_object("point_values_grid")
         self._point_values_grid.set_sensitive(False)
-        self._rotate_adj = builder.get_object("rotate_adj")
+        self._angle_adj = builder.get_object("angle_adj")
         self._xscale_adj = builder.get_object("xscale_adj")
         self._yscale_adj = builder.get_object("yscale_adj")
         self._tile_adj = builder.get_object("tile_adj")
         self._tile_scale = builder.get_object("tile_scale")
         self._random_tile_button = builder.get_object("random_tile_button")
         self._random_tile_button.set_sensitive(False)
-
         base_grid = builder.get_object("addtional_editing_grid")
 
         self.init_stamp_preset_view(0, base_grid)
@@ -1464,7 +1458,7 @@ class OptionsPresenter_Stamp (object):
         self._variation_preset_combo = combo
 
         # set last active setting.
-        last_used = self._app.stroke_rotate_settings.last_used_setting
+        last_used = self._app.stroke_angle_settings.last_used_setting
         def walk_combo_cb(model, path, iter, user_data):
             if self.variation_preset_store[iter][0] == last_used:
                 combo.set_active_iter(iter)
@@ -1516,18 +1510,19 @@ class OptionsPresenter_Stamp (object):
                 tile_adj = self._tile_adj
             else:
                 self._tile_adj.set_upper(0)
-                self._tile_scale.set_sensitive(False)
 
             if 0 <= cn_idx < len(mode.nodes):
                 cn = mode.nodes[cn_idx]
-                self._rotate_adj.set_value(cn.rotate)
-                self._xscale_adj.set_value(cn.xscale)
-                self._yscale_adj.set_value(cn.yscale)
+                self._angle_adj.set_value(
+                        clamp(math.degrees(cn.angle),-180.0, 180.0))
+                self._xscale_adj.set_value(cn.scale_x)
+                self._yscale_adj.set_value(cn.scale_y)
                 self._point_values_grid.set_sensitive(True)
                 if tile_adj:
                     tile_adj.set_value(cn.tile_index)
             else:
                 self._point_values_grid.set_sensitive(False)
+
             self._random_tile_button.set_sensitive(
                     mode.stamp.get_tile_count() > 1)
            #self._delete_button.set_sensitive(len(mode.nodes) > 0)
@@ -1535,11 +1530,11 @@ class OptionsPresenter_Stamp (object):
             self._updating_ui = False
 
 
-    def _rotate_adj_value_changed_cb(self, adj):
+    def _angle_adj_value_changed_cb(self, adj):
         if self._updating_ui:
             return
         mode, node_idx = self.target
-        mode.update_node(node_idx, rotate=float(adj.get_value()))
+        mode.update_node(node_idx, angle=math.radians(adj.get_value()))
 
     def _tile_adj_value_changed_cb(self, adj):
         if self._updating_ui:
@@ -1550,16 +1545,20 @@ class OptionsPresenter_Stamp (object):
     def _xscale_adj_value_changed_cb(self, adj):
         if self._updating_ui:
             return
-        value = adj.get_value()
+        value = float(adj.get_value())
         mode, node_idx = self.target
-        mode.update_node(node_idx, xscale=float(adj.get_value()))
+        if value == 0:
+            value = 0.001  
+        mode.update_node(node_idx, scale_x=value)
 
     def _yscale_adj_value_changed_cb(self, adj):
         if self._updating_ui:
             return
         value = adj.get_value()
         mode, node_idx = self.target
-        mode.update_node(node_idx, yscale=float(adj.get_value()))
+        if value == 0:
+            value = 0.001
+        mode.update_node(node_idx, scale_y=value)
 
     def _random_tile_button_clicked_cb(self, button):
         mode, node_idx = self.target
