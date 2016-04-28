@@ -18,6 +18,7 @@ import logging
 from collections import deque
 logger = logging.getLogger(__name__)
 import random
+import json
 
 import gtk2compat
 from gettext import gettext as _
@@ -37,6 +38,7 @@ from gui.inktool import _LayoutNode, _Phase, _EditZone
 from gui.linemode import *
 from lib.command import Command
 from gui.ui_utils import *
+from gui.stamps import *
 
 ## Module settings
 
@@ -51,302 +53,8 @@ EVCOMPRESSION_WORKAROUND_NONE = 999
 
 ## Functions
 
-def _draw_stamp_to_layer(target_layer, stamp, nodes, bbox):
-    """
-    :param bbox: boundary box, in model coordinate
-    """
-    sx, sy, w, h = bbox
-    surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, int(w), int(h))
-    cr = cairo.Context(surf)
-
-    stamp.initialize_draw(cr)
-    for cn in nodes:
-        stamp.draw(None, cr, cn.x - sx, cn.y - sy,
-                cn.angle, cn.scale_x, cn.scale_y, True)
-    stamp.finalize_draw(cr)
-
-    surf.flush()
-    pixbuf = Gdk.pixbuf_get_from_surface(surf, 0, 0, w, h)
-    layer = lib.layer.PaintingLayer(name='')
-    layer.load_surface_from_pixbuf(pixbuf, int(sx), int(sy))
-    del surf, cr
-
-    tiles = set()
-    tiles.update(layer.get_tile_coords())
-    dstsurf = target_layer._surface
-    for tx, ty in tiles:
-        with dstsurf.tile_request(tx, ty, readonly=False) as dst:
-            layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
-
-    bbox = tuple(target_layer.get_full_redraw_bbox())
-    target_layer.root.layer_content_changed(target_layer, *bbox)
-    target_layer.autosave_dirty = True
-    del layer
-
-
-
-def get_barycentric_point(x, y, triangle):
-    """
-    Get barycentric point of a point(x,y) in a triangle.
-    :param triangle: a sequential of 3 points, which compose a triangle.
-    """
-    p0, p1, p2 = triangle
-    v1x = p1[0] - p2[0]
-    v1y = p1[1] - p2[1]
-    v2x = p0[0] - p2[0]
-    v2y = p0[1] - p2[1]
-
-    d = v2y * v1x - v1y * v2x
-    if d == 0.0:
-        return False
-
-    p2x = x - p2[0] 
-    p2y = y - p2[1] 
-    p0x = x - p0[0] 
-    p0y = y - p0[1] 
-
-    b0 = (p2y * v1x + v1y * -p2x) / d
-    b1 = (p0y * -v2x + v2y * -p0x) / d
-    return (b0, b1, 1.0 - b0 - b1)
-
-#def is_inside_triangle(x, y, triangle):
-#    b0, b1, b2 = get_barycentric_point(x, y, triangle)
-#    return (0.0 <= b0 <= 1.0 and 
-#            0.0 <= b1 <= 1.0 and 
-#            0.0 <= b2 <= 1.0)
-
-
-def is_inside_triangle(x, y, triangle):
-    """ from stackoverflow
-    """
-    def sign(p1, p2, p3):
-        return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
-
-    b1 = sign((x,y) , triangle[0], triangle[1]) < 0.0
-    b2 = sign((x,y) , triangle[1], triangle[2]) < 0.0
-    b3 = sign((x,y) , triangle[2], triangle[0]) < 0.0
-    return b1 == b2 == b3
-
-
 
 ## Class defs
-
-class Stamp(object):
-    """
-    holding stamp information, and draw it to "cairo surface",
-    not mypaint surface, for now.
-
-    and then after finalize, it converted to mypaint surface
-    and merged into current layer.
-    """
-
-    def __init__(self):
-        self._stamp_src = None
-        self._mat = cairo.Matrix()
-        self._prev_src = {}
-
-    def load_from_file(self, filename):
-        self._stamp_src = GdkPixbuf.Pixbuf.new_from_file(filename)
-
-    def initialize_draw(self, cr):
-        """ Initialize draw calls.
-        Call this method prior to draw stamps loop.
-        """
-        self._prev_src[cr] = None
-
-    def finalize_draw(self, cr):
-        """ Finalize draw calls.
-        Call this method after draw stamps loop.
-        """
-        del self._prev_src[cr]
-
-    def fetch_pixbuf(self, cr):
-        if ((not cr in self._prev_src) or 
-                self._prev_src[cr] != self._stamp_src):
-            w = self._stamp_src.get_width() 
-            h = self._stamp_src.get_height()
-            ox = -(w / 2)
-            oy = -(h / 2)
-            Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
-            self._cached_cairo_src = cr.get_source()
-            self._prev_src[cr] = self._stamp_src
-        else:
-            cr.set_source(self._cached_cairo_src)
-
-
-    def draw(self, tdw, cr, x, y, angle, scale_x, scale_y, save_context=False):
-        """ draw this stamp into cairo surface.
-        """
-        if save_context:
-            cr.save()
-
-
-        w = self._stamp_src.get_width() 
-        h = self._stamp_src.get_height()
-
-        ox = -(w / 2)
-        oy = -(h / 2)
-
-        cr.translate(x,y)
-        if ((tdw and tdw.renderer.rotation != 0.0) or 
-                angle != 0.0):
-            if tdw:
-                angle += tdw.renderer.rotation
-            cr.rotate(angle)
-
-        if ((tdw and tdw.renderer.scale != 1.0) or 
-                (scale_x != 1.0 and scale_y != 1.0)):
-            if tdw:
-                scale_x *= tdw.renderer.scale
-                scale_y *= tdw.renderer.scale
-
-            if scale_x != 0.0 and scale_y != 0.0:
-                cr.scale(scale_x, scale_y)
-
-       #Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
-        self.fetch_pixbuf(cr)
-        cr.rectangle(ox, oy, w, h) 
-
-        cr.clip()
-        cr.paint()
-        
-        if save_context:
-            cr.restore()
-
-    def is_inside(self, mx, my, node):
-        """ 
-        THIS METHOD IS OBSOLUTED,USE get_handle_index INSTEAD.
-        Check whether the point(mx, my) is inside of the stamp
-        which placed as node information.
-        """
-        pos = self.get_boundary_points(node)
-        if not is_inside_triangle(mx, my, (pos[0], pos[1], pos[2])):
-            return is_inside_triangle(mx, my, (pos[0], pos[2], pos[3]))
-        else:
-            return True
-
-    def get_handle_index(self, mx, my, node, margin):
-        """
-        Get control handle index
-        :param mx,my: Cursor position in model coordination.
-        :param node: Target node,which contains scale/angle information.
-        :param margin: i.e. the half of control handle rectangle
-
-        :rtype: integer, whitch is targetted handle index.
-                Normally it should be either one of targetted handle index (0 to 3),
-                or -1 (cursor is not on this node)
-                When 'node is targetted but not on control handle',
-                return 4.
-
-        """
-        pos = self.get_boundary_points(node)
-
-        for i,cp in enumerate(pos):
-            cx, cy = cp
-            if (cx - margin <= mx <= cx + margin and
-                    cy - margin <= my <= cy + margin):
-                return i
-
-        # Returning 4 means 'inside but not on a handle'
-        if not is_inside_triangle(mx, my, (pos[0], pos[1], pos[2])):
-            if is_inside_triangle(mx, my, (pos[0], pos[2], pos[3])):
-                return 4 
-        else:
-            return 4
-
-        return -1
-
-    def get_boundary_points(self, node, tdw=None, dx=0.0, dy=0.0, no_transform=False):
-        """ Get boundary corner points, when this stamp is
-        placed/rotated/scaled into the node.
-
-        The return value is a list of 'boundary corner points'.
-        The stamp might be rotated, so boundary might not be 'rectangle'. 
-        so this method returns a list of 4 corner points.
-
-        Each corner points are model coordinate.
-
-        When parameter 'tdw' assigned, returned corner points are 
-        converted to display coordinate.
-
-        :param mx, my: the center point in model coordinate.
-        :param tdw: tiledrawwidget, to get display coordinate. 
-                    By default this is None.
-        :param dx, dy: offsets, in model coordinate.
-        :param no_transform: boolean flag, when this is True,
-                             rotation and scaling are cancelled.
-
-        :rtype: a list of tuple,[ (pt0.x, pt0.y) ... (pt3.x, pt3.y) ]
-        """
-        w = self._stamp_src.get_width() 
-        h = self._stamp_src.get_height()
-        if not no_transform:
-            w *= node.scale_x 
-            h *= node.scale_y
-        sx = - w / 2
-        sy = - h / 2
-        ex = w+sx
-        ey = h+sy
-        bx = node.x + dx
-        by = node.y + dy
-
-        if node.angle != 0.0 and not no_transform:
-            points = [ (sx, sy),
-                          (ex, sy),
-                          (ex, ey),
-                          (sx, ey) ]
-            cos_s = math.cos(node.angle)
-            sin_s = math.sin(node.angle)
-            for i in xrange(4):
-                x = points[i][0]
-                y = points[i][1]
-                tx = (cos_s * x - sin_s * y) + bx
-                ty = (sin_s * x + cos_s * y) + by
-                points[i] = (tx, ty) 
-        else:
-            sx += bx
-            ex += bx
-            sy += by
-            ey += by
-            points = [ (sx, sy),
-                          (ex, sy),
-                          (ex, ey),
-                          (sx, ey) ]
-
-        if tdw:
-            points = [ tdw.model_to_display(x,y) for x,y in points ]
-
-        return points
-
-    def get_bbox(self, tdw, node, dx=0.0, dy=0.0, margin = 0):
-        """ Get outmost boundary box, to get displaying area or 
-        to do initial collision detection.
-        return value is a tuple of rectangle,
-        (x, y, width, height)
-        """
-        pos = self.get_boundary_points(node, dx=dx, dy=dy)
-        if tdw:
-            sx, sy = tdw.model_to_display(*pos[0])
-        else:
-            sx, sy = pos[0]
-        ex = sx
-        ey = sy
-        for x, y in pos[1:]:
-            if tdw:
-                x, y = tdw.model_to_display(x, y)
-            sx = min(sx, x)
-            sy = min(sy, y)
-            ex = max(ex, x)
-            ey = max(ey, y)
-
-        return (sx - margin, sy - margin, 
-                (ex - sx) + 1 + margin * 2, 
-                (ey - sy) + 1 + margin * 2)
-
-
-    def get_tile_count(self):
-        return 1 # currently only stab
-
 
 _NODE_FIELDS = ("x", "y", "angle", "scale_x", "scale_y", "tile_index")
 
@@ -400,7 +108,7 @@ class DrawStamp(Command):
         self.snapshot = target.save_snapshot()
         target.autosave_dirty = True
         # Draw stamp at each nodes location 
-        _draw_stamp_to_layer(target,
+        draw_stamp_to_layer(target,
                 self.stamp, self.nodes, self.bbox)
 
     def undo(self):
@@ -474,9 +182,8 @@ class StampMode (InkingMode):
     def __init__(self, **kwargs):
         super(StampMode, self).__init__(**kwargs)
 
-        self._stamp = Stamp()
+        self._stamp = None
         #! test code
-        self._stamp.load_from_file('/home/dull/python/src/mypaint/mypaint/stamptest.png')
         self.current_handle_index = -1
         self.forced_button_pos = False
 
@@ -484,6 +191,11 @@ class StampMode (InkingMode):
     def stamp(self):
         return self._stamp
 
+    def set_stamp(self, stamp):
+        """ Called from OptionPresenter, 
+        This is to make stamp property as if it is read-only.
+        """
+        self._stamp = stamp
 
 
     def enter(self, doc, **kwds):
@@ -924,7 +636,11 @@ class StampMode (InkingMode):
                 self._last_event_node = None
                 return super(InkingMode, self).drag_start_cb(tdw, event)
             else:
-                node = _StampNode(mx, my, 0.0, 1.0, 1.0, 0)
+                node = _StampNode(mx, my, 
+                        self.stamp.default_angle,
+                        self.stamp.default_scale_x,
+                        self.stamp.default_scale_y,
+                        0)
                 self.nodes.append(node)
                 self._queue_draw_node(0)
                 self._last_node_evdata = (event.x, event.y, event.time)
@@ -1019,7 +735,7 @@ class StampMode (InkingMode):
 
             if self.phase == _PhaseStamp.SCALE_BY_HANDLE:
 
-                # 2. Get 'original' leg of triangle,
+                # 2. Get 'original vertical leg' of triangle,
                 # it is equal the half of 'side' ridge of stamp rectangle
                 side_length, snx, sny = length_and_normal(
                         pos[2][0], pos[2][1],
@@ -1296,6 +1012,9 @@ class Overlay_Stamp (Overlay):
         """Draw adjustable nodes to the screen"""
         # Control nodes
         mode = self._inkmode
+        if mode.stamp == None:
+            return
+
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
         dx,dy = mode.selection_rect.get_display_offset(self._tdw)
@@ -1436,17 +1155,12 @@ class OptionsPresenter_Stamp (object):
         # XXX we'll need reconsider fixed value 
         # such as item width of 48 or icon size of 32 
         # in hidpi environment
-        liststore = Gtk.ListStore(GdkPixbuf.Pixbuf, str)
+        liststore = self._app.stamp_manager.initialize_icon_store()
         iconview = Gtk.IconView.new()
         iconview.set_model(liststore)
         iconview.set_pixbuf_column(0)
         iconview.set_text_column(1)
         iconview.set_item_width(48) 
-
-        icons = ["edit-cut", "edit-paste", "edit-copy"]
-        for icon in icons:
-            pixbuf = Gtk.IconTheme.get_default().load_icon(icon, 32, 0)
-            liststore.append([pixbuf, "Label"])
 
         sw = Gtk.ScrolledWindow()
         sw.set_margin_top(4)
@@ -1568,5 +1282,4 @@ class OptionsPresenter_Stamp (object):
 
 
 if __name__ == '__main__':
-    triangle=( (0.0, 0.0), (10.0,12.0), (15.0, -2.0) )
-    print get_barycentric_point(2.0, 0.4, triangle)
+    pass

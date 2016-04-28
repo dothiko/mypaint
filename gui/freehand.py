@@ -596,8 +596,10 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                             info = assistant.get_current(drawstate.button_down, time)
                             if not info:
                                 continue
+                        else:
+                            info=((hx, hy, pressure), )
                     else:
-                        info=((hx, hy, None), )
+                        info=((hx, hy, pressure), )
 
                     for hx, hy, hp in info:
                         queue_motion(ht, hx, hy, hp, None,None)
