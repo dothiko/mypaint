@@ -97,7 +97,7 @@ class DrawStamp(Command):
         """
         super(DrawStamp, self).__init__(model, **kwds)
         self.nodes = nodes
-        self.stamp = stamp
+        self._stamp = stamp
         self.bbox = bbox
         self.snapshot = None
 
@@ -109,7 +109,7 @@ class DrawStamp(Command):
         target.autosave_dirty = True
         # Draw stamp at each nodes location 
         draw_stamp_to_layer(target,
-                self.stamp, self.nodes, self.bbox)
+                self._stamp, self.nodes, self.bbox)
 
     def undo(self):
         layers = self.doc.layer_stack
@@ -204,6 +204,7 @@ class StampMode (InkingMode):
             self.ACTION_NAME,
             gui.cursor.Name.ADD
         )
+        self.options_presenter.target = (self, None)
         super(StampMode, self).enter(doc, **kwds)
 
     def leave(self, **kwds):
@@ -236,18 +237,18 @@ class StampMode (InkingMode):
             self._queue_redraw_curve()
         
     def _commit_all(self):
-        sx, sy, w, h = self.stamp.get_bbox(None, self.nodes[0])
+        sx, sy, w, h = self._stamp.get_bbox(None, self.nodes[0])
         ex = sx+w
         ey = sy+h
         for cn in self.nodes[1:]:
-            tsx, tsy, tw, th = self.stamp.get_bbox(None, cn)
+            tsx, tsy, tw, th = self._stamp.get_bbox(None, cn)
             sx = min(sx, tsx)
             sy = min(sy, tsy)
             ex = max(ex, tsx + tw)
             ey = max(ey, tsy + th)
 
         cmd = DrawStamp(self.doc.model,
-                self.stamp,
+                self._stamp,
                 self.nodes,
                 (sx, sy, ex - sx + 1, ey - sy + 1))
         self.doc.model.do(cmd)
@@ -284,6 +285,8 @@ class StampMode (InkingMode):
 
     def _update_zone_and_target(self, tdw, x, y):
         """Update the zone and target node under a cursor position"""
+        if not self._stamp:
+            return
 
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone.EMPTY_CANVAS
@@ -385,7 +388,7 @@ class StampMode (InkingMode):
         hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 12
         new_target_node_index = None
         handle_idx = -1
-        stamp = self.stamp
+        stamp = self._stamp
         mx, my = tdw.display_to_model(x, y)
         for i, node in reversed(list(enumerate(self.nodes))):
             handle_idx = stamp.get_handle_index(mx, my, node,
@@ -419,13 +422,16 @@ class StampMode (InkingMode):
             self._queue_draw_node_internal(tdw, self.nodes[i], dx, dy, force_margin)
 
     def _queue_draw_node_internal(self, tdw, node, dx, dy, add_margin):
+        if not self._stamp:
+            return
+
         if add_margin:
             margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 4
         else:
             margin = 4
 
         tdw.queue_draw_area(
-                *self.stamp.get_bbox(tdw, node, dx, dy, margin=margin))
+                *self._stamp.get_bbox(tdw, node, dx, dy, margin=margin))
 
     def _queue_redraw_curve(self, force_margin=False):
         """Redraws the entire curve on all known view TDWs"""
@@ -442,6 +448,9 @@ class StampMode (InkingMode):
 
     ## Raw event handling (prelight & zone selection in adjust phase)
     def button_press_cb(self, tdw, event):
+        if not self._stamp:
+            return super(InkingMode, self).button_press_cb(tdw, event)
+
         self._ensure_overlay_for_tdw(tdw)
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
@@ -555,6 +564,9 @@ class StampMode (InkingMode):
         return super(InkingMode, self).button_press_cb(tdw, event)
 
     def button_release_cb(self, tdw, event):
+        if not self._stamp:
+            return super(InkingMode, self).button_release_cb(tdw, event)
+
         self._ensure_overlay_for_tdw(tdw)
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
@@ -627,6 +639,9 @@ class StampMode (InkingMode):
     ## Drag handling (both capture and adjust phases)
 
     def drag_start_cb(self, tdw, event):
+        if not self._stamp:
+            return super(StampMode, self).drag_start_cb(tdw, event)
+
         self._ensure_overlay_for_tdw(tdw)
         mx, my = tdw.display_to_model(event.x, event.y)
         if self.phase == _Phase.CAPTURE:
@@ -637,9 +652,9 @@ class StampMode (InkingMode):
                 return super(InkingMode, self).drag_start_cb(tdw, event)
             else:
                 node = _StampNode(mx, my, 
-                        self.stamp.default_angle,
-                        self.stamp.default_scale_x,
-                        self.stamp.default_scale_y,
+                        self._stamp.default_angle,
+                        self._stamp.default_scale_x,
+                        self._stamp.default_scale_y,
                         0)
                 self.nodes.append(node)
                 self._queue_draw_node(0)
@@ -674,6 +689,9 @@ class StampMode (InkingMode):
 
 
     def drag_update_cb(self, tdw, event, dx, dy):
+        if not self._stamp:
+            super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
+
         self._ensure_overlay_for_tdw(tdw)
         mx, my = tdw.display_to_model(event.x ,event.y)
         if self.phase == _Phase.CAPTURE:
@@ -718,7 +736,7 @@ class StampMode (InkingMode):
             assert self.target_node_index is not None
             self._queue_redraw_curve()
             node = self.nodes[self.target_node_index]
-            pos = self.stamp.get_boundary_points(node, 
+            pos = self._stamp.get_boundary_points(node, 
                     no_transform=True)
 
             # At here, we consider the movement of control handle(i.e. cursor)
@@ -793,6 +811,9 @@ class StampMode (InkingMode):
 
 
     def drag_stop_cb(self, tdw):
+        if not self._stamp:
+            return super(StampMode, self).drag_stop_cb(tdw)
+
         self._ensure_overlay_for_tdw(tdw)
         if self.phase == _Phase.CAPTURE:
 
@@ -985,7 +1006,7 @@ class Overlay_Stamp (Overlay):
             self.draw_stamp_rect(cr, idx, 0, 0, position=pos)
 
         mode.stamp.draw(self._tdw, cr, x, y,
-                node.angle, node.scale_x, node.scale_y, True)
+                node, True)
 
     def draw_stamp_rect(self, cr, idx, dx, dy, position=None):
         cr.save()
@@ -1216,11 +1237,18 @@ class OptionsPresenter_Stamp (object):
         try:
             self._ensure_ui_populated()
             tile_adj = None
-            if mode.stamp.get_tile_count() > 1:
-                self._tile_adj.set_upper(mode.stamp.get_tile_count()-1)
-                tile_adj = self._tile_adj
+            if mode.stamp != None:
+                if mode.stamp.tile_count > 1:
+                    self._tile_adj.set_upper(mode.stamp.tile_count-1)
+                    tile_adj = self._tile_adj
+                else:
+                    self._tile_adj.set_upper(0)
+
+                self._random_tile_button.set_sensitive(
+                        mode.stamp.tile_count > 1)
             else:
-                self._tile_adj.set_upper(0)
+                self._random_tile_button.set_sensitive(False)
+
 
             if 0 <= cn_idx < len(mode.nodes):
                 cn = mode.nodes[cn_idx]
@@ -1234,8 +1262,6 @@ class OptionsPresenter_Stamp (object):
             else:
                 self._point_values_grid.set_sensitive(False)
 
-            self._random_tile_button.set_sensitive(
-                    mode.stamp.get_tile_count() > 1)
            #self._delete_button.set_sensitive(len(mode.nodes) > 0)
         finally:
             self._updating_ui = False

@@ -19,6 +19,8 @@ from gi.repository import GdkPixbuf
 import cairo
 
 from gui.linemode import *
+#from lib import mypaintlib
+import lib
 
 def draw_stamp_to_layer(target_layer, stamp, nodes, bbox):
     """
@@ -31,7 +33,7 @@ def draw_stamp_to_layer(target_layer, stamp, nodes, bbox):
     stamp.initialize_draw(cr)
     for cn in nodes:
         stamp.draw(None, cr, cn.x - sx, cn.y - sy,
-                cn.angle, cn.scale_x, cn.scale_y, True)
+                cn, True)
     stamp.finalize_draw(cr)
 
     surf.flush()
@@ -111,10 +113,15 @@ class _Pixbuf_Source(object):
         self._tile_w = 0
         self._tile_h = 0
         self._tile_count = -1
+        self._tile_idx = 0
 
         self.set_file_sources(filenames)
 
     def _load_from_file(self, filename):
+        def get_offsets(pixbuf):
+            return (-(pixbuf.get_width() / 2),
+                    -(pixbuf.get_height() / 2))
+
         pixbuf = GdkPixbuf.Pixbuf.new_from_file(filename)
         if self._tile_w > 0 and self._tile_h > 0:
             ret = []
@@ -122,12 +129,16 @@ class _Pixbuf_Source(object):
                 for x in xrange(pixbuf.get_width() / self._tile_w):
                     cpb = pixbuf.new_subpixbuf(x, y, 
                             self._tile_w, self._tile_h)
-                    ret.append(Gdk.cairo_surface_create_from_pixbuf(cpb))
-                    del cpb
+                    ox, oy = get_offsets(cpb)
+                   #ret.append(Gdk.cairo_surface_create_from_pixbuf(cpb, ox, oy))
+                   #del cpb
+                    ret.append(cpb)
             del pixbuf
             return ret
         else:
-            return [Gdk.cairo_surface_create_from_pixbuf(pixbuf), ]
+            ox, oy = get_offsets(pixbuf)
+           #return [Gdk.cairo_surface_create_from_pixbuf(pixbuf, ox, oy), ]
+            return [pixbuf, ]
 
     ## Information methods
 
@@ -140,10 +151,9 @@ class _Pixbuf_Source(object):
             self._tile_count = cnt
         return self._tile_count
 
-    @property
-    def current_src(self):
+    def get_current_src(self, tile_idx):
         self._ensure_current_pixbuf()
-        return self._pixbufs[self._file_idx][self._tile_idx]
+        return self._pixbufs[self._file_idx][tile_idx]
 
     def set_tile_division(self, w, h):
         """ Set tile size as dividing factor.
@@ -261,6 +271,13 @@ class Stamp(object):
         if self._mask_src:
             self._mask_src.set_tile_division(w, h)
 
+    @property
+    def tile_count(self):
+        if self._pixbuf_src:
+            return self._pixbuf_src.tile_count
+        else:
+            return 0
+
     def set_file_sources(self, filenames):
         self._pixbuf_src = _Pixbuf_Source(filenames)
 
@@ -290,25 +307,25 @@ class Stamp(object):
 
     
 
-    def fetch_pattern(self, cr):
+    def fetch_pattern(self, cr, tile_idx):
         if self._pixbuf_src:
-            stamp_src = self._pixbuf_src.current_src
+            stamp_src = self._pixbuf_src.get_current_src(tile_idx)
             if ((not cr in self._prev_src) or 
                     self._prev_src[cr] != stamp_src):
                 w = stamp_src.get_width() 
                 h = stamp_src.get_height()
                 ox = -(w / 2)
                 oy = -(h / 2)
-               #Gdk.cairo_set_source_pixbuf(cr, stamp_src, ox, oy)
-                cr.set_source_surface(stamp_src, ox, oy)
+                Gdk.cairo_set_source_pixbuf(cr, stamp_src, ox, oy)
+               #cr.set_source_surface(stamp_src, ox, oy)
                 self._cached_cairo_src = cr.get_source()
                 self._prev_src[cr] = stamp_src
             else:
                 cr.set_source(self._cached_cairo_src)
 
-    def fetch_mask(self, cr):
+    def fetch_mask(self, cr, tile_idx):
         if self._mask_src:
-            mask_src = self._mask_src.current_src
+            mask_src = self._mask_src.get_current_src(tile_idx)
             if ((not cr in self._prev_mask) or 
                     self._prev_mask[cr] != stamp_src):
                 w = stamp_src.get_width() 
@@ -324,19 +341,23 @@ class Stamp(object):
 
 
 
-    def draw(self, tdw, cr, x, y, angle, scale_x, scale_y, tile_index, save_context=False):
+    def draw(self, tdw, cr, x, y, node, save_context=False):
         """ draw this stamp into cairo surface.
         """
         if save_context:
             cr.save()
 
-        stamp_src = self._pixbuf_src.current_src[tile_index]
+        stamp_src = self._pixbuf_src.get_current_src(node.tile_index)
 
         w = stamp_src.get_width() 
         h = stamp_src.get_height()
 
         ox = -(w / 2)
         oy = -(h / 2)
+
+        angle = node.angle
+        scale_x = node.scale_x
+        scale_y = node.scale_y
 
         cr.translate(x,y)
         if ((tdw and tdw.renderer.rotation != 0.0) or 
@@ -355,7 +376,7 @@ class Stamp(object):
                 cr.scale(scale_x, scale_y)
 
        #Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
-        self.fetch_pattern(cr)
+        self.fetch_pattern(cr, node.tile_index)
         cr.rectangle(ox, oy, w, h) 
 
         cr.clip()
@@ -431,7 +452,7 @@ class Stamp(object):
 
         :rtype: a list of tuple,[ (pt0.x, pt0.y) ... (pt3.x, pt3.y) ]
         """
-        stamp_src = self._pixbuf_src.current_src(node.tile_index)
+        stamp_src = self._pixbuf_src.get_current_src(node.tile_index)
 
         w = stamp_src.get_width() 
         h = stamp_src.get_height()
