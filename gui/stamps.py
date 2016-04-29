@@ -542,13 +542,15 @@ class StampPresetManager(object):
         return liststore
 
     def load_thumbnail(self, name):
-        if name == None:
-            assert self._default_icon != None
-            return self._default_icon
-        else:
-            return  GdkPixbuf.Pixbuf.new_from_file_at_size(
-                        self._get_adjusted_path(name),
-                        self._icon_size, self._icon_size)
+        if name != None:
+            filepath = self._get_adjusted_path(name)
+            if os.path.exists(filepath):
+                return  GdkPixbuf.Pixbuf.new_from_file_at_size(
+                            self._get_adjusted_path(name),
+                            self._icon_size, self._icon_size)
+
+        assert self._default_icon != None
+        return self._default_icon
         
     def load_from_file(self, filename):
         """ Presets saved as json file, just like as brushes.
