@@ -1161,6 +1161,9 @@ class OptionsPresenter_Stamp (object):
         iconview.set_pixbuf_column(0)
         iconview.set_text_column(1)
         iconview.set_item_width(48) 
+        iconview.connect('selection-changed', self._iconview_item_changed_cb)
+        self._stamps_store = liststore
+       #liststore.connect('changed', self._iconview_item_changed_cb)
 
         sw = Gtk.ScrolledWindow()
         sw.set_margin_top(4)
@@ -1278,6 +1281,14 @@ class OptionsPresenter_Stamp (object):
         mode, node_idx = self.target
         if mode.can_delete_node(node_idx):
             mode.delete_node(node_idx)
+
+    def _iconview_item_changed_cb(self, iconview):
+        mode, node_idx = self.target
+        if mode:
+            if len(iconview.get_selected_items()) > 0:
+                path = iconview.get_selected_items()[0]
+                iter = self._stamps_store.get_iter(path)
+                mode.set_stamp(self._stamps_store.get(iter, 2)[0])
 
 
 
