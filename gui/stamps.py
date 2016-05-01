@@ -133,6 +133,10 @@ class _SourceMixin(object):
         """
         pass
 
+    @staticmethod
+    def get_offsets(pixbuf):
+        return (-(pixbuf.get_width() / 2),
+                -(pixbuf.get_height() / 2))
 
 
 class _Pixbuf_Source(_SourceMixin):
@@ -150,10 +154,6 @@ class _Pixbuf_Source(_SourceMixin):
         # set_file_sources()
 
     def _load_from_file(self, filename):
-        def get_offsets(pixbuf):
-            return (-(pixbuf.get_width() / 2),
-                    -(pixbuf.get_height() / 2))
-
         pixbuf = GdkPixbuf.Pixbuf.new_from_file(filename)
         if self._tile_w > 0 and self._tile_h > 0:
             ret = []
@@ -161,14 +161,14 @@ class _Pixbuf_Source(_SourceMixin):
                 for x in xrange(pixbuf.get_width() / self._tile_w):
                     cpb = pixbuf.new_subpixbuf(x, y, 
                             self._tile_w, self._tile_h)
-                    ox, oy = get_offsets(cpb)
-                   #ret.append(Gdk.cairo_surface_create_from_pixbuf(cpb, ox, oy))
+                    ox, oy = _StampMixin.get_offsets(cpb)
+                   #ret.append(Gdk.cairo_surface_create_from_pixbuf(cpb, 1, None))
                    #del cpb
                     ret.append(cpb)
             del pixbuf
         else:
-            ox, oy = get_offsets(pixbuf)
-           #return [Gdk.cairo_surface_create_from_pixbuf(pixbuf, ox, oy), ]
+            ox, oy = _StampMixin.get_offsets(pixbuf)
+           #return [Gdk.cairo_surface_create_from_pixbuf(pixbuf, 1, None), ]
             ret = [pixbuf, ]
 
         if self._tile_segment == None:
@@ -203,6 +203,8 @@ class _Pixbuf_Source(_SourceMixin):
                 self._tile_idx = index % int(self.tile_segment)
             self._linear_tile_idx = index
 
+        return 0
+
     @property
     def current_src(self):
         self._ensure_current_pixbuf()
@@ -219,7 +221,10 @@ class _Pixbuf_Source(_SourceMixin):
         self._tile_h = h
 
     def set_file_sources(self, filenames):
-        self._source_files = filenames
+        if type(filenames) == str:
+            self._source_files = [filenames, ]
+        else:
+            self._source_files = filenames
         self._reset_info()
 
     def _reset_info(self):
@@ -261,6 +266,8 @@ class _Pixbuf_Source(_SourceMixin):
 
 class _StampMixin(object):
     """ Stamp Mixin, base class of all stamp classes. """
+
+    THUMBNAIL_SIZE = 32
 
     def __init__(self, name):
         self._pixbuf_src = None
@@ -332,6 +339,16 @@ class _StampMixin(object):
     def thumbnail(self):
         return self._thumbnail
 
+    @property
+    def current_src(self):
+        """ Get current src pixbuf.
+        by default it is from self._pixbuf_src
+        (it would be _SourceMixin derived class), 
+        we can change this with returning pixbuf object directly.
+        """
+        if self._pixbuf_src:
+            return self._pixbuf_src.current_src
+
     ## Drawing methods
 
     def initialize_draw(self, cr):
@@ -376,19 +393,20 @@ class _StampMixin(object):
 
         This method should be called from draw() method.
         """
-        srcinfo = self._setup_source(cr, tile_idx, 
-                self._mask_src, self._prev_mask)
-        if srcinfo:
-            stamp_src, ox, oy = srcinfo
-            mask_surface = Gdk.cairo_surface_create_from_pixbuf(
-                    stamp_src, 1, None)
-            cr.mask_surface(mask_surface, ox, oy)
-            self._cached_cairo_mask = mask_surface
-            self._mask_offset = (ox, oy)
-            self._prev_mask[cr] = stamp_src
-        elif self._cached_cairo_mask:
-            ox, oy = self._mask_offset
-            cr.mask_surface(mask_surface, ox, oy)
+        if self._mask_src:
+            srcinfo = self._setup_source(cr, tile_idx, 
+                    self._mask_src, self._prev_mask)
+            if srcinfo:
+                stamp_src, ox, oy = srcinfo
+                mask_surface = Gdk.cairo_surface_create_from_pixbuf(
+                        stamp_src, 1, None)
+                cr.mask_surface(mask_surface, ox, oy)
+                self._cached_cairo_mask = mask_surface
+                self._mask_offset = (ox, oy)
+                self._prev_mask[cr] = stamp_src
+            elif self._cached_cairo_mask:
+                ox, oy = self._mask_offset
+                cr.mask_surface(mask_surface, ox, oy)
 
 
     def _setup_source(self, cr, tile_idx, source, cache_list):
@@ -479,8 +497,7 @@ class _StampMixin(object):
 
         :rtype: a list of tuple,[ (pt0.x, pt0.y) ... (pt3.x, pt3.y) ]
         """
-        self._pixbuf_src.tile_index = node.tile_index
-        stamp_src = self._pixbuf_src.current_src
+        stamp_src = self.current_src
         if stamp_src:
             w = stamp_src.get_width() 
             h = stamp_src.get_height()
@@ -555,7 +572,7 @@ class _StampMixin(object):
         This implementation is as base class,
         node.tile_index ignored here.
         """
-        stamp_src = self._pixbuf_src.current_src
+        stamp_src = self.current_src
         if stamp_src:
             
             if save_context:
@@ -588,7 +605,9 @@ class _StampMixin(object):
                     cr.scale(scale_x, scale_y)
 
            #Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
-            self.apply_pattern(cr, stamp_src)
+            self.apply_pattern(cr, node.tile_index)
+            self.apply_mask(cr, node.tile_index)
+
             cr.rectangle(ox, oy, w, h) 
 
             cr.clip()
@@ -633,7 +652,7 @@ class _PixbufBackedStampMixin(_StampMixin):
     for example,Clipboard stamp.
     """
 
-    def __init__(self, name, doc):
+    def __init__(self, name):
         super(_PixbufBackedStampMixin, self).__init__(name)
         self._src_pixbuf = None
 
@@ -641,7 +660,7 @@ class _PixbufBackedStampMixin(_StampMixin):
         pass
 
     @property
-    def pixbuf(self):
+    def current_src(self):
         return self._src_pixbuf
 
     def _setup_source(self, cr, tile_idx, source, cache_list):
@@ -693,6 +712,12 @@ class Stamp(_StampMixin):
         else:
             return 0
 
+    ## Information methods
+    def get_boundary_points(self, node, tdw=None, dx=0.0, dy=0.0, no_transform=False):
+        if self._pixbuf_src:
+            self._pixbuf_src.tile_index = node.tile_index
+            super(Stamp, self).get_boundary_points(node, tdw, dx, dy, no_transform)
+
     ## Drawing methods
 
 
@@ -706,21 +731,20 @@ class ClipboardStamp(_PixbufBackedStampMixin):
 
     def __init__(self, name, doc):
         super(ClipboardStamp, self).__init__(name)
+        self._doc = doc
+
+    def _get_clipboard(self):
+        # XXX almost copied from gui.document._get_clipboard()
+        # we might need some property interface to get it from
+        # document class directly...?
+        display = self._doc.tdw.get_display()
+        cb = gtk.Clipboard.get_for_display(display, Gdk.SELECTION_CLIPBOARD)
+        return cb
 
     def initialize_phase(self):
         """ Initializing for start of each drawing phase.
         CAUTION: This method is not called when drawing to
         layer.
-
-        ACCEPT BUTTON Pressed (end of drawing phase)
-        |
-        +-- draw_stamp_to_layer called (from Command object : asynchronously)
-        |
-        self.finalize_phase() called
-        |
-        some stampmode initializing lines called
-        |
-        self.initialize_phase() called
         """
         self._src_pixbuf = None
         # XXX almost copied from gui.document.paste_cb()
@@ -735,6 +759,7 @@ class ClipboardStamp(_PixbufBackedStampMixin):
         pixbuf = clipboard.wait_for_image()
         if not pixbuf:
             return
+
         self._src_pixbuf = pixbuf
 
 class LayerStamp(_PixbufBackedStampMixin):
@@ -784,9 +809,82 @@ class VisibleStamp(LayerStamp):
                     *self._selbox, alpha=True)
         self._src_pixbuf = pixbuf
 
+class ForegroundStamp(_PixbufBackedStampMixin):
+    """ Foreground color stamp.
+    """
+
+    def __init__(self, name, app):
+        super(ForegroundStamp, self).__init__(name)
+        self._app = app
+
+    @property
+    def foreground_color(self):
+        return self._app.brush_color_manager.get_color().get_rgb()
+
+    @property
+    def current_src(self):
+        if self._mask_src:
+            return self._mask_src.current_src
+
+    def set_file_sources(self, filenames):
+        """ to disable setting self._pixbuf_src """
+        pass
+
+
+    def draw(self, tdw, cr, x, y, node, save_context=False):
+        """ Draw this stamp into cairo surface.
+        This implementation is as base class,
+        node.tile_index ignored here.
+        """
+        if save_context:
+            cr.save()
+
+        stamp_src = self.current_src
+        w = stamp_src.get_width() 
+        h = stamp_src.get_height()
+
+        ox = -(w / 2)
+        oy = -(h / 2)
+
+        angle = node.angle
+        scale_x = node.scale_x
+        scale_y = node.scale_y
+
+        cr.translate(x,y)
+        if ((tdw and tdw.renderer.rotation != 0.0) or 
+                angle != 0.0):
+            if tdw:
+                angle += tdw.renderer.rotation
+            cr.rotate(angle)
+
+        if ((tdw and tdw.renderer.scale != 1.0) or 
+                (scale_x != 1.0 and scale_y != 1.0)):
+            if tdw:
+                scale_x *= tdw.renderer.scale
+                scale_y *= tdw.renderer.scale
+
+            if scale_x != 0.0 and scale_y != 0.0:
+                cr.scale(scale_x, scale_y)
+
+   #Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
+        cr.set_source_rgb(*self.foreground_color)
+        self.apply_mask(cr, stamp_src)
+        cr.rectangle(ox, oy, w, h) 
+
+        cr.clip()
+        cr.paint()
+        
+        if save_context:
+            cr.restore()
+
+
+
+
 class PixbufStamp(_PixbufBackedStampMixin):
     """ A Stamp for dynamically changeable pixbuf stamps
     to fix its contents within DrawStamp command.
+    This stamp would only use inside program,have no any user
+    direct interaction.
 
     MyPaint 'Command' processing done in asynchronously,
     so Clipboard/Layer stamp might be updated its content(pixbuf)
@@ -797,8 +895,9 @@ class PixbufStamp(_PixbufBackedStampMixin):
     """
 
     def __init__(self, name, pixbuf):
-        super(VisibleStamp, self).__init__(name)
+        super(PixbufStamp, self).__init__(name)
         self._src_pixbuf = pixbuf
+
 
 
 ## Preset Manager classes
@@ -817,7 +916,6 @@ class StampPresetManager(object):
 
     def __init__(self, app):
         self._app = app
-        self._icon_size = 32
        #self.basedir = os.path.join(app.state_dirs.user_data, self.STAMP_DIR_NAME)
 
         # XXX mostly copied from gui/application.py _init_icons()
@@ -826,17 +924,29 @@ class StampPresetManager(object):
         self._default_icon = icon_theme.load_icon('mypaint', 32, 0)
 
     def _get_adjusted_path(self, filepath):
+        """ Return absolute path according to application setting.
+        
+        This method does not check the modified path exists.
+        However, glob.glob() will accept nonexistant path,
+        glob.glob() returns empty list for such one.
+        """
         if not os.path.isabs(filepath):
-            return  os.path.join(self._app.state_dirs.user_data,
+            return os.path.join(self._app.state_dirs.user_data,
                         self.STAMP_DIR_NAME, filepath)
         else:
             return filepath
 
     def initialize_icon_store(self):
-        """ Initialize iconview widget which is used in
+        """ Initialize iconview store which is used in
         stamptool's OptionPresenter.
+        i.e. This method is actually application-unique 
+        stamp preset initialize handler.
         """
         liststore = Gtk.ListStore(GdkPixbuf.Pixbuf, str, object)
+
+        for cs in BUILT_IN_STAMPS:
+            stamp = self.create_stamp_from_json(cs)
+            liststore.append([stamp.thumbnail, stamp.name, stamp])
 
         for cf in glob.glob(self._get_adjusted_path("*.mys")):
             stamp = self.load_from_file(cf)
@@ -848,55 +958,16 @@ class StampPresetManager(object):
         if name != None:
             filepath = self._get_adjusted_path(name)
             if os.path.exists(filepath):
+                icon_size = Stamp.THUMBNAIL_SIZE
                 return  GdkPixbuf.Pixbuf.new_from_file_at_size(
                             self._get_adjusted_path(name),
-                            self._icon_size, self._icon_size)
+                            icon_size, icon_size)
 
         assert self._default_icon != None
         return self._default_icon
         
     def load_from_file(self, filename):
         """ Presets saved as json file, just like as brushes.
-
-        stamp preset .mys file is a json file, which has
-        attributes below:
-
-            "comment" : comment of preset
-            "name" : name of preset
-            "settings" : a dictionary to contain stamp settings.
-            "thumbnail" : a thumbnail .jpg/.png filename
-            "version" : 1
-
-        stamp setting:
-            "source" : "file" - Create stamp from file(s).
-                       "clipboard" - Use run-time clipboard image for stamp.
-                       "layer" - create stamp from layer image 
-                                 where user defined area.
-                       "current_visible"  - create stamp from currently visible image
-                                            from user defined area.
-                       "foreground" - foreground color, with masked.
-                                      This source needs mask.
-                                      Without mask, the stamp meaninglessly
-                                      create filled rectangle.
-            "filename" : list of filepath of stamp source .jpg/.png.
-                         Multiple filepath means this stamp has
-                         tiles in separeted files.
-            "scale" : a tuple of default scaling ratio, 
-                      (horizontal_ratio, vertical_ratio)
-            "angle" : a floating value of default angle,in degree. 
-            "mask" : list of filepath of mask source .jpg/.png, this must be
-                     8bit grayscale.
-                     Multiple filepath means this stamp has
-                     multiple masks which corespond to each tile.
-            "tile" : a tuple of (width, height),it represents tile size
-                     of a picture. 
-                     This setting used when only one picture/mask file 
-                     assigned.
-            "type" : "random" - the next tile index is randomly seleceted.
-                     "increment" - the next tile index is automatically incremented.
-                     "same" - the next tile index is always 0.
-                              user change it manually.(default)
-
         :rtype: Stump class instance.
         """
         junk, ext = os.path.splitext(filename) 
@@ -905,52 +976,119 @@ class StampPresetManager(object):
         filename = self._get_adjusted_path(filename)
 
         with open(filename,'r') as ifp:
-            print filename
             jo = json.load(ifp)
+            return self.create_stamp_from_json(jo)
+
+    def create_stamp_from_json(self, jo):
+        """ Create a stamp from json-generated dictionary object.
+        :param jo: dictionary object, mostly created with json.load()/loads()
+        :rtype: Stump class instance.
+
+        ## The specification of mypaint stamp preset file(.mys)
+
+        Stamp preset .mys file is a json file, 
+        which has attributes below:
+
+            "comment" : comment of preset
+            "name" : name of preset
+            "settings" : a dictionary to contain 'Stamp setting's.
+            "thumbnail" : a thumbnail .jpg/.png filename
+            "version" : 1
+
+        Stamp setting:
+            "source" : "file" - Stamp from files.
+                       "tiled-file" - Stamp from a file, divided with tile setting.
+                       "clipboard" - Use run-time clipboard image for stamp.
+                       "layer" - Stamp from layer image of user defined area.
+                       "current_visible"  - Stamp from currently visible image
+                                            of user defined area.
+                       "foreground" - foreground color rectangle as source.
+                                      This type of stamp needs mask setting.
+                                      Without mask, the stamp cannot figure
+                                      its own size, so nothing can be drawn.
+
+            "filename" : LIST of .jpg/png filepaths of stamp source.
+                         Multiple filepaths mean 'this stamp has
+                         tiles in separeted files'.
+
+                         Otherwise, it will be a single picture stamp.
+
+            "scale" : A tuple of default scaling ratio, 
+                      (horizontal_ratio, vertical_ratio)
+
+            "angle" : A floating value of default angle,in degree. 
+
+            "mask" : List of filepath of mask source .jpg/.png, 
+                     These files must be 8bit grayscale.
+
+                     Multiple filepath means this stamp has
+                     multiple masks which corespond to each tile.
+
+                     Also,each mask size MUST be same as stamp picture.
+                     For foreground type stamp, there is no source stamp picture,
+                     so mask defines the shape of stamp. 
+
+            "tile" : A tuple of (width, height),it represents tile size
+                     of a picture. 
+                     Currently this setting use with 'tiled-file' source only.
+                     
+            "tile-type" : "random" - The next tile index is random value.
+                          "increment" - The next tile index is automatically incremented.
+                          "same" - The next tile index is always default index.
+                                   user change it manually.This is default tile-type.
+
+            "tile-default-index" : The default index of tile. by default, it is 0.
+
+                     Needless to say, 'tile-*' setting will ignore 
+                     when there is no tile setting.
+
+        """
+
+        if jo['version'] == "1":
             settings = jo['settings']
-
-            if jo['version'] == "1":
-                source = settings['source']
-                if source == 'file':
-                    stamp = Stamp(jo['name'])
-                    assert 'filenames' in settings
-                    stamp.set_file_sources(settings['filenames'])
-                   #stamp.load_from_files(files, 
-                   #        settings.get('tile', None))
-                    
-
-                elif source == 'clipboard':
-                    pass
-                elif source == 'layer':
-                    pass
-                elif source == 'current_visible':
-                    pass
-                elif source == 'foreground':
-                    pass
-                else:
-                    raise NotImplementedError("Unknown source %r" % source)
-
-                # common setting
-                if 'scale' in settings:
-                    stamp.set_default_scale(*settings['scale'])
-
-                if 'angle' in settings:
-                    stamp.set_default_angle(math.radians(settings['angle'] % 360.0))
-
-                if 'mask' in settings:
-                   #stamp.load_masks(settings['mask'],
-                   #        settings.get('tile', None))
-                    stamp.set_mask_sources(settings['mask'])
-
+            source = settings['source']
+            if source == 'file':
+                stamp = Stamp(jo['name'])
+                assert 'filenames' in settings
+                stamp.set_file_sources(settings['filenames'])
+            elif source == 'tiled-file':
+                stamp = Stamp(jo['name'])
+                assert 'filenames' in settings
+                stamp.set_file_sources(settings['filenames'])
                 stamp.set_tile_division(*settings.get('tile', (0, 0)))
+            elif source == 'clipboard':
+                stamp = ClipboardStamp(jo['name'], self._app.doc)
+            elif source == 'layer':
+                stamp = LayerStamp(jo['name'],self._app.doc.model.layer_stack)
+            elif source == 'current_visible':
+                stamp = VisibleStamp(jo['name'],self._app.doc.model.layer_stack)
+            elif source == 'foreground':
+                stamp = ForegroundStamp(jo['name'])
+            else:
+                raise NotImplementedError("Unknown source %r" % source)
 
+            # common setting
+            if 'scale' in settings:
+                stamp.set_default_scale(*settings['scale'])
+
+            if 'angle' in settings:
+                stamp.set_default_angle(math.radians(settings['angle'] % 360.0))
+
+            if 'mask' in settings:
+                stamp.set_mask_sources(settings['mask'])
+
+
+            if 'gtk-thumbnail' in settings:
+                pixbuf = Gtk.IconTheme.get_default().load_icon(
+                        settings['gtk-thumbnail'], Stamp.THUMBNAIL_SIZE, 0)
+                stamp.set_thumbnail(pixbuf)
+            else:
                 stamp.set_thumbnail(
                         self.load_thumbnail(settings.get('thumbnail', None)))
-
-            else:
-                raise NotImplementedError("Unknown version %r" % jo['version'])
-
             return stamp
+
+        else:
+            raise NotImplementedError("Unknown version %r" % jo['version'])
 
    #def save_stamp_to_file(self, filename, stamp):
    #    json_src = stamp.output_as_json()
@@ -960,6 +1098,27 @@ class StampPresetManager(object):
         filename = self._get_adjusted_path(filename)
         with open(filename, 'w') as ofp:
             json.dump(json_src, ofp)
+
+## Built-in stamps
+#  These stamps are built-in, automatically registered at OptionPresenter.
+
+BUILT_IN_STAMPS = [
+            { "version" : "1",
+              "name" : "clipboard stamp",
+              "settings" : {
+                  "source" : "clipboard",
+                  "gtk-thumbnail" : "gtk-paste"
+                  }
+            },
+            { "version" : "1",
+              "name" : "layer stamp",
+              "settings" : {
+                  "source" : "layer"
+                  }
+            }
+        ]
+              
+            
 
 
 def _test():

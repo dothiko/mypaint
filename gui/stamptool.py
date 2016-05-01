@@ -238,31 +238,34 @@ class StampMode (InkingMode):
             self._queue_redraw_curve()
         
     def _commit_all(self):
-        sx, sy, w, h = self._stamp.get_bbox(None, self.nodes[0])
-        ex = sx+w
-        ey = sy+h
-        for cn in self.nodes[1:]:
-            tsx, tsy, tw, th = self._stamp.get_bbox(None, cn)
-            sx = min(sx, tsx)
-            sy = min(sy, tsy)
-            ex = max(ex, tsx + tw)
-            ey = max(ey, tsy + th)
+        bbox = self._stamp.get_bbox(None, self.nodes[0])
+        if bbox:
+            sx, sy, w, h = bbox
 
-        if hasattr(self._stamp, 'pixbuf'):
-            # This means 'Current stamp is dynamic'. 
-            # Therefore we need save its current content 
-            # during draw command exist.
-            stamp = PixbufStamp('', self._stamp.pixbuf)
+            ex = sx+w
+            ey = sy+h
+            for cn in self.nodes[1:]:
+                tsx, tsy, tw, th = self._stamp.get_bbox(None, cn)
+                sx = min(sx, tsx)
+                sy = min(sy, tsy)
+                ex = max(ex, tsx + tw)
+                ey = max(ey, tsy + th)
+
+            if hasattr(self._stamp, 'pixbuf'):
+                # This means 'Current stamp is dynamic'. 
+                # Therefore we need save its current content 
+                # during draw command exist.
+                stamp = PixbufStamp('', self._stamp.pixbuf)
+            else:
+                stamp = self._stamp
+
+            cmd = DrawStamp(self.doc.model,
+                    stamp,
+                    self.nodes,
+                    (sx, sy, ex - sx + 1, ey - sy + 1))
+            self.doc.model.do(cmd)
         else:
-            stamp = self._stamp
-
-        cmd = DrawStamp(self.doc.model,
-                stamp,
-                self.nodes,
-                (sx, sy, ex - sx + 1, ey - sy + 1))
-        self.doc.model.do(cmd)
-
-
+            logger.warning("stamptool.commit_all encounter enpty bbox")
 
     def _start_new_capture_phase(self, rollback=False):
         """Let the user capture a new ink stroke"""
@@ -445,8 +448,10 @@ class StampMode (InkingMode):
         else:
             margin = 4
 
-        tdw.queue_draw_area(
-                *self._stamp.get_bbox(tdw, node, dx, dy, margin=margin))
+        bbox = self._stamp.get_bbox(tdw, node, dx, dy, margin=margin)
+
+        if bbox:
+            tdw.queue_draw_area(*bbox)
 
     def _queue_redraw_curve(self, force_margin=False):
         """Redraws the entire curve on all known view TDWs"""
@@ -902,16 +907,19 @@ class Overlay_Stamp (Overlay):
                 ty = dy
             else:
                 tx = ty = 0.0
-            x, y, w, h = mode.stamp.get_bbox(self._tdw, node, tx, ty)
-    
-            node_on_screen = (
-                x > alloc.x  and
-                y > alloc.y  and
-                x < alloc.x + alloc.width + w and
-                y < alloc.y + alloc.height + h
-            )
-            if node_on_screen:
-                yield (i, node)
+            bbox = mode.stamp.get_bbox(self._tdw, node, tx, ty)
+
+            if bbox:
+                x, y, w, h = bbox
+                node_on_screen = (
+                    x > alloc.x  and
+                    y > alloc.y  and
+                    x < alloc.x + alloc.width + w and
+                    y < alloc.y + alloc.height + h
+                )
+
+                if node_on_screen:
+                    yield (i, node)
 
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
