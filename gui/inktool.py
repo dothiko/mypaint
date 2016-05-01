@@ -1565,12 +1565,13 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._reset_selected_nodes(None)
         self._queue_redraw_all_nodes()
 
-    def select_area(self, sx, sy, ex, ey):
+    def select_area(self, selection_mode):
         """ Selection handler called from SelectionMode.
         This handler never called when no selection executed.
         """
+        modified = False
         for idx,cn in enumerate(self.nodes):
-            if sx <= cn.x <= ex and sy <= cn.y <= ey:
+            if selection_mode.is_inside_model(cn.x, cn.y):
                 if not idx in self.selected_nodes:
                     self.selected_nodes.append(idx)
                     modified = True

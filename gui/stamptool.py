@@ -1,7 +1,6 @@
 # This file is part of MyPaint.
-# Copyright (C) 2008-2013 by Martin Renold <martinxyz@gmx.ch>
-# Copyright (C) 2013-2016 by the MyPaint Development Team.
-#
+# Copyright (C) 2016 by dothiko <a.t.dothiko@gmail.com>
+
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
@@ -1033,7 +1032,7 @@ class Overlay_Stamp (Overlay):
 
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
-        # Control nodes
+
         mode = self._inkmode
         if mode.stamp == None:
             return

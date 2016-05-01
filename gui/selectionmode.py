@@ -21,6 +21,7 @@ from gi.repository import Gtk, Gdk
 from gettext import gettext as _
 import gobject
 from curve import CurveWidget
+import array
 
 import gui.mode
 import gui.cursor
@@ -41,14 +42,16 @@ HOW TO ADD Selection FUNCTIONALITY TO MODE
         ])
 ```
 
- 2. add callback 'select_area(sx, sy, ex, ey)' to mode.
-    (sx, sy) is left-top , (ex, ey) is right-bottom of 
-    selected area, in model coordinate.
+ 2. add callback 'select_area(self, selection_mode)' to mode.
+    argument selection_mode is the SelectionMode,it has
+    'is_inside_model/is_inside_display' method to 
+    distinguish whether the point(s) are inside selection or not.
 
 ```
-    def select_area(self, sx, sy, ex, ey):
+    def select_area(self, selection_mode):
+        modified = False
         for idx,cn in enumerate(self.nodes):
-            if sx <= cn.x <= ex and sy <= cn.y <= ey:
+            if selection_mode.is_inside_model(cn.x, cn.y):
                 if not idx in self.selected_nodes:
                     self.selected_nodes.append(idx)
                     modified = True
@@ -117,17 +120,35 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
         self.app = None
         self._cursor = Gdk.Cursor(Gdk.CursorType.BLANK_CURSOR)
         self._overlays = {}  # keyed by tdw
-        self.reset()
+        self._x = array.array('f',(0,0,0,0))
+        self._y = array.array('f',(0,0,0,0))
+        self._mx = array.array('f',(0,0,0,0))
+        self._my = array.array('f',(0,0,0,0))
 
     def reset(self):
-        self.sx = 0
-        self.sy = 0
-        self.ex = 0
-        self.ey = 0
+        self._x[0] = self._x[1] = self._x[2] = self._x[3] = 0
+        self._y[0] = self._y[1] = self._y[2] = self._y[3] = 0
+        self._mx[0] = self._mx[1] = self._mx[2] = self._mx[3] = 0
+        self._my[0] = self._my[1] = self._my[2] = self._my[3] = 0
 
-        # workaround flag, because drag_stop_cb does not have
-        # event parameter.
-        self.is_addition = False
+
+    def _modelnized(self, tdw):
+        for i in xrange(4):
+            self._mx[i], self._my[i] = tdw.display_to_model(
+                    self._x[i], self._y[i])
+
+    def _get_min_max_pos(self):
+        min_x = self._x[0]
+        max_x = min_x
+        min_y = self._y[0]
+        max_y = min_y
+        for i in xrange(3):
+            min_x = min(min_x, self._x[i+1])
+            max_x = max(max_x, self._x[i+1])
+            min_y = min(min_y, self._y[i+1])
+            max_y = max(max_y, self._y[i+1])
+
+        return (min_x, min_y, max_x, max_y)
 
     ## InteractionMode/DragMode implementation
 
@@ -143,11 +164,10 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
         if not self._is_active():
             self._discard_overlays()
         
-        returning_mode = self.doc.modes.top
-        if hasattr(returning_mode, 'select_area'):
-            sx, sy, ex, ey = self.get_sorted_area()
-            if sx != ex and sy != ey:
-                returning_mode.select_area(sx, sy, ex, ey)
+        if self.is_valid():
+            returning_mode = self.doc.modes.top
+            if hasattr(returning_mode, 'select_area'):
+                returning_mode.select_area(self)
 
         return super(SelectionMode, self).leave(**kwds)
 
@@ -165,9 +185,7 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
 
     def drag_start_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
-        mx, my = tdw.display_to_model(event.x, event.y)
-
-        self.start(mx, my)
+        self.start(tdw, event.x, event.y)
         self.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
         self._queue_draw_selection_rect() # to start
 
@@ -176,10 +194,8 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
     def drag_update_cb(self, tdw, event, dx, dy):
 
         self._ensure_overlay_for_tdw(tdw)
-        mx, my = tdw.display_to_model(event.x, event.y)
-
         self._queue_draw_selection_rect() # to erase
-        self.drag(mx, my)
+        self.drag(tdw, event.x, event.y)
         self._queue_draw_selection_rect()
         return super(SelectionMode, self).drag_update_cb(tdw, event, dx, dy)
 
@@ -216,79 +232,83 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
         """Redraws selection area"""
         for tdw, overlay in self._overlays.items():
             tdw.queue_draw_area(
-                    *self.get_update_rect(tdw))
+                    *self._get_update_rect(tdw))
 
-
-    ## Mode options
-
-   #def get_options_widget(self):
-   #    """Get the (class singleton) options widget"""
-   #    cls = self.__class__
-   #    if cls._OPTIONS_WIDGET is None:
-   #        widget = _SizeChangerOptionWidget()
-   #        cls._OPTIONS_WIDGET = widget
-   #    return cls._OPTIONS_WIDGET
-
-    ## Selection related methods
-
-    def start(self,x,y):
-        self.sx = x
-        self.sy = y
-        self.ex = x
-        self.ey = y
-        
-        SelectionMode.finalized_rect = None
-
-    def drag(self,x,y):
-        self.ex = x
-        self.ey = y
-
-    def get_sorted_area(self):
-        """
-        Get sorted selection area, in model coordinate.
-        """
-        return (min(self.sx, self.ex),
-                min(self.sy, self.ey),
-                max(self.sx, self.ex),
-                max(self.sy, self.ey))
-
-
-    def get_update_rect(self,tdw):
+    def _get_update_rect(self, tdw):
         """Get update 'rect' for update(erase) tdw"""
-
-        c_area = self.get_sorted_area()
-        csx, csy = tdw.model_to_display(c_area[0], c_area[1])
-        cex, cey = tdw.model_to_display(c_area[2], c_area[3])
+        csx, csy, cex, cey = self._get_min_max_pos()
         margin = self.LINE_WIDTH * 2
         return (csx - margin,
                 csy - margin,
                 (cex - csx + 1) + margin * 2,
                 (cey - csy + 1) + margin * 2)
 
-    def is_enabled(self):
-        return self.sx != None
 
-    def is_inside(self, x, y):
+
+    ## Selection related methods
+
+    def start(self, tdw, x, y):
+        self._x[0] = self._x[1] = self._x[2] = self._x[3] = x
+        self._y[0] = self._y[1] = self._y[2] = self._y[3] = y
+        self._modelnized(tdw)
+        
+
+    def drag(self, tdw, x, y):
+        self._x[1] = self._x[2] = x
+        self._y[2] = self._y[3] = y
+
+        self._modelnized(tdw)
+
+   #def get_sorted_area(self):
+   #    """
+   #    Get sorted selection area, in model coordinate.
+   #    """
+   #    return (min(self.sx, self.ex),
+   #            min(self.sy, self.ey),
+   #            max(self.sx, self.ex),
+   #            max(self.sy, self.ey))
+
+
+    def get_display_point(self, i):
+        return (self._x[i], self._y[i])
+
+    def get_model_point(self, i):
+        return (self._mx[i], self._my[i])
+
+    def is_inside_display(self, x, y):
         """ check whether x,y is inside selected rectangle.
-        this method needs screen coordinate point.
+        this method needs display coordinate point.
         """
-        sx, sy, ex, ey = self.get_sorted_area()
-        return (x >= sx and x <= ex and y >= sy and y <= ey)
+        if not gui.ui_utils.is_inside_triangle( 
+                x, y, ( (self._x[0], self._y[0]),
+                        (self._x[1], self._y[1]),
+                        (self._x[2], self._y[2]))):
+            return gui.ui_utils.is_inside_triangle(
+                    x, y, ( (self._x[0], self._y[0]),
+                            (self._x[2], self._y[2]),
+                            (self._x[3], self._y[3])))
+        else:
+            return True
 
-    def get_display_offset(self, tdw):
-        sx, sy, ex, ey = self.get_display_area(tdw)
-        return (ex - sx, ey - sy)
+    def is_inside_model(self, mx, my):
+        """ check whether mx,my is inside selected rectangle.
+        this method needs model coordinate point.
+        """
+        if not gui.ui_utils.is_inside_triangle( 
+                mx, my, ( (self._mx[0], self._my[0]),
+                        (self._mx[1], self._my[1]),
+                        (self._mx[2], self._my[2]))):
+            return gui.ui_utils.is_inside_triangle(
+                    mx, my, ( (self._mx[0], self._my[0]),
+                            (self._mx[2], self._my[2]),
+                            (self._mx[3], self._my[3])))
+        else:
+            return True
 
-    def get_model_offset(self):
-        return (self.ex - self.sx, self.ey - self.sy)
+    def is_valid(self):
+        return not (self._x[0] == self._x[1] == self._x[2] == self._x[3] and 
+            self._y[0] == self._y[1] == self._y[2] == self._y[3]) 
 
-    def get_display_area(self, tdw):
-        sx,sy = tdw.model_to_display(self.sx, self.sy)
-        ex,ey = tdw.model_to_display(self.ex, self.ey)
-        return (sx, sy, ex, ey)
-
-    def get_offset(self):
-        return (self.ex - self.sx, self.ey - self.sy)
 
 
 
@@ -302,20 +322,23 @@ class _Overlay (gui.overlays.Overlay):
         self._tdw = weakref.proxy(tdw)
 
     def draw_selection_rect(self, cr):
-        sx, sy, ex, ey = self._mode.get_display_area(self._tdw)
+       #sx, sy, ex, ey = self._mode.get_display_area(self._tdw)
 
         cr.save()
-        for color in ( (0,0,0) , (1,1,1) ):
-            cr.set_source_rgb(*color)
-            cr.set_line_width(self._mode.LINE_WIDTH)
-            cr.new_path()
-            cr.move_to(sx, sy)
-            cr.line_to(ex, sy)
-            cr.line_to(ex, ey)
-            cr.line_to(sx, ey)
-            cr.close_path()
-            cr.stroke()
-            cr.set_dash( (3.0, ) )
+        cr.set_source_rgb(0,0,0)
+        cr.set_line_width(self._mode.LINE_WIDTH)
+
+        cr.new_path()
+        cr.move_to(*self._mode.get_display_point(0))
+        cr.line_to(*self._mode.get_display_point(1))
+        cr.line_to(*self._mode.get_display_point(2))
+        cr.line_to(*self._mode.get_display_point(3))
+        cr.close_path()
+        cr.stroke_preserve()
+
+        cr.set_source_rgb(1,1,1)
+        cr.set_dash( (3.0, ) )
+        cr.stroke()
         cr.restore()
 
     def paint(self, cr):
