@@ -95,6 +95,7 @@ import sizechangemode
 import beziertool
 import polyfilltool
 import inktool
+import stamptool
 
 ## Utility methods
 
@@ -226,7 +227,7 @@ class Application (object):
             if not os.path.isdir(basedir):
                 os.makedirs(basedir)
                 logger.info('Created basedir %r', basedir)
-        for datasubdir in [u'backgrounds', u'brushes', u'scratchpads']:
+        for datasubdir in [u'backgrounds', u'brushes', u'scratchpads', u'stamps']:
             datadir = os.path.join(state_dirs.user_data, datasubdir)
             if not os.path.isdir(datadir):
                 os.mkdir(datadir)
@@ -428,6 +429,8 @@ class Application (object):
         # for Recent project 
         menu_orp = self.ui_manager.get_widget('/Menubar/FileMenu/ProjectMenu/OpenRecentProject')
         self.filehandler.init_project_related(menu_orp)
+
+        self.stamp_manager = stamptool.StampPresetManager(self)
 
     def save_settings(self):
         """Saves the current settings to persistent storage."""

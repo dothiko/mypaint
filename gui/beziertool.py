@@ -106,7 +106,7 @@ class _Node_Bezier (_Control_Handle):
                     self._control_handles[0].x,
                     self._control_handles[0].y)
 
-    def set_control_handle(self, idx, x, y):
+    def set_control_handle(self, idx, x, y, invert_curve_flag):
         """Use this method to set control handle.
         This method refers self._curve flag,
         and if it is True,automatically make handles
@@ -118,7 +118,11 @@ class _Node_Bezier (_Control_Handle):
         self._control_handles[idx].x = x 
         self._control_handles[idx].y = y
 
-        if self._curve:
+        curve = self._curve
+        if invert_curve_flag:
+            curve = not curve
+
+        if curve:
             tidx = (idx + 1) % 2
             self._control_handles[tidx].x = self.x - dx
             self._control_handles[tidx].y = self.y - dy
@@ -1085,6 +1089,8 @@ class BezierMode (InkingMode):
     def drag_update_cb(self, tdw, event, dx, dy):
         self._ensure_overlay_for_tdw(tdw)
         mx, my = tdw.display_to_model(event.x, event.y)
+        shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
+
         if self.phase == _PhaseBezier.CREATE_PATH:
             pass
             
@@ -1093,7 +1099,8 @@ class BezierMode (InkingMode):
             if self._last_event_node:
                 self._queue_draw_node(self.current_node_index)# to erase
                 node.set_control_handle(self.current_handle_index,
-                        mx, my)
+                        mx, my,
+                        shift_state)
 
                 self._queue_draw_node(self.current_node_index)
             self._queue_redraw_curve()

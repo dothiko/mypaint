@@ -1720,6 +1720,7 @@ class MergeSelectedLayers (GroupSelectedLayers):
         new_layer.name = rootstack.get_unique_name(new_layer)
         parent[group_path[-1]] = new_layer
         self._merged_layer = new_layer
+        self._merged_layer.autosave_dirty = True
 
         rootstack.current_path = self._first_layer_path
 

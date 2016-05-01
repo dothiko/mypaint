@@ -476,7 +476,7 @@ def render_round_floating_color_chip(cr, x, y, color, radius, z=2, fill=True):
     cr.restore()
 
 
-def render_square_floating_color_chip(cr, x, y, color, size, fill, z=2):
+def render_square_floating_color_chip(cr, x, y, color, size, fill):
     """Draw a round color chip with a slight drop shadow
 
     :param cairo.Context cr: Context in which to draw.
@@ -486,7 +486,6 @@ def render_square_floating_color_chip(cr, x, y, color, size, fill, z=2):
     :param float size: square size, in pixels. the entire size should be
                        size+1(center)+size
     :param bool fill: fill inside rectangle when this is True.
-    :param int z: Simulated height of the object above the canvas.
 
     Currently used for accept/dismiss/delete buttons and control points
     on the painting canvas, in certain modes.
@@ -512,9 +511,11 @@ def render_square_floating_color_chip(cr, x, y, color, size, fill, z=2):
     cr.set_source_rgb(*base_col.get_rgb())
     cr.rectangle(x - size, y - size, (size * 2) + 1, (size * 2) + 1)
     
-    cr.stroke_preserve()
+
     if fill:
         cr.fill()
+
+    cr.stroke()
 
     cr.restore()
 

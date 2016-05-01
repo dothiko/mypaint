@@ -970,6 +970,7 @@ class PolyfillMode (BezierMode):
     def drag_update_cb(self, tdw, event, dx, dy):
         self._ensure_overlay_for_tdw(tdw)
         mx, my = tdw.display_to_model(event.x, event.y)
+        shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
         if self.phase == _PhaseBezier.CREATE_PATH:
             pass
             
@@ -979,7 +980,8 @@ class PolyfillMode (BezierMode):
             if self._last_event_node:
                 self._queue_draw_node(self.current_node_index)# to erase
                 node.set_control_handle(self.current_handle_index,
-                        mx, my)
+                        mx, my,
+                        shift_state)
 
                 self._queue_draw_node(self.current_node_index)
             self._queue_redraw_curve(tdw)
