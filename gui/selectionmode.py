@@ -259,36 +259,11 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
 
         self._modelnized(tdw)
 
-   #def get_sorted_area(self):
-   #    """
-   #    Get sorted selection area, in model coordinate.
-   #    """
-   #    return (min(self.sx, self.ex),
-   #            min(self.sy, self.ey),
-   #            max(self.sx, self.ex),
-   #            max(self.sy, self.ey))
-
-
-    def get_display_point(self, i):
-        return (self._x[i], self._y[i])
+    def get_display_point(self, tdw, i):
+        return tdw.model_to_display(self._mx[i], self._my[i])
 
     def get_model_point(self, i):
         return (self._mx[i], self._my[i])
-
-    def is_inside_display(self, x, y):
-        """ check whether x,y is inside selected rectangle.
-        this method needs display coordinate point.
-        """
-        if not gui.ui_utils.is_inside_triangle( 
-                x, y, ( (self._x[0], self._y[0]),
-                        (self._x[1], self._y[1]),
-                        (self._x[2], self._y[2]))):
-            return gui.ui_utils.is_inside_triangle(
-                    x, y, ( (self._x[0], self._y[0]),
-                            (self._x[2], self._y[2]),
-                            (self._x[3], self._y[3])))
-        else:
-            return True
 
     def is_inside_model(self, mx, my):
         """ check whether mx,my is inside selected rectangle.
@@ -322,17 +297,16 @@ class _Overlay (gui.overlays.Overlay):
         self._tdw = weakref.proxy(tdw)
 
     def draw_selection_rect(self, cr):
-       #sx, sy, ex, ey = self._mode.get_display_area(self._tdw)
-
+        tdw = self._tdw
         cr.save()
         cr.set_source_rgb(0,0,0)
         cr.set_line_width(self._mode.LINE_WIDTH)
 
         cr.new_path()
-        cr.move_to(*self._mode.get_display_point(0))
-        cr.line_to(*self._mode.get_display_point(1))
-        cr.line_to(*self._mode.get_display_point(2))
-        cr.line_to(*self._mode.get_display_point(3))
+        cr.move_to(*self._mode.get_display_point(tdw, 0))
+        cr.line_to(*self._mode.get_display_point(tdw, 1))
+        cr.line_to(*self._mode.get_display_point(tdw, 2))
+        cr.line_to(*self._mode.get_display_point(tdw, 3))
         cr.close_path()
         cr.stroke_preserve()
 
@@ -346,26 +320,3 @@ class _Overlay (gui.overlays.Overlay):
         self.draw_selection_rect(cr)
 
 
-
-#class _SizeChangerOptionWidget(gui.mode.PaintingModeOptionsWidgetBase):
-#    """ Because OncanvasSizeMode use from dragging + modifier
-#    combination, thus this option widget mostly unoperatable.
-#    but I think user would feel some 'reliability' when there are 
-#    value displaying scale and label.
-#    """
-#
-#    def __init__(self):
-#        # Overwrite self._COMMON_SETTINGS
-#        # to use(show) only 'radius_logarithmic' scale.
-#        for cname, text in self._COMMON_SETTINGS:
-#            if cname == 'radius_logarithmic':
-#                self._COMMON_SETTINGS = [ (cname, text) ]
-#                break
-#        
-#        # And then,call superclass method
-#        super(_SizeChangerOptionWidget, self).__init__()
-#
-#    def init_reset_widgets(self, row):
-#        """To cancel creating 'reset setting' button"""
-#        pass
-#
