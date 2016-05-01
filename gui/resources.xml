@@ -2035,6 +2035,27 @@ Vocabulary
         </object>
       </child>
       <!-- }}} -->
+      <!-- {{{ Selection mode and flip actions -->
+      <child>
+        <object class="GtkRadioAction" id="SelectionMode">
+            <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">On-Canvas Item/Area Selector</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">Selector.</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Selection Mode: select on-canvas item or area.</property>
+          <property name="icon-name">mypaint-size-change-symbolic</property>
+          <property name="group">SelectionMode</property>
+          <property name="value">16</property>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="FlipSelectionMode">
+            <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">On-Canvas Item/Area Selector</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">select on-canvas item or area.</property>
+          <property name="icon-name">mypaint-size-change-symbolic</property>
+          <signal name="activate" handler="mode_flip_action_activated_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
+
     </object>
   </child>
   <!-- }}} -->

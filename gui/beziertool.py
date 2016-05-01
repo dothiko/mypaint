@@ -207,7 +207,6 @@ class _PhaseBezier(_Phase):
     CALL_BUTTONS = 106      #: call buttons around clicked point. 
 
    # ADJUST_PRESSURE
-   # ADJUST_SELECTING
    # are also used,it is defined at gui.inktool._Phase
 
 class PressureMap(object):
@@ -330,8 +329,6 @@ class BezierMode (InkingMode):
             if self.zone == _EditZone_Bezier.CONTROL_NODE:
                 return self._cursor_move_nw_se
 
-        elif self.phase == _PhaseBezier.ADJUST_SELECTING:
-            return self._crosshair_cursor
         return None  
 
     @property
@@ -639,7 +636,7 @@ class BezierMode (InkingMode):
     def _queue_draw_node(self, i):
         """Redraws a specific control node on all known view TDWs"""
         node = self.nodes[i]
-        dx,dy = self.selection_rect.get_model_offset()
+        dx,dy = self.drag_offset.get_model_offset()
         
         def get_area(node_idx, nx, ny, size, area=None):
             if node_idx in self.selected_nodes:
@@ -722,7 +719,7 @@ class BezierMode (InkingMode):
                 description=_("Bezier"),
                 abrupt=True,
             )
-            dx, dy = self.selection_rect.get_model_offset()
+            dx,dy = self.drag_offset.get_model_offset()
             idx = 0
             cnt = float(len(self.nodes) - 1)
             while idx < len(self.nodes) - 1:
@@ -948,13 +945,6 @@ class BezierMode (InkingMode):
                             self.forced_button_pos = (event.x, event.y)
                             self.phase = _PhaseBezier.CHANGE_PHASE 
                             self._returning_phase = _PhaseBezier.CREATE_PATH
-                        elif shift_state:
-                            # selection box dragging start!!
-                            if self._returning_phase == None:
-                                self._returning_phase = self.phase
-                            self.phase = _PhaseBezier.ADJUST_SELECTING
-                            self.selection_rect.start(
-                                    *tdw.display_to_model(event.x, event.y))
                         elif ctrl_state:
                             mx, my = tdw.display_to_model(event.x, event.y)
                             pressed_segment = self._detect_on_stroke(mx, my)
@@ -990,9 +980,6 @@ class BezierMode (InkingMode):
 
             # FALLTHRU: *do* start a drag 
 
-        elif self.phase == _PhaseBezier.ADJUST_SELECTING:
-            # XXX Not sure what to do here.
-            pass
         elif self.phase in (_PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
             pass
         elif self.phase in (_PhaseBezier.ADJUST_PRESSURE, 
@@ -1067,15 +1054,11 @@ class BezierMode (InkingMode):
         elif self.phase == _PhaseBezier.MOVE_NODE:
             if len(self.selected_nodes) > 0:
                 # Use selection_rect class as offset-information
-                self.selection_rect.start(mx, my)
+                self.drag_offset.start(mx, my)
         
         elif self.phase in (_PhaseBezier.ADJUST_PRESSURE, 
                 _PhaseBezier.ADJUST_PRESSURE_ONESHOT):
             pass
-        elif self.phase == _PhaseBezier.ADJUST_SELECTING:
-            self.selection_rect.start(mx, my)
-            self.selection_rect.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
-            self._queue_draw_selection_rect() # to start
         elif self.phase == _PhaseBezier.ADJUST_HANDLE:
             self._last_event_node = self.nodes[self.target_node_index]
             pass
@@ -1108,16 +1091,12 @@ class BezierMode (InkingMode):
         elif self.phase == _PhaseBezier.MOVE_NODE:
             if len(self.selected_nodes) > 0:
                 self._queue_draw_selected_nodes()
-                self.selection_rect.drag(mx, my)
+                self.drag_offset.end(mx, my)
                 self._queue_draw_selected_nodes()
                 self._queue_redraw_curve()
         elif self.phase in (_PhaseBezier.ADJUST_PRESSURE,
                 _PhaseBezier.ADJUST_PRESSURE_ONESHOT):
             self._adjust_pressure_with_motion(dx, dy)
-        elif self.phase == _PhaseBezier.ADJUST_SELECTING:
-            self._queue_draw_selection_rect() # to erase
-            self.selection_rect.drag(mx, my)
-            self._queue_draw_selection_rect()
         elif self.phase == _PhaseBezier.CHANGE_PHASE:
             # DO NOT DO ANYTHING.
             pass
@@ -1152,40 +1131,17 @@ class BezierMode (InkingMode):
                 
             self.phase = _PhaseBezier.CREATE_PATH
         elif self.phase == _PhaseBezier.MOVE_NODE:
-            dx, dy = self.selection_rect.get_model_offset()
+            dx, dy = self.drag_offset.get_model_offset()
 
             for idx in self.selected_nodes:
                 cn = self.nodes[idx]
                 cn.move(cn.x + dx, cn.y + dy)
 
-            self.selection_rect.reset()
+            self.drag_offset.reset()
             self._dragged_node_start_pos = None
             self._queue_redraw_curve()
             self._queue_draw_buttons()
             self.phase = _PhaseBezier.CREATE_PATH
-        elif self.phase == _PhaseBezier.ADJUST_SELECTING:
-            ## Nodes selection phase
-            self._queue_draw_selection_rect()
-
-            modified = False
-            if not self.selection_rect.is_addition:
-                self._reset_selected_nodes()
-                modified = True
-
-            for idx,cn in enumerate(self.nodes):
-                if self.selection_rect.is_inside(cn.x, cn.y):
-                    if not idx in self.selected_nodes:
-                        self.selected_nodes.append(idx)
-                        modified = True
-
-            if modified:
-                self._queue_redraw_all_nodes()
-
-            self._queue_draw_buttons() # buttons erased while selecting
-            self.selection_rect.reset()
-
-            # phase returns the last phase 
-
         elif self.phase in (_PhaseBezier.ADJUST_PRESSURE, 
                 _PhaseBezier.ADJUST_PRESSURE_ONESHOT):
             self._queue_draw_buttons()
@@ -1570,7 +1526,7 @@ class OverlayBezier (Overlay):
         mode = self._inkmode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
-        dx, dy = mode.selection_rect.get_display_offset(self._tdw)
+        dx, dy = mode.drag_offset.get_display_offset(self._tdw)
         fill_flag = not mode.phase in (_PhaseBezier.ADJUST_PRESSURE,
                 _PhaseBezier.ADJUST_PRESSURE_ONESHOT)
 
@@ -1664,9 +1620,6 @@ class OverlayBezier (Overlay):
                 )
         
 
-        # Selection Rectangle
-        if mode.phase == _PhaseBezier.ADJUST_SELECTING:
-            self.draw_selection_rect(cr)
                 
 
 

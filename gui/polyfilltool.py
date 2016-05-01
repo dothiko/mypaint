@@ -695,7 +695,7 @@ class PolyfillMode (BezierMode):
             if len(self.nodes) < 2:
                 continue
 
-            sdx, sdy = self.selection_rect.get_display_offset(tdw)
+            sdx, sdy = self.drag_offset.get_display_offset(tdw)
     
             sx, sy, ex, ey = self._get_maximum_rect(tdw, sdx, sdy)
         
@@ -1029,7 +1029,7 @@ class PolyfillMode (BezierMode):
                 
             self.phase = _PhaseBezier.CREATE_PATH
         elif self.phase == _PhaseBezier.MOVE_NODE:
-            dx, dy = self.selection_rect.get_model_offset()
+            dx, dy = self.drag_offset.get_model_offset()
 
             for idx in self.selected_nodes:
                 cn = self.nodes[idx]
@@ -1170,7 +1170,7 @@ class OverlayPolyfill (OverlayBezier):
         # Control nodes
         mode = self._inkmode
         alloc = self._tdw.get_allocation()
-        dx, dy = mode.selection_rect.get_display_offset(self._tdw)
+        dx, dy = mode.drag_offset.get_display_offset(self._tdw)
 
         # drawing path
         _draw_node_polygon(cr, self._tdw, mode.nodes, 

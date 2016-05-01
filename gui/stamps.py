@@ -19,8 +19,8 @@ from gi.repository import GdkPixbuf
 import cairo
 
 from gui.linemode import *
-#from lib import mypaintlib
 import lib
+from gui.ui_utils import *
 
 def draw_stamp_to_layer(target_layer, stamp, nodes, bbox):
     """
@@ -53,51 +53,6 @@ def draw_stamp_to_layer(target_layer, stamp, nodes, bbox):
     target_layer.root.layer_content_changed(target_layer, *bbox)
     target_layer.autosave_dirty = True
     del layer
-
-
-
-def get_barycentric_point(x, y, triangle):
-    """
-    Get barycentric point of a point(x,y) in a triangle.
-    :param triangle: a sequential of 3 points, which compose a triangle.
-    """
-    p0, p1, p2 = triangle
-    v1x = p1[0] - p2[0]
-    v1y = p1[1] - p2[1]
-    v2x = p0[0] - p2[0]
-    v2y = p0[1] - p2[1]
-
-    d = v2y * v1x - v1y * v2x
-    if d == 0.0:
-        return False
-
-    p2x = x - p2[0] 
-    p2y = y - p2[1] 
-    p0x = x - p0[0] 
-    p0y = y - p0[1] 
-
-    b0 = (p2y * v1x + v1y * -p2x) / d
-    b1 = (p0y * -v2x + v2y * -p0x) / d
-    return (b0, b1, 1.0 - b0 - b1)
-
-#def is_inside_triangle(x, y, triangle):
-#    b0, b1, b2 = get_barycentric_point(x, y, triangle)
-#    return (0.0 <= b0 <= 1.0 and 
-#            0.0 <= b1 <= 1.0 and 
-#            0.0 <= b2 <= 1.0)
-
-
-def is_inside_triangle(x, y, triangle):
-    """ from stackoverflow
-    """
-    def sign(p1, p2, p3):
-        return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
-
-    b1 = sign((x,y) , triangle[0], triangle[1]) < 0.0
-    b2 = sign((x,y) , triangle[1], triangle[2]) < 0.0
-    b3 = sign((x,y) , triangle[2], triangle[0]) < 0.0
-    return b1 == b2 == b3
-
 
 
 ## Class defs

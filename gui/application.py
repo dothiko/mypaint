@@ -96,6 +96,7 @@ import beziertool
 import polyfilltool
 import inktool
 import stamptool
+import selectionmode
 
 ## Utility methods
 

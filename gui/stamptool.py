@@ -131,6 +131,7 @@ class StampMode (InkingMode):
             'RotateViewMode',
             'ZoomViewMode',
             'PanViewMode',
+            'SelectionMode',
         ])
 
     ## Metadata methods
@@ -168,9 +169,6 @@ class StampMode (InkingMode):
    #        if self.zone == _EditZone.CONTROL_NODE:
    #            return self._cursor_move_nw_se
    #
-   #    elif self.phase == _Phase.ADJUST_SELECTING:
-   #        return self._crosshair_cursor
-   #    return None
 
 
     ## Class config vars
@@ -429,7 +427,7 @@ class StampMode (InkingMode):
        #    margin = 4
        #
         if i in self.selected_nodes:
-            dx,dy = self.selection_rect.get_model_offset()
+            dx,dy = self.drag_offset.get_model_offset()
         else:
             dx = dy = 0.0
 
@@ -455,7 +453,7 @@ class StampMode (InkingMode):
 
     def _queue_redraw_curve(self, force_margin=False):
         """Redraws the entire curve on all known view TDWs"""
-        dx, dy = self.selection_rect.get_model_offset()
+        dx, dy = self.drag_offset.get_model_offset()
         
         for tdw in self._overlays:
             for i, cn in enumerate(self.nodes):
@@ -493,19 +491,9 @@ class StampMode (InkingMode):
                     return False
                 # FALLTHRU: *do* allow drags to start with other buttons
             elif self.zone == _EditZone.EMPTY_CANVAS:
-                if shift_state:
-                    # selection box dragging start!!
-                    if self._returning_phase == None:
-                        self._returning_phase = self.phase
-                    self.phase = _Phase.ADJUST_SELECTING
-                    self.selection_rect.start(
-                            *tdw.display_to_model(event.x, event.y))
-                else:
-                   #self._start_new_capture_phase(rollback=False)
-                   #assert self.phase == _Phase.CAPTURE
-                    self.phase = _Phase.CAPTURE
-                    self._queue_draw_buttons() # To erase button!
-                    self._queue_redraw_curve()
+                self.phase = _Phase.CAPTURE
+                self._queue_draw_buttons() # To erase button!
+                self._queue_redraw_curve()
 
                 # FALLTHRU: *do* start a drag
             elif self.zone == _EditZone.CONTROL_NODE:
@@ -568,7 +556,6 @@ class StampMode (InkingMode):
             # XXX  but needs to allow a drag after the 1st one's placed.
             pass
         elif self.phase in (_Phase.ADJUST_PRESSURE_ONESHOT,
-                            _Phase.ADJUST_SELECTING,
                             _PhaseStamp.ROTATE,
                             _PhaseStamp.SCALE,
                             _PhaseStamp.ROTATE_BY_HANDLE,
@@ -630,9 +617,6 @@ class StampMode (InkingMode):
                 self._update_zone_and_target(tdw, event.x, event.y)
 
             # (otherwise fall through and end any current drag)
-        elif self.phase == _Phase.ADJUST_SELECTING:
-            # XXX Not sure what to do here.
-            pass
         elif self.phase == _Phase.CAPTURE:
             # Updating options_presenter is done at drag_stop_cb()
             pass
@@ -688,15 +672,10 @@ class StampMode (InkingMode):
                 self._dragged_node_start_pos = (node.x, node.y)
 
                 # Use selection_rect class as offset-information
-                self.selection_rect.start(mx, my)
+                self.drag_offset.start(mx, my)
 
         elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
             pass
-        elif self.phase == _Phase.ADJUST_SELECTING:
-            self.selection_rect.start(mx, my)
-            self.selection_rect.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
-            self._queue_draw_buttons() # To erase button!
-            self._queue_draw_selection_rect() # to start
         elif self.phase == _Phase.CHANGE_PHASE:
             pass
         elif self.phase in (_PhaseStamp.ROTATE,
@@ -899,7 +878,7 @@ class Overlay_Stamp (Overlay):
         """Iterates across only the on-screen nodes."""
         mode = self._inkmode
         alloc = self._tdw.get_allocation()
-        dx,dy = mode.selection_rect.get_display_offset(self._tdw)
+        dx,dy = mode.drag_offset.get_display_offset(self._tdw)
         for i, node in enumerate(mode.nodes):
 
             if i in mode.selected_nodes:
@@ -1061,7 +1040,7 @@ class Overlay_Stamp (Overlay):
 
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
-        dx,dy = mode.selection_rect.get_display_offset(self._tdw)
+        dx,dy = mode.drag_offset.get_display_offset(self._tdw)
         fill_flag = not mode.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT)
         mode.stamp.initialize_draw(cr)
 
@@ -1071,8 +1050,7 @@ class Overlay_Stamp (Overlay):
             if (mode.phase in
                     (_Phase.ADJUST,
                      _Phase.ADJUST_PRESSURE,
-                     _Phase.ADJUST_PRESSURE_ONESHOT,
-                     _Phase.ADJUST_SELECTING)):
+                     _Phase.ADJUST_PRESSURE_ONESHOT)):
                 if show_node:
                     if i == mode.current_node_index:
                         color = gui.style.ACTIVE_ITEM_COLOR
@@ -1129,10 +1107,6 @@ class Overlay_Stamp (Overlay):
                     pixbuf=icon_pixbuf,
                     radius=radius,
                 )
-
-        # Selection Rectangle
-        if mode.phase == _Phase.ADJUST_SELECTING:
-            self.draw_selection_rect(cr)
 
 
 class OptionsPresenter_Stamp (object):
