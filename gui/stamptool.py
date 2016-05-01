@@ -196,6 +196,7 @@ class StampMode (InkingMode):
         This is to make stamp property as if it is read-only.
         """
         self._stamp = stamp
+        self._stamp.initialize_phase()
 
 
     def enter(self, doc, **kwds):
@@ -247,8 +248,16 @@ class StampMode (InkingMode):
             ex = max(ex, tsx + tw)
             ey = max(ey, tsy + th)
 
+        if hasattr(self._stamp, 'pixbuf'):
+            # This means 'Current stamp is dynamic'. 
+            # Therefore we need save its current content 
+            # during draw command exist.
+            stamp = PixbufStamp('', self._stamp.pixbuf)
+        else:
+            stamp = self._stamp
+
         cmd = DrawStamp(self.doc.model,
-                self._stamp,
+                stamp,
                 self.nodes,
                 (sx, sy, ex - sx + 1, ey - sy + 1))
         self.doc.model.do(cmd)
@@ -264,6 +273,9 @@ class StampMode (InkingMode):
         else:
             self._stop_task_queue_runner(complete=True)
             self._commit_all()
+
+        if self.stamp:
+            self.stamp.finalize_phase()
             
         self.options_presenter.target = (self, None)
         self._queue_redraw_curve(force_margin=True)  # call this before reset node
@@ -273,6 +285,9 @@ class StampMode (InkingMode):
         self._reset_capture_data()
         self._reset_adjust_data()
         self.phase = _Phase.CAPTURE
+
+        if self.stamp:
+            self.stamp.initialize_phase()
 
     def _ensure_overlay_for_tdw(self, tdw):
         overlay = self._overlays.get(tdw)

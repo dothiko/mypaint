@@ -102,20 +102,52 @@ def is_inside_triangle(x, y, triangle):
 
 ## Class defs
 
-class _Pixbuf_Source(object):
+## Source classes
+class _SourceMixin(object):
+
+    def __init__(self):
+        pass
+
+    @property
+    def tile_count(self):
+        return 1
+
+    @property
+    def tile_index(self):
+        """ for compatibility """
+        return 0
+
+    @property
+    def current_src(self):
+        """ Get current (cached) src pixbuf.
+        Most important property.
+        """
+        pass
+
+    def set_tile_division(self, w, h):
+        """ Set tile size as dividing factor.
+        To cancel tile division, use 0 for each arguments.
+
+        :param w: width of a tile.
+        :param h: height of a tile.
+        """
+        pass
+
+
+
+class _Pixbuf_Source(_SourceMixin):
     """ Pixbuf source management class.
-    This is used Pixbuf source and Mask source.
+    This is used as 'Pixbuf source' and 
+    also 'Mask source' at Stamp class.
     """
 
 
     def __init__(self, filenames):
-        self._file_idx = 0
-        self._tile_w = 0
-        self._tile_h = 0
-        self._tile_count = -1
-        self._tile_idx = 0
 
         self.set_file_sources(filenames)
+        # Other attributes initialized at
+        # _reset_info() , which called from
+        # set_file_sources()
 
     def _load_from_file(self, filename):
         def get_offsets(pixbuf):
@@ -134,26 +166,47 @@ class _Pixbuf_Source(object):
                    #del cpb
                     ret.append(cpb)
             del pixbuf
-            return ret
         else:
             ox, oy = get_offsets(pixbuf)
            #return [Gdk.cairo_surface_create_from_pixbuf(pixbuf, ox, oy), ]
-            return [pixbuf, ]
+            ret = [pixbuf, ]
+
+        if self._tile_segment == None:
+            self._tile_segment = len(ret)
+
+        return ret
 
     ## Information methods
-
     @property
     def tile_count(self):
-        if self._tile_count == -1:
-            cnt = 0
-            for ck in self._pixbufs:
-                cnt += len(self._pixbufs)
-            self._tile_count = cnt
-        return self._tile_count
+        return self.tile_segment * len(self._pixbufs)
 
-    def get_current_src(self, tile_idx):
+    @property
+    def tile_segment(self):
+        """ 'tile_segment' means the tile counts per one picture.
+        Total tile count should be 'tile_segment * picture count'
+        """
+        return self._tile_segment
+
+    @property
+    def tile_index(self):
+        return self._linear_tile_idx
+
+    @tile_index.setter
+    def tile_index(self, index):
+        if self._tile_count > 0 and self._linear_tile_idx != index:
+            if index == 0:
+                self._file_idx = 0
+                self._tile_idx = 0
+            else:
+                self._file_idx = index / int(self.tile_segment)
+                self._tile_idx = index % int(self.tile_segment)
+            self._linear_tile_idx = index
+
+    @property
+    def current_src(self):
         self._ensure_current_pixbuf()
-        return self._pixbufs[self._file_idx][tile_idx]
+        return self._pixbufs[self._file_idx][self._tile_idx]
 
     def set_tile_division(self, w, h):
         """ Set tile size as dividing factor.
@@ -167,7 +220,18 @@ class _Pixbuf_Source(object):
 
     def set_file_sources(self, filenames):
         self._source_files = filenames
+        self._reset_info()
+
+    def _reset_info(self):
         self._pixbufs = {}
+        self._tile_segment = None
+        self._linear_tile_idx = -1
+        self._file_idx = 0
+        self._tile_idx = 0
+        self._tile_w = 0
+        self._tile_h = 0
+        self._tile_count = 0
+        
 
     ## Source Pixbuf methods
 
@@ -179,17 +243,6 @@ class _Pixbuf_Source(object):
             filename = self._source_files[self._file_idx]
             self._pixbufs[self._file_idx] = self._load_from_file(filename)
 
-    def next(self):
-        """
-        Proceed to source next pixbuf
-        """
-        self._tile_idx += 1
-        if self._tile_idx >= len(self._pixbufs[self._file_idx]):
-            self._file_idx += 1
-            self._tile_idx = 0
-
-            if self._file_idx >= len(self._pixbufs):
-                self._file_idx = 0
 
     def clear_all(self):
         """
@@ -203,23 +256,17 @@ class _Pixbuf_Source(object):
 
 
 
-class Stamp(object):
-    """
-    This class holds stamp information and pixbuf/masks 
-    and draw it to "cairo surface",
-    not mypaint surface.(But this is to ease development 
-    and might be changed to improve memory efficiency)
 
-    When 'finalize' action executed (i.e. ACCEPT button pressed)
-    the cairo surface converted into GdkPixbuf,
-    and that GdkPixbuf converted into Mypaint layer
-    and it is merged into current layer.
-    """
+## Stamp classes
+
+class _StampMixin(object):
+    """ Stamp Mixin, base class of all stamp classes. """
 
     def __init__(self, name):
         self._pixbuf_src = None
         self._mask_src = None
         self._prev_src = {}
+        self._prev_mask= {}
         self.name = name
         self._default_scale_x = 1.0
         self._default_scale_y = 1.0
@@ -266,17 +313,11 @@ class Stamp(object):
         :param w: width of a tile.
         :param h: height of a tile.
         """
-        if self._pixbuf_src:
-            self._pixbuf_src.set_tile_division(w, h)
-        if self._mask_src:
-            self._mask_src.set_tile_division(w, h)
+        pass
 
     @property
     def tile_count(self):
-        if self._pixbuf_src:
-            return self._pixbuf_src.tile_count
-        else:
-            return 0
+        return 1
 
     def set_file_sources(self, filenames):
         self._pixbuf_src = _Pixbuf_Source(filenames)
@@ -298,92 +339,75 @@ class Stamp(object):
         Call this method prior to draw stamps loop.
         """
         self._prev_src[cr] = None
+        self._prev_mask[cr] = None
 
     def finalize_draw(self, cr):
         """ Finalize draw calls.
         Call this method after draw stamps loop.
+
+        This method called from the end of each drawing sequence,
+        NOT END OF DRAWING PHASE OF STAMPTOOL! 
+        Therefore, source.finalize() MUST not be called here!
         """
         del self._prev_src[cr]
+        del self._prev_mask[cr]
 
     
 
-    def fetch_pattern(self, cr, tile_idx):
-        if self._pixbuf_src:
-            stamp_src = self._pixbuf_src.get_current_src(tile_idx)
-            if ((not cr in self._prev_src) or 
-                    self._prev_src[cr] != stamp_src):
+    def apply_pattern(self, cr, tile_idx):
+        """ Apply pixbuf pattern to cairo.
+        The pattern might be cached.
+
+        This method should be called from draw() method.
+        """
+        srcinfo = self._setup_source(cr, tile_idx, 
+                self._pixbuf_src, self._prev_src)
+        if srcinfo:
+            stamp_src, ox, oy = srcinfo
+            Gdk.cairo_set_source_pixbuf(cr, stamp_src, ox, oy)
+            self._cached_cairo_src = cr.get_source()
+            self._prev_src[cr] = stamp_src
+        elif self._cached_cairo_src:
+            cr.set_source(self._cached_cairo_src)
+
+    def apply_mask(self, cr, tile_idx):
+        """ Apply pixbuf mask to cairo.
+        The mask(cairo surface) might be cached.
+
+        This method should be called from draw() method.
+        """
+        srcinfo = self._setup_source(cr, tile_idx, 
+                self._mask_src, self._prev_mask)
+        if srcinfo:
+            stamp_src, ox, oy = srcinfo
+            mask_surface = Gdk.cairo_surface_create_from_pixbuf(
+                    stamp_src, 1, None)
+            cr.mask_surface(mask_surface, ox, oy)
+            self._cached_cairo_mask = mask_surface
+            self._mask_offset = (ox, oy)
+            self._prev_mask[cr] = stamp_src
+        elif self._cached_cairo_mask:
+            ox, oy = self._mask_offset
+            cr.mask_surface(mask_surface, ox, oy)
+
+
+    def _setup_source(self, cr, tile_idx, source, cache_list):
+        if source:
+            source.tile_index = tile_idx
+            stamp_src = source.current_src
+            if ((not cr in cache_list) or 
+                    cache_list[cr] != stamp_src):
                 w = stamp_src.get_width() 
                 h = stamp_src.get_height()
                 ox = -(w / 2)
                 oy = -(h / 2)
-                Gdk.cairo_set_source_pixbuf(cr, stamp_src, ox, oy)
-               #cr.set_source_surface(stamp_src, ox, oy)
-                self._cached_cairo_src = cr.get_source()
-                self._prev_src[cr] = stamp_src
-            else:
-                cr.set_source(self._cached_cairo_src)
-
-    def fetch_mask(self, cr, tile_idx):
-        if self._mask_src:
-            mask_src = self._mask_src.get_current_src(tile_idx)
-            if ((not cr in self._prev_mask) or 
-                    self._prev_mask[cr] != stamp_src):
-                w = stamp_src.get_width() 
-                h = stamp_src.get_height()
-                ox = -(w / 2)
-                oy = -(h / 2)
-               #Gdk.cairo_set_source_pixbuf(cr, stamp_src, ox, oy)
-                cr.set_mask_surface(stamp_src, ox, oy)
-                self._cached_cairo_src = cr.get_source()
-                self._prev_mask[cr] = stamp_src
-            else:
-                cr.set_source(self._cached_cairo_src)
-
+                return (stamp_src, ox, oy)
 
 
     def draw(self, tdw, cr, x, y, node, save_context=False):
         """ draw this stamp into cairo surface.
         """
-        if save_context:
-            cr.save()
-
-        stamp_src = self._pixbuf_src.get_current_src(node.tile_index)
-
-        w = stamp_src.get_width() 
-        h = stamp_src.get_height()
-
-        ox = -(w / 2)
-        oy = -(h / 2)
-
-        angle = node.angle
-        scale_x = node.scale_x
-        scale_y = node.scale_y
-
-        cr.translate(x,y)
-        if ((tdw and tdw.renderer.rotation != 0.0) or 
-                angle != 0.0):
-            if tdw:
-                angle += tdw.renderer.rotation
-            cr.rotate(angle)
-
-        if ((tdw and tdw.renderer.scale != 1.0) or 
-                (scale_x != 1.0 and scale_y != 1.0)):
-            if tdw:
-                scale_x *= tdw.renderer.scale
-                scale_y *= tdw.renderer.scale
-
-            if scale_x != 0.0 and scale_y != 0.0:
-                cr.scale(scale_x, scale_y)
-
-       #Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
-        self.fetch_pattern(cr, node.tile_index)
-        cr.rectangle(ox, oy, w, h) 
-
-        cr.clip()
-        cr.paint()
-        
-        if save_context:
-            cr.restore()
+        pass
 
     ## Boundary / hit-check methods
 
@@ -394,10 +418,13 @@ class Stamp(object):
         which placed as node information.
         """
         pos = self.get_boundary_points(node)
-        if not is_inside_triangle(mx, my, (pos[0], pos[1], pos[2])):
-            return is_inside_triangle(mx, my, (pos[0], pos[2], pos[3]))
-        else:
-            return True
+        if pos:
+            if not is_inside_triangle(mx, my, (pos[0], pos[1], pos[2])):
+                return is_inside_triangle(mx, my, (pos[0], pos[2], pos[3]))
+            else:
+                return True
+
+        return False
 
     def get_handle_index(self, mx, my, node, margin):
         """
@@ -414,19 +441,19 @@ class Stamp(object):
 
         """
         pos = self.get_boundary_points(node)
+        if pos:
+            for i,cp in enumerate(pos):
+                cx, cy = cp
+                if (cx - margin <= mx <= cx + margin and
+                        cy - margin <= my <= cy + margin):
+                    return i
 
-        for i,cp in enumerate(pos):
-            cx, cy = cp
-            if (cx - margin <= mx <= cx + margin and
-                    cy - margin <= my <= cy + margin):
-                return i
-
-        # Returning 4 means 'inside but not on a handle'
-        if not is_inside_triangle(mx, my, (pos[0], pos[1], pos[2])):
-            if is_inside_triangle(mx, my, (pos[0], pos[2], pos[3])):
-                return 4 
-        else:
-            return 4
+            # Returning 4 means 'inside but not on a handle'
+            if not is_inside_triangle(mx, my, (pos[0], pos[1], pos[2])):
+                if is_inside_triangle(mx, my, (pos[0], pos[2], pos[3])):
+                    return 4 
+            else:
+                return 4
 
         return -1
 
@@ -452,47 +479,48 @@ class Stamp(object):
 
         :rtype: a list of tuple,[ (pt0.x, pt0.y) ... (pt3.x, pt3.y) ]
         """
-        stamp_src = self._pixbuf_src.get_current_src(node.tile_index)
+        self._pixbuf_src.tile_index = node.tile_index
+        stamp_src = self._pixbuf_src.current_src
+        if stamp_src:
+            w = stamp_src.get_width() 
+            h = stamp_src.get_height()
+            if not no_transform:
+                w *= node.scale_x 
+                h *= node.scale_y
+            sx = - w / 2
+            sy = - h / 2
+            ex = w+sx
+            ey = h+sy
+            bx = node.x + dx
+            by = node.y + dy
 
-        w = stamp_src.get_width() 
-        h = stamp_src.get_height()
-        if not no_transform:
-            w *= node.scale_x 
-            h *= node.scale_y
-        sx = - w / 2
-        sy = - h / 2
-        ex = w+sx
-        ey = h+sy
-        bx = node.x + dx
-        by = node.y + dy
+            if node.angle != 0.0 and not no_transform:
+                points = [ (sx, sy),
+                              (ex, sy),
+                              (ex, ey),
+                              (sx, ey) ]
+                cos_s = math.cos(node.angle)
+                sin_s = math.sin(node.angle)
+                for i in xrange(4):
+                    x = points[i][0]
+                    y = points[i][1]
+                    tx = (cos_s * x - sin_s * y) + bx
+                    ty = (sin_s * x + cos_s * y) + by
+                    points[i] = (tx, ty) 
+            else:
+                sx += bx
+                ex += bx
+                sy += by
+                ey += by
+                points = [ (sx, sy),
+                              (ex, sy),
+                              (ex, ey),
+                              (sx, ey) ]
 
-        if node.angle != 0.0 and not no_transform:
-            points = [ (sx, sy),
-                          (ex, sy),
-                          (ex, ey),
-                          (sx, ey) ]
-            cos_s = math.cos(node.angle)
-            sin_s = math.sin(node.angle)
-            for i in xrange(4):
-                x = points[i][0]
-                y = points[i][1]
-                tx = (cos_s * x - sin_s * y) + bx
-                ty = (sin_s * x + cos_s * y) + by
-                points[i] = (tx, ty) 
-        else:
-            sx += bx
-            ex += bx
-            sy += by
-            ey += by
-            points = [ (sx, sy),
-                          (ex, sy),
-                          (ex, ey),
-                          (sx, ey) ]
+            if tdw:
+                points = [ tdw.model_to_display(x,y) for x,y in points ]
 
-        if tdw:
-            points = [ tdw.model_to_display(x,y) for x,y in points ]
-
-        return points
+            return points
 
     def get_bbox(self, tdw, node, dx=0.0, dy=0.0, margin = 0):
         """ Get outmost boundary box, to get displaying area or 
@@ -501,25 +529,279 @@ class Stamp(object):
         (x, y, width, height)
         """
         pos = self.get_boundary_points(node, dx=dx, dy=dy)
-        if tdw:
-            sx, sy = tdw.model_to_display(*pos[0])
-        else:
-            sx, sy = pos[0]
-        ex = sx
-        ey = sy
-        for x, y in pos[1:]:
+        if pos:
             if tdw:
-                x, y = tdw.model_to_display(x, y)
-            sx = min(sx, x)
-            sy = min(sy, y)
-            ex = max(ex, x)
-            ey = max(ey, y)
+                sx, sy = tdw.model_to_display(*pos[0])
+            else:
+                sx, sy = pos[0]
+            ex = sx
+            ey = sy
+            for x, y in pos[1:]:
+                if tdw:
+                    x, y = tdw.model_to_display(x, y)
+                sx = min(sx, x)
+                sy = min(sy, y)
+                ex = max(ex, x)
+                ey = max(ey, y)
 
-        return (sx - margin, sy - margin, 
-                (ex - sx) + 1 + margin * 2, 
-                (ey - sy) + 1 + margin * 2)
+            return (sx - margin, sy - margin, 
+                    (ex - sx) + 1 + margin * 2, 
+                    (ey - sy) + 1 + margin * 2)
+
+    ## drawing methods
+
+    def draw(self, tdw, cr, x, y, node, save_context=False):
+        """ Draw this stamp into cairo surface.
+        This implementation is as base class,
+        node.tile_index ignored here.
+        """
+        stamp_src = self._pixbuf_src.current_src
+        if stamp_src:
+            
+            if save_context:
+                cr.save()
+
+            w = stamp_src.get_width() 
+            h = stamp_src.get_height()
+
+            ox = -(w / 2)
+            oy = -(h / 2)
+
+            angle = node.angle
+            scale_x = node.scale_x
+            scale_y = node.scale_y
+
+            cr.translate(x,y)
+            if ((tdw and tdw.renderer.rotation != 0.0) or 
+                    angle != 0.0):
+                if tdw:
+                    angle += tdw.renderer.rotation
+                cr.rotate(angle)
+
+            if ((tdw and tdw.renderer.scale != 1.0) or 
+                    (scale_x != 1.0 and scale_y != 1.0)):
+                if tdw:
+                    scale_x *= tdw.renderer.scale
+                    scale_y *= tdw.renderer.scale
+
+                if scale_x != 0.0 and scale_y != 0.0:
+                    cr.scale(scale_x, scale_y)
+
+           #Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
+            self.apply_pattern(cr, stamp_src)
+            cr.rectangle(ox, oy, w, h) 
+
+            cr.clip()
+            cr.paint()
+            
+            if save_context:
+                cr.restore()
+
+    ## Phase related methods
+    #  these methods should be called from 
+    #  Stamptool._start_new_capture_phase()
+
+    def initialize_phase(self):
+        """ Initializing for start of each drawing phase.
+        CAUTION: This method is not called when drawing to
+        layer.
+
+        the code flow around this method should be :
+
+        ACCEPT BUTTON Pressed (end of drawing phase)
+        |
+        +-- draw_stamp_to_layer called (from Command object : asynchronously)
+        |
+        self.finalize_phase() called
+        |
+        some stampmode initializing lines called
+        |
+        self.initialize_phase() called
+        """
+        pass
+
+    def finalize_phase(self):
+        """ This called when stamptool comes to end of
+        capture(drawing) phase.
+        """
+        pass
+
+class _PixbufBackedStampMixin(_StampMixin):
+    """ Non-tiled single pixbuf stamp mixin.
+
+    This mixin used for dynamically changed stamps,
+    for example,Clipboard stamp.
+    """
+
+    def __init__(self, name, doc):
+        super(_PixbufBackedStampMixin, self).__init__(name)
+        self._src_pixbuf = None
+
+    def set_file_sources(self, filenames):
+        pass
+
+    @property
+    def pixbuf(self):
+        return self._src_pixbuf
+
+    def _setup_source(self, cr, tile_idx, source, cache_list):
+        if self._src_pixbuf:
+            stamp_src = self._src_pixbuf
+            if ((not cr in cache_list) or 
+                    cache_list[cr] != stamp_src):
+                w = stamp_src.get_width() 
+                h = stamp_src.get_height()
+                ox = -(w / 2)
+                oy = -(h / 2)
+                return (stamp_src, ox, oy)
 
 
+class Stamp(_StampMixin):
+    """
+    This class holds stamp information and pixbuf/masks 
+    and draw it to "cairo surface",
+    not mypaint surface.(But this is to ease development 
+    and might be changed to improve memory efficiency)
+
+    When 'finalize' action executed (i.e. ACCEPT button pressed)
+    the cairo surface converted into GdkPixbuf,
+    and that GdkPixbuf converted into Mypaint layer
+    and it is merged into current layer.
+    """
+
+    def __init__(self, name):
+        super(Stamp, self).__init__(name)
+
+    ## Information methods
+
+    def set_tile_division(self, w, h):
+        """ Set tile size as dividing factor.
+        To cancel tile division, use 0 for each arguments.
+
+        :param w: width of a tile.
+        :param h: height of a tile.
+        """
+        if self._pixbuf_src:
+            self._pixbuf_src.set_tile_division(w, h)
+        if self._mask_src:
+            self._mask_src.set_tile_division(w, h)
+
+    @property
+    def tile_count(self):
+        if self._pixbuf_src:
+            return self._pixbuf_src.tile_count
+        else:
+            return 0
+
+    ## Drawing methods
+
+
+    def draw(self, tdw, cr, x, y, node, save_context=False):
+        """ draw this stamp into cairo surface.
+        """
+        self._pixbuf_src.tile_index = node.tile_index
+        super(Stamp, self).draw(tdw, cr, x, y, node, save_context)
+
+class ClipboardStamp(_PixbufBackedStampMixin):
+
+    def __init__(self, name, doc):
+        super(ClipboardStamp, self).__init__(name)
+
+    def initialize_phase(self):
+        """ Initializing for start of each drawing phase.
+        CAUTION: This method is not called when drawing to
+        layer.
+
+        ACCEPT BUTTON Pressed (end of drawing phase)
+        |
+        +-- draw_stamp_to_layer called (from Command object : asynchronously)
+        |
+        self.finalize_phase() called
+        |
+        some stampmode initializing lines called
+        |
+        self.initialize_phase() called
+        """
+        self._src_pixbuf = None
+        # XXX almost copied from gui.document.paste_cb()
+        clipboard = self._get_clipboard()
+
+        targs_avail, targets = clipboard.wait_for_targets()
+        if not targs_avail:
+            # Nothing on clipboard."
+            return
+
+        # Then grab any available image, also synchronously
+        pixbuf = clipboard.wait_for_image()
+        if not pixbuf:
+            return
+        self._src_pixbuf = pixbuf
+
+class LayerStamp(_PixbufBackedStampMixin):
+    """ A Stamp which sources the current layer.
+    """
+
+    def __init__(self, name, rootstack):
+        super(LayerStamp, self).__init__(name)
+        self._selbox = None
+
+    def set_selected_area(self, selbox):
+        """
+        set selected area of current layer as stamp source.
+
+        :param selbox: a tuple of selection box (x, y, w, h)
+        To disable selection(and disable draw), assign selbox as None
+        """
+        self._selbox = selbox
+
+    def initialize_phase(self):
+        """ Get current (cached) src pixbuf.
+        Most important property.
+        """
+        current = self._rootstack.current
+        pixbuf = None
+        if current and self._selbox:
+            pixbuf = current.render_as_pixbuf(
+                    *self._selbox, alpha=True)
+        self._src_pixbuf = pixbuf
+
+
+class VisibleStamp(LayerStamp):
+    """ A Stamp which sources the currently visible area.
+    """
+
+    def __init__(self, name, rootstack):
+        super(VisibleStamp, self).__init__(name)
+
+    def initialize_phase(self):
+        """ Get current (cached) src pixbuf.
+        Most important property.
+        """
+        current = self._rootstack
+        pixbuf = None
+        if current and self._selbox:
+            pixbuf = current.render_as_pixbuf(
+                    *self._selbox, alpha=True)
+        self._src_pixbuf = pixbuf
+
+class PixbufStamp(_PixbufBackedStampMixin):
+    """ A Stamp for dynamically changeable pixbuf stamps
+    to fix its contents within DrawStamp command.
+
+    MyPaint 'Command' processing done in asynchronously,
+    so Clipboard/Layer stamp might be updated its content(pixbuf)
+    when actually draw_stamp_to_layer() called.
+
+    Therefore, we need to pass the pixbuf used when editing
+    to this stamp class.
+    """
+
+    def __init__(self, name, pixbuf):
+        super(VisibleStamp, self).__init__(name)
+        self._src_pixbuf = pixbuf
+
+
+## Preset Manager classes
 
 class StampPresetManager(object):
     """ Stamp preset manager.
@@ -683,7 +965,7 @@ class StampPresetManager(object):
 def _test():
     from application import get_app
     app = get_app()
-    m = StampPresetManager()
+    m = StampPresetManager(None)
     print(m.initialize_icon_store())
 
 if __name__ == '__main__':
