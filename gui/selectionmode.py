@@ -150,6 +150,20 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
 
         return (min_x, min_y, max_x, max_y)
 
+    def get_min_max_pos_model(self):
+        min_x = self._mx[0]
+        max_x = min_x
+        min_y = self._my[0]
+        max_y = min_y
+        for i in xrange(3):
+            min_x = min(min_x, self._mx[i+1])
+            max_x = max(max_x, self._mx[i+1])
+            min_y = min(min_y, self._my[i+1])
+            max_y = max(max_y, self._my[i+1])
+
+        return (min_x, min_y, max_x, max_y)
+
+
     ## InteractionMode/DragMode implementation
 
     def enter(self, doc, **kwds):

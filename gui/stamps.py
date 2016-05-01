@@ -304,6 +304,10 @@ class _StampMixin(object):
         if self._pixbuf_src:
             return self._pixbuf_src.current_src
 
+    @property
+    def is_support_selection(self):
+        return False
+
     ## Drawing methods
 
     def initialize_draw(self, cr):
@@ -723,16 +727,24 @@ class LayerStamp(_PixbufBackedStampMixin):
 
     def __init__(self, name, rootstack):
         super(LayerStamp, self).__init__(name)
-        self._selbox = None
+        self._selarea = None
+        self._rootstack = rootstack
 
-    def set_selected_area(self, selbox):
+    @property
+    def is_support_selection(self):
+        return True
+
+    def set_selection_area(self, selarea):
         """
         set selected area of current layer as stamp source.
 
-        :param selbox: a tuple of selection box (x, y, w, h)
+        :param selbox: a tuple of selection area (sx, sy, ex, ey)
         To disable selection(and disable draw), assign selbox as None
         """
-        self._selbox = selbox
+        self._selarea = selarea
+
+    def get_selection_area(self):
+        return self._selarea
 
     def initialize_phase(self):
         """ Get current (cached) src pixbuf.
@@ -740,9 +752,13 @@ class LayerStamp(_PixbufBackedStampMixin):
         """
         current = self._rootstack.current
         pixbuf = None
-        if current and self._selbox:
+        if current and self._selarea:
+            # TODO this method called twice per phase: it is not intentional.fix it.
+            sx, sy, ex, ey = self._selarea
             pixbuf = current.render_as_pixbuf(
-                    *self._selbox, alpha=True)
+                    int(sx), int(sy), int(ex-sx)+1, int(ey-sy)+1,
+                    alpha=True)
+            print pixbuf
         self._src_pixbuf = pixbuf
 
 
@@ -759,10 +775,14 @@ class VisibleStamp(LayerStamp):
         """
         current = self._rootstack
         pixbuf = None
-        if current and self._selbox:
+        if current and self._selarea:
+            sx, sy, ex, ey = self._selarea
             pixbuf = current.render_as_pixbuf(
-                    *self._selbox, alpha=True)
+                    int(sx), int(sy), int(ex-sx)+1, int(ey-sy)+1,
+                    alpha=True)
+            print pixbuf
         self._src_pixbuf = pixbuf
+
 
 class ForegroundStamp(_PixbufBackedStampMixin):
     """ Foreground color stamp.

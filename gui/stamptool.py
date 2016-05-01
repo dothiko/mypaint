@@ -195,7 +195,6 @@ class StampMode (InkingMode):
         self._stamp = stamp
         self._stamp.initialize_phase()
 
-
     def enter(self, doc, **kwds):
         """Enters the mode: called by `ModeStack.push()` etc."""
         self._blank_cursor = doc.app.cursors.get_action_cursor(
@@ -436,6 +435,7 @@ class StampMode (InkingMode):
         for tdw in self._overlays:
             self._queue_draw_node_internal(tdw, self.nodes[i], dx, dy, force_margin)
 
+
     def _queue_draw_node_internal(self, tdw, node, dx, dy, add_margin):
         if not self._stamp:
             return
@@ -461,9 +461,21 @@ class StampMode (InkingMode):
                     self._queue_draw_node_internal(tdw, cn, dx, dy, targetted)
                 else:
                     self._queue_draw_node_internal(tdw, cn, 0.0, 0.0, targetted)
-        
+
+            self._queue_selection_area(tdw)
+
+    def _queue_selection_area(self, tdw):
+        if self.stamp and self.stamp.is_support_selection:
+            area = self._stamp.get_selection_area()
+            if area:
+                dsx, dsy = tdw.model_to_display(area[0], area[1])
+                dex, dey = tdw.model_to_display(area[2], area[3])
+                tdw.queue_draw_area(dsx, dsy, 
+                        dex - dsx + 1, dey - dsy + 1)
+
 
     ## Raw event handling (prelight & zone selection in adjust phase)
+
     def button_press_cb(self, tdw, event):
         if not self._stamp:
             return super(InkingMode, self).button_press_cb(tdw, event)
@@ -867,6 +879,26 @@ class StampMode (InkingMode):
         self._queue_draw_node(i, force_margin=True) 
 
 
+    def select_area(self, selection_mode):
+        """ Selection handler called from SelectionMode.
+        This handler never called when no selection executed.
+        """
+        if self.phase == _Phase.CAPTURE:
+            if self.stamp and self.stamp.is_support_selection:
+                self.stamp.set_selection_area(
+                        selection_mode.get_min_max_pos_model())
+                self.stamp.initialize_phase()
+
+        else:
+            modified = False
+            for idx,cn in enumerate(self.nodes):
+                if selection_mode.is_inside_model(cn.x, cn.y):
+                    if not idx in self.selected_nodes:
+                        self.selected_nodes.append(idx)
+                        modified = True
+            if modified:
+                self._queue_redraw_all_nodes()
+
 class Overlay_Stamp (Overlay):
     """Overlay for an StampMode's adjustable points"""
 
@@ -1030,6 +1062,25 @@ class Overlay_Stamp (Overlay):
         cr.stroke()
         cr.restore()
 
+    def draw_selection_area(self, cr, selarea):
+        if selarea:
+            cr.save()
+            mode = self._inkmode
+            cr.set_line_width(1)
+            cr.set_source_rgb(0, 1, 0)
+            tdw = self._tdw
+
+            dx, dy = tdw.model_to_display(selarea[0], selarea[1])
+            ex, ey = tdw.model_to_display(selarea[2], selarea[3])
+            cr.move_to(dx, dy)
+            cr.line_to(ex, dy)
+            cr.line_to(ex, ey)
+            cr.line_to(dx, ey)
+            cr.close_path()
+
+            cr.stroke()
+            cr.restore()
+
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
 
@@ -1068,8 +1119,11 @@ class Overlay_Stamp (Overlay):
             else:
                 self.draw_stamp_rect(cr, i, node, dx, dy)
 
-
         mode.stamp.finalize_draw(cr)
+
+        # Selection areas
+        if mode.stamp.is_support_selection:
+            self.draw_selection_area(cr, mode.stamp.get_selection_area())
 
         # Buttons
         if (mode.phase in
