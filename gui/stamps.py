@@ -73,10 +73,8 @@ class _SourceMixin(object):
         """ for compatibility """
         return 0
 
-    @property
-    def current_src(self):
+    def get_current_src(self, tile_index):
         """ Get current (cached) src pixbuf.
-        Most important property.
         """
         pass
 
@@ -102,19 +100,9 @@ class _Pixbuf_Source(_SourceMixin):
     def tile_count(self):
         return len(self._source_files)
 
-    @property
-    def tile_index(self):
-        return self._tile_idx
-
-    @tile_index.setter
-    def tile_index(self, index):
-        if self.tile_count > 0 and self._tile_idx != index:
-            self._tile_idx = index
-
-    @property
-    def current_src(self):
-        if self._ensure_current_pixbuf():
-            return self._pixbufs[self._tile_idx]
+    def get_current_src(self, tile_index):
+        if self._ensure_current_pixbuf(tile_index):
+            return self._pixbufs[tile_index]
 
 
     def set_file_sources(self, filenames):
@@ -132,15 +120,14 @@ class _Pixbuf_Source(_SourceMixin):
     def _reset_info(self):
         self._cached_cairo_src = {}
         self._pixbufs = {}
-        self._tile_idx = 0
 
     ## Source Pixbuf methods
 
-    def _ensure_current_pixbuf(self):
+    def _ensure_current_pixbuf(self, tile_index):
         if self._source_files and len(self._source_files) > 0:
-            if not self._tile_idx in self._pixbufs:
-                filename = self._source_files[self._tile_idx]
-                self._pixbufs[self._tile_idx] = \
+            if not tile_index in self._pixbufs:
+                filename = self._source_files[tile_index]
+                self._pixbufs[tile_index] = \
                         GdkPixbuf.Pixbuf.new_from_file(filename)
             return True
         return False
@@ -159,7 +146,7 @@ class _Pixbuf_Source(_SourceMixin):
         self._cached_cairo_src.clear()
 
 
-    def apply(self, cr):
+    def apply(self, cr, tile_index):
         """ Apply pixbuf pattern to cairo.
         The pattern might be cached.
 
@@ -168,7 +155,7 @@ class _Pixbuf_Source(_SourceMixin):
         if cr in self._cached_cairo_src:
             cr.set_source(self._cached_cairo_src[cr])
         else:
-            stamp_src = self.current_src
+            stamp_src = self.get_current_src(tile_index)
             w = stamp_src.get_width() 
             h = stamp_src.get_height()
             ox = -(w / 2)
@@ -189,10 +176,9 @@ class _Dynamic_Source(_Pixbuf_Source):
         with calling 'set_pixbuf(tile_index, None)'.
         """
 
-    @property
-    def current_src(self):
-        self.pixbuf_requested(self._tile_idx)
-        return self._pixbufs.get(self._tile_idx, None)
+    def get_current_src(self, tile_index):
+        self.pixbuf_requested(tile_index)
+        return self._pixbufs.get(tile_index, None)
 
 
 class _Tiled_Source(_Pixbuf_Source):
@@ -228,15 +214,15 @@ class _Tiled_Source(_Pixbuf_Source):
             del pixbuf
             self._tile_count = idx
 
-    def _ensure_current_pixbuf(self):
-        if not self._tile_idx in self._pixbufs:
+    def _ensure_current_pixbuf(self, tile_index):
+        if not tile_index in self._pixbufs:
             self._load_from_file(self._source_filename)
         return True
 
 class _Pixbuf_Mask(_Pixbuf_Source):
     """ cairo mask source."""
 
-    def apply(self, cr):
+    def apply(self, cr, tile_index):
         """ Apply pixbuf pattern to cairo.
         The pattern might be cached.
 
@@ -245,7 +231,7 @@ class _Pixbuf_Mask(_Pixbuf_Source):
         if cr in self._cached_cairo_src:
             cr.mask_surface(*self._cached_cairo_src[cr])
         else:
-            stamp_src = self.current_pixbuf
+            stamp_src = self.get_current_src(tile_index)
             w = stamp_src.get_width() 
             h = stamp_src.get_height()
             ox = -(w / 2)
@@ -330,15 +316,6 @@ class _StampMixin(object):
     def thumbnail(self):
         return self._thumbnail
 
-    @property
-    def current_src(self):
-        """ Get current src pixbuf.
-        by default it is from self._pixbuf_src
-        (it would be _SourceMixin derived class), 
-        we can change this with returning pixbuf object directly.
-        """
-        if self._pixbuf_src:
-            return self._pixbuf_src.current_src
 
     @property
     def is_support_selection(self):
@@ -376,7 +353,7 @@ class _StampMixin(object):
         This implementation is as base class,
         node.tile_index ignored here.
         """
-        stamp_src = self.current_src
+        stamp_src = self._pixbuf_src.get_current_src(node.tile_index)
         if stamp_src:
             if save_context:
                 cr.save()
@@ -408,9 +385,9 @@ class _StampMixin(object):
                     cr.scale(scale_x, scale_y)
 
            #Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
-            self._pixbuf_src.apply(cr)
+            self._pixbuf_src.apply(cr, node.tile_index)
             if self._mask_src:
-                self.mask_src.apply(cr)
+                self.mask_src.apply(cr, node.tile_index)
 
             cr.rectangle(ox, oy, w, h) 
 
@@ -490,8 +467,7 @@ class _StampMixin(object):
         :rtype: a list of tuple,[ (pt0.x, pt0.y) ... (pt3.x, pt3.y) ]
         """
         if self._pixbuf_src:
-            self._pixbuf_src.tile_index = node.tile_index
-            stamp_src = self.current_src
+            stamp_src = self._pixbuf_src.get_current_src(node.tile_index)
             if stamp_src:
                 w = stamp_src.get_width() 
                 h = stamp_src.get_height()
@@ -540,7 +516,6 @@ class _StampMixin(object):
         (x, y, width, height)
         """
         pos = self.get_boundary_points(node, dx=dx, dy=dy)
-        print pos
         if pos:
             if tdw:
                 sx, sy = tdw.model_to_display(*pos[0])
@@ -641,19 +616,9 @@ class Stamp(_StampMixin):
             return 1
 
     ## Information methods
-    def get_boundary_points(self, node, tdw=None, dx=0.0, dy=0.0, no_transform=False):
-        if self._pixbuf_src:
-            self._pixbuf_src.tile_index = node.tile_index
-            return super(Stamp, self).get_boundary_points(node, tdw, dx, dy, no_transform)
 
     ## Drawing methods
 
-
-    def draw(self, tdw, cr, x, y, node, save_context=False):
-        """ draw this stamp into cairo surface.
-        """
-        self._pixbuf_src.tile_index = node.tile_index
-        super(Stamp, self).draw(tdw, cr, x, y, node, save_context)
 
 class TiledStamp(_StampMixin):
     """
@@ -785,10 +750,6 @@ class ForegroundStamp(_DynamicStampMixin):
     def foreground_color(self):
         return self._app.brush_color_manager.get_color().get_rgb()
 
-    @property
-    def current_src(self):
-        if self._mask_src:
-            return self._mask_src.current_src
 
     def set_file_sources(self, filenames):
         """ to disable setting self._pixbuf_src """
@@ -806,7 +767,7 @@ class ForegroundStamp(_DynamicStampMixin):
         if save_context:
             cr.save()
 
-        stamp_src = self._mask_src.current_src
+        stamp_src = self._mask_src.get_current_src(node.tile_index)
 
         w = stamp_src.get_width() 
         h = stamp_src.get_height()
@@ -835,7 +796,7 @@ class ForegroundStamp(_DynamicStampMixin):
                 cr.scale(scale_x, scale_y)
 
         cr.set_source_rgb(*self.foreground_color)
-        self._mask_src.apply(cr)
+        self._mask_src.apply(cr, node.tile_index)
         cr.rectangle(ox, oy, w, h) 
 
         cr.clip()
