@@ -93,6 +93,7 @@ class _Pixbuf_Source(_SourceMixin):
 
     def __init__(self):
         self._source_files = []
+        self._pixbufs = {}
         self._reset_info()
 
     ## Information methods
@@ -118,8 +119,11 @@ class _Pixbuf_Source(_SourceMixin):
         return self._pixbufs.get(tile_index, None)
 
     def _reset_info(self):
+        """
+        Reset infomations which should be cleared each drawing call.
+        """
         self._cached_cairo_src = {}
-        self._pixbufs = {}
+        self._prev_cr = None
 
     ## Source Pixbuf methods
 
@@ -144,6 +148,7 @@ class _Pixbuf_Source(_SourceMixin):
         Clear cairo cashed sources.
         """
         self._cached_cairo_src.clear()
+        self._prev_cr = None
 
 
     def apply(self, cr, tile_index):
@@ -152,16 +157,19 @@ class _Pixbuf_Source(_SourceMixin):
 
         This method should be called from draw() method.
         """
-        if cr in self._cached_cairo_src:
-            cr.set_source(self._cached_cairo_src[cr])
+        if cr == self._prev_cr and tile_index in self._cached_cairo_src:
+            cr.set_source(self._cached_cairo_src[tile_index])
         else:
+            if self._prev_cr != cr:
+                self.clear_cache()
             stamp_src = self.get_current_src(tile_index)
             w = stamp_src.get_width() 
             h = stamp_src.get_height()
             ox = -(w / 2)
             oy = -(h / 2)
             Gdk.cairo_set_source_pixbuf(cr, stamp_src, ox, oy)
-            self._cached_cairo_src[cr] = cr.get_source()
+            self._cached_cairo_src[tile_index] = cr.get_source()
+            self._prev_cr = cr
 
 
 class _Dynamic_Source(_Pixbuf_Source):
@@ -217,7 +225,6 @@ class _Tiled_Source(_Pixbuf_Source):
     def _ensure_current_pixbuf(self, tile_index):
         if not tile_index in self._pixbufs:
             self._load_from_file(self._source_filename)
-        return True
 
 class _Pixbuf_Mask(_Pixbuf_Source):
     """ cairo mask source."""
@@ -228,8 +235,8 @@ class _Pixbuf_Mask(_Pixbuf_Source):
 
         This method should be called from draw() method.
         """
-        if cr in self._cached_cairo_src:
-            cr.mask_surface(*self._cached_cairo_src[cr])
+        if tile_index in self._cached_cairo_src:
+            cr.mask_surface(*self._cached_cairo_src[tile_index])
         else:
             stamp_src = self.get_current_src(tile_index)
             w = stamp_src.get_width() 
@@ -239,7 +246,7 @@ class _Pixbuf_Mask(_Pixbuf_Source):
             mask_source = Gdk.cairo_surface_create_from_pixbuf(
                     stamp_src, 1, None)
             cr.mask_surface(mask_source, ox, oy)
-            self._cached_cairo_src[cr] = (mask_source, ox, oy)
+            self._cached_cairo_src[tile_index] = (mask_source, ox, oy)
 
 class _Tiled_Mask(_Tiled_Source,
                   _Pixbuf_Mask):
