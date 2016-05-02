@@ -448,7 +448,7 @@ class SettingsEditor (Gtk.Grid):
         self._devices_view.append_column(col)
         cell = Gtk.CellRendererText()
         cell.set_property("ellipsize", Pango.EllipsizeMode.MIDDLE)
-        col.pack_start(cell, expand=True)
+        col.pack_start(cell, True)
         col.set_cell_data_func(cell, self._device_name_datafunc)
 
         #TRANSLATORS: Column's data is an integer count of the number of axes
@@ -462,7 +462,7 @@ class SettingsEditor (Gtk.Grid):
         col.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
         self._devices_view.append_column(col)
         cell = Gtk.CellRendererText()
-        col.pack_start(cell, expand=True)
+        col.pack_start(cell, True)
         col.set_cell_data_func(cell, self._device_axes_datafunc)
 
         #TRANSLATORS: Column shows type labels ("Touchscreen", "Pen" etc.)
@@ -477,7 +477,7 @@ class SettingsEditor (Gtk.Grid):
         self._devices_view.append_column(col)
         cell = Gtk.CellRendererText()
         cell.set_property("ellipsize", Pango.EllipsizeMode.END)
-        col.pack_start(cell, expand=True)
+        col.pack_start(cell, True)
         col.set_cell_data_func(cell, self._device_type_datafunc)
 
         # Usage config value => string store (dropdowns)
@@ -506,7 +506,7 @@ class SettingsEditor (Gtk.Grid):
         cell.set_property("has-entry", False)
         cell.set_property("ellipsize", Pango.EllipsizeMode.END)
         cell.connect("changed", self._usage_cell_changed_cb)
-        col.pack_start(cell, expand=True)
+        col.pack_start(cell, True)
         col.set_cell_data_func(cell, self._device_usage_datafunc)
 
         # Scroll action config value => string store (dropdowns)
@@ -536,7 +536,7 @@ class SettingsEditor (Gtk.Grid):
         cell.set_property("has-entry", False)
         cell.set_property("ellipsize", Pango.EllipsizeMode.END)
         cell.connect("changed", self._scroll_cell_changed_cb)
-        col.pack_start(cell, expand=True)
+        col.pack_start(cell, True)
         col.set_cell_data_func(cell, self._device_scroll_datafunc)
 
         # Pretty borders

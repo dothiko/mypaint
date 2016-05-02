@@ -21,8 +21,7 @@ import logging
 logger = logging.getLogger(__name__)
 from collections import OrderedDict
 
-import glib
-import gtk
+from gi.repository import Gtk
 
 from lib import document, helpers, tiledsurface
 from lib import fileutils
@@ -71,7 +70,7 @@ def _get_case_insensitive_glob(string):
 def _add_filters_to_dialog(filters, dialog):
     """Adds Gtk.FileFilter objs for patterns to a dialog."""
     for name, patterns in filters:
-        f = gtk.FileFilter()
+        f = Gtk.FileFilter()
         f.set_name(name)
         for p in patterns:
             f.add_pattern(_get_case_insensitive_glob(p))
@@ -135,15 +134,15 @@ class FileHandler (object):
         file_re = r'[.](?:' + ('|'.join(file_regex_exts)) + r')$'
         logger.debug("Using regex /%s/i for filtering recent files", file_re)
         self._file_extension_regex = re.compile(file_re, re.IGNORECASE)
-        rf = gtk.RecentFilter()
+        rf = Gtk.RecentFilter()
         rf.add_pattern('')
         # The blank-string pattern is eeded so the custom func will
         # get URIs at all, despite the needed flags below.
         rf.add_custom(
             func = self._recentfilter_func,
             needed = (
-                gtk.RecentFilterFlags.APPLICATION |
-                gtk.RecentFilterFlags.URI
+                Gtk.RecentFilterFlags.APPLICATION |
+                Gtk.RecentFilterFlags.URI
             )
         )
         ra = app.find_action("OpenRecent")
@@ -212,7 +211,7 @@ class FileHandler (object):
         # gtk bug.  So we use our own test instead of i.exists().
 
         recent_items = []
-        rm = gtk.RecentManager.get_default()
+        rm = Gtk.RecentManager.get_default()
         for i in rm.get_items():
             if not i:
                 continue
@@ -239,42 +238,38 @@ class FileHandler (object):
 
     filename = property(get_filename, set_filename)
 
-    def init_save_dialog(self, chooser_flag = gtk.FILE_CHOOSER_ACTION_SAVE, with_format_widget=True):
-        """
-        Init save dialog as self.save_dialog
-        This attribute might be referred from other modules.
-        """
-        dialog = gtk.FileChooserDialog(
-            C_("Dialogs: Save As...", u"Save"),
+    def init_save_dialog(self, export):
+        if export:
+            save_dialog_name = C_("Dialogs: Save As...", u"Export")
+        else:
+            save_dialog_name = C_("Dialogs: Save As...", u"Save")
+        dialog = Gtk.FileChooserDialog(
+            save_dialog_name,
             self.app.drawWindow,
-            chooser_flag,
+            Gtk.FileChooserAction.SAVE,
             (
-                gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
-                gtk.STOCK_SAVE, gtk.RESPONSE_OK,
+                Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+                Gtk.STOCK_SAVE, Gtk.ResponseType.OK,
             ),
         )
-        self.save_dialog = dialog
-        dialog.set_default_response(gtk.RESPONSE_OK)
+        dialog.set_default_response(Gtk.ResponseType.OK)
         dialog.set_do_overwrite_confirmation(True)
 
         # Add widget for selecting save format
-        if with_format_widget:
-            _add_filters_to_dialog(self.file_filters, dialog)
-            box = gtk.HBox()
-            label = gtk.Label(_('Format to save as:'))
-            label.set_alignment(0.0, 0.0)
-            combo = self.saveformat_combo = gtk.ComboBoxText()
-            for name, ext, opt in self.saveformats.itervalues():
-                combo.append_text(name)
-            combo.set_active(0)
-            combo.connect('changed', self.selected_save_format_changed_cb)
-            box.pack_start(label)
-            box.pack_start(combo, expand=False)
-            dialog.set_extra_widget(box)
-        else:
-            self.saveformat_combo = None            
+        box = Gtk.HBox()
+        label = Gtk.Label(_('Format to save as:'))
+        label.set_alignment(0.0, 0.0)
+        combo = self.saveformat_combo = Gtk.ComboBoxText()
+        for name, ext, opt in self.saveformats.itervalues():
+            combo.append_text(name)
+        combo.set_active(0)
+        combo.connect('changed', self.selected_save_format_changed_cb)
+        box.pack_start(label, True, True, 0)
+        box.pack_start(combo, False, True, 0)
+        dialog.set_extra_widget(box)
         dialog.show_all()
-        
+        return dialog
+
     def selected_save_format_changed_cb(self, widget):
         """When the user changes the selected format to save as in the dialog,
         change the extension of the filename (if existing) immediately."""
@@ -350,11 +345,11 @@ class FileHandler (object):
         continue_response_code = 2
 
         # Dialog setup.
-        d = gtk.MessageDialog(
+        d = Gtk.MessageDialog(
             title = title,
             parent = self.app.drawWindow,
-            type = gtk.MessageType.QUESTION,
-            flags = gtk.DialogFlags.MODAL,
+            type = Gtk.MessageType.QUESTION,
+            flags = Gtk.DialogFlags.MODAL,
         )
 
         # Translated strings for things
@@ -376,7 +371,7 @@ class FileHandler (object):
             continue_btn_text = confirm
 
         # Button setup. Cancel first, continue at end.
-        d.add_button(cancel_btn_text, gtk.RESPONSE_CANCEL)
+        d.add_button(cancel_btn_text, Gtk.ResponseType.CANCEL)
         d.add_button(continue_btn_text, continue_response_code)
 
         # Explanatory message.
@@ -397,9 +392,9 @@ class FileHandler (object):
         # Checkbox for saving
         if offer_save:
             save1st_text = save_to_scraps_first_text
-            save1st_cb = gtk.CheckButton.new_with_mnemonic(save1st_text)
+            save1st_cb = Gtk.CheckButton.new_with_mnemonic(save1st_text)
             save1st_cb.set_hexpand(False)
-            save1st_cb.set_halign(gtk.Align.END)
+            save1st_cb.set_halign(Gtk.Align.END)
             save1st_cb.set_vexpand(False)
             save1st_cb.set_margin_top(12)
             save1st_cb.set_margin_bottom(12)
@@ -423,10 +418,10 @@ class FileHandler (object):
             vbox = d.get_content_area()
             vbox.set_spacing(0)
             vbox.set_margin_top(12)
-            vbox.pack_start(save1st_cb, expand=False, fill=True)
+            vbox.pack_start(save1st_cb, False, True, 0)
 
         # Get a response and handle it.
-        d.set_default_response(gtk.RESPONSE_CANCEL)
+        d.set_default_response(Gtk.ResponseType.CANCEL)
         response_code = d.run()
         d.destroy()
         if response_code == continue_response_code:
@@ -448,7 +443,7 @@ class FileHandler (object):
         # Hopefully this isn't too strange.
         # Escape will still work.
         cancel_allowed = not checkbox.get_active()
-        cancel_btn = dialog.get_widget_for_response(gtk.RESPONSE_CANCEL)
+        cancel_btn = dialog.get_widget_for_response(Gtk.ResponseType.CANCEL)
         cancel_btn.set_sensitive(cancel_allowed)
 
     def new_cb(self, action):
@@ -472,8 +467,8 @@ class FileHandler (object):
 
     @staticmethod
     def gtk_main_tick():
-        while gtk.events_pending():
-            gtk.main_iteration()
+        while Gtk.events_pending():
+            Gtk.main_iteration()
 
     @drawwindow.with_wait_cursor
     def open_file(self, filename):
@@ -503,7 +498,7 @@ class FileHandler (object):
             ).format(
                 file_basename = file_basename,
             ))
-            self.app.message_dialog(unicode(e), type=gtk.MESSAGE_ERROR)
+            self.app.message_dialog(unicode(e), type=Gtk.MessageType.ERROR)
         else:
             statusbar.remove_all(statusbar_cid)
             self.filename = os.path.abspath(filename)
@@ -535,7 +530,7 @@ class FileHandler (object):
             self.app.scratchpad_filename = os.path.abspath(filename)
             self.app.preferences["scratchpad.last_opened_scratchpad"] = self.app.scratchpad_filename
         except (FileHandlingError, AllocationError, MemoryError) as e:
-            self.app.message_dialog(unicode(e), type=gtk.MESSAGE_ERROR)
+            self.app.message_dialog(unicode(e), type=Gtk.MessageType.ERROR)
         else:
             self.app.scratchpad_filename = os.path.abspath(filename)
             self.app.preferences["scratchpad.last_opened_scratchpad"] = self.app.scratchpad_filename
@@ -573,16 +568,15 @@ class FileHandler (object):
             self.register_recent_project(self.filename)
             # As project, recent file management is inappropriate,for now
             return 
-           #export = True # so pretend export, bypass it! 
 
         if not os.path.isfile(filename):  # failed to save
             return
         if not export:
             self.filename = os.path.abspath(filename)
             basename, ext = os.path.splitext(self.filename)
-            recent_mgr = gtk.RecentManager.get_default()
+            recent_mgr = Gtk.RecentManager.get_default()
             uri = lib.glib.filename_to_uri(self.filename)
-            recent_data = gtk.RecentData()
+            recent_data = Gtk.RecentData()
             recent_data.app_name = "mypaint"
             recent_data.app_exec = sys.argv_unicode[0].encode("utf-8")
             mime_default = "application/octet-stream"
@@ -672,7 +666,7 @@ class FileHandler (object):
                     file_basename = file_basename,
                 ))
             self.lastsavefailed = True
-            self.app.message_dialog(unicode(e), type=gtk.MESSAGE_ERROR)
+            self.app.message_dialog(unicode(e), type=Gtk.MessageType.ERROR)
         else:
             if statusmsg:
                 statusbar.remove_all(statusbar_cid)
@@ -717,11 +711,13 @@ class FileHandler (object):
     
                 
     def get_open_dialog(self, filename=None, start_in_folder=None, file_filters=[]):
-        dialog = gtk.FileChooserDialog(_("Open..."), self.app.drawWindow,
-                                       gtk.FILE_CHOOSER_ACTION_OPEN,
-                                       (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
-                                        gtk.STOCK_OPEN, gtk.RESPONSE_OK))
-        dialog.set_default_response(gtk.RESPONSE_OK)
+        dialog = Gtk.FileChooserDialog(
+            _("Open..."),
+            self.app.drawWindow,
+            Gtk.FileChooserAction.OPEN,
+            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+             Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
+        dialog.set_default_response(Gtk.ResponseType.OK)
         _add_filters_to_dialog(file_filters, dialog)
 
         if filename:
@@ -732,7 +728,7 @@ class FileHandler (object):
         return dialog
 
     def open_cb(self, action):
-        self._open_internal(gtk.FILE_CHOOSER_ACTION_OPEN,
+        self._open_internal(Gtk.FILE_CHOOSER_ACTION_OPEN,
                 self.update_preview_cb,
                 self.file_filters)
 
@@ -750,24 +746,23 @@ class FileHandler (object):
         )
         if not ok_to_open:
             return
-        dialog = gtk.FileChooserDialog(
+        dialog = Gtk.FileChooserDialog(
             title = C_(
                 u'File→Open: file chooser dialog: title',
                 u"Open File",
             ),
             parent = self.app.drawWindow,
-            action = dialog_action,
+            action = Gtk.FileChooserAction.OPEN,
             buttons = [
-                gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
-                gtk.STOCK_OPEN, gtk.RESPONSE_OK,
+                Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+                Gtk.STOCK_OPEN, Gtk.ResponseType.OK,
             ]
         )
-        dialog.set_default_response(gtk.RESPONSE_OK)
+        dialog.set_default_response(Gtk.ResponseType.OK)
 
-        if preview_cb:
-            preview = gtk.Image()
-            dialog.set_preview_widget(preview)
-            dialog.connect("update-preview", preview_cb, preview)
+        preview = Gtk.Image()
+        dialog.set_preview_widget(preview)
+        dialog.connect("update-preview", self.update_preview_cb, preview)
 
         if filters:
             _add_filters_to_dialog(self.file_filters, dialog)
@@ -785,7 +780,7 @@ class FileHandler (object):
                     dialog.set_current_folder(dn)
                     break
         try:
-            if dialog.run() == gtk.RESPONSE_OK:
+            if dialog.run() == Gtk.ResponseType.OK:
                 dialog.hide()
                 self.open_file(dialog.get_filename().decode('utf-8'))
         finally:
@@ -793,13 +788,15 @@ class FileHandler (object):
 
 
     def open_scratchpad_dialog(self):
-        dialog = gtk.FileChooserDialog(_("Open Scratchpad..."), self.app.drawWindow,
-                                       gtk.FILE_CHOOSER_ACTION_OPEN,
-                                       (gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL,
-                                        gtk.STOCK_OPEN, gtk.RESPONSE_OK))
-        dialog.set_default_response(gtk.RESPONSE_OK)
+        dialog = Gtk.FileChooserDialog(
+            _("Open Scratchpad..."),
+            self.app.drawWindow,
+            Gtk.FileChooserAction.OPEN,
+            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+             Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
+        dialog.set_default_response(Gtk.ResponseType.OK)
 
-        preview = gtk.Image()
+        preview = Gtk.Image()
         dialog.set_preview_widget(preview)
         dialog.connect("update-preview", self.update_preview_cb, preview)
 
@@ -818,7 +815,7 @@ class FileHandler (object):
                     dialog.set_current_folder(dn)
                     break
         try:
-            if dialog.run() == gtk.RESPONSE_OK:
+            if dialog.run() == Gtk.ResponseType.OK:
                 dialog.hide()
                 self.app.scratchpad_filename = dialog.get_filename().decode('utf-8')
                 self.open_scratchpad(self.app.scratchpad_filename)
@@ -873,7 +870,7 @@ class FileHandler (object):
     def save_as_dialog(self, save_method_reference, suggested_filename=None, start_in_folder=None, export=False, **options):
         
         if not self.save_dialog:
-            self.init_save_dialog()
+            self.save_dialog = self.init_save_dialog(export)
         dialog = self.save_dialog
                    
         # Set the filename in the dialog
@@ -887,7 +884,7 @@ class FileHandler (object):
 
         try:
             # Loop until we have filename with an extension
-            while dialog.run() == gtk.RESPONSE_OK:
+            while dialog.run() == Gtk.ResponseType.OK:
                 filename = dialog.get_filename()
                 if filename is None:
                     continue
@@ -946,7 +943,7 @@ class FileHandler (object):
                 
                 # trigger overwrite confirmation for the modified filename
                 _dialog_set_filename(dialog, filename)
-                dialog.response(gtk.RESPONSE_OK)
+                dialog.response(Gtk.ResponseType.OK)
 
         finally:
             dialog.hide()
@@ -1148,7 +1145,7 @@ class FileHandler (object):
         if not groups:
             msg = _('There are no scrap files named "%s" yet.') % \
                 (self.get_scrap_prefix() + '[0-9]*')
-            self.app.message_dialog(msg, gtk.MESSAGE_WARNING)
+            self.app.message_dialog(msg, Gtk.MessageType.WARNING)
             return
         next = action.get_name() == 'NextScrap'
         if next:
@@ -1280,7 +1277,7 @@ class FileHandler (object):
         file_chooser.set_preview_widget_active(False)
 
     def open_project_cb(self, action):
-        self._open_internal(gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
+        self._open_internal(Gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
                 self.update_project_preview_cb,
                 None)
 
@@ -1313,7 +1310,7 @@ class FileHandler (object):
         # we can use customized version of dialog.
         # this dialog should be destoroyed in self.save_as_dialog().
         self.init_save_dialog(
-            gtk.FILE_CHOOSER_ACTION_CREATE_FOLDER | gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
+            Gtk.FILE_CHOOSER_ACTION_CREATE_FOLDER | Gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
             False
             )
             
@@ -1354,7 +1351,6 @@ class FileHandler (object):
                 "file handling: revert project failed (statusbar)",
                 u"Current document is not project,you cannot revert it.",
             ))
-           #self.app.message_dialog(unicode(e), type=gtk.MESSAGE_ERROR)
 
     def open_recent_project_cb(self, action):
         filepath = self.recent_projects_info[action.id]
@@ -1388,13 +1384,13 @@ class FileHandler (object):
                                 curdir)
 
         menu_or.set_visible(True)
-        menu_sub = gtk.Menu()
+        menu_sub = Gtk.Menu()
         menu_sub.set_visible(True)
         self.PROJECT_RECENT_MAX = 5
         self.project_recent_menus = []
 
         for i in range(self.PROJECT_RECENT_MAX):
-            cmenu = gtk.MenuItem() 
+            cmenu = Gtk.MenuItem() 
             cmenu.id = i
             cmenu.connect('activate', self.open_recent_project_cb)
             cmenu.set_visible(False)
@@ -1403,8 +1399,6 @@ class FileHandler (object):
         menu_or.set_submenu(menu_sub)
         self.menu_sub = menu_sub
 
-       #self.project_recent_menus = sorted(self.project_recent_menus, 
-       #        reverse=True)
 
         self._refresh_recent_project_menu()
 

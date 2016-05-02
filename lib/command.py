@@ -14,7 +14,6 @@ from gi.repository import Gtk
 import lib.layer
 import helpers
 from observable import event
-import tiledsurface
 import lib.stroke
 from warnings import warn
 import lib.mypaintlib
@@ -292,9 +291,9 @@ class Brushwork (Command):
         else:
             time = self._stroke_seq.total_painting_time
             brush_name = unicode(self._stroke_seq.brush_name)
-        #TRANSLATORS: A short time spent painting / making brushwork.
-        #TRANSLATORS: This can correspond to zero or more touches of
-        #TRANSLATORS: the physical stylus to the tablet.
+        # TRANSLATORS: A short time spent painting / making brushwork.
+        # TRANSLATORS: This can correspond to zero or more touches of
+        # TRANSLATORS: the physical stylus to the tablet.
         return _(u"{seconds:.01f}s of painting with {brush_name}").format(
             seconds=time,
             brush_name=brush_name,
@@ -820,7 +819,7 @@ class AddLayer (Command):
     def display_name(self):
         return _("Add {layer_default_name}").format(
             layer_default_name=self._layer.DEFAULT_NAME,
-            )
+        )
 
     def redo(self):
         layers = self.doc.layer_stack
@@ -944,8 +943,8 @@ class MoveLayer (Command):
     methods can no longer be used.
     """
 
-    #TRANSLATORS: Command to move a layer in the horizontal plane,
-    #TRANSLATORS: preserving its position in the stack.
+    # TRANSLATORS: Command to move a layer in the horizontal plane,
+    # TRANSLATORS: preserving its position in the stack.
     display_name = _("Move Layer")
 
     def __init__(self, doc, layer_path, x0, y0, **kwds):
@@ -1054,6 +1053,7 @@ class DuplicateLayer (Command):
         layer_copy = deepcopy(layers.current)
         layers.deepinsert(self._path, layer_copy)
         assert layers.deepindex(layer_copy) == self._path
+        layers.set_current_path(self._path)
         self._notify_canvas_observers([layer_copy.get_full_redraw_bbox()])
 
     def undo(self):
@@ -1341,7 +1341,7 @@ class SetLayerOpacity (Command):
 
     @property
     def display_name(self):
-        percent = self._new_opacity*100.0
+        percent = self._new_opacity * 100.0
         return _(u"Set Layer Opacity: %0.1f%%") % (percent,)
 
     @property

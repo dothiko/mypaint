@@ -23,6 +23,7 @@ import platform
 
 from gi.repository import Gtk
 from gi.repository import GdkPixbuf
+from gi.repository import GLib
 import cairo
 
 from lib.gettext import C_
@@ -210,7 +211,12 @@ _TRANSLATOR_CREDITS = C_(
 ## About dialog for the app
 
 def get_libs_version_string():
-    """Get a string describing the versions of important libs."""
+    """Get a string describing the versions of important libs.
+
+    >>> type(get_libs_version_string()) == str
+    True
+
+    """
     versions = [
         ("Python", "{major}.{minor}.{micro}".format(
             major = sys.version_info.major,
@@ -224,6 +230,11 @@ def get_libs_version_string():
         )),
         ("GdkPixbuf", GdkPixbuf.PIXBUF_VERSION),
         ("Cairo", cairo.cairo_version_string()),  # NOT cairo.version
+        ("GLib", "{major}.{minor}.{micro}".format(
+            major = GLib.MAJOR_VERSION,
+            minor = GLib.MINOR_VERSION,
+            micro = GLib.MICRO_VERSION,
+        )),
     ]
     return ", ".join([" ".join(t) for t in versions])
 
@@ -257,7 +268,7 @@ def run_about_dialog(mainwin, app):
     d.set_copyright(escape(COPYRIGHT_STRING))
     d.set_website(WEBSITE_URI)
     d.set_logo(app.pixmaps.mypaint_logo)
-    d.set_license(escape(LICENSE_SUMMARY))
+    d.set_license(LICENSE_SUMMARY)
     d.set_wrap_license(True)
     d.set_authors(_AUTHOR_CREDITS)
     d.set_artists(_ARTIST_CREDITS)

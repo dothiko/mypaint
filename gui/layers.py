@@ -352,7 +352,7 @@ class RootStackTreeView (Gtk.TreeView):
         # Type column
         cell = Gtk.CellRendererPixbuf()
         col = Gtk.TreeViewColumn(_("Type"))
-        col.pack_start(cell, expand=False)
+        col.pack_start(cell, False)
         datafunc = layer_type_pixbuf_datafunc
         col.set_cell_data_func(cell, datafunc)
         col.set_sizing(Gtk.TreeViewColumnSizing.FIXED)
@@ -363,7 +363,7 @@ class RootStackTreeView (Gtk.TreeView):
         cell = Gtk.CellRendererText()
         cell.set_property("ellipsize", Pango.EllipsizeMode.END)
         col = Gtk.TreeViewColumn(_("Name"))
-        col.pack_start(cell, expand=True)
+        col.pack_start(cell, True)
         datafunc = layer_name_text_datafunc
         col.set_cell_data_func(cell, datafunc)
         col.set_expand(True)
@@ -374,7 +374,7 @@ class RootStackTreeView (Gtk.TreeView):
         # Visibility column
         cell = Gtk.CellRendererPixbuf()
         col = Gtk.TreeViewColumn(_("Visible"))
-        col.pack_start(cell, expand=False)
+        col.pack_start(cell, False)
         datafunc = layer_visible_pixbuf_datafunc
         col.set_cell_data_func(cell, datafunc)
         col.set_sizing(Gtk.TreeViewColumnSizing.FIXED)
@@ -384,7 +384,7 @@ class RootStackTreeView (Gtk.TreeView):
         # Locked column
         cell = Gtk.CellRendererPixbuf()
         col = Gtk.TreeViewColumn(_("Locked"))
-        col.pack_start(cell, expand=False)
+        col.pack_start(cell, False)
         datafunc = layer_locked_pixbuf_datafunc
         col.set_cell_data_func(cell, datafunc)
         col.set_sizing(Gtk.TreeViewColumnSizing.FIXED)
