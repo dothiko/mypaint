@@ -879,13 +879,13 @@ class StampMode (InkingMode):
         self._queue_draw_node(i, force_margin=True) 
 
 
-    def select_area(self, selection_mode):
+    def select_area_cb(self, selection_mode):
         """ Selection handler called from SelectionMode.
         This handler never called when no selection executed.
         """
         if self.phase == _Phase.CAPTURE:
             if self.stamp and self.stamp.is_support_selection:
-                self.stamp.set_selection_area(
+                self.stamp.selection_areas.append(
                         selection_mode.get_min_max_pos_model())
                 self.stamp.initialize_phase()
 
@@ -1122,6 +1122,7 @@ class Overlay_Stamp (Overlay):
         mode.stamp.finalize_draw(cr)
 
         # Selection areas
+        # TODO draw only visible area
         if mode.stamp.is_support_selection:
             self.draw_selection_area(cr, mode.stamp.get_selection_area())
 
