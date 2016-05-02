@@ -42,13 +42,13 @@ HOW TO ADD Selection FUNCTIONALITY TO MODE
         ])
 ```
 
- 2. add callback 'select_area(self, selection_mode)' to mode.
+ 2. add callback 'select_area_cb(self, selection_mode)' to mode.
     argument selection_mode is the SelectionMode,it has
     'is_inside_model/is_inside_display' method to 
     distinguish whether the point(s) are inside selection or not.
 
 ```
-    def select_area(self, selection_mode):
+    def select_area_cb(self, selection_mode):
         modified = False
         for idx,cn in enumerate(self.nodes):
             if selection_mode.is_inside_model(cn.x, cn.y):
@@ -180,8 +180,8 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
         
         if self.is_valid():
             returning_mode = self.doc.modes.top
-            if hasattr(returning_mode, 'select_area'):
-                returning_mode.select_area(self)
+            if hasattr(returning_mode, 'select_area_cb'):
+                returning_mode.select_area_cb(self)
 
         return super(SelectionMode, self).leave(**kwds)
 

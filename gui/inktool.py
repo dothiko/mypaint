@@ -1565,7 +1565,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._reset_selected_nodes(None)
         self._queue_redraw_all_nodes()
 
-    def select_area(self, selection_mode):
+    def select_area_cb(self, selection_mode):
         """ Selection handler called from SelectionMode.
         This handler never called when no selection executed.
         """
