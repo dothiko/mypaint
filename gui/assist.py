@@ -7,7 +7,6 @@
 
 
 ## Imports
-
 import math
 import array
 from lib.helpers import clamp
@@ -15,12 +14,7 @@ import logging
 from collections import deque
 logger = logging.getLogger(__name__)
 
-import gtk2compat
-from gettext import gettext as _
-import gobject
-import gtk
-from gtk import gdk
-from gtk import keysyms
+from gi.repository import Gtk, Gdk
 
 import gui.drawutils
 

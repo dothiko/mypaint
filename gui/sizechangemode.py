@@ -17,11 +17,8 @@ import logging
 logger = logging.getLogger(__name__)
 import weakref
 
-import gtk2compat
-import gtk
-from gtk import gdk
 from gettext import gettext as _
-import gobject
+from gi.repository import Gtk, Gdk
 from curve import CurveWidget
 
 import gui.mode
@@ -85,7 +82,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         """Initialize"""
         super(SizechangeMode, self).__init__(**kwds)
         self.app = None
-        self._cursor = gdk.Cursor(gdk.CursorType.BLANK_CURSOR)
+        self._cursor = Gdk.Cursor(Gdk.CursorType.BLANK_CURSOR)
         self._overlays = {}  # keyed by tdw
         self._enable_warp = False
 
@@ -133,7 +130,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
             self.base_x = self.start_x
             self.base_y = self.start_y
             # getting returning point of cursor,in screen coordinate
-            disp = gdk.Display.get_default()
+            disp = Gdk.Display.get_default()
             if self._enable_warp:
                 screen, self.start_screen_x , self.start_screen_y ,mod = \
                         disp.get_pointer()
@@ -182,7 +179,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         # but,absolute axis pointer device(like pen-stylus)
         # rather unconfortable than nothing done.
         if self._enable_warp:
-            d = gdk.Display.get_default()
+            d = Gdk.Display.get_default()
            #d=tdw.get_display()
             d.warp_pointer(d.get_default_screen(),self.start_screen_x,self.start_screen_y)
         return super(SizechangeMode, self).drag_stop_cb(tdw)

@@ -19,7 +19,6 @@ import weakref
 
 from gi.repository import Gtk, Gdk
 from gettext import gettext as _
-import gobject
 from curve import CurveWidget
 import array
 

@@ -19,11 +19,7 @@ logger = logging.getLogger(__name__)
 import random
 import json
 
-import gtk2compat
 from gettext import gettext as _
-import gtk
-from gtk import gdk
-from gtk import keysyms
 from libmypaint import brushsettings
 from gi.repository import GLib
 from gi.repository import GdkPixbuf
@@ -1239,8 +1235,8 @@ class OptionsPresenter_Stamp (object):
 
         sw = Gtk.ScrolledWindow()
         sw.set_margin_top(4)
-        sw.set_shadow_type(Gtk.SHADOW_ETCHED_IN)
-        sw.set_policy(Gtk.POLICY_AUTOMATIC, Gtk.POLICY_AUTOMATIC)            
+        sw.set_shadow_type(Gtk.ShadowType.ETCHED_IN)
+        sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)            
         sw.set_hexpand(True)
         sw.set_vexpand(True)
         sw.set_halign(Gtk.Align.FILL)
