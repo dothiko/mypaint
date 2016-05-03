@@ -883,6 +883,8 @@ class StampMode (InkingMode):
                 self.stamp.selection_areas.append(
                         selection_mode.get_min_max_pos_model())
                 self.stamp.initialize_phase()
+                for tdw in self._overlays:
+                    self._queue_selection_area(tdw)
 
         else:
             modified = False
