@@ -462,10 +462,9 @@ class StampMode (InkingMode):
 
     def _queue_selection_area(self, tdw):
         if self.stamp and self.stamp.is_support_selection:
-            area = self._stamp.get_selection_area()
-            if area:
-                dsx, dsy = tdw.model_to_display(area[0], area[1])
-                dex, dey = tdw.model_to_display(area[2], area[3])
+            for area in self._stamp.selection_areas:
+                dsx, dsy = tdw.model_to_display(int(area[0]), int(area[1]))
+                dex, dey = tdw.model_to_display(int(area[2]), int(area[3]))
                 tdw.queue_draw_area(dsx, dsy, 
                         dex - dsx + 1, dey - dsy + 1)
 
@@ -1058,23 +1057,25 @@ class Overlay_Stamp (Overlay):
         cr.stroke()
         cr.restore()
 
-    def draw_selection_area(self, cr, selarea):
-        if selarea:
+    def draw_selection_area(self, cr, selareas):
+        if selareas:
             cr.save()
             mode = self._inkmode
             cr.set_line_width(1)
             cr.set_source_rgb(0, 1, 0)
             tdw = self._tdw
 
-            dx, dy = tdw.model_to_display(selarea[0], selarea[1])
-            ex, ey = tdw.model_to_display(selarea[2], selarea[3])
-            cr.move_to(dx, dy)
-            cr.line_to(ex, dy)
-            cr.line_to(ex, ey)
-            cr.line_to(dx, ey)
-            cr.close_path()
+            for area in selareas:
+                # TODO only visible area should be drawn
+                dx, dy = tdw.model_to_display(area[0], area[1])
+                ex, ey = tdw.model_to_display(area[2], area[3])
+                cr.move_to(dx, dy)
+                cr.line_to(ex, dy)
+                cr.line_to(ex, ey)
+                cr.line_to(dx, ey)
+                cr.close_path()
+                cr.stroke()
 
-            cr.stroke()
             cr.restore()
 
     def paint(self, cr):
@@ -1120,7 +1121,7 @@ class Overlay_Stamp (Overlay):
         # Selection areas
         # TODO draw only visible area
         if mode.stamp.is_support_selection:
-            self.draw_selection_area(cr, mode.stamp.get_selection_area())
+            self.draw_selection_area(cr, mode.stamp.selection_areas)
 
         # Buttons
         if (mode.phase in
