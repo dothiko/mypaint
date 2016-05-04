@@ -191,6 +191,8 @@ class StampMode (InkingMode):
         self._stamp = stamp
         self._stamp.initialize_phase()
 
+    ## Status methods
+
     def enter(self, doc, **kwds):
         """Enters the mode: called by `ModeStack.push()` etc."""
         self._blank_cursor = doc.app.cursors.get_action_cursor(
@@ -378,19 +380,35 @@ class StampMode (InkingMode):
                 tdw.set_override_cursor(cursor)
                 self._current_override_cursor = cursor
 
+    def _notify_stamp_changed(self):
+        for tdw in self._overlays:
+            self._queue_selection_area(tdw)
+
+        self.options_presenter.refresh_tile_count()
+
+    def select_area_cb(self, selection_mode):
+        """ Selection handler called from SelectionMode.
+        This handler never called when no selection executed.
+        """
+        if self.phase == _Phase.CAPTURE:
+            if self.stamp and self.stamp.is_support_selection:
+                self.stamp.selection_areas.append(
+                        selection_mode.get_min_max_pos_model())
+
+                self.stamp.initialize_phase()
+                self._notify_stamp_changed()
+        else:
+            modified = False
+            for idx,cn in enumerate(self.nodes):
+                if selection_mode.is_inside_model(cn.x, cn.y):
+                    if not idx in self.selected_nodes:
+                        self.selected_nodes.append(idx)
+                        modified = True
+            if modified:
+                self._queue_redraw_all_nodes()
 
     ## Redraws
 
-
-   #def _queue_draw_selected_nodes(self):
-   #    for i in self.selected_nodes:
-   #        self._queue_draw_node(i)
-   #
-   #def _queue_redraw_all_nodes(self):
-   #    """Redraws all nodes on all known view TDWs"""
-   #    for i in xrange(len(self.nodes)):
-   #        self._queue_draw_node(i)
-   #
     def _search_target_node(self, tdw, x, y):
         """ utility method: to commonize processing,
         even in inherited classes.
@@ -403,7 +421,6 @@ class StampMode (InkingMode):
         for i, node in reversed(list(enumerate(self.nodes))):
             handle_idx = stamp.get_handle_index(mx, my, node,
                    gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
-           #if stamp.is_inside(mx, my, node):
             if handle_idx >= 0:
                 new_target_node_index = i
                 if handle_idx >= 4:
@@ -413,13 +430,6 @@ class StampMode (InkingMode):
 
     def _queue_draw_node(self, i, force_margin=False):
         """Redraws a specific control node on all known view TDWs"""
-       #node = self.nodes[i]
-       #
-       #if i == self.target_node_index:
-       #    margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 4
-       #else:
-       #    margin = 4
-       #
         if i in self.selected_nodes:
             dx,dy = self.drag_offset.get_model_offset()
         else:
@@ -646,6 +656,7 @@ class StampMode (InkingMode):
 
         self._update_zone_and_target(tdw, event.x, event.y)
         return super(InkingMode, self).motion_notify_cb(tdw, event)
+
     ## Drag handling (both capture and adjust phases)
 
     def drag_start_cb(self, tdw, event):
@@ -874,27 +885,6 @@ class StampMode (InkingMode):
         self._queue_draw_node(i, force_margin=True) 
 
 
-    def select_area_cb(self, selection_mode):
-        """ Selection handler called from SelectionMode.
-        This handler never called when no selection executed.
-        """
-        if self.phase == _Phase.CAPTURE:
-            if self.stamp and self.stamp.is_support_selection:
-                self.stamp.selection_areas.append(
-                        selection_mode.get_min_max_pos_model())
-                self.stamp.initialize_phase()
-                for tdw in self._overlays:
-                    self._queue_selection_area(tdw)
-
-        else:
-            modified = False
-            for idx,cn in enumerate(self.nodes):
-                if selection_mode.is_inside_model(cn.x, cn.y):
-                    if not idx in self.selected_nodes:
-                        self.selected_nodes.append(idx)
-                        modified = True
-            if modified:
-                self._queue_redraw_all_nodes()
 
 class Overlay_Stamp (Overlay):
     """Overlay for an StampMode's adjustable points"""
@@ -1286,18 +1276,18 @@ class OptionsPresenter_Stamp (object):
         self._updating_ui = True
         try:
             self._ensure_ui_populated()
-            tile_adj = None
-            if mode.stamp != None:
-                if mode.stamp.tile_count > 1:
-                    self._tile_adj.set_upper(mode.stamp.tile_count-1)
-                    tile_adj = self._tile_adj
-                else:
-                    self._tile_adj.set_upper(0)
-
-                self._random_tile_button.set_sensitive(
-                        mode.stamp.tile_count > 1)
-            else:
-                self._random_tile_button.set_sensitive(False)
+           #tile_adj = None
+           #if mode.stamp != None:
+           #    if mode.stamp.tile_count > 1:
+           #        self._tile_adj.set_upper(mode.stamp.tile_count-1)
+           #        tile_adj = self._tile_adj
+           #    else:
+           #        self._tile_adj.set_upper(0)
+           #
+           #    self._random_tile_button.set_sensitive(
+           #            mode.stamp.tile_count > 1)
+           #else:
+           #    self._random_tile_button.set_sensitive(False)
 
 
             if 0 <= cn_idx < len(mode.nodes):
@@ -1307,8 +1297,12 @@ class OptionsPresenter_Stamp (object):
                 self._xscale_adj.set_value(cn.scale_x)
                 self._yscale_adj.set_value(cn.scale_y)
                 self._point_values_grid.set_sensitive(True)
-                if tile_adj:
-                    tile_adj.set_value(cn.tile_index)
+
+                if self.refresh_tile_count():
+                    self._random_tile_button.set_sensitive(True)
+                    self._tile_adj.set_value(cn.tile_index)
+                else:
+                    self._random_tile_button.set_sensitive(False)
             else:
                 self._point_values_grid.set_sensitive(False)
 
@@ -1316,6 +1310,18 @@ class OptionsPresenter_Stamp (object):
         finally:
             self._updating_ui = False
 
+    def refresh_tile_count(self):
+        mode, node_idx = self.target
+
+        if mode.stamp:
+            if mode.stamp.tile_count > 1:
+                self._tile_adj.set_upper(mode.stamp.tile_count-1)
+                return True
+            else:
+                self._tile_adj.set_upper(0)
+        return False
+
+    ## Widgets Handlers
 
     def _angle_adj_value_changed_cb(self, adj):
         if self._updating_ui:
@@ -1327,7 +1333,7 @@ class OptionsPresenter_Stamp (object):
         if self._updating_ui:
             return
         mode, node_idx = self.target
-        mode.set_node_tile(node_idx, adj.get_value())
+        mode.update_node(node_idx, tile_index=int(adj.get_value()))
 
     def _xscale_adj_value_changed_cb(self, adj):
         if self._updating_ui:
@@ -1350,8 +1356,8 @@ class OptionsPresenter_Stamp (object):
     def _random_tile_button_clicked_cb(self, button):
         mode, node_idx = self.target
         if mode.stamp.get_tile_count() > 1:
-            mode.set_current_tile(
-                    random.randint(0, mode.stamp.get_tile_count()))
+            mode.update_node(node_idx, 
+                    tile_index=random.randint(0, mode.stamp.get_tile_count()))
 
     def _delete_point_button_clicked_cb(self, button):
         mode, node_idx = self.target

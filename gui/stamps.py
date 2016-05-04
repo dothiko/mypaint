@@ -186,6 +186,16 @@ class _Dynamic_Source(_Pixbuf_Source):
     This event should be used from some Stamp class.
     """
 
+    @property
+    def tile_count(self):
+        """
+        CAUTION: Length of self._pixbufs might not be correct number of 
+        tile.because there might be some sources not loaded yet.
+
+        tile_count property of Stamp class should deal with this problem.
+        """
+        return len(self._pixbufs)
+
     @event
     def pixbuf_requested(self, tile_index):
         """ Event of pixbuf for tile_index is dynamically requested now.
@@ -327,7 +337,10 @@ class _StampMixin(object):
 
     @property
     def tile_count(self):
-        return 1
+        if self._pixbuf_src:
+            return self._pixbuf_src.tile_count
+        else:
+            return 0
 
     def set_file_sources(self, filenames):
         if self._pixbuf_src == None:
@@ -426,6 +439,7 @@ class _StampMixin(object):
             
             if save_context:
                 cr.restore()
+
     ## Boundary / hit-check methods
 
     def is_inside(self, mx, my, node):
@@ -719,6 +733,9 @@ class LayerStamp(_DynamicStampMixin):
     def selection_areas(self):
         return self._sel_areas
 
+    @property
+    def tile_count(self):
+        return len(self._sel_areas)
 
     def initialize_phase(self):
         """ Get current (cached) src pixbuf.
