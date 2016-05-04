@@ -111,6 +111,8 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
         ['RotateViewMode', 'ZoomViewMode', 'PanViewMode']
         + gui.mode.BUTTON_BINDING_ACTIONS)
 
+    RECTANGLE_INDEX = ( (0,0), (1,0), (1,1), (0,1) )
+
     ## Initialization
 
     def __init__(self, **kwds):
@@ -119,48 +121,32 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
         self.app = None
         self._cursor = Gdk.Cursor(Gdk.CursorType.BLANK_CURSOR)
         self._overlays = {}  # keyed by tdw
-        self._x = array.array('f',(0,0,0,0))
-        self._y = array.array('f',(0,0,0,0))
-        self._mx = array.array('f',(0,0,0,0))
-        self._my = array.array('f',(0,0,0,0))
+        self._x = array.array('f',(0,0))
+        self._y = array.array('f',(0,0))
+        self._mx = array.array('f',(0,0))
+        self._my = array.array('f',(0,0))
 
     def reset(self):
-        self._x[0] = self._x[1] = self._x[2] = self._x[3] = 0
-        self._y[0] = self._y[1] = self._y[2] = self._y[3] = 0
-        self._mx[0] = self._mx[1] = self._mx[2] = self._mx[3] = 0
-        self._my[0] = self._my[1] = self._my[2] = self._my[3] = 0
+        self._x[0] = self._x[1] = 0
+        self._y[0] = self._y[1] = 0
+        self._mx[0] = self._mx[1] = 0
+        self._my[0] = self._my[1] = 0
 
 
     def _modelnized(self, tdw):
-        for i in xrange(4):
+        for i in xrange(2):
             self._mx[i], self._my[i] = tdw.display_to_model(
                     self._x[i], self._y[i])
 
-    def _get_min_max_pos(self):
-        min_x = self._x[0]
-        max_x = min_x
-        min_y = self._y[0]
-        max_y = min_y
-        for i in xrange(3):
-            min_x = min(min_x, self._x[i+1])
-            max_x = max(max_x, self._x[i+1])
-            min_y = min(min_y, self._y[i+1])
-            max_y = max(max_y, self._y[i+1])
-
-        return (min_x, min_y, max_x, max_y)
+    def _get_min_max_pos(self, tdw):
+        return gui.ui_utils.get_outmost_area(tdw,
+                self._mx[0], self._my[0], self._mx[1], self._my[1], 
+                margin=2)
 
     def get_min_max_pos_model(self):
-        min_x = self._mx[0]
-        max_x = min_x
-        min_y = self._my[0]
-        max_y = min_y
-        for i in xrange(3):
-            min_x = min(min_x, self._mx[i+1])
-            max_x = max(max_x, self._mx[i+1])
-            min_y = min(min_y, self._my[i+1])
-            max_y = max(max_y, self._my[i+1])
-
-        return (min_x, min_y, max_x, max_y)
+        return gui.ui_utils.get_outmost_area(None,
+                self._mx[0], self._my[0], self._mx[1], self._my[1], 
+                margin=0)
 
 
     ## InteractionMode/DragMode implementation
@@ -249,53 +235,43 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
 
     def _get_update_rect(self, tdw):
         """Get update 'rect' for update(erase) tdw"""
-        csx, csy, cex, cey = self._get_min_max_pos()
-        margin = self.LINE_WIDTH * 2
-        return (csx - margin,
-                csy - margin,
-                (cex - csx + 1) + margin * 2,
-                (cey - csy + 1) + margin * 2)
+        return self._get_min_max_pos(tdw)
 
 
 
     ## Selection related methods
 
     def start(self, tdw, x, y):
-        self._x[0] = self._x[1] = self._x[2] = self._x[3] = x
-        self._y[0] = self._y[1] = self._y[2] = self._y[3] = y
+        self._x[0] = self._x[1] = x
+        self._y[0] = self._y[1] = y
         self._modelnized(tdw)
         
 
     def drag(self, tdw, x, y):
-        self._x[1] = self._x[2] = x
-        self._y[2] = self._y[3] = y
+        self._x[1] = x
+        self._y[1] = y
 
         self._modelnized(tdw)
 
     def get_display_point(self, tdw, i):
-        return tdw.model_to_display(self._mx[i], self._my[i])
+        xi, yi = self.RECTANGLE_INDEX[i]
+        return tdw.model_to_display(
+                self._mx[xi], self._my[yi])
 
     def get_model_point(self, i):
-        return (self._mx[i], self._my[i])
+        xi, yi = self.RECTANGLE_INDEX[i]
+        return (self._mx[xi], self._my[xi])
 
     def is_inside_model(self, mx, my):
         """ check whether mx,my is inside selected rectangle.
         this method needs model coordinate point.
         """
-        if not gui.ui_utils.is_inside_triangle( 
-                mx, my, ( (self._mx[0], self._my[0]),
-                        (self._mx[1], self._my[1]),
-                        (self._mx[2], self._my[2]))):
-            return gui.ui_utils.is_inside_triangle(
-                    mx, my, ( (self._mx[0], self._my[0]),
-                            (self._mx[2], self._my[2]),
-                            (self._mx[3], self._my[3])))
-        else:
-            return True
+        return (self._mx[0] <= mx <= self._mx[1] and
+                self._my[0] <= my <= self._my[1])
 
     def is_valid(self):
-        return not (self._x[0] == self._x[1] == self._x[2] == self._x[3] and 
-            self._y[0] == self._y[1] == self._y[2] == self._y[3]) 
+        return not (self._x[0] == self._x[1] and 
+            self._y[0] == self._y[1]) 
 
 
 
