@@ -894,6 +894,7 @@ class Overlay_Stamp (Overlay):
     def __init__(self, mode, tdw):
         super(Overlay_Stamp, self).__init__(mode, tdw)
 
+
     def _get_onscreen_nodes(self):
         """Iterates across only the on-screen nodes."""
         mode = self._inkmode
@@ -911,14 +912,44 @@ class Overlay_Stamp (Overlay):
             if bbox:
                 x, y, w, h = bbox
                 node_on_screen = (
-                    x > alloc.x  and
-                    y > alloc.y  and
+                    x > alloc.x - w and
+                    y > alloc.y - h and
                     x < alloc.x + alloc.width + w and
                     y < alloc.y + alloc.height + h
                 )
 
                 if node_on_screen:
                     yield (i, node)
+
+    def _get_onscreen_areas(self, selareas):
+        """Iterates across only the on-screen areas.
+
+        :rtype: yielding a tuple of (index, (start_x, start_y, end_x, end_y)).
+                returned values are display coordinate.
+        """
+        mode = self._inkmode
+        tdw = self._tdw
+        alloc = tdw.get_allocation()
+
+        for i, area in enumerate(selareas):
+            sx, sy = tdw.model_to_display(area[0], area[1])
+            ex, ey = tdw.model_to_display(area[2], area[3])
+            tsx = min(sx, ex)
+            tsy = min(sy, ey)
+            tex = max(sx, ex)
+            tey = max(sy, ey)
+            w = (tex - tsx) + 1
+            h = (tey - tsy) + 1
+
+            node_on_screen = (
+                tsx > alloc.x - w  and
+                tsy > alloc.y - h and
+                tsx < alloc.x + alloc.width + w and
+                tsy < alloc.y + alloc.height + h
+            )
+
+            if node_on_screen:
+                yield (i, (tsx, tsy, tex, tey))
 
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
@@ -1054,19 +1085,15 @@ class Overlay_Stamp (Overlay):
     def draw_selection_area(self, cr, selareas):
         if selareas:
             cr.save()
-            mode = self._inkmode
             cr.set_line_width(1)
             cr.set_source_rgb(0, 1, 0)
-            tdw = self._tdw
 
-            for area in selareas:
-                # TODO only visible area should be drawn
-                dx, dy = tdw.model_to_display(area[0], area[1])
-                ex, ey = tdw.model_to_display(area[2], area[3])
-                cr.move_to(dx, dy)
-                cr.line_to(ex, dy)
+            for i, area in self._get_onscreen_areas(selareas):
+                sx, sy, ex, ey = area
+                cr.move_to(sx, sy)
+                cr.line_to(ex, sy)
                 cr.line_to(ex, ey)
-                cr.line_to(dx, ey)
+                cr.line_to(sx, ey)
                 cr.close_path()
                 cr.stroke()
 
@@ -1113,7 +1140,6 @@ class Overlay_Stamp (Overlay):
         mode.stamp.finalize_draw(cr)
 
         # Selection areas
-        # TODO draw only visible area
         if mode.stamp.is_support_selection:
             self.draw_selection_area(cr, mode.stamp.selection_areas)
 
@@ -1158,17 +1184,6 @@ class OptionsPresenter_Stamp (object):
     """Presents UI for directly editing point values etc."""
 
     variation_preset_store = None
-
-    @classmethod
-    def init_stamp_presets(cls):
-        return
-       #if cls.variation_preset_store == None:
-       #    from application import get_app
-       #    _app = get_app()
-       #    store = Gtk.ListStore(str, int)
-       #    for i,name in enumerate(_app.stroke_pressure_settings.settings):
-       #        store.append((name,i))
-       #    cls.variation_preset_store = store
 
     def __init__(self):
         super(OptionsPresenter_Stamp, self).__init__()
