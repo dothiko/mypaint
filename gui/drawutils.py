@@ -583,6 +583,22 @@ def get_drop_shadow_offsets(line_width, z=2):
         dy + max_line_width + slack,
     ])
 
+def draw_rectangle_follow_canvas(cr, tdw, sx, sy, ex, ey):
+    """
+    Draw a rectangle, which follows to rotating canvas.
+    :param sx, sy: start point(left-top) of rectangle
+    :param ex, ey: end point(right-bottom) of rectangle
+    """
+    tx, ty = tdw.model_to_display(sx, sy)
+    cr.move_to(tx, ty)
+    tx, ty = tdw.model_to_display(ex, sy)
+    cr.line_to(tx, ty)
+    tx, ty = tdw.model_to_display(ex, ey)
+    cr.line_to(tx, ty)
+    tx, ty = tdw.model_to_display(sx, ey)
+    cr.line_to(tx, ty)
+    cr.close_path()
+
 ## Bezier curve
 def get_bezier(p0, p1, p2, t):
     dt = 1-t

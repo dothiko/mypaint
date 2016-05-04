@@ -547,23 +547,7 @@ class _StampMixin(object):
         """
         pos = self.get_boundary_points(node, dx=dx, dy=dy)
         if pos:
-            if tdw:
-                sx, sy = tdw.model_to_display(*pos[0])
-            else:
-                sx, sy = pos[0]
-            ex = sx
-            ey = sy
-            for x, y in pos[1:]:
-                if tdw:
-                    x, y = tdw.model_to_display(x, y)
-                sx = min(sx, x)
-                sy = min(sy, y)
-                ex = max(ex, x)
-                ey = max(ey, y)
-
-            return (sx - margin, sy - margin, 
-                    (ex - sx) + 1 + margin * 2, 
-                    (ey - sy) + 1 + margin * 2)
+            return get_outmost_area(tdw, *pos, margin=margin)
 
 
     ## Phase related methods
@@ -676,7 +660,7 @@ class ClipboardStamp(_DynamicStampMixin):
         # we might need some property interface to get it from
         # document class directly...?
         display = self._doc.tdw.get_display()
-        cb = gtk.Clipboard.get_for_display(display, Gdk.SELECTION_CLIPBOARD)
+        cb = Gtk.Clipboard.get_for_display(display, Gdk.SELECTION_CLIPBOARD)
         return cb
 
     def initialize_phase(self):
@@ -1089,14 +1073,9 @@ BUILT_IN_STAMPS = [
             
 
 
-def _test():
-   #from application import get_app
-   #app = get_app()
-    m = StampPresetManager(None)
-    print(m.initialize_icon_store())
 
 if __name__ == '__main__':
-    _test()
+    pass
 
 
 

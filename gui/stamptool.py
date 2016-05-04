@@ -34,6 +34,7 @@ from gui.linemode import *
 from lib.command import Command
 from gui.ui_utils import *
 from gui.stamps import *
+from lib.color import HCYColor, RGBColor
 
 ## Module settings
 
@@ -381,6 +382,10 @@ class StampMode (InkingMode):
                 self._current_override_cursor = cursor
 
     def _notify_stamp_changed(self):
+        """
+        Common processing stamp changed,
+        or target area added/removed
+        """
         for tdw in self._overlays:
             self._queue_selection_area(tdw)
 
@@ -472,12 +477,12 @@ class StampMode (InkingMode):
 
     def _queue_selection_area(self, tdw):
         if self.stamp and self.stamp.is_support_selection:
+            # TODO only visible areas should be drawn.
             for area in self._stamp.selection_areas:
-                dsx, dsy = tdw.model_to_display(int(area[0]), int(area[1]))
-                dex, dey = tdw.model_to_display(int(area[2]), int(area[3]))
-                tdw.queue_draw_area(dsx, dsy, 
-                        dex - dsx + 1, dey - dsy + 1)
-
+                sx, sy, ex, ey = gui.ui_utils.get_outmost_area(tdw, *area, 
+                        margin=gui.style.DRAGGABLE_POINT_HANDLE_SIZE+4)
+                tdw.queue_draw_area(sx, sy, 
+                        ex - sx + 1, ey - sy + 1)
 
     ## Raw event handling (prelight & zone selection in adjust phase)
 
@@ -891,6 +896,12 @@ class StampMode (InkingMode):
 class Overlay_Stamp (Overlay):
     """Overlay for an StampMode's adjustable points"""
 
+    SELECTED_COLOR = \
+            RGBColor(color=gui.style.ACTIVE_ITEM_COLOR).get_rgb()
+    SELECTED_AREA_COLOR = \
+            RGBColor(color=gui.style.POSTLIT_ITEM_COLOR).get_rgb()
+
+
     def __init__(self, mode, tdw):
         super(Overlay_Stamp, self).__init__(mode, tdw)
 
@@ -999,7 +1010,7 @@ class Overlay_Stamp (Overlay):
             self.accept_button_pos = pos_list[0][0], pos_list[0][1]
             self.reject_button_pos = pos_list[1][0], pos_list[1][1]
         else:
-            # Usually, Bezier tool needs to keep extending control points.
+            # Usually, these tool needs to keep extending control points.
             # So when buttons placed around the tail(newest) node, 
             # it is something frastrating to manipulate new node...
             # Thus,different to Inktool, place buttons around 
@@ -1032,20 +1043,22 @@ class Overlay_Stamp (Overlay):
         return True
 
 
-    def draw_stamp(self, cr, idx, node, dx, dy):
+    def draw_stamp(self, cr, idx, node, dx, dy, colors):
         """ Draw a stamp as overlay preview.
 
         :param idx: index of node in mode.nodes[] 
         :param node: current node.this holds some information
                      such as stamp scaling ratio and rotation.
-        :param x,y: display coordinate position of node.
+        :param dx, dy: display coordinate position of node.
+        :param color: color of stamp rectangle
         """
         mode = self._inkmode
         pos = mode.stamp.get_boundary_points(node, tdw=self._tdw)
         x, y = self._tdw.model_to_display(node.x, node.y)
+        normal_color, selected_color = colors
 
         if idx == mode.current_node_index or idx in mode.selected_nodes:
-            self.draw_stamp_rect(cr, idx, dx, dy, position=pos)
+            self.draw_stamp_rect(cr, idx, dx, dy, selected_color, position=pos)
             x+=dx
             y+=dy
             for i, pt in enumerate(pos):
@@ -1056,19 +1069,16 @@ class Overlay_Stamp (Overlay):
                     gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
                     fill=(handle_idx==mode.zone)) 
         else:
-            self.draw_stamp_rect(cr, idx, 0, 0, position=pos)
+            self.draw_stamp_rect(cr, idx, 0, 0, normal_color, position=pos)
 
-        mode.stamp.draw(self._tdw, cr, x, y,
-                node, True)
+        mode.stamp.draw(self._tdw, cr, x, y, node, True)
 
-    def draw_stamp_rect(self, cr, idx, dx, dy, position=None):
+    def draw_stamp_rect(self, cr, idx, dx, dy, color, position=None):
         cr.save()
         mode = self._inkmode
         cr.set_line_width(1)
-        if idx == mode.current_node_index:
-            cr.set_source_rgb(1, 0, 0)
-        else:
-            cr.set_source_rgb(0, 0, 0)
+
+        cr.set_source_rgb(0, 0, 0)
 
         if not position:
             position = mode.stamp.get_boundary_points(
@@ -1079,22 +1089,31 @@ class Overlay_Stamp (Overlay):
         for lx, ly in position[1:]:
             cr.line_to(lx+dx, ly+dy)
         cr.close_path()
+        cr.stroke_preserve()
+
+        cr.set_dash( (3.0, ) )
+        cr.set_source_rgb(*color)
         cr.stroke()
         cr.restore()
 
-    def draw_selection_area(self, cr, selareas):
+    def draw_selection_area(self, cr, selareas, color):
         if selareas:
             cr.save()
             cr.set_line_width(1)
-            cr.set_source_rgb(0, 1, 0)
+            tdw = self._tdw
 
             for i, area in self._get_onscreen_areas(selareas):
-                sx, sy, ex, ey = area
-                cr.move_to(sx, sy)
-                cr.line_to(ex, sy)
-                cr.line_to(ex, ey)
-                cr.line_to(sx, ey)
-                cr.close_path()
+               #sx, sy, ex, ey = area
+                # We MUST consider rotation, to draw rectangle
+                sx, sy, ex, ey = selareas[i]
+                gui.drawutils.draw_rectangle_follow_canvas(cr, tdw,
+                        sx, sy, ex, ey)
+                cr.set_dash((), 0)
+                cr.set_source_rgb(0, 0, 0)
+                cr.stroke_preserve()
+
+                cr.set_dash( (3.0, ) )
+                cr.set_source_rgb(*color)
                 cr.stroke()
 
             cr.restore()
@@ -1112,42 +1131,44 @@ class Overlay_Stamp (Overlay):
         fill_flag = not mode.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT)
         mode.stamp.initialize_draw(cr)
 
-        for i, node in self._get_onscreen_nodes():
-            color = gui.style.EDITABLE_ITEM_COLOR
-            show_node = not mode.hide_nodes
-            if (mode.phase in
-                    (_Phase.ADJUST,
-                     _Phase.ADJUST_PRESSURE,
-                     _Phase.ADJUST_PRESSURE_ONESHOT)):
-                if show_node:
-                    if i == mode.current_node_index:
-                        color = gui.style.ACTIVE_ITEM_COLOR
-                    elif i == mode.target_node_index:
-                        color = gui.style.PRELIT_ITEM_COLOR
-                    elif i in mode.selected_nodes:
-                        color = gui.style.POSTLIT_ITEM_COLOR
+        colors = ( (1, 1, 1), self.SELECTED_COLOR)
 
-                else:
-                    if i == mode.target_node_index:
-                        show_node = True
-                        color = gui.style.PRELIT_ITEM_COLOR
+        for i, node in self._get_onscreen_nodes():
+           #color = gui.style.EDITABLE_ITEM_COLOR
+            show_node = not mode.hide_nodes
+           #if (mode.phase in
+           #        (_Phase.ADJUST,
+           #         _Phase.ADJUST_PRESSURE,
+           #         _Phase.ADJUST_PRESSURE_ONESHOT)):
+           #   #if show_node:
+           #   #    if i == mode.current_node_index:
+           #   #        color = gui.style.ACTIVE_ITEM_COLOR
+           #   #    elif i == mode.target_node_index:
+           #   #        color = gui.style.PRELIT_ITEM_COLOR
+           #   #    elif i in mode.selected_nodes:
+           #   #        color = gui.style.POSTLIT_ITEM_COLOR
+           #   #
+           #   #else:
+           #   #    if i == mode.target_node_index:
+           #   #        show_node = True
+           #   #        color = gui.style.PRELIT_ITEM_COLOR
 
             if show_node:
-                self.draw_stamp(cr, i, node, dx, dy)
+                self.draw_stamp(cr, i, node, dx, dy, colors)
             else:
-                self.draw_stamp_rect(cr, i, node, dx, dy)
+                self.draw_stamp_rect(cr, i, node, dx, dy, colors)
 
         mode.stamp.finalize_draw(cr)
 
         # Selection areas
         if mode.stamp.is_support_selection:
-            self.draw_selection_area(cr, mode.stamp.selection_areas)
+            self.draw_selection_area(cr, mode.stamp.selection_areas, 
+                    self.SELECTED_AREA_COLOR)
 
         # Buttons
         if (mode.phase in
-                (_Phase.ADJUST,
-                 _Phase.ADJUST_PRESSURE,
-                 _Phase.ADJUST_PRESSURE_ONESHOT) and
+                (_Phase.ADJUST,)
+                and
                 not mode.in_drag):
             self.update_button_positions()
             radius = gui.style.FLOATING_BUTTON_RADIUS

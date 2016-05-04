@@ -71,6 +71,40 @@ def is_inside_triangle(x, y, triangle):
     b3 = sign((x,y) , triangle[2], triangle[0]) < 0.0
     return b1 == b2 == b3
 
+def get_outmost_area(tdw, sx, sy, ex, ey, margin=0):
+    """ Get outmost AREA(not bbox), mostly to get (rotated)displaying area.  
+    :rtype: a tuple of area(sx, sy, ex, ey), IN DISPLAY COORDINATE.
+
+    :param tdw: a TiledDrawWidget, this can be None.
+                if None, this method does no any coordinate conversion.
+    :param sx, sy: start point(the left-top) point of rectangle, in model.
+    :param ex, ey: end point(the right-bottom) point of rectangle, in model.
+    :param margin: margin of rectangle, in DISPLAY coordinate.
+    """
+
+    points = ( (ex, sy), (ex, ey), (sx, ey) )
+
+    if tdw:
+        dsx, dsy = tdw.model_to_display(sx, sy)
+    else:
+        dsx, dsy = sx, sy
+
+    dex, dey = dsx, dsy
+
+    for x, y in points:
+        if tdw:
+            x, y = tdw.model_to_display(x, y)
+        dsx = min(dsx, x)
+        dsy = min(dsy, y)
+        dex = max(dex, x)
+        dey = max(dey, y)
+
+    return (dsx - margin, dsy - margin, 
+            dex + margin, dey + margin)
+
+
+
+
 ## Class defs
 
 class DragOffset(object):
