@@ -270,11 +270,8 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
                 self._my[0] <= my <= self._my[1])
 
     def is_valid(self):
-        return not (self._x[0] == self._x[1] and 
+        return not (self._x[0] == self._x[1] or
             self._y[0] == self._y[1]) 
-
-
-
 
 
 class _Overlay (gui.overlays.Overlay):
@@ -292,6 +289,7 @@ class _Overlay (gui.overlays.Overlay):
         cr.set_line_width(self._mode.LINE_WIDTH)
 
         cr.new_path()
+        cr.set_dash((), 0)
         cr.move_to(*self._mode.get_display_point(tdw, 0))
         cr.line_to(*self._mode.get_display_point(tdw, 1))
         cr.line_to(*self._mode.get_display_point(tdw, 2))
