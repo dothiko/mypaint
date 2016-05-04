@@ -99,7 +99,7 @@ class _Pixbuf_Source(_SourceMixin):
 
     def __init__(self):
         self._source_files = []
-        self._pixbufs = {}
+        self._surfs = {}
         self._reset_info()
 
     ## Information methods
@@ -109,7 +109,7 @@ class _Pixbuf_Source(_SourceMixin):
 
     def get_current_src(self, tile_index):
         if self._ensure_current_pixbuf(tile_index):
-            return self._pixbufs[tile_index]
+            return self._surfs[tile_index]
 
 
     def set_file_sources(self, filenames):
@@ -120,25 +120,35 @@ class _Pixbuf_Source(_SourceMixin):
         self._reset_info()
 
     def set_pixbuf(self, tile_index, pixbuf):
-        self._pixbufs[tile_index] = pixbuf
-    def get_pixbuf(self, tile_index):
-        return self._pixbufs.get(tile_index, None)
+        surf = Gdk.cairo_surface_create_from_pixbuf(pixbuf, 1, None)
+        self._surfs[tile_index] = surf
+
+    def set_surface(self, tile_index, surf):
+        self._surfs[tile_index] = surf
+
+    def get_surface(self, tile_index):
+        return self._surfs.get(tile_index, None)
 
     def _reset_info(self):
         """
         Reset infomations which should be cleared each drawing call.
         """
         self._cached_cairo_src = {}
-        self._prev_cr = None
 
     ## Source Pixbuf methods
 
     def _ensure_current_pixbuf(self, tile_index):
         if self._source_files and len(self._source_files) > 0:
-            if not tile_index in self._pixbufs:
+            if not tile_index in self._surfs:
                 filename = self._source_files[tile_index]
-                self._pixbufs[tile_index] = \
-                        GdkPixbuf.Pixbuf.new_from_file(filename)
+                junk, ext = os.path.splitext(filename)
+                if ext.lower() == '.png':
+                    surf = cairo.ImageSurface.create_from_png(filename)
+                else:
+                    pixbuf = GdkPixbuf.Pixbuf.new_from_file(filename)
+                    surf = Gdk.cairo_surface_create_from_pixbuf(
+                            pixbuf, 1, None)
+                self._surfs[tile_index] = surf
             return True
         return False
 
@@ -146,15 +156,7 @@ class _Pixbuf_Source(_SourceMixin):
         """
         Clear all cached pixbuf
         """
-        self._pixbufs.clear()
-        self.clear_cache()
-
-    def clear_cache(self):
-        """
-        Clear cairo cashed sources.
-        """
-        self._cached_cairo_src.clear()
-        self._prev_cr = None
+        self._surfs.clear()
 
 
     def apply(self, cr, tile_index):
@@ -163,25 +165,18 @@ class _Pixbuf_Source(_SourceMixin):
 
         This method should be called from draw() method.
         """
-        if cr == self._prev_cr and tile_index in self._cached_cairo_src:
-            cr.set_source(self._cached_cairo_src[tile_index])
-        else:
-            if self._prev_cr != cr:
-                self.clear_cache()
-            stamp_src = self.get_current_src(tile_index)
-            w = stamp_src.get_width() 
-            h = stamp_src.get_height()
-            ox = -(w / 2)
-            oy = -(h / 2)
-            Gdk.cairo_set_source_pixbuf(cr, stamp_src, ox, oy)
-            self._cached_cairo_src[tile_index] = cr.get_source()
-            self._prev_cr = cr
+        stamp_src = self.get_current_src(tile_index)
+        w = stamp_src.get_width() 
+        h = stamp_src.get_height()
+        ox = -(w / 2)
+        oy = -(h / 2)
+        cr.set_source_surface(stamp_src, ox, oy)
 
 
 class _Dynamic_Source(_Pixbuf_Source):
     """ Dynamic sources, i.e. clipboard or layers 
     
-    This class has 'pixbuf_requested' event facility, to ensure generating pixbuf
+    This class has 'surface_requested' event facility, to ensure generating pixbuf
     in various situation.
     This event should be used from some Stamp class.
     """
@@ -189,15 +184,15 @@ class _Dynamic_Source(_Pixbuf_Source):
     @property
     def tile_count(self):
         """
-        CAUTION: Length of self._pixbufs might not be correct number of 
+        CAUTION: Length of self._surfs might not be correct number of 
         tile.because there might be some sources not loaded yet.
 
         tile_count property of Stamp class should deal with this problem.
         """
-        return len(self._pixbufs)
+        return len(self._surfs)
 
     @event
-    def pixbuf_requested(self, tile_index):
+    def surface_requested(self, tile_index):
         """ Event of pixbuf for tile_index is dynamically requested now.
 
         If failed to setup the pixbuf by some reason, 
@@ -206,8 +201,8 @@ class _Dynamic_Source(_Pixbuf_Source):
         """
 
     def get_current_src(self, tile_index):
-        self.pixbuf_requested(tile_index)
-        return self._pixbufs.get(tile_index, None)
+        self.surface_requested(tile_index)
+        return self._surfs.get(tile_index, None)
 
 
 class _Tiled_Source(_Pixbuf_Source):
@@ -237,18 +232,23 @@ class _Tiled_Source(_Pixbuf_Source):
             idx = 0
             for y in xrange(pixbuf.get_height() / self._tile_h):
                 for x in xrange(pixbuf.get_width() / self._tile_w):
-                    cpb = pixbuf.new_subpixbuf(x, y, 
+                    tpb = pixbuf.new_subpixbuf(x, y, 
                             self._tile_w, self._tile_h)
-                    ox, oy = _StampMixin.get_offsets(cpb)
-                   #ret.append(Gdk.cairo_surface_create_from_pixbuf(cpb, 1, None))
-                   #del cpb
-                    self._pixbufs[idx] = cpb
+                    ox, oy = _StampMixin.get_offsets(tpb)
+                    self.set_pixbuf(idx, tpb)
+                    # tpb(temporary pixbuf) converted to cairo-surface 
+                    # in set_pixbuf(), so unnescessary.
+                    del cpb 
+
                     idx+=1
             del pixbuf
             self._tile_count = idx
 
     def _ensure_current_pixbuf(self, tile_index):
-        if not 0 in self._pixbufs: # 0 should be every sort of tile setting.
+        if not 0 in self._surfs: 
+            # index 0 should exist in every sort of tile setting.
+            # therefore index 0 exist = all tiles loaded in
+            # _Tiled_Source.
             self._load_from_file(self._source_filename)
 
 class _Pixbuf_Mask(_Pixbuf_Source):
@@ -260,18 +260,12 @@ class _Pixbuf_Mask(_Pixbuf_Source):
 
         This method should be called from draw() method.
         """
-        if tile_index in self._cached_cairo_src:
-            cr.mask_surface(*self._cached_cairo_src[tile_index])
-        else:
-            stamp_src = self.get_current_src(tile_index)
-            w = stamp_src.get_width() 
-            h = stamp_src.get_height()
-            ox = -(w / 2)
-            oy = -(h / 2)
-            mask_source = Gdk.cairo_surface_create_from_pixbuf(
-                    stamp_src, 1, None)
-            cr.mask_surface(mask_source, ox, oy)
-            self._cached_cairo_src[tile_index] = (mask_source, ox, oy)
+        stamp_src = self.get_current_src(tile_index)
+        w = stamp_src.get_width() 
+        h = stamp_src.get_height()
+        ox = -(w / 2)
+        oy = -(h / 2)
+        cr.mask_surface(stamp_src, ox, oy)
 
 class _Tiled_Mask(_Tiled_Source,
                   _Pixbuf_Mask):
@@ -371,10 +365,6 @@ class _StampMixin(object):
         Call this method prior to draw stamps loop.
         """
         pass
-       #if self._pixbuf_src:
-       #    self._pixbuf_src.clear_cache(cr)
-       #if self._mask_src:
-       #    self._mask_src.clear_cache(cr)
 
     def finalize_draw(self, cr):
         """ Finalize draw calls.
@@ -384,10 +374,7 @@ class _StampMixin(object):
         NOT END OF DRAWING PHASE OF STAMPTOOL! 
         Therefore, source.finalize() MUST not be called here!
         """
-        if self._pixbuf_src:
-            self._pixbuf_src.clear_cache()
-        if self._mask_src:
-            self._mask_src.clear_cache()
+        pass
         
     
 
@@ -427,7 +414,6 @@ class _StampMixin(object):
                 if scale_x != 0.0 and scale_y != 0.0:
                     cr.scale(scale_x, scale_y)
 
-           #Gdk.cairo_set_source_pixbuf(cr, self._stamp_src, ox, oy)
             self._pixbuf_src.apply(cr, node.tile_index)
             if self._mask_src:
                 self.mask_src.apply(cr, node.tile_index)
@@ -619,12 +605,12 @@ class _DynamicStampMixin(_StampMixin):
     def __init__(self, name):
         super(_DynamicStampMixin, self).__init__(name)
         self._pixbuf_src = _Dynamic_Source()
-        self._pixbuf_src.pixbuf_requested += self.pixbuf_requested_cb
+        self._pixbuf_src.surface_requested += self.surface_requested_cb
 
     def set_file_sources(self, filenames):
         pass
 
-    def pixbuf_requested_cb(self, source, tile_index):
+    def surface_requested_cb(self, source, tile_index):
         """
         Pixbuf requested callback, called from 
         self._pixbuf_src._ensure_current_pixbuf()
@@ -751,12 +737,16 @@ class LayerStamp(_DynamicStampMixin):
                 int(sx), int(sy), int(ex-sx)+1, int(ey-sy)+1,
                 alpha=True)
 
-    def pixbuf_requested_cb(self, source, tile_index):
+    def surface_requested_cb(self, source, tile_index):
         """
         Pixbuf requested callback, called from 
         self._pixbuf_src._ensure_current_pixbuf()
         """
-        if source.get_pixbuf(tile_index) == None:
+
+        # Check surface existence,
+        # set 'PIXBUF' into source object.
+        # (and then covert pixbuf to surface inside source object)
+        if source.get_surface(tile_index) == None:
             layer = self._rootstack.current
             assert layer != None
             source.set_pixbuf(tile_index, 
@@ -771,12 +761,12 @@ class VisibleStamp(LayerStamp):
     def __init__(self, name, rootstack):
         super(VisibleStamp, self).__init__(name, rootstack)
 
-    def pixbuf_requested_cb(self, source, tile_index):
+    def surface_requested_cb(self, source, tile_index):
         """
         Pixbuf requested callback, called from 
         self._pixbuf_src._ensure_current_pixbuf()
         """
-        if source.get_pixbuf(tile_index) == None:
+        if source.get_surface(tile_index) == None:
             source.set_pixbuf(tile_index, 
                     self._fetch_single_area(self._rootstack, tile_index))
         return True
@@ -890,7 +880,6 @@ class StampPresetManager(object):
 
     def __init__(self, app):
         self._app = app
-       #self.basedir = os.path.join(app.state_dirs.user_data, self.STAMP_DIR_NAME)
 
         # XXX mostly copied from gui/application.py _init_icons()
         icon_theme = Gtk.IconTheme.get_default()
@@ -1066,9 +1055,6 @@ class StampPresetManager(object):
         else:
             raise NotImplementedError("Unknown version %r" % jo['version'])
 
-   #def save_stamp_to_file(self, filename, stamp):
-   #    json_src = stamp.output_as_json()
-   #    self.save_to_file(self, filename)
 
     def save_to_file(self, filename, json_src):
         filename = self._get_adjusted_path(filename)

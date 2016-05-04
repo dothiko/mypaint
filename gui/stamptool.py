@@ -491,6 +491,7 @@ class StampMode (InkingMode):
             return False
         self._update_zone_and_target(tdw, event.x, event.y)
         self._update_current_node_index()
+        self.drag_offset.reset()
 
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
         ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
@@ -541,6 +542,7 @@ class StampMode (InkingMode):
 
                         do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
                         do_reset |= not (self.current_node_index in self.selected_nodes)
+                        self.phase = _Phase.ADJUST
 
                     if do_reset:
                         # To avoid old selected nodes still lit.
@@ -896,7 +898,7 @@ class Overlay_Stamp (Overlay):
         """Iterates across only the on-screen nodes."""
         mode = self._inkmode
         alloc = self._tdw.get_allocation()
-        dx,dy = mode.drag_offset.get_display_offset(self._tdw)
+        dx,dy = mode.drag_offset.get_model_offset()
         for i, node in enumerate(mode.nodes):
 
             if i in mode.selected_nodes:

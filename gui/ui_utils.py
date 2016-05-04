@@ -88,6 +88,8 @@ class DragOffset(object):
         """
         self._sx = x
         self._sy = y
+        self._ex = x
+        self._ey = y
 
     def end(self, x, y):
         self._ex = x
