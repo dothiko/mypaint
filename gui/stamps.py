@@ -760,22 +760,6 @@ class LayerStamp(_DynamicStampMixin):
                     if ret:
                         yield (i, ret)
 
-
-           #sx, sy, ex, ey = get_outmost_area(tdw, *area, margin=0)
-           #w = (ex - sx) + 1
-           #h = (ey - sy) + 1
-           #
-           #node_on_screen = (
-           #    sx > alloc.x - w  and
-           #    sy > alloc.y - h and
-           #    sx < alloc.x + alloc.width + w and
-           #    sy < alloc.y + alloc.height + h
-           #)
-           #
-           #if node_on_screen:
-           #    yield (i, (sx, sy, ex, ey))
-
-
     @property
     def tile_count(self):
         return len(self._sel_areas)

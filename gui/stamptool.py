@@ -327,7 +327,7 @@ class StampMode (InkingMode):
         new_zone = _EditZone.EMPTY_CANVAS
 
         if not self.in_drag:
-            if self.phase in (_Phase.ADJUST,):
+            if self.phase in (_Phase.ADJUST, _Phase.CAPTURE):
 
                 new_target_node_index = None
                 new_target_area_index = None
@@ -369,8 +369,6 @@ class StampMode (InkingMode):
                     elif stamp.is_support_selection:
                         margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE 
                         msize = margin * 2
-                        # TODO only visible areas should be targetted
-                       #for i, area in enumerate(stamp.selection_areas):
                         for i, area in stamp.enum_visible_selection_areas(tdw):
                             for  t, tx, ty in enum_area_point(*area):
                                 tx, ty = tdw.model_to_display(tx, ty)
@@ -390,7 +388,8 @@ class StampMode (InkingMode):
                             if new_zone != None:
                                 break
 
-                        if new_target_area_index != self.target_area_index:
+                        if (new_target_area_index != self.target_area_index or
+                                new_target_area_handle != self.target_area_handle):
                             self._queue_selection_area(tdw, 
                                     indexes=(new_target_area_index, 
                                         self.target_area_index))
@@ -531,8 +530,6 @@ class StampMode (InkingMode):
         stamp = self.stamp
 
         if stamp and stamp.is_support_selection:
-            # TODO only visible areas should be drawn.
-           #for i, area in enumerate(f._stamp.selection_areas):
             for i, area in stamp.enum_visible_selection_areas(tdw, indexes=indexes):
                 area = self.adjust_selection_area(i, area)
                 sx, sy, ex, ey = gui.ui_utils.get_outmost_area(tdw, *area, 
@@ -606,7 +603,6 @@ class StampMode (InkingMode):
                         do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
                         do_reset |= not (self.current_node_index in self.selected_nodes)
                         self.phase = _Phase.ADJUST
-                        print 'adjust!'
 
                     if do_reset:
                         # To avoid old selected nodes still lit.
@@ -1247,8 +1243,6 @@ class Overlay_Stamp (Overlay):
                             gui.style.ACTIVE_ITEM_COLOR, 
                             gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
                             fill=(i==mode.target_area_handle)) 
-                else:
-                    print 'no, not target'
 
             cr.restore()
 
