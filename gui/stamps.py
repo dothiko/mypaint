@@ -512,18 +512,25 @@ class _StampMixin(object):
                 by = node.y + dy
 
                 if node.angle != 0.0 and not no_transform:
-                    points = [ (sx, sy),
-                                  (ex, sy),
-                                  (ex, ey),
-                                  (sx, ey) ]
+                   #points = [ (sx, sy),
+                   #              (ex, sy),
+                   #              (ex, ey),
+                   #              (sx, ey) ]
+                   #cos_s = math.cos(node.angle)
+                   #sin_s = math.sin(node.angle)
+                   #for i in xrange(4):
+                   #    x = points[i][0]
+                   #    y = points[i][1]
+                   #    tx = (cos_s * x - sin_s * y) + bx
+                   #    ty = (sin_s * x + cos_s * y) + by
+                   #    points[i] = (tx, ty) 
                     cos_s = math.cos(node.angle)
                     sin_s = math.sin(node.angle)
-                    for i in xrange(4):
-                        x = points[i][0]
-                        y = points[i][1]
+                    points = []
+                    for i, x, y in enum_area_point(sx, sy, ex, ey):
                         tx = (cos_s * x - sin_s * y) + bx
                         ty = (sin_s * x + cos_s * y) + by
-                        points[i] = (tx, ty) 
+                        points.append( (tx, ty) )
                 else:
                     sx += bx
                     ex += bx
@@ -547,7 +554,10 @@ class _StampMixin(object):
         """
         pos = self.get_boundary_points(node, dx=dx, dy=dy)
         if pos:
-            return get_outmost_area(tdw, *pos, margin=margin)
+            return get_outmost_area(tdw, 
+                    pos[0][0], pos[0][1],
+                    pos[2][0], pos[2][1],
+                    margin=margin)
 
 
     ## Phase related methods
@@ -688,6 +698,10 @@ class ClipboardStamp(_DynamicStampMixin):
 
 class LayerStamp(_DynamicStampMixin):
     """ A Stamp which sources the current layer.
+
+    This class has selection(target) areas, which define
+    a rectangular area as the source of stamp. 
+    Each area is model coordinate.
     """
 
     def __init__(self, name, rootstack):
@@ -702,6 +716,65 @@ class LayerStamp(_DynamicStampMixin):
     @property
     def selection_areas(self):
         return self._sel_areas
+
+    def enum_visible_selection_areas(self, tdw, indexes=None):
+        """
+        Enumerate visible selection areas at tdw.
+        :param tdw: TiledDrawWidget to display
+        :param indexes: sequence of index of self._sel_areas. 
+                        an index might be None.
+        :rtype: yielding a tuple of (index, (start_x, start_y, end_x, end_y)).
+                returned values are display coordinate.
+        """
+
+        # XXX mostly same as Overlay_Stamp._get_oncscreen_areas()
+        # but that method needs to adjust the points with
+        # user dragging.
+
+        alloc = tdw.get_allocation()
+
+        def check_area(area):
+            sx, sy, ex, ey = get_outmost_area(tdw, *area, margin=0)
+            w = (ex - sx) + 1
+            h = (ey - sy) + 1
+            
+            node_on_screen = (
+                sx > alloc.x - w  and
+                sy > alloc.y - h and
+                sx < alloc.x + alloc.width + w and
+                sy < alloc.y + alloc.height + h
+            )
+            
+            if node_on_screen:
+                return (sx, sy, ex, ey)
+
+        if indexes == None:
+            for i, area in enumerate(self._sel_areas):
+                ret = check_area(area)
+                if ret:
+                    yield (i, ret)
+        else:
+            for i in indexes:
+                if i != None:
+                    ret = check_area(self._sel_areas[i])
+                    if ret:
+                        yield (i, ret)
+
+
+           #sx, sy, ex, ey = get_outmost_area(tdw, *area, margin=0)
+           #w = (ex - sx) + 1
+           #h = (ey - sy) + 1
+           #
+           #node_on_screen = (
+           #    sx > alloc.x - w  and
+           #    sy > alloc.y - h and
+           #    sx < alloc.x + alloc.width + w and
+           #    sy < alloc.y + alloc.height + h
+           #)
+           #
+           #if node_on_screen:
+           #    yield (i, (sx, sy, ex, ey))
+
 
     @property
     def tile_count(self):

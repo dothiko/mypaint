@@ -71,7 +71,9 @@ class _PhaseStamp(_Phase):
     SCALE  = 102         #: Scale with mouse drag 
     ROTATE_BY_HANDLE = 103 #: Rotate with handle of GUI
     SCALE_BY_HANDLE = 104  #: Scale  with handle of GUI
-    CALL_BUTTONS = 106      #: call buttons around clicked point. 
+    CALL_BUTTONS = 106     #: call buttons around clicked point. 
+    ADJUST_SOURCE = 107    #: Adjust source target area
+    ADJUST_SOURCE_BY_HANDLE = 108    #: Adjust source target area with handle.
 
 class _EditZone_Stamp:
     """Enumeration of what the pointer is on in phases"""
@@ -80,6 +82,8 @@ class _EditZone_Stamp:
     CONTROL_HANDLE_2 = 102
     CONTROL_HANDLE_3 = 103
     CONTROL_HANDLE_BASE = 100
+    SOURCE_AREA = 110
+    SOURCE_AREA_HANDLE = 111
 
 
 class DrawStamp(Command):
@@ -177,13 +181,29 @@ class StampMode (InkingMode):
         super(StampMode, self).__init__(**kwargs)
 
         self._stamp = None
-        #! test code
         self.current_handle_index = -1
         self.forced_button_pos = False
+
+    def _reset_adjust_data(self):
+        super(StampMode, self)._reset_adjust_data()
+        self.target_area_index = None
+        self.target_area_handle = None
 
     @property
     def stamp(self):
         return self._stamp
+
+    @property
+    def target_area_index(self):
+        return self._target_area_index
+
+    @target_area_index.setter
+    def target_area_index(self, index):
+        self._target_area_index = index
+       #self.current_node_index = None
+       #self.target_node_index = None
+
+
 
     def set_stamp(self, stamp):
         """ Called from OptionPresenter, 
@@ -300,15 +320,18 @@ class StampMode (InkingMode):
         """Update the zone and target node under a cursor position"""
         if not self._stamp:
             return
+        else:
+            stamp = self._stamp
 
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone.EMPTY_CANVAS
 
         if not self.in_drag:
-            if self.phase in (_Phase.ADJUST,
-                    _Phase.ADJUST_PRESSURE):
+            if self.phase in (_Phase.ADJUST,):
 
                 new_target_node_index = None
+                new_target_area_index = None
+                new_target_area_handle = None
                 # Test buttons for hits
                 overlay = self._ensure_overlay_for_tdw(tdw)
                 hit_dist = gui.style.FLOATING_BUTTON_RADIUS
@@ -340,6 +363,42 @@ class StampMode (InkingMode):
                         if new_zone != self.zone:
                             self._queue_draw_node(new_target_node_index)
 
+                        self.target_area_index = None
+                        self.target_area_handle = None
+
+                    elif stamp.is_support_selection:
+                        margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE 
+                        msize = margin * 2
+                        # TODO only visible areas should be targetted
+                       #for i, area in enumerate(stamp.selection_areas):
+                        for i, area in stamp.enum_visible_selection_areas(tdw):
+                            for  t, tx, ty in enum_area_point(*area):
+                                tx, ty = tdw.model_to_display(tx, ty)
+                                if (tx-margin <= x <= tx+msize and 
+                                        ty-margin <= y <= ty+msize):
+                                    new_zone = _EditZone_Stamp.SOURCE_AREA_HANDLE
+                                    new_target_area_handle = t
+                                    new_target_area_index = i
+                                    break
+
+                            if not new_zone:
+                                sx, sy, ex, ey = area
+                                if sx <= x <= ex and sy <= y <= ey:
+                                    new_zone = _EditZone_Stamp.SOURCE_AREA
+                                    new_target_area_index = i
+
+                            if new_zone != None:
+                                break
+
+                        if new_target_area_index != self.target_area_index:
+                            self._queue_selection_area(tdw, 
+                                    indexes=(new_target_area_index, 
+                                        self.target_area_index))
+                            self.target_area_index = new_target_area_index
+                            self.target_area_handle = new_target_area_handle
+
+                            
+
                 # Update the prelit node, and draw changes to it
                 if new_target_node_index != self.target_node_index:
                     if self.target_node_index is not None:
@@ -349,14 +408,6 @@ class StampMode (InkingMode):
                         self._queue_draw_node(self.target_node_index)
 
 
-            elif self.phase ==  _Phase.ADJUST_PRESSURE_ONESHOT:
-                self.target_node_index = self._search_target_node(tdw, x, y)
-                if self.target_node_index != None:
-                    new_zone = _EditZone.CONTROL_NODE
-
-        elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
-            # Always control node,in pressure editing.
-            new_zone = _EditZone.CONTROL_NODE
 
         # Update the zone, and assume any change implies a button state
         # change as well (for now...)
@@ -367,7 +418,7 @@ class StampMode (InkingMode):
         # Update the "real" inactive cursor too:
         if not self.in_drag:
             cursor = None
-            if self.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
+            if self.phase in (_Phase.ADJUST, _Phase.CAPTURE):
                 if self.zone == _EditZone.CONTROL_NODE:
                     cursor = self._crosshair_cursor
                 elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
@@ -395,7 +446,7 @@ class StampMode (InkingMode):
         """ Selection handler called from SelectionMode.
         This handler never called when no selection executed.
         """
-        if self.phase == _Phase.CAPTURE:
+        if self.phase in (_Phase.CAPTURE, _Phase.ADJUST):
             if self.stamp and self.stamp.is_support_selection:
                 self.stamp.selection_areas.append(
                         selection_mode.get_min_max_pos_model())
@@ -475,12 +526,18 @@ class StampMode (InkingMode):
 
             self._queue_selection_area(tdw)
 
-    def _queue_selection_area(self, tdw):
-        if self.stamp and self.stamp.is_support_selection:
+    def _queue_selection_area(self, tdw, indexes=None):
+        dx, dy = self.drag_offset.get_model_offset()
+        stamp = self.stamp
+
+        if stamp and stamp.is_support_selection:
             # TODO only visible areas should be drawn.
-            for area in self._stamp.selection_areas:
+           #for i, area in enumerate(f._stamp.selection_areas):
+            for i, area in stamp.enum_visible_selection_areas(tdw, indexes=indexes):
+                area = self.adjust_selection_area(i, area)
                 sx, sy, ex, ey = gui.ui_utils.get_outmost_area(tdw, *area, 
                         margin=gui.style.DRAGGABLE_POINT_HANDLE_SIZE+4)
+
                 tdw.queue_draw_area(sx, sy, 
                         ex - sx + 1, ey - sy + 1)
 
@@ -498,10 +555,11 @@ class StampMode (InkingMode):
         self._update_current_node_index()
         self.drag_offset.reset()
 
+
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
         ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
 
-        if self.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE):
+        if self.phase in (_Phase.ADJUST, _Phase.CAPTURE):
             button = event.button
             # Normal ADJUST/ADJUST_PRESSURE Phase.
 
@@ -548,6 +606,7 @@ class StampMode (InkingMode):
                         do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
                         do_reset |= not (self.current_node_index in self.selected_nodes)
                         self.phase = _Phase.ADJUST
+                        print 'adjust!'
 
                     if do_reset:
                         # To avoid old selected nodes still lit.
@@ -567,19 +626,18 @@ class StampMode (InkingMode):
                         self.phase = _PhaseStamp.ROTATE_BY_HANDLE
                     else:
                         self.phase = _PhaseStamp.SCALE_BY_HANDLE
+            elif self.zone in (_EditZone_Stamp.SOURCE_AREA,
+                               _EditZone_Stamp.SOURCE_AREA_HANDLE):
+                if button == 1:
+                    if self.zone == _EditZone_Stamp.SOURCE_AREA:
+                        self.phase = _PhaseStamp.ADJUST_SOURCE
+                    else:
+                        self.phase = _PhaseStamp.ADJUST_SOURCE_BY_HANDLE
             else:
                 raise NotImplementedError("Unrecognized zone %r", self.zone)
 
 
-        elif self.phase == _Phase.CAPTURE:
-            # XXX Not sure what to do here.
-            # XXX Click to append nodes?
-            # XXX  but how to stop that and enter the adjust phase?
-            # XXX Click to add a 1st & 2nd (=last) node only?
-            # XXX  but needs to allow a drag after the 1st one's placed.
-            pass
-        elif self.phase in (_Phase.ADJUST_PRESSURE_ONESHOT,
-                            _PhaseStamp.ROTATE,
+        elif self.phase in (_PhaseStamp.ROTATE,
                             _PhaseStamp.SCALE,
                             _PhaseStamp.ROTATE_BY_HANDLE,
                             _PhaseStamp.SCALE_BY_HANDLE):
@@ -602,7 +660,7 @@ class StampMode (InkingMode):
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
 
-        if self.phase in (_Phase.ADJUST , _Phase.ADJUST_PRESSURE):
+        if self.phase == _Phase.ADJUST:
             if self._click_info:
                 button0, zone0 = self._click_info
                 if event.button == button0:
@@ -643,7 +701,7 @@ class StampMode (InkingMode):
         elif self.phase == _Phase.CAPTURE:
             # Updating options_presenter is done at drag_stop_cb()
             pass
-
+        
         # Update workaround state for evdev dropouts
         self._button_down = None
 
@@ -707,6 +765,9 @@ class StampMode (InkingMode):
                             _PhaseStamp.ROTATE_BY_HANDLE,
                             _PhaseStamp.SCALE_BY_HANDLE):
             pass
+        elif self.phase in (_PhaseStamp.ADJUST_SOURCE,
+                            _PhaseStamp.ADJUST_SOURCE_BY_HANDLE):
+            self.drag_offset.start(mx, my)
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -829,6 +890,12 @@ class StampMode (InkingMode):
 
             self._queue_redraw_curve()
 
+        elif self.phase in (_PhaseStamp.ADJUST_SOURCE,
+                            _PhaseStamp.ADJUST_SOURCE_BY_HANDLE):
+
+            self._queue_selection_area(tdw)
+            self.drag_offset.end(mx, my)
+            self._queue_selection_area(tdw)
         else:
             super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
 
@@ -858,25 +925,37 @@ class StampMode (InkingMode):
             else:
                 self._reset_nodes()
                 tdw.queue_draw()
+
         elif self.phase == _Phase.ADJUST:
             super(StampMode, self).drag_stop_cb(tdw)
             self._queue_redraw_all_nodes()
             self._queue_redraw_curve()
             self._queue_draw_buttons()
+
         elif self.phase in (_PhaseStamp.ROTATE,
                             _PhaseStamp.SCALE,
                             _PhaseStamp.ROTATE_BY_HANDLE,
                             _PhaseStamp.SCALE_BY_HANDLE):
             self.phase = _Phase.ADJUST
+
+        elif self.phase in (_PhaseStamp.ADJUST_SOURCE,
+                            _PhaseStamp.ADJUST_SOURCE_BY_HANDLE):
+            area = self.adjust_selection_area(
+                            self.target_area_index,
+                            self.stamp.selection_areas[self.target_area_index])
+            self.stamp.selection_areas[self.target_area_index] = area
+
+            self.phase = _Phase.ADJUST
+            self._queue_selection_area(tdw)
+            self._reset_adjust_data()
         else:
             return super(StampMode, self).drag_stop_cb(tdw)
 
     def scroll_cb(self, tdw, event):
-        """Handles scroll-wheel events, to adjust pressure."""
-        if (self.phase in (_Phase.ADJUST, 
-                _Phase.ADJUST_PRESSURE, 
-                _Phase.ADJUST_PRESSURE_ONESHOT) 
+        """Handles scroll-wheel events, to adjust rotation/scale."""
+        if (self.phase in (_Phase.ADJUST,) 
                 and self.target_node_index != None):
+            # TODO implement this!
             return
 
         else:
@@ -890,6 +969,37 @@ class StampMode (InkingMode):
         self._queue_draw_node(i, force_margin=True) 
         self.nodes[i] = self.nodes[i]._replace(**kwargs)
         self._queue_draw_node(i, force_margin=True) 
+
+    ## Utility methods
+    def adjust_selection_area(self, index, area):
+        """
+        Adjust selection(source-target) area
+        against user interaction(i.e. dragging selection area).
+
+        :param index: area index of LayerStamp source area
+        :param area: area, i.e. a tuple of (sx, sy, ex, ey)
+                     this is model coordinate.
+        """
+        if self.target_area_index == index:
+            dx, dy = self.drag_offset.get_model_offset()
+            sx, sy, ex, ey = area 
+
+            if self.target_area_handle == None:
+                return (sx+dx, sy+dy, ex+dx, ey+dy)
+            else:
+                if self.target_area_handle in (0, 3):
+                    sx += dx
+                else:
+                    ex += dx
+
+                if self.target_area_handle in (0, 1):
+                    sy += dy
+                else:
+                    ey += dy
+
+                return (sx, sy, ex, ey)
+
+        return area
 
 
 
@@ -943,24 +1053,29 @@ class Overlay_Stamp (Overlay):
         alloc = tdw.get_allocation()
 
         for i, area in enumerate(selareas):
-            sx, sy = tdw.model_to_display(area[0], area[1])
-            ex, ey = tdw.model_to_display(area[2], area[3])
-            tsx = min(sx, ex)
-            tsy = min(sy, ey)
-            tex = max(sx, ex)
-            tey = max(sy, ey)
-            w = (tex - tsx) + 1
-            h = (tey - tsy) + 1
+            sx, sy, ex, ey = mode.adjust_selection_area(i, area)
+            sx, sy = tdw.model_to_display(sx, sy)
+            ex, ey = tdw.model_to_display(ex, ey)
 
+            # sort area again, because the order
+            # might be changed by coordinate conversion.
+            if sx > ex:
+                sx, ex = ex, sx
+            if sy > ey:
+                sy, ey = ey, sy
+
+            w = (ex - sx) + 1
+            h = (ey - sy) + 1
+            
             node_on_screen = (
-                tsx > alloc.x - w  and
-                tsy > alloc.y - h and
-                tsx < alloc.x + alloc.width + w and
-                tsy < alloc.y + alloc.height + h
+                sx > alloc.x - w  and
+                sy > alloc.y - h and
+                sx < alloc.x + alloc.width + w and
+                sy < alloc.y + alloc.height + h
             )
-
+            
             if node_on_screen:
-                yield (i, (tsx, tsy, tex, tey))
+                yield (i, (sx, sy, ex, ey))
 
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
@@ -1097,17 +1212,23 @@ class Overlay_Stamp (Overlay):
         cr.restore()
 
     def draw_selection_area(self, cr, selareas, color):
+        """ Drawing LayerStamp's source-target rectangle.
+        """
         if selareas:
             cr.save()
             cr.set_line_width(1)
             tdw = self._tdw
+            mode = self._inkmode
 
             for i, area in self._get_onscreen_areas(selareas):
-               #sx, sy, ex, ey = area
+                sx, sy, ex, ey = area
                 # We MUST consider rotation, to draw rectangle
-                sx, sy, ex, ey = selareas[i]
-                gui.drawutils.draw_rectangle_follow_canvas(cr, tdw,
-                        sx, sy, ex, ey)
+
+                # _get_onscreen_areas() returns display coordinate area
+                # (with offseted one when user move it by dragging)
+                # so use it. 
+                gui.drawutils.draw_rectangle_follow_canvas(cr, None,
+                        sx, sy, ex, ey) 
                 cr.set_dash((), 0)
                 cr.set_source_rgb(0, 0, 0)
                 cr.stroke_preserve()
@@ -1115,6 +1236,19 @@ class Overlay_Stamp (Overlay):
                 cr.set_dash( (3.0, ) )
                 cr.set_source_rgb(*color)
                 cr.stroke()
+
+                if (i == mode.target_area_index):
+                   #and 
+                   #    mode.target_area_handle != None):
+
+                    for i, x, y in enum_area_point(*area):
+                        gui.drawutils.render_square_floating_color_chip(
+                            cr, x, y,
+                            gui.style.ACTIVE_ITEM_COLOR, 
+                            gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
+                            fill=(i==mode.target_area_handle)) 
+                else:
+                    print 'no, not target'
 
             cr.restore()
 
@@ -1262,7 +1396,6 @@ class OptionsPresenter_Stamp (object):
         iconview.set_item_width(48) 
         iconview.connect('selection-changed', self._iconview_item_changed_cb)
         self._stamps_store = liststore
-       #liststore.connect('changed', self._iconview_item_changed_cb)
 
         sw = Gtk.ScrolledWindow()
         sw.set_margin_top(4)
@@ -1274,9 +1407,7 @@ class OptionsPresenter_Stamp (object):
         sw.set_valign(Gtk.Align.FILL)
         sw.add(iconview)
         box.attach(sw, 0, row, 2, 1)
-       #combo.connect('changed', self._variation_preset_combo_changed_cb)
         self.preset_view = iconview
-        return #! REMOVEME
 
     @property
     def widget(self):

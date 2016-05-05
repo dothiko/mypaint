@@ -102,6 +102,15 @@ def get_outmost_area(tdw, sx, sy, ex, ey, margin=0):
     return (dsx - margin, dsy - margin, 
             dex + margin, dey + margin)
 
+def enum_area_point(sx, sy, ex, ey):
+    """
+    Enumerate area points clockwise.
+    :param sx, sy: left-top of rectangle
+    :param ex, ey: right-bottom of rectangle
+    :rtype: a tuple, (index, x, y)
+    """
+    for i, pt in enumerate(((sx, sy), (ex, sy), (ex, ey), (sx, ey))):
+        yield (i, pt[0], pt[1])
 
 
 

@@ -6,7 +6,6 @@
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 
-# NOTE: This file based on linemode.py ,freehand.py, inktool.py
 
 
 
@@ -30,7 +29,7 @@ import gui.ui_utils
 """ 
 HOW TO ADD Selection FUNCTIONALITY TO MODE
 
- 1. add 'SelectionMode' to 'permitted_switch_actions' 
+ 1. add 'SelectionMode' to 'permitted_switch_actions' of the mode class.
 
 ```
     permitted_switch_actions = set(gui.mode.BUTTON_BINDING_ACTIONS).union([
@@ -41,10 +40,10 @@ HOW TO ADD Selection FUNCTIONALITY TO MODE
         ])
 ```
 
- 2. add callback 'select_area_cb(self, selection_mode)' to mode.
+ 2. add callback 'select_area_cb(self, selection_mode)' to the mode class.
     argument selection_mode is the SelectionMode,it has
     'is_inside_model/is_inside_display' method to 
-    distinguish whether the point(s) are inside selection or not.
+    distinguish whether the point(s) are inside the selection area or not.
 
 ```
     def select_area_cb(self, selection_mode):
@@ -59,6 +58,13 @@ HOW TO ADD Selection FUNCTIONALITY TO MODE
 ```  
 
  3. Just completed!
+
+SEE ALSO:
+    With document.select_all_cb(self, action) of gui/document.py and
+    GtkAction "SelectAll" / "DeselectAll" of gui/resource.xml
+    you can implement 'select_all()' or 'deselect_all()' for your mode. 
+    In conjection with SelectionMode, you can implement standard
+    selection interface.
 
 """
 

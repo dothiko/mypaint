@@ -589,14 +589,16 @@ def draw_rectangle_follow_canvas(cr, tdw, sx, sy, ex, ey):
     :param sx, sy: start point(left-top) of rectangle
     :param ex, ey: end point(right-bottom) of rectangle
     """
-    tx, ty = tdw.model_to_display(sx, sy)
-    cr.move_to(tx, ty)
-    tx, ty = tdw.model_to_display(ex, sy)
-    cr.line_to(tx, ty)
-    tx, ty = tdw.model_to_display(ex, ey)
-    cr.line_to(tx, ty)
-    tx, ty = tdw.model_to_display(sx, ey)
-    cr.line_to(tx, ty)
+    if tdw:
+        cr.move_to(*tdw.model_to_display(sx, sy))
+        cr.line_to(*tdw.model_to_display(ex, sy))
+        cr.line_to(*tdw.model_to_display(ex, ey))
+        cr.line_to(*tdw.model_to_display(sx, ey))
+    else:
+        cr.move_to(sx, sy)
+        cr.line_to(ex, sy)
+        cr.line_to(ex, ey)
+        cr.line_to(sx, ey)
     cr.close_path()
 
 ## Bezier curve
