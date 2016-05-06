@@ -794,9 +794,11 @@ class LayerStamp(_DynamicStampMixin):
                 int(sx), int(sy), int(ex-sx)+1, int(ey-sy)+1,
                 alpha=True)
 
-    def refresh_surface(self, tile_index):
+    def refresh_surface(self, tile_index, source=None):
         layer = self._rootstack.current
         assert layer != None
+        if source == None:
+            source = self._pixbuf_src
         source.set_pixbuf(tile_index, 
                 self._fetch_single_area(layer, tile_index))
 
@@ -804,13 +806,16 @@ class LayerStamp(_DynamicStampMixin):
         """
         Pixbuf requested callback, called from 
         self._pixbuf_src._ensure_current_pixbuf()
+
+        :param source: source object, actually it should be 'self._pixbuf_src'.
+        :param tile_index: target tile index, to be used right after this callback.
         """
 
-        # Check surface existence,
-        # set 'PIXBUF' into source object.
-        # (and then covert pixbuf to surface inside source object)
+        # Check surface existence, and then,
+        # set 'PIXBUF' into source object. not SURFACE.
+        # (and the pixbuf is coverted to surface inside set_pixbuf method)
         if source.get_surface(tile_index) == None:
-            self.refresh_surface(tile_index)
+            self.refresh_surface(tile_index,source=source)
 
 
 
