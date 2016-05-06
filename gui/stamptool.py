@@ -578,31 +578,16 @@ class StampMode (InkingMode):
 
                 if button == 1:
                     # 'do_reset' is a selection reset flag
+                    # With clicking node with holding shift/ctrl key,
+                    # we can select/cancel the node.
+                    # but that routine is placed at button_release_cb()
+                    # at here, we confirm whether selecting nodes or not.
                     do_reset = False
-                    if shift_state:
-                        # Holding SHIFT key
-                        if ctrl_state:
-                            self.phase = _PhaseStamp.ROTATE
-                        else:
-                            self.phase = _PhaseStamp.SCALE
-                            
-                        self._queue_redraw_curve()
-                        
-                    elif ctrl_state:
-                        # Holding CONTROL key = adding or removing a node.
-                        # But it is done at button_release_cb for now,
-                        pass
-
-                    else:
-                        # no CONTROL Key holded.
-                        # If new solo node clicked without holding
-                        # CONTROL key,then reset all selected nodes.
-
-                        assert self.current_node_index != None
-
+                    self.phase = _Phase.ADJUST
+                     
+                    if not (shift_state or ctrl_state):
                         do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
                         do_reset |= not (self.current_node_index in self.selected_nodes)
-                        self.phase = _Phase.ADJUST
 
                     if do_reset:
                         # To avoid old selected nodes still lit.
@@ -729,8 +714,8 @@ class StampMode (InkingMode):
         if self.phase == _Phase.CAPTURE:
 
             if event.state != 0:
-                # To activate some mode override
-                self._last_event_node = None
+                # here when something go wrong,and cancelled.
+                self.current_node_index = None
                 return super(InkingMode, self).drag_start_cb(tdw, event)
             else:
                 node = _StampNode(mx, my, 
@@ -739,9 +724,11 @@ class StampMode (InkingMode):
                         self._stamp.default_scale_y,
                         0)
                 self.nodes.append(node)
+                self.target_node_index = len(self.nodes) -1
+                self._update_current_node_index()
+                self.selected_nodes = [self.target_node_index, ]
                 self._queue_draw_node(0)
-                self._last_node_evdata = (event.x, event.y, event.time)
-                self._last_event_node = node
+                self.drag_offset.start(mx, my)
 
         elif self.phase == _Phase.ADJUST:
             self._node_dragged = False
@@ -773,21 +760,40 @@ class StampMode (InkingMode):
             super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
 
         self._ensure_overlay_for_tdw(tdw)
+
+        shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
+        ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
         mx, my = tdw.display_to_model(event.x ,event.y)
+
+        def override_scale_and_rotate():
+            if ctrl_state:
+                self.phase = _PhaseStamp.ROTATE
+            else:
+                self.phase = _PhaseStamp.SCALE
+            # Re-enter drag operation again
+            self.drag_update_cb(tdw, event, dx, dy)
+            self.phase = _Phase.CAPTURE
+            self._queue_draw_node(self.current_node_index) 
+
         if self.phase == _Phase.CAPTURE:
-
-            self._queue_redraw_curve()
-
-             # [TODO] below line can be reformed to minimize redrawing
-            self._queue_draw_node(len(self.nodes)-1) 
+            if self.current_node_index != None:
+                self._queue_draw_node(self.current_node_index) 
+                if shift_state:
+                    override_scale_and_rotate()
+                else:
+                    self.drag_offset.end(mx, my)
+                    self._queue_draw_node(len(self.nodes)-1) 
         elif self.phase == _Phase.ADJUST:
-            self._queue_redraw_curve()
-            super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
+            if shift_state:
+                override_scale_and_rotate()
+            else:
+                self._queue_redraw_curve()
+                super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
         elif self.phase in (_PhaseStamp.SCALE,
                             _PhaseStamp.ROTATE):
-            assert self.target_node_index is not None
+            assert self.current_node_index is not None
             self._queue_redraw_curve()
-            node = self.nodes[self.target_node_index]
+            node = self.nodes[self.current_node_index]
             bx, by = tdw.model_to_display(node.x, node.y)
             dir, length = get_drag_direction(
                     self.start_x, self.start_y,
@@ -806,7 +812,7 @@ class StampMode (InkingMode):
                     node = node._replace(scale_x = node.scale_x + scale,
                             scale_y = node.scale_y + scale)
 
-                self.nodes[self.target_node_index] = node
+                self.nodes[self.current_node_index] = node
                 self._queue_redraw_curve()
                 self.start_x = event.x
                 self.start_y = event.y
@@ -903,18 +909,22 @@ class StampMode (InkingMode):
         self._ensure_overlay_for_tdw(tdw)
         if self.phase == _Phase.CAPTURE:
 
-            if not self.nodes or self._last_event_node == None:
+            if not self.nodes or self.current_node_index == None:
+                # Cancelled drag event (and current capture phase)
                 # call super-superclass directly to bypass this phase
+                self._reset_capture_data()
+                self._reset_adjust_data()
                 return super(InkingMode, self).drag_stop_cb(tdw) 
 
-
+            node = self.nodes[self.current_node_index]
+            dx, dy = self.drag_offset.get_model_offset()
+            self.nodes[self.current_node_index] = \
+                    node._replace( x=node.x + dx, y=node.y + dy)
 
             self._reset_capture_data()
             self._reset_adjust_data()
             if len(self.nodes) > 0:
                 self.phase = _Phase.ADJUST
-                self.target_node_index = len(self.nodes) -1
-                self._update_current_node_index()
                 self._queue_redraw_all_nodes()
                 self._queue_redraw_curve()
                 self._queue_draw_buttons()
@@ -940,6 +950,7 @@ class StampMode (InkingMode):
                             self.target_area_index,
                             self.stamp.selection_areas[self.target_area_index])
             self.stamp.selection_areas[self.target_area_index] = area
+            self.stamp.refresh_surface(self.target_area_index)
 
             self.phase = _Phase.ADJUST
             self._queue_selection_area(tdw)

@@ -358,6 +358,22 @@ class _StampMixin(object):
     def is_support_selection(self):
         return False
 
+    @staticmethod
+    def _get_outmost_rect_from_points(pts):
+        sx, sy = pts[0]
+        ex, ey = sx, sy
+        for tx, ty in pts[1:]:
+            if tx < sx:
+                sx = tx
+            elif tx > ex:
+                ex = tx
+
+            if ty < sy:
+                sy = ty
+            elif ty > ey:
+                ey = ty
+        return (sx, sy, ex, ey)
+
     ## Drawing methods
 
     def initialize_draw(self, cr):
@@ -554,9 +570,9 @@ class _StampMixin(object):
         """
         pos = self.get_boundary_points(node, dx=dx, dy=dy)
         if pos:
+            area = _StampMixin._get_outmost_rect_from_points(pos)
             return get_outmost_area(tdw, 
-                    pos[0][0], pos[0][1],
-                    pos[2][0], pos[2][1],
+                    *area,
                     margin=margin)
 
 
@@ -778,6 +794,12 @@ class LayerStamp(_DynamicStampMixin):
                 int(sx), int(sy), int(ex-sx)+1, int(ey-sy)+1,
                 alpha=True)
 
+    def refresh_surface(self, tile_index):
+        layer = self._rootstack.current
+        assert layer != None
+        source.set_pixbuf(tile_index, 
+                self._fetch_single_area(layer, tile_index))
+
     def surface_requested_cb(self, source, tile_index):
         """
         Pixbuf requested callback, called from 
@@ -788,10 +810,7 @@ class LayerStamp(_DynamicStampMixin):
         # set 'PIXBUF' into source object.
         # (and then covert pixbuf to surface inside source object)
         if source.get_surface(tile_index) == None:
-            layer = self._rootstack.current
-            assert layer != None
-            source.set_pixbuf(tile_index, 
-                    self._fetch_single_area(layer, tile_index))
+            self.refresh_surface(tile_index)
 
 
 
