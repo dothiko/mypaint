@@ -343,7 +343,7 @@ class _StampMixin(object):
 
     def set_mask_sources(self, filenames):
         if self._mask_src == None:
-            self._mask_src = _Pixbuf_Source()
+            self._mask_src = _Pixbuf_Mask()
         self._mask_src.set_file_sources(filenames)
 
     def set_thumbnail(self, pixbuf):
@@ -856,6 +856,10 @@ class ForegroundStamp(_DynamicStampMixin):
         """ to disable setting self._pixbuf_src """
         pass
 
+    def set_mask_sources(self, filenames):
+        super(ForegroundStamp, self).set_mask_sources(filenames)
+        self._pixbuf_src = self._mask_src
+
 
     def draw(self, tdw, cr, x, y, node, save_context=False):
         """ Draw this stamp into cairo surface.
@@ -897,11 +901,11 @@ class ForegroundStamp(_DynamicStampMixin):
                 cr.scale(scale_x, scale_y)
 
         cr.set_source_rgb(*self.foreground_color)
-        self._mask_src.apply(cr, node.tile_index)
         cr.rectangle(ox, oy, w, h) 
-
         cr.clip()
-        cr.paint()
+        cr.fill()
+        self._mask_src.apply(cr, node.tile_index) # Place this code after fill!
+
         
         if save_context:
             cr.restore()
@@ -1093,7 +1097,8 @@ class StampPresetManager(object):
             elif source == 'current-visible':
                 stamp = VisibleStamp(jo['name'],self._app.doc.model.layer_stack)
             elif source == 'foreground':
-                stamp = ForegroundStamp(jo['name'], *settings.get('tile', (1, 1)))
+                stamp = ForegroundStamp(jo['name'], self._app, *settings.get('tile', (1, 1)))
+                assert 'mask' in settings
             else:
                 raise NotImplementedError("Unknown source %r" % source)
 
