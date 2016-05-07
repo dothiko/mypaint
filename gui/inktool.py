@@ -1021,18 +1021,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 targets = self.selected_nodes
 
             for idx in targets:
-                new_pressure = self.nodes[idx].pressure
+                node = self.nodes[idx]
+                new_pressure = node.pressure
 
-                if event.direction == Gdk.SCROLL_UP:
-                    new_pressure += self.__class__._PRESSURE_WHEEL_STEP
-                elif event.direction == Gdk.SCROLL_DOWN:
-                    new_pressure -= self.__class__._PRESSURE_WHEEL_STEP
-                elif event.direction == Gdk.SCROLL_SMOOTH:
-                    new_pressure += (self.__class__._PRESSURE_WHEEL_STEP * event.delta_y)
-                else:
-                    raise NotImplementedError("Unknown scroll direction %s" % str(event.direction))
+                junk, y = gui.ui_utils.get_scroll_delta(event, self._PRESSURE_WHEEL_STEP)
+                new_pressure += y
 
-                self.nodes[idx]=self.nodes[idx]._replace(pressure=new_pressure)
+                if new_pressure != node.pressure:
+                    self.nodes[idx]=node._replace(pressure=new_pressure)
 
                 if idx == self.target_node_index:
                     self.options_presenter.target = (self, self.target_node_index)

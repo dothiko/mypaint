@@ -11,6 +11,8 @@
 
 import math
 
+from gi.repository import Gdk
+
 import gui.linemode
 
 def get_drag_direction(bx, by, cx, cy, margin=0):
@@ -113,6 +115,28 @@ def enum_area_point(sx, sy, ex, ey):
         yield (i, pt[0], pt[1])
 
 
+def get_scroll_delta(event, step=1):
+    """
+    Get a delta value from scroll-wheel event.
+
+    :param event: event object in scroll_cb
+    :param step: scroll step value.default is 1.
+
+    :rtype: a tuple of delta value, (x_delta, y_delta)
+    """
+
+    if event.direction == Gdk.ScrollDirection.UP:
+        return (0, step)
+    elif event.direction == Gdk.ScrollDirection.DOWN:
+        return (0, -step)
+    elif event.direction == Gdk.ScrollDirection.LEFT:
+        return (-step, 0)
+    elif event.direction == Gdk.ScrollDirection.RIGHT:
+        return (step, 0)
+    elif event.direction == Gdk.ScrollDirection.SMOOTH:
+        return (step * event.delta_x, step * event.delta_y)
+    else:
+        raise NotImplementedError("Unknown scroll direction %s" % str(event.direction))
 
 ## Class defs
 
