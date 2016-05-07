@@ -271,6 +271,10 @@ class _Tiled_Mask(_Tiled_Source,
                   _Pixbuf_Mask):
     """ tiled cairo mask."""
 
+class _Dynamic_Mask(_Dynamic_Source,
+                    _Pixbuf_Mask):
+    """ dynamic mask """
+
 ## Stamp Mixins
 #
 #  These stamp classes manage drawing, 
@@ -286,7 +290,7 @@ class _StampMixin(object):
 
     THUMBNAIL_SIZE = 32
 
-    def __init__(self, name):
+    def _reset_members(self, name):
         self._pixbuf_src = None
         self._mask_src = None
         self.name = name
@@ -612,8 +616,8 @@ class _DynamicStampMixin(_StampMixin):
     utilizing _Dynamic_Source class and its event functionary.
     """
 
-    def __init__(self, name):
-        super(_DynamicStampMixin, self).__init__(name)
+    def _reset_members(self, name):
+        super(_DynamicStampMixin, self)._reset_members(name)
         self._pixbuf_src = _Dynamic_Source()
         self._pixbuf_src.surface_requested += self.surface_requested_cb
 
@@ -643,7 +647,7 @@ class Stamp(_StampMixin):
     """
 
     def __init__(self, name):
-        super(Stamp, self).__init__(name)
+        self._reset_members(name)
         self._pixbuf_src = _Pixbuf_Source()
 
     ## Information methods
@@ -678,7 +682,7 @@ class TiledStamp(_StampMixin):
 class ClipboardStamp(_DynamicStampMixin):
 
     def __init__(self, name, doc):
-        super(ClipboardStamp, self).__init__(name)
+        self._reset_members(name)
         self._doc = doc
 
     def _get_clipboard(self):
@@ -721,7 +725,7 @@ class LayerStamp(_DynamicStampMixin):
     """
 
     def __init__(self, name, rootstack):
-        super(LayerStamp, self).__init__(name)
+        self._reset_members(name)
         self._sel_areas = []
         self._rootstack = rootstack
 
@@ -842,7 +846,7 @@ class ForegroundStamp(_DynamicStampMixin):
     """
 
     def __init__(self, name, app, tw, th):
-        super(ForegroundStamp, self).__init__(name)
+        self._reset_members(name)
         self._app = app
         self._tile_w = tw
         self._tile_h = th
@@ -910,8 +914,24 @@ class ForegroundStamp(_DynamicStampMixin):
         if save_context:
             cr.restore()
 
+class ForegroundLayerStamp(ForegroundStamp,
+                           LayerStamp):
+    """ Another version of Foreground color stamp.
+    In this version,mask is generated from current layer.
+    """
+
+    def __init__(self, name, app):
+        layerstack = app.doc.model.layer_stack
+        # Call LayerStamp constructor
+        super(ForegroundStamp, self).__init__(name, layerstack)
+        self._app = app
 
 
+    def _reset_members(self, name):
+        super(_DynamicStampMixin, self)._reset_members(name)
+        self._mask_src = _Dynamic_Mask()
+        self._pixbuf_src = self.mask_src
+        self._pixbuf_src.surface_requested += self.surface_requested_cb
 
 class PixbufStamp(_DynamicStampMixin):
     """ A Stamp for dynamically changeable pixbuf stamps
@@ -1099,6 +1119,8 @@ class StampPresetManager(object):
             elif source == 'foreground':
                 stamp = ForegroundStamp(jo['name'], self._app, *settings.get('tile', (1, 1)))
                 assert 'mask' in settings
+            elif source == 'foreground-layermask':
+                stamp = ForegroundLayerStamp(jo['name'], self._app)
             else:
                 raise NotImplementedError("Unknown source %r" % source)
 
@@ -1153,7 +1175,13 @@ BUILT_IN_STAMPS = [
               "settings" : {
                   "source" : "current-visible"
                   }
-            }
+            },
+            { "version" : "1",
+              "name" : "layer mask",
+              "settings" : {
+                  "source" : "foreground-layermask"
+                  }
+            },
         ]
               
             
