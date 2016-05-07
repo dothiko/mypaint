@@ -123,12 +123,19 @@ def get_scroll_delta(event, step=1):
     :param step: scroll step value.default is 1.
 
     :rtype: a tuple of delta value, (x_delta, y_delta)
+
+    CAUTION: in some environment,scroll_cb() might called twice at same time.
+    for example, roll wheel up, then at first Gdk.ScrollDirection.SMOOTH event
+    happen,and then Gdk.ScrollDirection.UP event happen.
+    But make matters worse, in some environment, Gdk.ScrollDirection.UP would
+    not happen...
+    so we need some facility to reject such case.
     """
 
     if event.direction == Gdk.ScrollDirection.UP:
-        return (0, step)
-    elif event.direction == Gdk.ScrollDirection.DOWN:
         return (0, -step)
+    elif event.direction == Gdk.ScrollDirection.DOWN:
+        return (0, step)
     elif event.direction == Gdk.ScrollDirection.LEFT:
         return (-step, 0)
     elif event.direction == Gdk.ScrollDirection.RIGHT:

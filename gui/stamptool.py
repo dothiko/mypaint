@@ -35,6 +35,7 @@ from lib.command import Command
 from gui.ui_utils import *
 from gui.stamps import *
 from lib.color import HCYColor, RGBColor
+import lib.helpers
 
 ## Module settings
 
@@ -183,6 +184,8 @@ class StampMode (InkingMode):
         self._stamp = None
         self.current_handle_index = -1
         self.forced_button_pos = False
+
+        self.scaleval=1.0
 
     def _reset_adjust_data(self):
         super(StampMode, self)._reset_adjust_data()
@@ -921,10 +924,9 @@ class StampMode (InkingMode):
             self.nodes[self.current_node_index] = \
                     node._replace( x=node.x + dx, y=node.y + dy)
 
-            self._reset_capture_data()
-            self._reset_adjust_data()
             if len(self.nodes) > 0:
                 self.phase = _Phase.ADJUST
+                self._update_zone_and_target(tdw, self.last_x, self.last_y)
                 self._queue_redraw_all_nodes()
                 self._queue_redraw_curve()
                 self._queue_draw_buttons()
@@ -959,14 +961,51 @@ class StampMode (InkingMode):
             return super(StampMode, self).drag_stop_cb(tdw)
 
     def scroll_cb(self, tdw, event):
-        """Handles scroll-wheel events, to adjust rotation/scale."""
-        if (self.phase in (_Phase.ADJUST,) 
-                and self.target_node_index != None):
-            # TODO implement this!
-            return
+        """Handles scroll-wheel events, to adjust rotation/scale/tile_index."""
 
+        if (self.phase in (_Phase.ADJUST,) 
+                and self.zone == _EditZone.CONTROL_NODE
+                and self.current_node_index != None):
+
+            if self._prev_scroll_time != event.time:
+                shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
+                ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
+                junk, step = get_scroll_delta(event, 1.0)
+                node = self.nodes[self.current_node_index]
+                redraw = True
+
+                if shift_state:
+                    self._queue_draw_node(self.current_node_index) 
+
+                    scale_step = 0.05
+                    node = node._replace(scale_x = node.scale_x + step * scale_step,
+                            scale_y = node.scale_y + step * scale_step)
+                    self.nodes[self.current_node_index] = node
+                elif ctrl_state:
+                    self._queue_draw_node(self.current_node_index) 
+
+                    node = node._replace(angle = node.angle + step * (math.pi * 0.05))
+                    self.nodes[self.current_node_index] = node
+                else:
+                    if self.stamp and self.stamp.tile_count > 1:
+                        self._queue_draw_node(self.current_node_index) 
+
+                        new_tile_index = lib.helpers.clamp(node.tile_index + int(step),
+                                0, self.stamp.tile_count - 1)
+
+                        if new_tile_index != node.tile_index:
+                            self.nodes[self.current_node_index] = \
+                                    node._replace(tile_index = new_tile_index)
+                    else:
+                        redraw = False
+
+                if redraw:
+                    self._queue_draw_node(self.current_node_index) 
+
+            self._prev_scroll_time = event.time
         else:
-            return super(StampMode, self).scroll_cb(tdw, event)
+            # calling super-supreclass handler, to invoke original scroll events.
+            return super(InkingMode, self).scroll_cb(tdw, event)
 
 
     ## Interrogating events
@@ -1275,22 +1314,6 @@ class Overlay_Stamp (Overlay):
         for i, node in self._get_onscreen_nodes():
            #color = gui.style.EDITABLE_ITEM_COLOR
             show_node = not mode.hide_nodes
-           #if (mode.phase in
-           #        (_Phase.ADJUST,
-           #         _Phase.ADJUST_PRESSURE,
-           #         _Phase.ADJUST_PRESSURE_ONESHOT)):
-           #   #if show_node:
-           #   #    if i == mode.current_node_index:
-           #   #        color = gui.style.ACTIVE_ITEM_COLOR
-           #   #    elif i == mode.target_node_index:
-           #   #        color = gui.style.PRELIT_ITEM_COLOR
-           #   #    elif i in mode.selected_nodes:
-           #   #        color = gui.style.POSTLIT_ITEM_COLOR
-           #   #
-           #   #else:
-           #   #    if i == mode.target_node_index:
-           #   #        show_node = True
-           #   #        color = gui.style.PRELIT_ITEM_COLOR
 
             if show_node:
                 self.draw_stamp(cr, i, node, dx, dy, colors)

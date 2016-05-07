@@ -292,6 +292,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         #+ returning phase.for special phase changing case.
         self._returning_phase = None
 
+        #+ previous scroll event time.
+        #  in some environment, Gdk.ScrollDirection.UP/DOWN/LEFT/RIGHT
+        #  and Gdk.ScrollDirection.SMOOTH might happen at same time.
+        #  to reject such event, this attribute needed.
+        self._prev_scroll_time = None
+
 
     def _reset_nodes(self):
         self.nodes = []  # nodes that met the distance+time criteria
@@ -1015,27 +1021,31 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 _Phase.ADJUST_PRESSURE_ONESHOT) 
                 and self.target_node_index != None):
 
-            if len(self.selected_nodes) == 0:
-                targets = (self.target_node_index,)
-            else:
-                targets = self.selected_nodes
+            if self._prev_scroll_time != event.time:
+                if len(self.selected_nodes) == 0:
+                    targets = (self.target_node_index,)
+                else:
+                    targets = self.selected_nodes
 
-            for idx in targets:
-                node = self.nodes[idx]
-                new_pressure = node.pressure
+                for idx in targets:
+                    node = self.nodes[idx]
+                    new_pressure = node.pressure
 
-                junk, y = gui.ui_utils.get_scroll_delta(event, self._PRESSURE_WHEEL_STEP)
-                new_pressure += y
+                    junk, y = gui.ui_utils.get_scroll_delta(event, self._PRESSURE_WHEEL_STEP)
+                    new_pressure += y
 
-                if new_pressure != node.pressure:
-                    self.nodes[idx]=node._replace(pressure=new_pressure)
+                    if new_pressure != node.pressure:
+                        self.nodes[idx]=node._replace(pressure=new_pressure)
 
-                if idx == self.target_node_index:
-                    self.options_presenter.target = (self, self.target_node_index)
+                    if idx == self.target_node_index:
+                        self.options_presenter.target = (self, self.target_node_index)
 
-            self._queue_redraw_curve()
+                self._queue_redraw_curve()
+
+            self._prev_scroll_time = event.time
         else:
             return super(InkingMode, self).scroll_cb(tdw, event)
+
 
 
     ## Interrogating events
