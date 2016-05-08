@@ -613,6 +613,10 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         """
         flood_fill(self, x, y, color, bbox, tolerance, dst_surface)
 
+    def get_smallest_mipmap(self):
+        """ Get smallest mipmap, to generate layer thumbnail. """
+        return self._mipmaps[-1]
+
 
 class _TiledSurfaceMove (object):
     """Ongoing move state for a tiled surface, processed in chunks

@@ -532,18 +532,6 @@ class _StampMixin(object):
                 by = node.y + dy
 
                 if node.angle != 0.0 and not no_transform:
-                   #points = [ (sx, sy),
-                   #              (ex, sy),
-                   #              (ex, ey),
-                   #              (sx, ey) ]
-                   #cos_s = math.cos(node.angle)
-                   #sin_s = math.sin(node.angle)
-                   #for i in xrange(4):
-                   #    x = points[i][0]
-                   #    y = points[i][1]
-                   #    tx = (cos_s * x - sin_s * y) + bx
-                   #    ty = (sin_s * x + cos_s * y) + by
-                   #    points[i] = (tx, ty) 
                     cos_s = math.cos(node.angle)
                     sin_s = math.sin(node.angle)
                     points = []
