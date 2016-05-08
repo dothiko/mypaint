@@ -461,10 +461,13 @@ class StampMode (InkingMode):
     def select_area_cb(self, selection_mode):
         """ Selection handler called from SelectionMode.
         This handler never called when no selection executed.
+
+        CAUTION: you can not access the self.doc attribute here
+        (it is disabled as None, with modestack facility)
         """
         if self.phase in (_Phase.CAPTURE, _Phase.ADJUST):
             if self.stamp and self.stamp.is_support_selection:
-                self.stamp.selection_areas.append(
+                self.stamp.set_selection_area(-1,
                         selection_mode.get_min_max_pos_model())
 
                 self.stamp.initialize_phase()
@@ -677,7 +680,7 @@ class StampMode (InkingMode):
                             assert self.stamp.is_support_selection
                             assert self.target_area_handle == None
                             self._queue_selection_area(tdw)
-                            del self.stamp.selection_areas[self.target_area_index]
+                            self.stamp.remove_selection_area(self.target_area_index)
                             self.target_area_index = None
 
                     self._click_info = None
@@ -993,8 +996,8 @@ class StampMode (InkingMode):
                             _PhaseStamp.ADJUST_SOURCE_BY_HANDLE):
             area = self.adjust_selection_area(
                             self.target_area_index,
-                            self.stamp.selection_areas[self.target_area_index])
-            self.stamp.selection_areas[self.target_area_index] = area
+                            self.stamp.get_selection_area(self.target_area_index))
+            self.stamp.set_selection_area(self.target_area_index, area)
             self.stamp.refresh_surface(self.target_area_index)
 
             self.phase = _Phase.ADJUST
@@ -1131,7 +1134,7 @@ class Overlay_Stamp (Overlay):
                 if node_on_screen:
                     yield (i, node)
 
-    def _get_onscreen_areas(self, selareas):
+    def _get_onscreen_areas(self):
         """Iterates across only the on-screen areas.
 
         :rtype: yielding a tuple of (index, (start_x, start_y, end_x, end_y)).
@@ -1141,7 +1144,8 @@ class Overlay_Stamp (Overlay):
         tdw = self._tdw
         alloc = tdw.get_allocation()
 
-        for i, area in enumerate(selareas):
+        for i in xrange(mode.stamp.tile_count):
+            area = mode.stamp.get_selection_area(i)
             sx, sy, ex, ey = mode.adjust_selection_area(i, area)
             sx, sy = tdw.model_to_display(sx, sy)
             ex, ey = tdw.model_to_display(ex, ey)
@@ -1300,62 +1304,66 @@ class Overlay_Stamp (Overlay):
         cr.stroke()
         cr.restore()
 
-    def draw_selection_area(self, cr, selareas, color):
+    def draw_selection_area(self, cr, right_color, other_color):
         """ Drawing LayerStamp's source-target rectangle.
         """
-        if selareas:
-            cr.save()
-            cr.set_line_width(1)
-            tdw = self._tdw
-            mode = self._inkmode
-            icon_pixbuf = None
+        cr.save()
+        cr.set_line_width(1)
+        tdw = self._tdw
+        mode = self._inkmode
+        icon_pixbuf = None
+        current_layer = tdw.doc.layer_stack.current
 
-            for i, area in self._get_onscreen_areas(selareas):
-                sx, sy, ex, ey = area
-                # We MUST consider rotation, to draw rectangle
+        for i, area in self._get_onscreen_areas():
+            sx, sy, ex, ey = area
+            # We MUST consider rotation, to draw rectangle
 
-                # _get_onscreen_areas() returns display coordinate area
-                # (with offseted one when user move it by dragging)
-                # so use it. 
-                gui.drawutils.draw_rectangle_follow_canvas(cr, None,
-                        sx, sy, ex, ey) 
-                cr.set_dash((), 0)
-                cr.set_source_rgb(0, 0, 0)
-                cr.stroke_preserve()
+            # _get_onscreen_areas() returns display coordinate area
+            # (with offseted one when user move it by dragging)
+            # so use it. 
+            gui.drawutils.draw_rectangle_follow_canvas(cr, None,
+                    sx, sy, ex, ey) 
+            cr.set_dash((), 0)
+            cr.set_source_rgb(0, 0, 0)
+            cr.stroke_preserve()
 
-                cr.set_dash( (3.0, ) )
-                cr.set_source_rgb(*color)
-                cr.stroke()
+            cr.set_dash( (3.0, ) )
+            target_layer = mode.stamp.get_layer_for_area(i)
+            if target_layer == current_layer:
+                cr.set_source_rgb(*right_color)
+            else:
+                cr.set_source_rgb(*other_color)
+            cr.stroke()
 
-                if (i == mode.target_area_index):
-                   #and 
-                   #    mode.target_area_handle != None):
+            if (i == mode.target_area_index):
+               #and 
+               #    mode.target_area_handle != None):
 
-                    for i, x, y in enum_area_point(*area):
-                        gui.drawutils.render_square_floating_color_chip(
-                            cr, x, y,
-                            gui.style.ACTIVE_ITEM_COLOR, 
-                            gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
-                            fill=(i==mode.target_area_handle)) 
+                for i, x, y in enum_area_point(*area):
+                    gui.drawutils.render_square_floating_color_chip(
+                        cr, x, y,
+                        gui.style.ACTIVE_ITEM_COLOR, 
+                        gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
+                        fill=(i==mode.target_area_handle)) 
 
-                    if mode.show_area_trash_button:
-                        if icon_pixbuf == None:
-                            icon_pixbuf = self._get_button_pixbuf("mypaint-trash-symbolic")
-                            radius = gui.style.FLOATING_BUTTON_RADIUS / 2
+                if mode.show_area_trash_button:
+                    if icon_pixbuf == None:
+                        icon_pixbuf = self._get_button_pixbuf("mypaint-trash-symbolic")
+                        radius = gui.style.FLOATING_BUTTON_RADIUS / 2
 
-                        if mode.zone == _EditZone_Stamp.SOURCE_TRASH_BUTTON:
-                            btn_color = gui.style.ACTIVE_ITEM_COLOR
-                        else:
-                            btn_color = gui.style.EDITABLE_ITEM_COLOR
+                    if mode.zone == _EditZone_Stamp.SOURCE_TRASH_BUTTON:
+                        btn_color = gui.style.ACTIVE_ITEM_COLOR
+                    else:
+                        btn_color = gui.style.EDITABLE_ITEM_COLOR
 
-                        gui.drawutils.render_round_floating_button(
-                            cr=cr, x=sx+(ex-sx)/2, y=sy+(ey-sy)/2,
-                            color=btn_color,
-                            pixbuf=icon_pixbuf,
-                            radius=radius,
-                        )
+                    gui.drawutils.render_round_floating_button(
+                        cr=cr, x=sx+(ex-sx)/2, y=sy+(ey-sy)/2,
+                        color=btn_color,
+                        pixbuf=icon_pixbuf,
+                        radius=radius,
+                    )
 
-            cr.restore()
+        cr.restore()
 
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
@@ -1385,8 +1393,11 @@ class Overlay_Stamp (Overlay):
 
         # Selection areas
         if mode.stamp.is_support_selection:
-            self.draw_selection_area(cr, mode.stamp.selection_areas, 
-                    self.SELECTED_AREA_COLOR)
+            # TODO right_color and other_color should be
+            # correctly configured at gui/style.py
+            if mode.stamp.tile_count > 0:
+                self.draw_selection_area(cr, 
+                        self.SELECTED_AREA_COLOR, (1, 0 ,0) )
 
         # Buttons
         if (mode.phase in

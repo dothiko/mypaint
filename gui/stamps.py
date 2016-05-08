@@ -11,6 +11,7 @@ import random
 import json
 import os
 import glob
+import weakref
 
 from gettext import gettext as _
 from gi.repository import Gdk, Gtk
@@ -716,14 +717,42 @@ class LayerStamp(_DynamicStampMixin):
         self._reset_members(name)
         self._sel_areas = []
         self._rootstack = rootstack
+        self._area_layers = {}
 
     @property
     def is_support_selection(self):
         return True
 
-    @property
-    def selection_areas(self):
-        return self._sel_areas
+    def set_selection_area(self, tile_index, area):
+        """ Set (add) selection area to this object.
+        when the new area added, the source is always
+        'currently selected layer'
+
+        :param tile_index: the index of tile == index of selection area
+                           if this is -1, area added.
+        :param area: a tuple of (sx, sy, ex, ey) , in model.
+        """
+        if tile_index == -1:
+            # Set last selection area == add selection area
+            tile_index = len(self._sel_areas) 
+            assert not tile_index in self._sel_areas
+            self._sel_areas.append(area)
+            self.set_layer_for_area(tile_index,
+                self._rootstack.current)
+        else:
+            self._sel_areas[tile_index] = area
+        return tile_index
+
+    def get_selection_area(self, tile_index):
+        if tile_index < len(self._sel_areas):
+            return self._sel_areas[tile_index]
+
+    def remove_selection_area(self, tile_index):
+        if tile_index in self._sel_areas:
+            del self._sel_areas[tile_index]
+            assert tile_index in self._area_layers
+            del self._area_layers[tile_index]
+
 
     def enum_visible_selection_areas(self, tdw, indexes=None):
         """
@@ -773,12 +802,19 @@ class LayerStamp(_DynamicStampMixin):
         return len(self._sel_areas)
 
     def initialize_phase(self):
-        """ Get current (cached) src pixbuf.
-        Most important property.
+        """ Initialize when a entire phase stated
+        i.e. where self.phase is set to _Phase.CAPTURE.
         """
         self._pixbuf_src.clear_all()
 
     # Pixbuf Source related  
+    def set_layer_for_area(self, tile_index, layer):
+        self._area_layers[tile_index] = weakref.ref(layer)
+
+    def get_layer_for_area(self, tile_index):
+        ref = self._area_layers.get(tile_index, None)
+        if ref:
+            return ref()
 
     def _fetch_single_area(self, layer, idx):
         sx, sy, ex, ey = self._sel_areas[idx]
@@ -787,12 +823,17 @@ class LayerStamp(_DynamicStampMixin):
                 alpha=True)
 
     def refresh_surface(self, tile_index, source=None):
-        layer = self._rootstack.current
-        assert layer != None
-        if source == None:
-            source = self._pixbuf_src
-        source.set_pixbuf(tile_index, 
-                self._fetch_single_area(layer, tile_index))
+        if not tile_index in self._area_layers:
+            layer = self._rootstack.current
+            self.set_layer_for_area(tile_index, layer)
+        else:
+            layer = self.get_layer_for_area(tile_index)
+
+        if layer != None:
+            if source == None:
+                source = self._pixbuf_src
+            source.set_pixbuf(tile_index, 
+                    self._fetch_single_area(layer, tile_index))
 
     def surface_requested_cb(self, source, tile_index):
         """
@@ -816,7 +857,12 @@ class VisibleStamp(LayerStamp):
     """
 
     def __init__(self, name, rootstack):
-        super(VisibleStamp, self).__init__(name, rootstack)
+        self._reset_members(name)
+        self._sel_areas = []
+        self._rootstack = rootstack
+
+    def set_layer_for_area(self, tile_index, layer):
+        pass # Disable this method
 
     def surface_requested_cb(self, source, tile_index):
         """
