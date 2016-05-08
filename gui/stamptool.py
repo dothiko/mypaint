@@ -413,14 +413,6 @@ class StampMode (InkingMode):
                             self.target_area_index = new_target_area_index
                             self.target_area_handle = new_target_area_handle
 
-                       #if new_zone != _EditZone_Stamp.SOURCE_AREA:
-                       #    pass
-                       #else:
-                       #    # When cursor is not in source area,
-                       #    # everytime force to hide trush button of source area.
-                       #    self.show_area_trash_button = False
-
-                            
 
                 # Update the prelit node, and draw changes to it
                 if new_target_node_index != self.target_node_index:
