@@ -1048,6 +1048,7 @@ class StampPresetManager(object):
             "settings" : a dictionary to contain 'Stamp setting's.
             "thumbnail" : a thumbnail .jpg/.png filename
             "version" : 1
+            "tooltip" : (Optional) tooltip message of this stamp,for iconview item.
 
         Stamp setting:
             "source" : "file" - Stamp from files.
@@ -1162,25 +1163,29 @@ BUILT_IN_STAMPS = [
               "settings" : {
                   "source" : "clipboard",
                   "gtk-thumbnail" : "gtk-paste"
-                  }
+                  },
+              "tooltip" : "Stamp of Clipboard Image"
             },
             { "version" : "1",
               "name" : "layer stamp",
               "settings" : {
                   "source" : "layer"
-                  }
+                  },
+              "tooltip" : "Stamp of area of Layer."
             },
             { "version" : "1",
               "name" : "visible stamp",
               "settings" : {
                   "source" : "current-visible"
-                  }
+                  },
+              "tooltip" : "Stamp of area of current visible."
             },
             { "version" : "1",
               "name" : "layer mask",
               "settings" : {
                   "source" : "foreground-layermask"
-                  }
+                  },
+              "tooltip" : "Stamp of forground color, masked with area of Layer."
             },
         ]
               

@@ -85,6 +85,7 @@ class _EditZone_Stamp:
     CONTROL_HANDLE_BASE = 100
     SOURCE_AREA = 110
     SOURCE_AREA_HANDLE = 111
+    SOURCE_TRASH_BUTTON = 112
 
 
 class DrawStamp(Command):
@@ -191,6 +192,7 @@ class StampMode (InkingMode):
         super(StampMode, self)._reset_adjust_data()
         self.target_area_index = None
         self.target_area_handle = None
+        self.show_area_trash_button = False
 
     @property
     def stamp(self):
@@ -371,24 +373,36 @@ class StampMode (InkingMode):
 
                     elif stamp.is_support_selection:
                         margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE 
-                        msize = margin * 2
                         for i, area in stamp.enum_visible_selection_areas(tdw):
                             for  t, tx, ty in enum_area_point(*area):
-                                tx, ty = tdw.model_to_display(tx, ty)
-                                if (tx-margin <= x <= tx+msize and 
-                                        ty-margin <= y <= ty+msize):
+                                if (tx-margin <= x <= tx+margin and 
+                                        ty-margin <= y <= ty+margin):
                                     new_zone = _EditZone_Stamp.SOURCE_AREA_HANDLE
                                     new_target_area_handle = t
                                     new_target_area_index = i
                                     break
 
-                            if not new_zone:
+                            # If 'handle-check' failed, but cursor might be 
+                            # on the source-targetting rect.
+                            if new_zone == _EditZone.EMPTY_CANVAS:
                                 sx, sy, ex, ey = area
+                                hit_dist = gui.style.FLOATING_BUTTON_RADIUS / 2
+
                                 if sx <= x <= ex and sy <= y <= ey:
                                     new_zone = _EditZone_Stamp.SOURCE_AREA
                                     new_target_area_index = i
 
-                            if new_zone != None:
+                                    if self.show_area_trash_button:
+                                        btn_x = sx + (ex - sx) / 2
+                                        btn_y = sy + (ey - sy) / 2
+                                        d = math.hypot(btn_x - x, btn_y - y)
+                                        if d <= hit_dist:
+                                            new_zone = _EditZone_Stamp.SOURCE_TRASH_BUTTON
+
+                            # Check zone again.
+                            # Either cursor is on handle or on rect,
+                            # loop should be broken.
+                            if new_zone != _EditZone.EMPTY_CANVAS:
                                 break
 
                         if (new_target_area_index != self.target_area_index or
@@ -398,6 +412,13 @@ class StampMode (InkingMode):
                                         self.target_area_index))
                             self.target_area_index = new_target_area_index
                             self.target_area_handle = new_target_area_handle
+
+                       #if new_zone != _EditZone_Stamp.SOURCE_AREA:
+                       #    pass
+                       #else:
+                       #    # When cursor is not in source area,
+                       #    # everytime force to hide trush button of source area.
+                       #    self.show_area_trash_button = False
 
                             
 
@@ -417,6 +438,7 @@ class StampMode (InkingMode):
             self.zone = new_zone
             self._ensure_overlay_for_tdw(tdw)
             self._queue_draw_buttons()
+            self._queue_selection_area(tdw)
         # Update the "real" inactive cursor too:
         if not self.in_drag:
             cursor = None
@@ -564,7 +586,8 @@ class StampMode (InkingMode):
             # Normal ADJUST/ADJUST_PRESSURE Phase.
 
             if self.zone in (_EditZone.REJECT_BUTTON,
-                             _EditZone.ACCEPT_BUTTON):
+                             _EditZone.ACCEPT_BUTTON,
+                             _EditZone_Stamp.SOURCE_TRASH_BUTTON):
                 if (button == 1 and
                         event.type == Gdk.EventType.BUTTON_PRESS):
                     self._click_info = (button, self.zone)
@@ -644,7 +667,10 @@ class StampMode (InkingMode):
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
 
-        if self.phase == _Phase.ADJUST:
+        shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
+        ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
+
+        if self.phase in (_Phase.ADJUST, _Phase.CAPTURE):
             if self._click_info:
                 button0, zone0 = self._click_info
                 if event.button == button0:
@@ -655,6 +681,13 @@ class StampMode (InkingMode):
                         elif zone0 == _EditZone.ACCEPT_BUTTON:
                             self._start_new_capture_phase(rollback=False)
                             assert self.phase == _Phase.CAPTURE
+                        elif zone0 == _EditZone_Stamp.SOURCE_TRASH_BUTTON:
+                            assert self.stamp.is_support_selection
+                            assert self.target_area_handle == None
+                            self._queue_selection_area(tdw)
+                            del self.stamp.selection_areas[self.target_area_index]
+                            self.target_area_index = None
+
                     self._click_info = None
                     self._update_zone_and_target(tdw, event.x, event.y)
                     self._update_current_node_index()
@@ -664,7 +697,7 @@ class StampMode (InkingMode):
                 # Add or Remove selected node
                 # when control key is pressed
                 if event.button == 1:
-                    if event.state & Gdk.ModifierType.CONTROL_MASK:
+                    if ctrl_state:
                         tidx = self.target_node_index
                         if tidx != None:
                             if not tidx in self.selected_nodes:
@@ -682,9 +715,6 @@ class StampMode (InkingMode):
                 self._update_zone_and_target(tdw, event.x, event.y)
 
             # (otherwise fall through and end any current drag)
-        elif self.phase == _Phase.CAPTURE:
-            # Updating options_presenter is done at drag_stop_cb()
-            pass
         
         # Update workaround state for evdev dropouts
         self._button_down = None
@@ -703,7 +733,27 @@ class StampMode (InkingMode):
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
 
+        shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
+        ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
         self._update_zone_and_target(tdw, event.x, event.y)
+        prev_state = self.show_area_trash_button
+
+        if not self.in_drag:
+            if self.phase in (_Phase.CAPTURE, _Phase.ADJUST):
+                if (self.stamp.is_support_selection and
+                        shift_state):
+                    
+                    self.show_area_trash_button = \
+                            (self.zone in (_EditZone_Stamp.SOURCE_AREA,
+                                           _EditZone_Stamp.SOURCE_TRASH_BUTTON))
+                else:
+                    self.show_area_trash_button = False
+
+        if prev_state != self.show_area_trash_button:
+            self._queue_selection_area(tdw)
+                
+
+        # call super-superclass callback
         return super(InkingMode, self).motion_notify_cb(tdw, event)
 
     ## Drag handling (both capture and adjust phases)
@@ -923,6 +973,7 @@ class StampMode (InkingMode):
             dx, dy = self.drag_offset.get_model_offset()
             self.nodes[self.current_node_index] = \
                     node._replace( x=node.x + dx, y=node.y + dy)
+            self.drag_offset.reset()
 
             if len(self.nodes) > 0:
                 self.phase = _Phase.ADJUST
@@ -1265,6 +1316,7 @@ class Overlay_Stamp (Overlay):
             cr.set_line_width(1)
             tdw = self._tdw
             mode = self._inkmode
+            icon_pixbuf = None
 
             for i, area in self._get_onscreen_areas(selareas):
                 sx, sy, ex, ey = area
@@ -1293,6 +1345,23 @@ class Overlay_Stamp (Overlay):
                             gui.style.ACTIVE_ITEM_COLOR, 
                             gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
                             fill=(i==mode.target_area_handle)) 
+
+                    if mode.show_area_trash_button:
+                        if icon_pixbuf == None:
+                            icon_pixbuf = self._get_button_pixbuf("mypaint-trash-symbolic")
+                            radius = gui.style.FLOATING_BUTTON_RADIUS / 2
+
+                        if mode.zone == _EditZone_Stamp.SOURCE_TRASH_BUTTON:
+                            btn_color = gui.style.ACTIVE_ITEM_COLOR
+                        else:
+                            btn_color = gui.style.EDITABLE_ITEM_COLOR
+
+                        gui.drawutils.render_round_floating_button(
+                            cr=cr, x=sx+(ex-sx)/2, y=sy+(ey-sy)/2,
+                            color=btn_color,
+                            pixbuf=icon_pixbuf,
+                            radius=radius,
+                        )
 
             cr.restore()
 
