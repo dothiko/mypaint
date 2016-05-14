@@ -1177,6 +1177,8 @@ class StampPresetManager(object):
             else:
                 stamp.set_thumbnail(
                         self.load_thumbnail(settings.get('thumbnail', None)))
+
+            # TODO tooltip does not supported yet
             return stamp
 
         else:
@@ -1198,28 +1200,28 @@ BUILT_IN_STAMPS = [
                   "source" : "clipboard",
                   "gtk-thumbnail" : "gtk-paste"
                   },
-              "tooltip" : "Stamp of Clipboard Image"
+              "tooltip" : _("Stamp of Clipboard Image")
             },
             { "version" : "1",
               "name" : "layer stamp",
               "settings" : {
                   "source" : "layer"
                   },
-              "tooltip" : "Stamp of area of Layer."
+              "tooltip" : _("Stamp of area of Layer.")
             },
             { "version" : "1",
               "name" : "visible stamp",
               "settings" : {
                   "source" : "current-visible"
                   },
-              "tooltip" : "Stamp of area of current visible."
+              "tooltip" : _("Stamp of area of current visible.")
             },
             { "version" : "1",
               "name" : "layer mask",
               "settings" : {
                   "source" : "foreground-layermask"
                   },
-              "tooltip" : "Stamp of forground color, masked with area of Layer."
+              "tooltip" : _("Stamp of forground color, masked with area of Layer.")
             },
         ]
               
