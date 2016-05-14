@@ -238,15 +238,23 @@ class FileHandler (object):
 
     filename = property(get_filename, set_filename)
 
-    def init_save_dialog(self, export):
+    def init_save_dialog(self, export, project=False):
+
         if export:
             save_dialog_name = C_("Dialogs: Save As...", u"Export")
         else:
             save_dialog_name = C_("Dialogs: Save As...", u"Save")
+
+        if project:
+            action=Gtk.FileChooserAction.CREATE_FOLDER | \
+                    Gtk.FileChooserAction.SELECT_FOLDER
+        else:
+            action=Gtk.FileChooserAction.SAVE
+
         dialog = Gtk.FileChooserDialog(
             save_dialog_name,
             self.app.drawWindow,
-            Gtk.FileChooserAction.SAVE,
+            action,
             (
                 Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
                 Gtk.STOCK_SAVE, Gtk.ResponseType.OK,
@@ -256,17 +264,21 @@ class FileHandler (object):
         dialog.set_do_overwrite_confirmation(True)
 
         # Add widget for selecting save format
-        box = Gtk.HBox()
-        label = Gtk.Label(_('Format to save as:'))
-        label.set_alignment(0.0, 0.0)
-        combo = self.saveformat_combo = Gtk.ComboBoxText()
-        for name, ext, opt in self.saveformats.itervalues():
-            combo.append_text(name)
-        combo.set_active(0)
-        combo.connect('changed', self.selected_save_format_changed_cb)
-        box.pack_start(label, True, True, 0)
-        box.pack_start(combo, False, True, 0)
-        dialog.set_extra_widget(box)
+        if not project:
+            box = Gtk.HBox()
+            label = Gtk.Label(_('Format to save as:'))
+            label.set_alignment(0.0, 0.0)
+            combo = self.saveformat_combo = Gtk.ComboBoxText()
+            for name, ext, opt in self.saveformats.itervalues():
+                combo.append_text(name)
+            combo.set_active(0)
+            combo.connect('changed', self.selected_save_format_changed_cb)
+            box.pack_start(label, True, True, 0)
+            box.pack_start(combo, False, True, 0)
+            dialog.set_extra_widget(box)
+        else:
+            self.saveformat_combo = None
+
         dialog.show_all()
         return dialog
 
@@ -728,7 +740,7 @@ class FileHandler (object):
         return dialog
 
     def open_cb(self, action):
-        self._open_internal(Gtk.FILE_CHOOSER_ACTION_OPEN,
+        self._open_internal(Gtk.FileChooserAction.OPEN,
                 self.update_preview_cb,
                 self.file_filters)
 
@@ -1277,7 +1289,7 @@ class FileHandler (object):
         file_chooser.set_preview_widget_active(False)
 
     def open_project_cb(self, action):
-        self._open_internal(Gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
+        self._open_internal(Gtk.FileChooserAction.SELECT_FOLDER,
                 self.update_project_preview_cb,
                 None)
 
@@ -1309,11 +1321,11 @@ class FileHandler (object):
         # With creating save dialog prior to self.save_as_dialog(),
         # we can use customized version of dialog.
         # this dialog should be destoroyed in self.save_as_dialog().
-        self.init_save_dialog(
-            Gtk.FILE_CHOOSER_ACTION_CREATE_FOLDER | Gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
-            False
+        self.save_dialog = self.init_save_dialog(
+            False,
+            project=True
             )
-            
+
         if self.filename:
             junk, ext = os.path.splitext(self.filename)
         else:

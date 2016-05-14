@@ -499,7 +499,7 @@ class Document (object):
 
     ## Queued autosave writes: low priority & chunked
 
-    def _queue_autosave_writes(self,dirname=None):
+    def _queue_autosave_writes(self,dirname=None, immidiate=False):
         """Add autosaved backup tasks to the background processor
 
         These tasks consist of nicely chunked writes for all layers
@@ -584,6 +584,9 @@ class Document (object):
             image_elem,
             os.path.join(oradir, stackfile_rel),
         )
+        if immidiate:
+            taskproc.finish_all()
+
         manifest.add(stackfile_rel)
         self._autosave_launch_cleanup(oradir, manifest)
 
@@ -1824,7 +1827,7 @@ class Document (object):
             # After all files copied,
             # ordinary autosave processing should be launched.
             self._as_project = True
-            self._queue_autosave_writes(dirname)
+            self._queue_autosave_writes(dirname, immidiate=True)
         finally:
             self._autosave_dirty = False 
 
