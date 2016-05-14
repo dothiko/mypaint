@@ -986,7 +986,6 @@ class PixbufStamp(_DynamicStampMixin):
         self._pixbuf_src = pixbuf_src
 
 
-
 ## Preset Manager classes
 
 class StampPresetManager(object):

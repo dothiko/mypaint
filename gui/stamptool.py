@@ -735,7 +735,8 @@ class StampMode (InkingMode):
 
         if not self.in_drag:
             if self.phase in (_Phase.CAPTURE, _Phase.ADJUST):
-                if (self.stamp.is_support_selection and
+                if (self._stamp != None and 
+                        self.stamp.is_support_selection and
                         shift_state):
                     
                     self.show_area_trash_button = \
