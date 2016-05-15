@@ -290,10 +290,12 @@ class Document (object):
         # Project flag.place here to avoid exception
         # from _command_stack_updated_cb
         self._as_project = False
+        self._projcopy_processor = None
         self._pending_project_copy = False
 
         if not painting_only:
             self._autosave_processor = lib.idletask.Processor()
+            self._projcopy_processor = lib.idletask.Processor()
             self.command_stack.stack_updated += self._command_stack_updated_cb
             self.effective_bbox_changed += self._effective_bbox_changed_cb
 
@@ -1712,6 +1714,10 @@ class Document (object):
             if self._autosave_processor.has_work():
                 logger.info('autosave processor still have pending works')
                 self._autosave_processor.finish_all()
+
+            if self._projcopy_processor.has_work():
+                logger.info('project copy processor still have pending works')
+                self._projcopy_processor.finish_all()
             
             # If 'save as another project', set _autosave_dirty flag
             # to avoid save bypassed when right after current project saved.
@@ -1816,7 +1822,7 @@ class Document (object):
                 if len(copy_list) > 0:
                     self._pending_project_copy = True
                     assert os.path.exists(source_dir)
-                    taskproc = self._autosave_processor
+                    taskproc = self._projcopy_processor
                     taskproc.add_work(
                         self._project_copy_cb,
                         copy_list,

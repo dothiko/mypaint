@@ -1370,11 +1370,22 @@ class FileHandler (object):
         self.register_recent_project(filepath)
 
     def init_project_related(self, menu_or):
-        """ THIS IS ADHOC METHOD.
-        Ideally we should use GTK recent file list against project too, 
-        but it seems to be GTK cannot accept a directory to 'recent file list'.
-        if I found more resonable way,I'll change this.
-        (or,create filetype such as '.project'?)"""
+        """ Initializing project-save functionality attributes and
+        'recent directory list'.
+
+        THIS IS PROVISIONAL METHOD.
+        This method created for to separete initializing codes from __init__() 
+        and to ease maintainance.
+        project-save functionality might change drastically, so we need this
+        method.
+
+        Currently Project-save use its own 'recent directory list'.
+        Ideally we should use GTK recent file list to project-save too, 
+        just same as ordinary MRUs.
+        but it seems that GTK cannot accept a directory to 'recent file list'.
+        If there is more resonable way in GTK,these codes should be changed.
+        (or,create filetype such as '.project' as a placeholder file?)
+        """
 
         # loading recent project info(if exists)
         recent_project_path = os.path.join(
@@ -1438,6 +1449,9 @@ class FileHandler (object):
         self._refresh_recent_project_menu()
 
     def write_recent_project_info(self):
+        """
+        Write Recent Projects information.
+        """
         recent_project_path = os.path.join(
                 self.app.state_dirs.user_data,
                 'recent_projects.txt')
