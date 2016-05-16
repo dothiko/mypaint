@@ -597,16 +597,14 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                     if assistant:
                         assistant.fetch(hx, hy, pressure, time)
                         if self.doc.stabilizer_mode:
-                            info = assistant.get_current(drawstate.button_down, time)
-                            if not info:
-                                continue
-                        else:
-                            info=((hx, hy, pressure), )
-                    else:
-                        info=((hx, hy, pressure), )
+                            for hx, hy, hp in assistant.enum_current(drawstate.button_down, time):
+                                queue_motion(ht, hx, hy, hp, None,None)
+                            continue
+                       #else:
+                       #    info=((hx, hy, pressure), )
 
-                    for hx, hy, hp in info:
-                        queue_motion(ht, hx, hy, hp, None,None)
+                    queue_motion(ht, hx, hy, pressure, None,None)
+
             else:
                 logger.warning(
                     "Final evhack event (%0.2f, %0.2f, %d) doesn't match its "
@@ -622,12 +620,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         if assistant:
             assistant.fetch(x, y, pressure, time)
             if self.doc.stabilizer_mode:
-                info = assistant.get_current(drawstate.button_down, time)
-                if info:
-                    for x, y, pressure in info:
-                        queue_motion(time, x, y, pressure, xtilt, ytilt)
-                else:
-                    return False
+                for x, y, p in assistant.enum_current(drawstate.button_down, time):
+                    queue_motion(time, x, y, p, xtilt, ytilt)
             else:
                 queue_motion(time, x, y, pressure, xtilt, ytilt)
 

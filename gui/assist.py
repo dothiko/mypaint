@@ -47,8 +47,11 @@ class Assistbase(object):
         Assistbase._sample_index = 0
         Assistbase._sample_count = 0
 
-    def get_current(self, button, time):
-        """only stub"""
+    def enum_current(self, button, time):
+        """
+        Only stub.
+        This method should return a value with yield.
+        """
         pass
 
     def fetch(self, x, y, pressure, time):
@@ -74,20 +77,20 @@ class Stabilizer(Assistbase):
     def __init__(self):
         super(Stabilizer, self).__init__()
 
-    def get_current(self, button, time):
+    def enum_current(self, button, time):
         if self._sample_count < self._sampling_max:
-            return None
+            raise StopIteration
 
-        rx = 0
-        ry = 0
-        rp = 0
+        rx = 0.0
+        ry = 0.0
+        rp = 0.0
         idx = 0
+
         while idx < self._sampling_max:
             rx += self._get_stabilized_x(idx)
             ry += self._get_stabilized_y(idx)
             rp += self._get_stabilized_pressure(idx)
             idx += 1
-
 
         rx /= self._sampling_max 
         ry /= self._sampling_max
@@ -97,17 +100,31 @@ class Stabilizer(Assistbase):
         self._prev_button = button
         self._prev_rx = rx
         self._prev_ry = ry
+        self._prev_rp = rp
 
         # Heading / Trailing glitch workaround
         if button == 1:
             if (_prev_button == None):
-                return ((rx, ry, 0.0), (rx, ry, rp))
+                #eturn ((rx, ry, 0.0), (rx, ry, rp / 2))
+                if self._prev_rx != None:
+                    yield (self._prev_rx, self._prev_ry, 0.0)
+                yield (rx, ry, 0.0)
+                yield (rx, ry, rp)
+                raise StopIteration
         elif button == None:
             if (_prev_button != None):
-                return ((rx, ry, rp), (rx, ry, 0.0))
+                rp = self._get_stabilized_pressure(idx)
+                if rp > 0.0:
+                    self._prev_button = 1
+                    yield (rx, ry, rp)
+                    raise StopIteration
+                else:
+                    yield (rx, ry, 0.0)
+                    raise StopIteration
             rp = 0.0
 
-        return ((rx, ry, rp), )
+        yield (rx, ry, rp)
+        raise StopIteration
 
     def reset(self):
         super(Stabilizer, self).reset()
@@ -115,6 +132,8 @@ class Stabilizer(Assistbase):
         self._prev_ry = None
         self._prev_button = None
         self._prev_time = None
+        self._prev_rp = None
+        self._release_time = None
         
 
     def _get_stabilized_x(self, idx):
