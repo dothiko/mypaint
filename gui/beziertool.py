@@ -104,7 +104,8 @@ class _Node_Bezier (_Control_Handle):
         if self._curve:
             self.set_control_handle(0, 
                     self._control_handles[0].x,
-                    self._control_handles[0].y)
+                    self._control_handles[0].y,
+                    False)
 
     def set_control_handle(self, idx, x, y, invert_curve_flag):
         """Use this method to set control handle.
@@ -283,7 +284,7 @@ class StrokeHistory(object):
                 else:
                     nx = handle.x
                     ny = handle.y
-                new_node.set_control_handle(i, nx, ny)
+                new_node.set_control_handle(i, nx, ny, False)
                 if cn.curve:
                     break
 
@@ -1220,7 +1221,7 @@ class BezierMode (InkingMode):
         # The nodes around a new node changed to 'not curve' node,
         # to retain original shape.
         cn.curve = False
-        cn.set_control_handle(1, xa, ya)
+        cn.set_control_handle(1, xa, ya, False)
         new_node = _Node_Bezier(
                     gui.drawutils.linear_interpolation(xd, xe, step), 
                     gui.drawutils.linear_interpolation(yd, ye, step),
@@ -1229,12 +1230,12 @@ class BezierMode (InkingMode):
                     ytilt = cn.ytilt + (nn.ytilt - cn.ytilt) * step,
                     dtime = self._DEFAULT_DTIME,
                     curve = False)
-        new_node.set_control_handle(0, xd, yd)
-        new_node.set_control_handle(1, xe, ye)
+        new_node.set_control_handle(0, xd, yd, False)
+        new_node.set_control_handle(1, xe, ye, False)
         self.nodes.insert(index + 1, new_node)
 
         nn.curve = False
-        nn.set_control_handle(0, xc, yc)
+        nn.set_control_handle(0, xc, yc, False)
 
 
     def can_delete_node(self, idx):
