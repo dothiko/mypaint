@@ -185,20 +185,47 @@ class _Dynamic_Source(_Pixbuf_Source):
     @property
     def tile_count(self):
         """
-        CAUTION: Length of self._surfs might not be correct number of 
-        tile.because there might be some sources not loaded yet.
+        CAUTION: 
 
-        tile_count property of Stamp class should deal with this problem.
+        Other source-class would hold preloaded surfaces
+        and simply return len(self._surfs) for 'tile_count.
+
+        but dynamic STAMP class might setup surfaces dynamically
+        and self._surfs might not contain needed surfaces yet
+        at some point in time.
+
+        Therefore, the dynamic STAMP class might
+        not use this method to know how many tiles are there.
+        (Although it is rely on how implemented the dynamic
+        stamp class is)
         """
-        return len(self._surfs)
+        return len(self._surfs) 
 
     @event
     def surface_requested(self, tile_index):
-        """ Event of pixbuf for tile_index is dynamically requested now.
+        """ Event of pixbuf,invoked when tile_index is requested.
+        It is actually access to Source object with
+        get_current_src() method.
+
+        event handler would be placed in Stamp Class,
+        not inherited source class.
+
+        USAGE EXAMPLE:
+
+        class SampleStamp:
+
+            def __init__(self):
+                self._pixbuf_src = Some_Dynamic_Source()
+                self._pixbuf_src.surface_requested += self.surf_req_cb
+
+            def surf_req_cb(self, source, tile_index):
+                source.set_pixbuf(tile_index, None) # Failed to Load
+
+        NOTE:
 
         If failed to setup the pixbuf by some reason, 
-        set that tile_index key to None
-        with calling 'set_pixbuf(tile_index, None)'.
+        set that tile_index key (it would be Zero) to None
+        with calling 'source.set_pixbuf(tile_index, None)'.
         """
 
     def get_current_src(self, tile_index):
@@ -598,6 +625,7 @@ class _StampMixin(object):
         """
         pass
 
+
 class _DynamicStampMixin(_StampMixin):
     """ Non-tiled single pixbuf stamp mixin.
 
@@ -647,9 +675,24 @@ class Stamp(_StampMixin):
         else:
             return 1
 
+    @property
+    def is_ready(self):
+        """
+        In some stamp class, 
+        it might not be ready to stamp a tile
+        at some point in time.
+        For example, there is no clipboard bitmap
+        for ClipboardStamp... 
+        Otherwise, this property always return True.
+        """
+        return True
+
+
     ## Information methods
 
     ## Drawing methods
+
+    
 
 
 class TiledStamp(_StampMixin):
@@ -674,6 +717,10 @@ class ClipboardStamp(_DynamicStampMixin):
         self._reset_members(name)
         self._doc = doc
 
+    @property
+    def is_ready(self):
+        return self._pixbuf_src.tile_count == 1
+
     def _get_clipboard(self):
         # XXX almost copied from gui.document._get_clipboard()
         # we might need some property interface to get it from
@@ -682,11 +729,7 @@ class ClipboardStamp(_DynamicStampMixin):
         cb = Gtk.Clipboard.get_for_display(display, Gdk.SELECTION_CLIPBOARD)
         return cb
 
-    def initialize_phase(self):
-        """ Initializing for start of each drawing phase.
-        CAUTION: This method is not called when drawing to
-        layer.
-        """
+    def _load_clipboard_image(self): 
         # XXX almost copied from gui.document.paste_cb()
         clipboard = self._get_clipboard()
 
@@ -702,8 +745,17 @@ class ClipboardStamp(_DynamicStampMixin):
 
         self._pixbuf_src.set_pixbuf(0, pixbuf)
 
+    def initialize_phase(self):
+        """ Initializing for start of each drawing phase.
+        CAUTION: This method is not called when drawing to
+        layer.
+        """
+        self._load_clipboard_image()
+
     def pixbuf_requested_cb(self, source, tile_index):
-        pass
+        assert tile_index == 0
+        if self._pixbuf_src.tile_count == 0:
+            self._load_clipboard_image()
 
 class LayerStamp(_DynamicStampMixin):
     """ A Stamp which sources the current layer.
@@ -722,6 +774,10 @@ class LayerStamp(_DynamicStampMixin):
     @property
     def is_support_selection(self):
         return True
+    
+    @property
+    def is_ready(self):
+        return len(self._sel_areas) > 0
 
     def set_selection_area(self, tile_index, area):
         """ Set (add) selection area to this object.
@@ -823,17 +879,18 @@ class LayerStamp(_DynamicStampMixin):
                 alpha=True)
 
     def refresh_surface(self, tile_index, source=None):
-        if not tile_index in self._area_layers:
-            layer = self._rootstack.current
-            self.set_layer_for_area(tile_index, layer)
-        else:
-            layer = self.get_layer_for_area(tile_index)
+        if tile_index < len(self._sel_areas):
+            if not tile_index in self._area_layers:
+                layer = self._rootstack.current
+                self.set_layer_for_area(tile_index, layer)
+            else:
+                layer = self.get_layer_for_area(tile_index)
 
-        if layer != None:
-            if source == None:
-                source = self._pixbuf_src
-            source.set_pixbuf(tile_index, 
-                    self._fetch_single_area(layer, tile_index))
+            if layer != None:
+                if source == None:
+                    source = self._pixbuf_src
+                source.set_pixbuf(tile_index, 
+                        self._fetch_single_area(layer, tile_index))
 
     def surface_requested_cb(self, source, tile_index):
         """
@@ -968,17 +1025,20 @@ class ForegroundLayerStamp(ForegroundStamp,
         self._pixbuf_src.surface_requested += self.surface_requested_cb
 
 class PixbufStamp(_DynamicStampMixin):
-    """ A Stamp for dynamically changeable pixbuf stamps
+    """ 
+    A Stamp for dynamically changeable pixbuf stamps
+    (Currently, it is only ClipboardStamp)
     to fix its contents within DrawStamp command.
     This stamp would only use inside program,have no any user
     direct interaction.
 
-    MyPaint 'Command' processing done in asynchronously,
-    so Clipboard/Layer stamp might be updated its content(pixbuf)
-    when actually draw_stamp_to_layer() called.
+    Due to MyPaint 'Command' processing done in asynchronously,
+    Clipboard stamp might be updated its content(pixbuf)
+    when actually draw_stamp_to_layer() called
+    i.e. StampCommand has issued.
 
     Therefore, we need to pass the pixbuf used when editing
-    to this stamp class.
+    to this stamp class, instead of ClipboardStamp.
     """
 
     def __init__(self, name, pixbuf_src):

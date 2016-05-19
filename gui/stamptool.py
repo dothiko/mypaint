@@ -561,7 +561,7 @@ class StampMode (InkingMode):
     ## Raw event handling (prelight & zone selection in adjust phase)
 
     def button_press_cb(self, tdw, event):
-        if not self._stamp:
+        if not self._stamp or not self._stamp.is_ready:
             return super(InkingMode, self).button_press_cb(tdw, event)
 
         self._ensure_overlay_for_tdw(tdw)
@@ -654,7 +654,7 @@ class StampMode (InkingMode):
         return super(InkingMode, self).button_press_cb(tdw, event)
 
     def button_release_cb(self, tdw, event):
-        if not self._stamp:
+        if not self._stamp or not self._stamp.is_ready:
             return super(InkingMode, self).button_release_cb(tdw, event)
 
         self._ensure_overlay_for_tdw(tdw)
@@ -728,26 +728,27 @@ class StampMode (InkingMode):
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
 
-        shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
-        ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
-        self._update_zone_and_target(tdw, event.x, event.y)
-        prev_state = self.show_area_trash_button
+        if self._stamp and self._stamp.is_ready:
+            shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
+            ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
+            self._update_zone_and_target(tdw, event.x, event.y)
+            prev_state = self.show_area_trash_button
 
-        if not self.in_drag:
-            if self.phase in (_Phase.CAPTURE, _Phase.ADJUST):
-                if (self._stamp != None and 
-                        self.stamp.is_support_selection and
-                        shift_state):
+            if not self.in_drag:
+                if self.phase in (_Phase.CAPTURE, _Phase.ADJUST):
+                    if (self._stamp != None and 
+                            self.stamp.is_support_selection and
+                            shift_state):
+                        
+                        self.show_area_trash_button = \
+                                (self.zone in (_EditZone_Stamp.SOURCE_AREA,
+                                               _EditZone_Stamp.SOURCE_TRASH_BUTTON))
+                    else:
+                        self.show_area_trash_button = False
+
+            if prev_state != self.show_area_trash_button:
+                self._queue_selection_area(tdw)
                     
-                    self.show_area_trash_button = \
-                            (self.zone in (_EditZone_Stamp.SOURCE_AREA,
-                                           _EditZone_Stamp.SOURCE_TRASH_BUTTON))
-                else:
-                    self.show_area_trash_button = False
-
-        if prev_state != self.show_area_trash_button:
-            self._queue_selection_area(tdw)
-                
 
         # call super-superclass callback
         return super(InkingMode, self).motion_notify_cb(tdw, event)
@@ -755,8 +756,8 @@ class StampMode (InkingMode):
     ## Drag handling (both capture and adjust phases)
 
     def drag_start_cb(self, tdw, event):
-        if not self._stamp:
-            return super(StampMode, self).drag_start_cb(tdw, event)
+        if not self._stamp or not self._stamp.is_ready:
+            super(InkingMode, self).drag_start_cb(tdw, event)
 
         self._ensure_overlay_for_tdw(tdw)
         mx, my = tdw.display_to_model(event.x, event.y)
@@ -805,8 +806,8 @@ class StampMode (InkingMode):
 
 
     def drag_update_cb(self, tdw, event, dx, dy):
-        if not self._stamp:
-            super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
+        if not self._stamp or not self._stamp.is_ready:
+            super(InkingMode, self).drag_update_cb(tdw, event, dx, dy)
 
         self._ensure_overlay_for_tdw(tdw)
 
@@ -952,8 +953,9 @@ class StampMode (InkingMode):
 
 
     def drag_stop_cb(self, tdw):
-        if not self._stamp:
-            return super(StampMode, self).drag_stop_cb(tdw)
+        if not self._stamp or not self._stamp.is_ready:
+            return super(InkingMode, self).drag_stop_cb(tdw)
+        
 
         self._ensure_overlay_for_tdw(tdw)
         if self.phase == _Phase.CAPTURE:
