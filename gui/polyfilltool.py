@@ -847,13 +847,6 @@ class PolyfillMode (BezierMode):
                             self.forced_button_pos = (event.x, event.y)
                             self.phase = _PhaseBezier.CHANGE_PHASE 
                             self._returning_phase = _PhaseBezier.CREATE_PATH
-                        elif shift_state:
-                            # selection box dragging start!!
-                            if self._returning_phase == None:
-                                self._returning_phase = self.phase
-                            self.phase = _PhaseBezier.ADJUST_SELECTING
-                            self.selection_rect.start(
-                                    *tdw.display_to_model(event.x, event.y))
                         elif ctrl_state:
                             mx, my = tdw.display_to_model(event.x, event.y)
                             pressed_segment = self._detect_on_stroke(mx, my)
@@ -880,9 +873,6 @@ class PolyfillMode (BezierMode):
 
             # FALLTHRU: *do* start a drag 
 
-        elif self.phase == _PhaseBezier.ADJUST_SELECTING:
-            # XXX Not sure what to do here.
-            pass
         elif self.phase in (_PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
             pass
         elif self.phase in (_PhaseBezier.MOVE_NODE, _PhaseBezier.CHANGE_PHASE):
@@ -950,13 +940,7 @@ class PolyfillMode (BezierMode):
 
         elif self.phase == _PhaseBezier.MOVE_NODE:
             if len(self.selected_nodes) > 0:
-                # Use selection_rect class as offset-information
-                self.selection_rect.start(mx, my)
-        
-        elif self.phase == _PhaseBezier.ADJUST_SELECTING:
-            self.selection_rect.start(mx, my)
-            self.selection_rect.is_addition = (event.state & Gdk.ModifierType.CONTROL_MASK)
-            self._queue_draw_selection_rect() # to start
+                self.drag_offset.start(mx, my)
         elif self.phase == _PhaseBezier.ADJUST_HANDLE:
             self._last_event_node = self.nodes[self.target_node_index]
             pass
@@ -990,13 +974,9 @@ class PolyfillMode (BezierMode):
             if len(self.selected_nodes) > 0:
                 self._queue_redraw_curve(tdw)  
                 self._queue_draw_selected_nodes()
-                self.selection_rect.drag(mx, my)
+                self.drag_offset.end(mx, my)
                 self._queue_draw_selected_nodes()
                 self._queue_redraw_curve(tdw)
-        elif self.phase == _PhaseBezier.ADJUST_SELECTING:
-            self._queue_draw_selection_rect() # to erase
-            self.selection_rect.drag(mx, my)
-            self._queue_draw_selection_rect()
         elif self.phase == _PhaseBezier.CHANGE_PHASE:
             # DO NOT DO ANYTHING.
             pass
@@ -1035,33 +1015,11 @@ class PolyfillMode (BezierMode):
                 cn = self.nodes[idx]
                 cn.move(cn.x + dx, cn.y + dy)
 
-            self.selection_rect.reset()
+            self.drag_offset.reset()
             self._dragged_node_start_pos = None
             self._queue_redraw_curve(tdw)
             self._queue_draw_buttons()
             self.phase = _PhaseBezier.CREATE_PATH
-        elif self.phase == _PhaseBezier.ADJUST_SELECTING:
-            ## Nodes selection phase
-            self._queue_draw_selection_rect()
-
-            modified = False
-            if not self.selection_rect.is_addition:
-                self._reset_selected_nodes()
-                modified = True
-
-            for idx,cn in enumerate(self.nodes):
-                if self.selection_rect.is_inside(cn.x, cn.y):
-                    if not idx in self.selected_nodes:
-                        self.selected_nodes.append(idx)
-                        modified = True
-
-            if modified:
-                self._queue_redraw_all_nodes()
-
-            self._queue_draw_buttons() # buttons erased while selecting
-            self.selection_rect.reset()
-
-            # phase returns the last phase 
 
         elif self.phase == _PhaseBezier.CHANGE_PHASE:
             pass

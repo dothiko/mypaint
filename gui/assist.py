@@ -83,18 +83,18 @@ class Stabilizer(Assistbase):
 
         rx = 0.0
         ry = 0.0
-        rp = 0.0
+        rp = self._latest_pressure
         idx = 0
 
         while idx < self._sampling_max:
             rx += self._get_stabilized_x(idx)
             ry += self._get_stabilized_y(idx)
-            rp += self._get_stabilized_pressure(idx)
+           #rp += self._get_stabilized_pressure(idx)
             idx += 1
 
         rx /= self._sampling_max 
         ry /= self._sampling_max
-        rp /= self._sampling_max
+       #rp /= self._sampling_max
 
         _prev_button = self._prev_button
         self._prev_button = button
@@ -105,10 +105,9 @@ class Stabilizer(Assistbase):
         # Heading / Trailing glitch workaround
         if button == 1:
             if (_prev_button == None):
-                #eturn ((rx, ry, 0.0), (rx, ry, rp / 2))
                 if self._prev_rx != None:
                     yield (self._prev_rx, self._prev_ry, 0.0)
-                yield (rx, ry, 0.0)
+                    self._prev_rx = self._prev_ry = None
                 yield (rx, ry, rp)
                 raise StopIteration
         elif button == None:
@@ -134,6 +133,7 @@ class Stabilizer(Assistbase):
         self._prev_time = None
         self._prev_rp = None
         self._release_time = None
+        self._latest_pressure = None
         
 
     def _get_stabilized_x(self, idx):
@@ -147,6 +147,7 @@ class Stabilizer(Assistbase):
 
     def fetch(self, x, y, pressure, time):
         """Fetch samples"""
+        self._latest_pressure = pressure
         
         # To reject extreamly slow and near samples
         if self._prev_time == None or time - self._prev_time > 8:

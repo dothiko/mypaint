@@ -593,6 +593,19 @@ class Document (object):
         self._autosave_launch_cleanup(oradir, manifest)
 
     def get_autosave_processor(self):
+        """
+        Getter method for autosave processor.
+        We need this method to know and finish enqueued tasks
+        from outside of this class, to ensure every file-saving tasks
+        are exactly finished. 
+        Currently, this is called from inside gui.drawwindow.quit_cb() 
+        
+        Without this,when system is under very heavy processing load,
+        mypaint quits before some project-save tasks are unfinished.
+        In consequence of this, not only the drawing works are lost,
+        some layers dimension are differ from stack.xml, 
+        and their position (might) be misplaced.
+        """
         return self._autosave_processor
     
     def _autosave_launch_cleanup(self, oradir, manifest, taskproc=None):
@@ -1752,6 +1765,7 @@ class Document (object):
                             '%02d-%02d-%02d' % (lt.tm_hour, lt.tm_min, lt.tm_sec))
 
                     assert not os.path.exists(destdirname)
+                    os.makedirs(destdirname)       
 
                     for path, cl in self.layer_stack.walk():
                         if cl.autosave_dirty:
@@ -1779,9 +1793,20 @@ class Document (object):
                                 assert os.path.exists(filepath)
                                 copy_list.append(filepath)
 
-                    filepath = os.path.join(source_dir,'stack.xml')
-                    assert os.path.exists(filepath)
-                    copy_list.append(filepath)
+
+                    # Thumbnail and stack.xml copied at here immidiately 
+                    # because it would be overwritten at later processing
+                    # before the idling copy task starts.
+
+                    filepaths = ( 
+                        os.path.join(source_dir, 'stack.xml'),
+                        os.path.join(source_dir, 'Thumbnails', 'thumbnail.png')
+                        )
+
+                    for cpath in filepaths:
+                        assert os.path.exists(cpath)
+                        shutil.copy(cpath.decode('utf-8'), destdirname)
+
 
 
                 elif 'source_dir' in kwargs:

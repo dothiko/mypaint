@@ -458,8 +458,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
         def queue_motion(time, x, y, pressure, xtilt, ytilt):
             x, y = tdw.display_to_model(x, y)
-            event_data = (time, x, y, pressure, xtilt, ytilt)
-            drawstate.queue_motion(event_data)
+            drawstate.queue_motion((time, x, y, pressure, xtilt, ytilt))
 
         # Do nothing if painting is inactivated
         current_layer = tdw.doc._layers.current
@@ -598,12 +597,12 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                         assistant.fetch(hx, hy, pressure, time)
                         if self.doc.stabilizer_mode:
                             for hx, hy, hp in assistant.enum_current(drawstate.button_down, time):
-                                queue_motion(ht, hx, hy, hp, None,None)
+                                queue_motion(ht, hx, hy, hp, None, None)
                             continue
                        #else:
                        #    info=((hx, hy, pressure), )
 
-                    queue_motion(ht, hx, hy, pressure, None,None)
+                    queue_motion(ht, hx, hy, pressure, None, None)
 
             else:
                 logger.warning(
