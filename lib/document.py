@@ -1721,6 +1721,7 @@ class Document (object):
     def save_project(self, dirname, **kwargs):
         """ save current document as a project
         """
+        print '--- projsave start ---'
         
         try:
             
@@ -1861,6 +1862,7 @@ class Document (object):
             self._queue_autosave_writes(dirname, immidiate=True)
         finally:
             self._autosave_dirty = False 
+            print '--- projsave end ---'
 
 
     def load_project(self, dirname,feedback_cb=None,**kwargs):
