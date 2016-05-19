@@ -1961,6 +1961,27 @@ class RootLayerStack (group.LayerStack):
         stack_elem.append(bg_elem)
         return stack_elem
 
+    def save_to_project(self, projdir, path, canvas_bbox,
+                           frame_bbox, force_write, **kwargs):
+        """Saves the stack's data into an project directory"""
+        stack_elem = super(RootLayerStack, self).save_to_project(
+            projdir, path, canvas_bbox,
+            frame_bbox, force_write, **kwargs
+        )
+        # Save background
+        bg_layer = self.background_layer
+        if bg_layer.autosave_dirty or force_write:
+            bg_layer.initially_selected = False
+            bg_path = (len(self),)
+            bg_elem = bg_layer.save_to_project(
+                projdir, bg_path,
+                canvas_bbox, frame_bbox,
+                force_write,
+                **kwargs
+            )
+            stack_elem.append(bg_elem)
+        return stack_elem
+
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
         """Queues the layer for auto-saving"""
         stack_elem = super(RootLayerStack, self).queue_autosave(

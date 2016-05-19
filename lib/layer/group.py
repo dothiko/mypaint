@@ -498,6 +498,39 @@ class LayerStack (core.LayerBase, lib.autosave.Autosaveable):
 
         return stack_elem
 
+    def save_to_project(self, projdir, path,
+                           canvas_bbox, frame_bbox, force_write, **kwargs):
+        """Saves the stack's data into an project directory"""
+
+        # MyPaint uses the same origin internally for all data layers,
+        # meaning the internal stack objects don't impose any offsets on
+        # their children. Any x or y attrs which were present when the
+        # stack was loaded from .ORA were accounted for back then.
+        stack_elem = self._get_stackxml_element("stack")
+
+        # Recursively save out the stack's child layers
+        for layer_idx, layer in list(enumerate(self)):
+            layer_path = tuple(list(path) + [layer_idx])
+            # the layer might not be written when it is not dirty,
+            # anyway it returns element.
+            layer_elem = layer.save_to_project(projdir, layer_path,
+                                               canvas_bbox, frame_bbox,
+                                               force_write,
+                                               **kwargs)
+            stack_elem.append(layer_elem)
+
+        # OpenRaster has no pass-through composite op: need to override.
+        # MyPaint's "Pass-through" mode is internal shorthand for the
+        # default behaviour of OpenRaster.
+        isolation = "isolate"
+        if self.mode == PASS_THROUGH_MODE:
+            stack_elem.attrib.pop("opacity", None)  # => 1.0
+            stack_elem.attrib.pop("composite-op", None)  # => svg:src-over
+            isolation = "auto"
+        stack_elem.attrib["isolation"] = isolation
+
+        return stack_elem
+
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
         """Queues the layer for auto-saving"""
         # Build a layers.xml element: no x or y for stacks

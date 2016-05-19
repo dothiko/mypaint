@@ -409,6 +409,14 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
         return self._save_rect_to_ora(orazip, tmpdir, "layer", path,
                                       frame_bbox, rect, **kwargs)
 
+    def save_to_project(self, projdir, path,
+                           canvas_bbox, frame_bbox, 
+                           force_write, **kwargs):
+        """Saves the layer's data into an project directory"""
+        rect = self.get_bbox()
+        return self._save_rect_to_project(projdir, 
+                                      frame_bbox, rect, force_write, **kwargs)
+
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
         """Queues the layer for auto-saving"""
 
@@ -425,11 +433,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
         # standardizes looped layer data, that code should be moved
         # here.
         
-        if self.src != None:
-            png_basename = os.path.basename(self.src)
-        else:
-            png_basename = self.autosave_uuid + ".png"
-            
+        png_basename = self.filename_for_project
         png_relpath = os.path.join("data", png_basename)
         png_path = os.path.join(oradir, png_relpath)
         png_bbox = self._surface.looped and bbox or tuple(self.get_bbox())
@@ -490,6 +494,40 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
         assert (x == y == 0) or not self._surface.looped
         elem = self._get_stackxml_element("layer", x, y)
         elem.attrib["src"] = storepath
+        return elem
+
+    def _save_rect_to_project(self, projdir,
+                          frame_bbox, rect, force_write, **kwargs):
+        """
+        Internal: saves a rectangle of the surface to a project dir
+
+        CAUTION: THIS METHOD REWRITES AUTOSAVE_DIRTY FLAG!!
+                 So you'll need to reserve the flag before call this method. 
+        """
+
+        pngname = self.get_filename_for_project()
+        png_relpath = os.path.join('data', pngname)
+        png_path = os.path.join(projdir, png_relpath)
+
+        if ('only_element' not in kwargs and 
+                (self.autosave_dirty or force_write)):
+            # Write PNG data via a tempfile
+            logger.debug('layer %s of surface %r is marked as dirty or forced write!', self.name , pngname)
+            t0 = time.time()
+            self._surface.save_as_png(png_path, *rect, **kwargs)
+            t1 = time.time()
+            logger.debug('%.3fs surface saving %r', t1-t0, pngname)
+            self.autosave_dirty = False
+
+        # Return details
+        png_bbox = tuple(rect)
+        png_x, png_y = png_bbox[0:2]
+        ref_x, ref_y = frame_bbox[0:2]
+        x = png_x - ref_x
+        y = png_y - ref_y
+        assert (x == y == 0) or not self._surface.looped
+        elem = self._get_stackxml_element("layer", x, y)
+        elem.attrib["src"] = png_relpath
         return elem
 
     ## Painting symmetry axis
@@ -751,6 +789,42 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         orazip.write(src_path, storepath)
         # Return details of what was written.
         elem.attrib["src"] = unicode(storepath)
+        return elem
+
+    def save_to_project(self, projdir, path,
+                           canvas_bbox, frame_bbox, 
+                           force_write, **kwargs):
+        """Saves the working file to an project directory"""
+        # No supercall in this override, but the base implementation's
+        # attributes method is useful.
+        ref_x, ref_y = frame_bbox[0:2]
+        x = self._x - ref_x
+        y = self._y - ref_y
+        elem = self._get_stackxml_element("layer", x, y)
+        # Pick a suitable name to store under.
+        src_path = self.workfilename
+        src_rootname, src_ext = os.path.splitext(src_path)
+        src_ext = src_ext.lower()
+       #storename = self._make_refname("layer", path, src_ext)
+       #storepath = "data/%s" % (storename,)
+
+        # generate filepaths and copy it like queue_autosave, 
+        # but a bit differently.
+        final_basename = self.get_filename_for_project(ext=src_ext)
+
+        final_relpath = os.path.join("data", final_basename)
+        final_path = os.path.join(projdir, final_relpath)
+
+        if (self.autosave_dirty or not os.path.exists(final_path) or
+                force_write):
+
+           #shutil.copy(final_path, tmp_fp)
+            # TODO something to do here???
+            print 'filebackedlayer save to project...?'
+            self.autosave_dirty = False
+
+        # Return details of what was written.
+        elem.attrib["src"] = unicode(final_relpath)
         return elem
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
@@ -1061,6 +1135,41 @@ class BackgroundLayer (SurfaceBackedLayer):
         os.remove(tmppath)
         elem.attrib[self.ORA_BGTILE_LEGACY_ATTR] = storename
         elem.attrib[self.ORA_BGTILE_ATTR] = storename
+        return elem
+
+    def save_to_project(self, projdir, path,
+                           canvas_bbox, frame_bbox, force_write, **kwargs):
+        # Save as a regular layer for other apps.
+        # Background surfaces repeat, so just the bit filling the frame.
+
+        is_dirty = self.autosave_dirty or force_write
+
+        # Get only element for this method
+        kwargs = dict(kwargs)
+        kwargs['only_element'] = True
+        elem = self._save_rect_to_project(
+            projdir, 
+            frame_bbox, frame_bbox, force_write, **kwargs
+        )
+
+        # Also save as single pattern (with corrected origin)
+        x0, y0 = frame_bbox[0:2]
+        x, y, w, h = self.get_bbox()
+        rect = (x+x0, y+y0, w, h)
+
+        pngname = self._make_refname("background", path, "tile.png")
+        store_relpath = os.path.join('data', pngname)
+        storename = os.path.join(projdir, store_relpath)
+
+        if is_dirty:
+            t0 = time.time()
+            self._surface.save_as_png(storename, *rect, **kwargs)
+            t1 = time.time()
+            logger.debug('%.3fs surface saving %s', t1 - t0, store_relpath)
+            self.autosave_dirty = False
+
+        elem.attrib[self.ORA_BGTILE_LEGACY_ATTR] = store_relpath
+        elem.attrib[self.ORA_BGTILE_ATTR] = store_relpath
         return elem
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
@@ -1533,6 +1642,40 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         # See comment above for compatibility strategy.
         elem.attrib[self._ORA_STROKEMAP_ATTR] = storepath
         elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = storepath
+        return elem
+
+    def save_to_project(self, projdir, path,
+                           canvas_bbox, frame_bbox, force_write, **kwargs):
+        """Save the strokemap too, in addition to the base implementation"""
+        # Save the layer normally
+
+        dirty_flag = self.autosave_dirty or force_write
+
+        elem = super(PaintingLayer, self).save_to_project(
+            projdir, path,
+            canvas_bbox, frame_bbox, force_write, **kwargs
+        )
+        # Store stroke shape data too
+        # TODO we'll need unified version of get_filename_for_project()
+        # for here...
+        dat_basename = self.get_filename_for_project(
+                ext=None,
+                formatstr=u"%s-strokemap.dat")
+        dat_relpath = os.path.join('data', dat_basename)
+        dat_path = os.path.join(projdir, dat_relpath)
+
+        if dirty_flag:
+            x, y, w, h = self.get_bbox()
+            t0 = time.time()
+            with open(dat_path , 'w') as fp:
+                _write_strokemap(fp, self.strokes, -x, -y)
+            t1 = time.time()
+            logger.debug("%.3fs strokemap saving %r", t1-t0, dat_relpath)
+
+        # Add strokemap XML attrs and return.
+        # See comment above for compatibility strategy.
+        elem.attrib[self._ORA_STROKEMAP_ATTR] = dat_relpath
+        elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = dat_relpath
         return elem
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):

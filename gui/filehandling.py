@@ -764,7 +764,8 @@ class FileHandler (object):
                 u"Open File",
             ),
             parent = self.app.drawWindow,
-            action = Gtk.FileChooserAction.OPEN,
+           #action = Gtk.FileChooserAction.OPEN,
+            action = dialog_action,
             buttons = [
                 Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
                 Gtk.STOCK_OPEN, Gtk.ResponseType.OK,

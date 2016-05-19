@@ -292,6 +292,7 @@ class Document (object):
         self._as_project = False
         self._projcopy_processor = None
         self._pending_project_copy = False
+        self.projectsaving = False
 
         if not painting_only:
             self._autosave_processor = lib.idletask.Processor()
@@ -468,21 +469,20 @@ class Document (object):
         if the autosave writes are in progress.
 
         """
-        if not self._as_project:
-            assert not self._painting_only
-            if not self._autosave_dirty: return
-            if self._autosave_processor.has_work(): return
-            if self._autosave_countdown_id: return
-            if not self._autosave_backups: return
-            interval = lib.helpers.clamp(self.autosave_interval, 5, 300)
-            self._autosave_countdown_id = GLib.timeout_add_seconds(
-                interval = interval,
-                function = self._autosave_countdown_cb,
-            )
-            logger.debug(
-                "autosave_countdown: autosave will run in %ds",
-                self.autosave_interval,
-            )
+        assert not self._painting_only
+        if not self._autosave_dirty: return
+        if self._autosave_processor.has_work(): return
+        if self._autosave_countdown_id: return
+        if not self._autosave_backups: return
+        interval = lib.helpers.clamp(self.autosave_interval, 5, 300)
+        self._autosave_countdown_id = GLib.timeout_add_seconds(
+            interval = interval,
+            function = self._autosave_countdown_cb,
+        )
+        logger.debug(
+            "autosave_countdown: autosave will run in %ds",
+            self.autosave_interval,
+        )
 
     def _stop_autosave_countdown(self):
         """Stop any existing countdown to an automatic backup"""
@@ -501,7 +501,7 @@ class Document (object):
 
     ## Queued autosave writes: low priority & chunked
 
-    def _queue_autosave_writes(self,dirname=None, immidiate=False):
+    def _queue_autosave_writes(self,dirname=None):
         """Add autosaved backup tasks to the background processor
 
         These tasks consist of nicely chunked writes for all layers
@@ -515,20 +515,9 @@ class Document (object):
             return
         logger.debug("autosave starting: queueing save tasks")
         assert not self._painting_only
+        assert not self._autosave_processor.has_work()
         assert self._autosave_dirty
-        if dirname:
-            # Project save might have pending tasks of
-            # backup or unchanged layer copy of new project save.
-            # FYI, all pending task flashed right after
-            # project-save method starts.
-            if self._pending_project_copy:
-                assert self._autosave_processor.get_work_count() <= 1
-            else:
-                assert not self._autosave_processor.has_work()
-            oradir = dirname
-        else:
-            assert not self._autosave_processor.has_work()
-            oradir = os.path.join(self._cache_dir, CACHE_DOC_AUTOSAVE_SUBDIR)
+        oradir = os.path.join(self._cache_dir, CACHE_DOC_AUTOSAVE_SUBDIR)
         datadir = os.path.join(oradir, "data")
         if not os.path.exists(datadir):
             logger.debug("autosave: creating %r...", datadir)
@@ -586,9 +575,6 @@ class Document (object):
             image_elem,
             os.path.join(oradir, stackfile_rel),
         )
-        if immidiate:
-            taskproc.finish_all()
-
         manifest.add(stackfile_rel)
         self._autosave_launch_cleanup(oradir, manifest)
 
@@ -655,8 +641,6 @@ class Document (object):
 
     def _autosave_cleanup_cb(self, oradir, manifest):
         """Autosaved backup task: final cleanup task"""
-        if self._as_project:
-            return 
         assert not self._painting_only
         surplus_files = []
         for dirpath, dirnames, filenames in os.walk(oradir):
@@ -1382,12 +1366,13 @@ class Document (object):
         if not os.path.isfile(filename):
             # Filename is not file.
             # But it might be oradir(project)...
-            dirname = "%s%s" % (filename, os.path.sep)
-            xmlname = "%sstack.xml" % dirname
+            dirname = filename
+            xmlname = os.path.join(dirname, 'stack.xml')
+            thumbpath = os.path.join(dirname, 'Thumbnails')
+            datapath = os.path.join(dirname, 'data')
             if (os.path.exists(xmlname) and
-                    os.path.exists("%smimetype" % dirname) and
-                    os.path.exists("%sThumbnails" % dirname) and
-                    os.path.exists("%sdata" % dirname) ):
+                    os.path.exists(thumbpath) and
+                    os.path.exists(datapath) ):
                 # It might be oradir!
                 with open(xmlname, 'rt') as ifp:
                     elem = ET.fromstring(ifp.read())
@@ -1722,6 +1707,7 @@ class Document (object):
         """ save current document as a project
         """
         print '--- projsave start ---'
+        self.projectsaving = True
         
         try:
             
@@ -1736,7 +1722,7 @@ class Document (object):
             # If 'save as another project', set _autosave_dirty flag
             # to avoid save bypassed when right after current project saved.
 
-            self._autosave_dirty = True # Currently, forced to set autosave_dirty
+           #self._autosave_dirty = True # Currently, forced to set autosave_dirty
 
             if (kwargs != None):
 
@@ -1859,10 +1845,16 @@ class Document (object):
             # After all files copied,
             # ordinary autosave processing should be launched.
             self._as_project = True
-            self._queue_autosave_writes(dirname, immidiate=True)
+            self._project_write(dirname, 
+                    xres=self._xres if self._xres else None,
+                    yres=self._yres if self._yres else None,
+                    frame_active = self.frame_enabled,
+                    force_write = not os.path.exists(dirname), 
+                    **kwargs)
         finally:
             self._autosave_dirty = False 
             print '--- projsave end ---'
+            self.projectsaving = False
 
 
     def load_project(self, dirname,feedback_cb=None,**kwargs):
@@ -1907,6 +1899,84 @@ class Document (object):
             # For project,all layer already saved initially.
             for pos, cl in self.layer_stack.walk():
                 cl.autosave_dirty = False
+
+    def _project_write(self, dirname, 
+            xres=None,yres=None,
+            frame_active=False, force_write=False, 
+            **kwargs):
+        """
+        Write project, only dirty layers.
+        This method based on _save_layers_to_new_orazip()
+
+        :param bool force_write: if True, all layers written even it is not dirty.
+        """
+        root_stack = self.layer_stack
+
+        if not os.path.exists(dirname):
+            os.mkdir(dirname)
+            force_write = True
+
+        mimepath = os.path.join(dirname, 'mimetype')
+        if not os.path.exists(mimepath):
+            with open(mimepath, 'w') as fp:
+                fp.write(lib.xml.OPENRASTER_MEDIA_TYPE)
+
+        # Creating sub directories
+        for subdir in ('Thumbnails', 'data', 'backup'): 
+            subpath = os.path.join(dirname, subdir)
+            if not os.path.exists(subpath):
+                os.mkdir(subpath)
+
+        # Update the initially-selected flag on all layers
+        # Also get the data bounding box as we go
+        data_bbox = helpers.Rect()
+        for s_path, s_layer in root_stack.walk():
+            selected = (s_path == root_stack.current_path)
+            s_layer.initially_selected = selected
+            data_bbox.expandToIncludeRect(s_layer.get_bbox())
+        data_bbox = tuple(data_bbox)
+
+        # Save the layer stack
+        image = ET.Element('image')
+        bbox = tuple(data_bbox)
+        x0, y0, w0, h0 = bbox
+        image.attrib['w'] = str(w0)
+        image.attrib['h'] = str(h0)
+        root_stack_path = ()
+        root_stack_elem = root_stack.save_to_project(
+            dirname, root_stack_path,
+            data_bbox, bbox, force_write, 
+            **kwargs
+        )
+        image.append(root_stack_elem)
+
+        # Frame-enabled state
+        frame_active_value = ("true" if frame_active else "false")
+        image.attrib[_ORA_FRAME_ACTIVE_ATTR] = frame_active_value
+
+        # Resolution info
+        if xres and yres:
+            image.attrib["xres"] = str(xres)
+            image.attrib["yres"] = str(yres)
+
+        # OpenRaster version declaration
+        image.attrib["version"] = lib.xml.OPENRASTER_VERSION
+
+        # Thumbnail preview (256x256)
+        thumbnail = root_stack.render_thumbnail(bbox)
+        lib.pixbuf.save(thumbnail, 
+                os.path.join(dirname, 'Thumbnails' , 'thumbnail.png'),
+                'png')
+
+        # Prettification
+        lib.xml.indent_etree(image)
+        xml = ET.tostring(image, encoding='UTF-8')
+
+        # Finalize
+        with open(os.path.join(dirname, 'stack.xml'), 'w') as fp:
+            fp.write(xml)
+
+        return thumbnail
 
     def _project_copy_cb(self, filelist, dirinfos):
         """Project save task: copy files of filelist into new directory.

@@ -12,6 +12,7 @@
 
 import abc
 import uuid
+import os
 
 
 class Autosaveable:
@@ -129,4 +130,23 @@ class Autosaveable:
             return self._src
         except AttributeError:
             return None
+
+    def get_filename_for_project(self, ext=u".png", formatstr=None):
+        """
+        Get a unique filename in a project.
+        :param ext: file extension.
+        :param formatstr: format strings, in unicode.
+        """
+        if self.src != None:
+            basename = os.path.basename(self.src)
+            if formatstr:
+                basename, ext = os.path.splitext(basename)
+                return formatstr % (basename,)
+            else:
+                return basename
+        else:
+            if formatstr:
+                return formatstr % (self.autosave_uuid,)
+            else:
+                return self.autosave_uuid + ext
     

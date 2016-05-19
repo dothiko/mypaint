@@ -797,6 +797,22 @@ class LayerBase (TileBlittable, TileCompositable):
         """
         raise NotImplementedError
 
+    def save_to_openraster(self, projdir, path,
+                           canvas_bbox, frame_bbox, force_write, **kwargs):
+
+        """Saves the layer's data into an project directory
+
+        :param projdir: the project directory
+        :param force_write: force write flag, regardless how self.autosave_dirty is. 
+
+        Other parameters are same as save_to_openraster.
+
+        :returns: element describing data written
+        :rtype: xml.etree.ElementTree.Element
+        """
+        raise NotImplementedError
+
+
     def _get_stackxml_element(self, tag, x=None, y=None):
         """Internal: get a basic etree Element for .ora saving"""
 
