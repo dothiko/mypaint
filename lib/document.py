@@ -289,7 +289,7 @@ class Document (object):
 
         # Project flag.place here to avoid exception
         # from _command_stack_updated_cb
-        self._as_project = False
+        self._is_project = False
         self._projcopy_processor = None
         self._pending_project_copy = False
         self.projectsaving = False
@@ -678,7 +678,7 @@ class Document (object):
 
     def _command_stack_updated_cb(self, cmdstack):
         assert not self._painting_only
-        if not (self.autosave_backups or self._as_project): return
+        if not self.autosave_backups: return
         self._autosave_dirty = True
         self._restart_autosave_countdown()
         logger.debug("autosave: updates detected, doc marked autosave-dirty")
@@ -1362,7 +1362,7 @@ class Document (object):
         }
 
         ext = None
-        self._as_project = False
+        self._is_project = False
         if not os.path.isfile(filename):
             # Filename is not file.
             # But it might be oradir(project)...
@@ -1700,13 +1700,14 @@ class Document (object):
 
     ## Project Related
     @property
-    def as_project(self):
-        return self._as_project
+    def is_project(self):
+        return self._is_project
 
     def save_project(self, dirname, **kwargs):
         """ save current document as a project
         """
-        print '--- projsave start ---'
+        t0 = time.time()
+        logger.debug("projectsave started")
         self.projectsaving = True
         
         try:
@@ -1719,15 +1720,10 @@ class Document (object):
                 logger.info('project copy processor still have pending works')
                 self._projcopy_processor.finish_all()
             
-            # If 'save as another project', set _autosave_dirty flag
-            # to avoid save bypassed when right after current project saved.
-
-           #self._autosave_dirty = True # Currently, forced to set autosave_dirty
-
             if (kwargs != None):
 
                 copy_list = []
-                                 
+                source_dir = None
 
                 if ('version_save' in kwargs): 
                     # Version save of project assigned.
@@ -1781,18 +1777,6 @@ class Document (object):
                                 copy_list.append(filepath)
 
 
-                    # Thumbnail and stack.xml copied at here immidiately 
-                    # because it would be overwritten at later processing
-                    # before the idling copy task starts.
-
-                    filepaths = ( 
-                        os.path.join(source_dir, 'stack.xml'),
-                        os.path.join(source_dir, 'Thumbnails', 'thumbnail.png')
-                        )
-
-                    for cpath in filepaths:
-                        assert os.path.exists(cpath)
-                        shutil.copy(cpath.decode('utf-8'), destdirname)
 
 
 
@@ -1831,20 +1815,37 @@ class Document (object):
                     if len(copy_list) == 0:
                         logger.warning('at new save_project, copy_list is empty!')
 
-                if len(copy_list) > 0:
-                    self._pending_project_copy = True
-                    assert os.path.exists(source_dir)
-                    taskproc = self._projcopy_processor
-                    taskproc.add_work(
-                        self._project_copy_cb,
-                        copy_list,
-                        (destdirname , source_dir)
-                    )
-    
-                
-            # After all files copied,
-            # ordinary autosave processing should be launched.
-            self._as_project = True
+
+                if source_dir:
+                    # source_dir is not empty, 
+                    # i.e. needs copy some files from existing project.
+                    #
+                    # Thumbnail and stack.xml copied at here immidiately 
+                    # because it would be overwritten at later processing
+                    # before the idling copy task starts.
+
+                    filepaths = ( 
+                        os.path.join(source_dir, 'stack.xml'),
+                        os.path.join(source_dir, 'Thumbnails', 'thumbnail.png')
+                        )
+
+                    for cpath in filepaths:
+                        assert os.path.exists(cpath)
+                        shutil.copy(cpath.decode('utf-8'), destdirname)
+
+                    # After that, run copying task.
+                    if len(copy_list) > 0:
+                        self._pending_project_copy = True
+                        assert os.path.exists(source_dir)
+                        taskproc = self._projcopy_processor
+                        taskproc.add_work(
+                            self._project_copy_cb,
+                            copy_list,
+                            (destdirname , source_dir)
+                        )
+             
+            # (Along with copying tasks in some case,)
+            # Do project writing.
             self._project_write(dirname, 
                     xres=self._xres if self._xres else None,
                     yres=self._yres if self._yres else None,
@@ -1852,9 +1853,11 @@ class Document (object):
                     force_write = not os.path.exists(dirname), 
                     **kwargs)
         finally:
+            t1 = time.time()
+            logger.debug('projectsave ended in %.3fs', t1-t0)
             self._autosave_dirty = False 
-            print '--- projsave end ---'
             self.projectsaving = False
+            self._is_project = True
 
 
     def load_project(self, dirname,feedback_cb=None,**kwargs):
@@ -1865,8 +1868,7 @@ class Document (object):
         self._stop_cache_updater()
         self._stop_autosave_writes()
         self.clear(new_cache=False)
-
-        self._as_project = True
+        self._is_project = True
 
         try:
             elem = self._load_from_openraster_dir(
@@ -1905,10 +1907,16 @@ class Document (object):
             frame_active=False, force_write=False, 
             **kwargs):
         """
-        Write project, only dirty layers.
-        This method based on _save_layers_to_new_orazip()
+        Write project.
+        This method based on _save_layers_to_new_orazip().
+        The difference from the original is,this method (basically)
+        process only 'dirty' layers. 
 
-        :param bool force_write: if True, all layers written even it is not dirty.
+        :param int xres: nominal X resolution for the doc
+        :param int yres: nominal Y resolution for the doc
+        :param frame_active: True if the frame is enabled
+        :param bool force_write: if True, all layers processed 
+                                 even it is not dirty.
         """
         root_stack = self.layer_stack
 

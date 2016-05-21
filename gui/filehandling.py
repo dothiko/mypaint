@@ -1297,7 +1297,7 @@ class FileHandler (object):
         self.register_recent_project(self.filename)
 
     def save_current_project_cb(self, action):
-        if not hasattr(self.doc.model, "as_project") or self.doc.model.as_project == False:
+        if self.doc.model.is_project == False:
             self.save_as_project_cb(action)
         else:
             self.save_file(self.filename, project=True)
@@ -1351,13 +1351,13 @@ class FileHandler (object):
 
     def save_project_as_new_version_cb(self, action):
 
-        if not hasattr(self.doc.model, "as_project") or self.doc.model.as_project == False:
+        if self.doc.model.is_project == False:
             self.save_as_project_cb(action)
         else:
             self.save_file(self.filename, project=True,version_save=self.filename)
 
     def revert_project_cb(self, action):
-        if hasattr(self.doc, "as_project") and self.doc.as_project == True:
+        if self.doc.model.is_project == True:
             raise NotImplementedError("revert project does not implemented yet")
         else:
             self.app.show_transient_message(C_(

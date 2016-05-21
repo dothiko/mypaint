@@ -805,8 +805,6 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         src_path = self.workfilename
         src_rootname, src_ext = os.path.splitext(src_path)
         src_ext = src_ext.lower()
-       #storename = self._make_refname("layer", path, src_ext)
-       #storepath = "data/%s" % (storename,)
 
         # generate filepaths and copy it like queue_autosave, 
         # but a bit differently.
@@ -817,10 +815,8 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
         if (self.autosave_dirty or not os.path.exists(final_path) or
                 force_write):
-
-           #shutil.copy(final_path, tmp_fp)
-            # TODO something to do here???
-            print 'filebackedlayer save to project...?'
+            shutil.copy(src_path, final_path)
+            logger.debug("filebacked layer copied from %s", final_relpath)
             self.autosave_dirty = False
 
         # Return details of what was written.
