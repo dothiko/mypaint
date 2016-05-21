@@ -1970,7 +1970,7 @@ class RootLayerStack (group.LayerStack):
         )
         # Save background
         bg_layer = self.background_layer
-        if bg_layer.autosave_dirty or force_write:
+        if bg_layer.project_dirty or force_write:
             bg_layer.initially_selected = False
             bg_path = (len(self),)
             bg_elem = bg_layer.save_to_project(

@@ -1715,10 +1715,10 @@ class Document (object):
                     # Version save of project is assigned.
                     # 
                     # The system of version save is ,
-                    # 1. move currently marked as autosave_dirty files
-                    #    into 'backup' directory,which named with 
+                    # 1. create 'backup' directory,which named with 
                     #    'year-month-day/hour-min-sec' format. 
-                    #    for example,if you saved it at 2016.march.3,
+                    #    for example,if you saved a project at 
+                    #    2016.march.3 00:11:22,
                     #    the directory name should be such as
                     #    such as 'backup/2016-03-03/00-11-22/'
                     # 2. MOVE current stack.xml and thumbnail.png file 
@@ -1758,7 +1758,7 @@ class Document (object):
 
                     # After that, 'dirty' layers should be moved.
                     for path, cl in self.layer_stack.walk():
-                        if cl.autosave_dirty:
+                        if cl.project_dirty:
                             filepath = None
                             strokepath = None
                             
@@ -1805,7 +1805,7 @@ class Document (object):
                     destdirname = os.path.join(dirname, 'data')
                                     
                     for path, cl in self.layer_stack.walk():
-                        if not cl.autosave_dirty:
+                        if not cl.project_dirty:
                             filepath = None
                             strokepath = None
                             
@@ -1839,7 +1839,6 @@ class Document (object):
         finally:
             t1 = time.time()
             logger.debug('projectsave ended in %.3fs', t1-t0)
-            self._autosave_dirty = False 
             self._is_project = True
 
 
@@ -1852,6 +1851,7 @@ class Document (object):
         self._stop_autosave_writes()
         self.clear(new_cache=False)
         self._is_project = True
+        self._autosave_dirty = False
 
         try:
             elem = self._load_from_openraster_dir(
@@ -1881,9 +1881,11 @@ class Document (object):
             )
         else:
             self._cache_dir = app_cache_dir
-            # For project,all layer already saved initially.
+
+            # All LOADED layers are clean(not dirty), as initial states.
+            # On the other hand, NEW layers are always dirty initially.
             for pos, cl in self.layer_stack.walk():
-                cl.autosave_dirty = False
+                cl.clear_project_dirty()
 
     def _project_write(self, dirname, 
             xres=None,yres=None,

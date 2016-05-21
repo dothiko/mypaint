@@ -40,8 +40,42 @@ class Autosaveable:
 
     @autosave_dirty.setter
     def autosave_dirty(self, value):
-        """Setter for the dirty flag"""
-        self.__autosave_dirty = bool(value)
+        """
+        Setter for the dirty flag
+        
+        if autosave_dirty set as dirty,
+        also project_dirty flag set as dirty.
+        but when autosave_dirty is cleared,
+        project_dirty is remained.
+        """
+        value = bool(value)
+        self.__autosave_dirty = value
+        if value == True:
+            self.__project_dirty = True
+
+    @property
+    def project_dirty(self):
+        """
+        Dirty flag for project-save feature.
+
+        CAUTION: Project_dirty flag cannot be set alone.
+        this is nearly read-only flag,
+        we can only clear this.
+        """
+        try:
+            return self.__project_dirty
+        except AttributeError:
+            self.__project_dirty = True
+            return self.__project_dirty
+        
+    def clear_project_dirty(self):
+        """
+        clear dirty flag for project.
+
+        setting dirty flag should be done from
+        autosave_dirty.
+        """
+        self.__project_dirty = False
 
     @property
     def autosave_uuid(self):

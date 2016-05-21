@@ -797,13 +797,13 @@ class LayerBase (TileBlittable, TileCompositable):
         """
         raise NotImplementedError
 
-    def save_to_openraster(self, projdir, path,
+    def save_to_project(self, projdir, path,
                            canvas_bbox, frame_bbox, force_write, **kwargs):
 
         """Saves the layer's data into an project directory
 
         :param projdir: the project directory
-        :param force_write: force write flag, regardless how self.autosave_dirty is. 
+        :param force_write: force write flag, regardless how self.project_dirty is. 
 
         Other parameters are same as save_to_openraster.
 

@@ -501,7 +501,9 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
         """
         Internal: saves a rectangle of the surface to a project dir
 
-        CAUTION: THIS METHOD REWRITES AUTOSAVE_DIRTY FLAG!!
+        :rtype ET.element: xml element which represents of this layer.
+
+        CAUTION: THIS METHOD CLEARS project_dirty FLAG!!
                  So you'll need to reserve the flag before call this method. 
         """
 
@@ -510,14 +512,14 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
         png_path = os.path.join(projdir, png_relpath)
 
         if ('only_element' not in kwargs and 
-                (self.autosave_dirty or force_write)):
+                (self.project_dirty or force_write)):
             # Write PNG data via a tempfile
             logger.debug('layer %s of surface %r is marked as dirty or forced write!', self.name , pngname)
             t0 = time.time()
             self._surface.save_as_png(png_path, *rect, **kwargs)
             t1 = time.time()
             logger.debug('%.3fs surface saving %r', t1-t0, pngname)
-            self.autosave_dirty = False
+            self.clear_project_dirty()
 
         # Return details
         png_bbox = tuple(rect)
@@ -813,11 +815,11 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         final_relpath = os.path.join("data", final_basename)
         final_path = os.path.join(projdir, final_relpath)
 
-        if (self.autosave_dirty or not os.path.exists(final_path) or
+        if (self.project_dirty or not os.path.exists(final_path) or
                 force_write):
             shutil.copy(src_path, final_path)
             logger.debug("filebacked layer copied from %s", final_relpath)
-            self.autosave_dirty = False
+            self.clear_project_dirty()
 
         # Return details of what was written.
         elem.attrib["src"] = unicode(final_relpath)
@@ -1138,11 +1140,13 @@ class BackgroundLayer (SurfaceBackedLayer):
         # Save as a regular layer for other apps.
         # Background surfaces repeat, so just the bit filling the frame.
 
-        is_dirty = self.autosave_dirty or force_write
+        is_dirty = self.project_dirty or force_write
 
         # Get only element for this method
         kwargs = dict(kwargs)
         kwargs['only_element'] = True
+
+        # Dirty flag cleared in _save_rect_to_project()
         elem = self._save_rect_to_project(
             projdir, 
             frame_bbox, frame_bbox, force_write, **kwargs
@@ -1162,7 +1166,7 @@ class BackgroundLayer (SurfaceBackedLayer):
             self._surface.save_as_png(storename, *rect, **kwargs)
             t1 = time.time()
             logger.debug('%.3fs surface saving %s', t1 - t0, store_relpath)
-            self.autosave_dirty = False
+            self.clear_project_dirty()
 
         elem.attrib[self.ORA_BGTILE_LEGACY_ATTR] = store_relpath
         elem.attrib[self.ORA_BGTILE_ATTR] = store_relpath
@@ -1645,7 +1649,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         """Save the strokemap too, in addition to the base implementation"""
         # Save the layer normally
 
-        dirty_flag = self.autosave_dirty or force_write
+        dirty_flag = self.project_dirty or force_write
 
         elem = super(PaintingLayer, self).save_to_project(
             projdir, path,
