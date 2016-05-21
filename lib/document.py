@@ -290,13 +290,9 @@ class Document (object):
         # Project flag.place here to avoid exception
         # from _command_stack_updated_cb
         self._is_project = False
-        self._projcopy_processor = None
-        self._pending_project_copy = False
-        self.projectsaving = False
 
         if not painting_only:
             self._autosave_processor = lib.idletask.Processor()
-            self._projcopy_processor = lib.idletask.Processor()
             self.command_stack.stack_updated += self._command_stack_updated_cb
             self.effective_bbox_changed += self._effective_bbox_changed_cb
 
@@ -1708,35 +1704,32 @@ class Document (object):
         """
         t0 = time.time()
         logger.debug("projectsave started")
-        self.projectsaving = True
         
         try:
             
-            if self._autosave_processor.has_work():
-                logger.info('autosave processor still have pending works')
-                self._autosave_processor.finish_all()
-
-            if self._projcopy_processor.has_work():
-                logger.info('project copy processor still have pending works')
-                self._projcopy_processor.finish_all()
-            
             if (kwargs != None):
 
-                copy_list = []
                 source_dir = None
 
                 if ('version_save' in kwargs): 
-                    # Version save of project assigned.
+                    # Version save of project is assigned.
+                    # 
                     # The system of version save is ,
-                    # 1. move currentry marked as autosave_dirty files
+                    # 1. move currently marked as autosave_dirty files
                     #    into 'backup' directory,which named with 
-                    #    'yyyy-mm-dd/uuid' format. 
+                    #    'year-month-day/hour-min-sec' format. 
                     #    for example,if you saved it at 2016.march.3,
-                    #    the directory name should be
-                    #    such as 'backup/2016-03-03/281c4ff(snip)'
-                    # 2. copy current stack.xml file into backup dir.
+                    #    the directory name should be such as
+                    #    such as 'backup/2016-03-03/00-11-22/'
+                    # 2. MOVE current stack.xml and thumbnail.png file 
+                    #    into backup dir.
                     #    revert should executed with based on this file.
-                    # 3. ordinary save executed.
+                    # 3. MOVE (not copy) 'dirty' files into backup dir.
+                    #
+                    # After that, ordinary project-save should be done.
+                    # moved files are generated as new one.
+
+                    logger.info("version save of project is initiated.")
 
                     source_dir = kwargs['version_save']
 
@@ -1750,35 +1743,49 @@ class Document (object):
                     assert not os.path.exists(destdirname)
                     os.makedirs(destdirname)       
 
+                    # First of all,
+                    # old Thumbnail and stack.xml moved at here
+                    # They are always rewritten, and no dirty flag.
+                    
+                    filepaths = ( 
+                        os.path.join(source_dir, 'stack.xml'),
+                        os.path.join(source_dir, 'Thumbnails', 'thumbnail.png')
+                        )
+
+                    for cpath in filepaths:
+                        assert os.path.exists(cpath)
+                        shutil.move(cpath.decode('utf-8'), destdirname)
+
+                    # After that, 'dirty' layers should be moved.
                     for path, cl in self.layer_stack.walk():
                         if cl.autosave_dirty:
                             filepath = None
+                            strokepath = None
                             
                             if hasattr(cl,'workfilename'):
                                 filepath = cl.workfilename
-                            elif hasattr(cl,'src') and cl.src != None:
-                                filepath = os.path.join(
-                                    source_dir,
-                                    cl.src                            
-                                    )
-                            else:
-                                testfname = os.path.join(
-                                        source_dir,
-                                        'data',
-                                        cl.autosave_uuid + ".png")
+                            elif hasattr(cl,'get_filename_for_project'):
+                                testfname = cl.get_filename_for_project()
                                 if os.path.exists(testfname):
                                     filepath = testfname
                                     logger.info("Layer %s is dirty but has no file-entity information.but uuid-png file found." % cl.name )
+                                    strokepath = cl.get_filename_for_project(
+                                            ext=None,
+                                            formatstr=u"%s-strokemap.dat")
                                 else:
                                     logger.info("Layer %s is dirty but has no file-entity information. and uuid-png file also not found." % cl.name )
+
+                            else:
+                                logger.warning(u"no any filename attributes for layer %r", cl.name)
            
                             if filepath: 
                                 assert os.path.exists(filepath)
-                                copy_list.append(filepath)
+                                shutil.move(filepath, destdirname) 
 
+                                if strokepath and os.path.exists(strokepath):
+                                    shutil.move(strokepath, destdirname) 
 
-
-
+                    # fallthrough.
 
                 elif 'source_dir' in kwargs:
                     # This document is a project and assigned to 'save as 
@@ -1791,6 +1798,8 @@ class Document (object):
                     # And file existence is checked in _project_copy_cb(),
                     # so overwritten with old one does not happen.
 
+                    logger.info("copy save of project is initiated.")
+
                     source_dir = kwargs['source_dir']
 
                     destdirname = os.path.join(dirname, 'data')
@@ -1798,54 +1807,29 @@ class Document (object):
                     for path, cl in self.layer_stack.walk():
                         if not cl.autosave_dirty:
                             filepath = None
+                            strokepath = None
                             
                             if hasattr(cl,'workfilename'):
                                 filepath = cl.workfilename
-                            elif hasattr(cl,'src') and cl.src != None:
-                                filepath = os.path.join(
-                                    source_dir,
-                                    cl.src                            
-                                    )
+                            elif hasattr(cl,'get_filename_for_project'):
+                                filepath = cl.get_filename_for_project()
+                                strokepath = cl.get_filename_for_project(
+                                        ext=None,
+                                        formatstr=u"%s-strokemap.dat")
+                            else:
+                                logger.warning(u"no any filename attributes for layer %r", cl.name)
            
-                            if filepath and os.path.exists(filepath):
-                                copy_list.append(filepath)
+                            for cpath in (filepath, strokepath):
+                                if cpath and os.path.exists(cpath):
+                                    shutil.copy(cpath, destdirname)
+
                         else:
                             logger.info('%s has marked as dirty,so not copied', cl.name)
 
-                    if len(copy_list) == 0:
-                        logger.warning('at new save_project, copy_list is empty!')
-
-
-                if source_dir:
-                    # source_dir is not empty, 
-                    # i.e. needs copy some files from existing project.
-                    #
-                    # Thumbnail and stack.xml copied at here immidiately 
-                    # because it would be overwritten at later processing
-                    # before the idling copy task starts.
-
-                    filepaths = ( 
-                        os.path.join(source_dir, 'stack.xml'),
-                        os.path.join(source_dir, 'Thumbnails', 'thumbnail.png')
-                        )
-
-                    for cpath in filepaths:
-                        assert os.path.exists(cpath)
-                        shutil.copy(cpath.decode('utf-8'), destdirname)
-
-                    # After that, run copying task.
-                    if len(copy_list) > 0:
-                        self._pending_project_copy = True
-                        assert os.path.exists(source_dir)
-                        taskproc = self._projcopy_processor
-                        taskproc.add_work(
-                            self._project_copy_cb,
-                            copy_list,
-                            (destdirname , source_dir)
-                        )
+                    # fallthrough.
              
-            # (Along with copying tasks in some case,)
-            # Do project writing.
+            # All preprocess has done.
+            # Then do the project writing.
             self._project_write(dirname, 
                     xres=self._xres if self._xres else None,
                     yres=self._yres if self._yres else None,
@@ -1856,7 +1840,6 @@ class Document (object):
             t1 = time.time()
             logger.debug('projectsave ended in %.3fs', t1-t0)
             self._autosave_dirty = False 
-            self.projectsaving = False
             self._is_project = True
 
 
@@ -1986,49 +1969,6 @@ class Document (object):
 
         return thumbnail
 
-    def _project_copy_cb(self, filelist, dirinfos):
-        """Project save task: copy files of filelist into new directory.
-
-        This runs every time new project directory created,to copy 
-        unedited layers into new directory's data subdir.
-
-        """
-        assert len(dirinfos) == 2
-        newdir, curdir = dirinfos
-        if not os.path.exists(newdir):
-            os.makedirs(newdir)       
-
-        for csf in filelist:
-            # csf(current source file) is FULLPATH.
-            basename = os.path.basename(csf)
-            newfilepath = os.path.join(newdir, basename)
-            assert os.path.exists(csf)
-            if not os.path.exists(newfilepath):
-                shutil.copyfile(csf, newfilepath)
-                
-            
-            basename, ext = os.path.splitext(basename)
-            ext = ext.lower()
-            if ext == '.png':
-                # .png might have some strokemaps.
-                # if so, copy it too.
-                if basename[-5:] == '-tile':
-                    uuidbase = basename[:-5]
-                else:
-                    uuidbase = basename
-                
-                curdir = os.path.dirname(csf)
-                strokemapname = "%s-strokemap.dat" % uuidbase
-                csf = os.path.join(curdir, strokemapname)
-                assert os.path.exists(csf)
-                newfilepath = os.path.join(newdir, strokemapname)
-                if os.path.exists(csf) and not os.path.exists(newfilepath):
-                    shutil.copyfile(csf, newfilepath)
-                    
-                
-    
-        self._pending_project_copy = False
-        return False
 
 
 def _save_layers_to_new_orazip(root_stack, filename, bbox=None, xres=None, yres=None, frame_active=False, **kwargs):
