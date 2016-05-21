@@ -695,10 +695,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         if current_layer.locked or not current_layer.visible:
             return
 
-        #! projectsave test
-        if model.projectsaving:
-            print '****** OH MY GOD nasty drawing found! *******'
-
         # Feed data to the brush engine.  Pressure and tilt cleanup
         # needs to be done here to catch all forwarded data after the
         # earlier interpolations. The interpolation method used for
