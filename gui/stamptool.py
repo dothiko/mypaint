@@ -39,15 +39,6 @@ import lib.helpers
 
 ## Module settings
 
-# Which workarounds to allow for motion event compression
-EVCOMPRESSION_WORKAROUND_ALLOW_DISABLE_VIA_API = True
-EVCOMPRESSION_WORKAROUND_ALLOW_EVHACK_FILTER = True
-
-# Consts for the style of workaround in use
-EVCOMPRESSION_WORKAROUND_DISABLE_VIA_API = 1
-EVCOMPRESSION_WORKAROUND_EVHACK_FILTER = 2
-EVCOMPRESSION_WORKAROUND_NONE = 999
-
 ## Functions
 
 
@@ -214,7 +205,10 @@ class StampMode (InkingMode):
         """ Called from OptionPresenter, 
         This is to make stamp property as if it is read-only.
         """
+        if self._stamp:
+            self._stamp.leave()
         self._stamp = stamp
+        self._stamp.enter()
         self._stamp.initialize_phase()
 
     ## Status methods

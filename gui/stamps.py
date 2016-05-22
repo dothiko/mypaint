@@ -153,7 +153,7 @@ class _Pixbuf_Source(_SourceMixin):
             return True
         return False
 
-    def clear_all(self):
+    def clear_all_cache(self):
         """
         Clear all cached pixbuf
         """
@@ -625,6 +625,22 @@ class _StampMixin(object):
         """
         pass
 
+    ## Event callbacks
+
+    def enter(self):
+        """
+        Called when stamp has selected.
+        """
+        pass
+
+    def leave(self):
+        """
+        Called when stamp has unselected.
+        """
+        pass
+    
+
+
 
 class _DynamicStampMixin(_StampMixin):
     """ Non-tiled single pixbuf stamp mixin.
@@ -692,7 +708,6 @@ class Stamp(_StampMixin):
 
     ## Drawing methods
 
-    
 
 
 class TiledStamp(_StampMixin):
@@ -767,9 +782,9 @@ class LayerStamp(_DynamicStampMixin):
 
     def __init__(self, name, rootstack):
         self._reset_members(name)
-        self._sel_areas = []
+        self._sel_areas = {}
         self._rootstack = rootstack
-        self._area_layers = {}
+        self._tile_index_seed = 0
 
     @property
     def is_support_selection(self):
@@ -790,25 +805,24 @@ class LayerStamp(_DynamicStampMixin):
         """
         if tile_index == -1:
             # Set last selection area == add selection area
-            tile_index = len(self._sel_areas) 
+            tile_index = self._tile_index_seed 
             assert not tile_index in self._sel_areas
-            self._sel_areas.append(area)
-            self.set_layer_for_area(tile_index,
-                self._rootstack.current)
+            self._sel_areas[tile_index] = \
+                    (area, weakref.ref(self._rootstack.current))
+            self._tile_index_seed += 1
         else:
-            self._sel_areas[tile_index] = area
+            assert tile_index in self._sel_areas
+            oldarea, layer = self._sel_areas[tile_index]
+            self._sel_areas[tile_index] = (area, layer)
         return tile_index
 
     def get_selection_area(self, tile_index):
         if tile_index < len(self._sel_areas):
-            return self._sel_areas[tile_index]
+            return self._sel_areas[tile_index][0]
 
     def remove_selection_area(self, tile_index):
         if tile_index in self._sel_areas:
             del self._sel_areas[tile_index]
-            assert tile_index in self._area_layers
-            del self._area_layers[tile_index]
-
 
     def enum_visible_selection_areas(self, tdw, indexes=None):
         """
@@ -816,7 +830,7 @@ class LayerStamp(_DynamicStampMixin):
         :param tdw: TiledDrawWidget to display
         :param indexes: sequence of index of self._sel_areas. 
                         an index might be None.
-        :rtype: yielding a tuple of (index, (start_x, start_y, end_x, end_y)).
+        :rtype: yielding a tuple of (tile_index, (start_x, start_y, end_x, end_y)).
                 returned values are display coordinate.
         """
 
@@ -842,55 +856,49 @@ class LayerStamp(_DynamicStampMixin):
                 return (sx, sy, ex, ey)
 
         if indexes == None:
-            for i, area in enumerate(self._sel_areas):
+            for tile_idx in self._sel_areas:
+                area, layer = self._sel_areas[tile_idx]
                 ret = check_area(area)
                 if ret:
-                    yield (i, ret)
+                    yield (tile_idx, ret)
         else:
             for i in indexes:
                 if i != None:
-                    ret = check_area(self._sel_areas[i])
-                    if ret:
-                        yield (i, ret)
+                    if i in self._sel_areas:
+                        area, layer = self._sel_areas[i]
+                        ret = check_area(area)
+                        if ret:
+                            yield (i, ret)
 
     @property
     def tile_count(self):
         return len(self._sel_areas)
 
-    def initialize_phase(self):
-        """ Initialize when a entire phase stated
-        i.e. where self.phase is set to _Phase.CAPTURE.
-        """
-        self._pixbuf_src.clear_all()
 
     # Pixbuf Source related  
     def set_layer_for_area(self, tile_index, layer):
-        self._area_layers[tile_index] = weakref.ref(layer)
+        area, layer = self._sel_areas[tile_index]
+        self._sel_areas[tile_index] = (area, weakref.ref(layer))
 
     def get_layer_for_area(self, tile_index):
-        ref = self._area_layers.get(tile_index, None)
-        if ref:
-            return ref()
+        area, layer = self._sel_areas[tile_index]
+        return layer()
 
-    def _fetch_single_area(self, layer, idx):
-        sx, sy, ex, ey = self._sel_areas[idx]
+    def _fetch_single_area(self, layer, area):
+        sx, sy, ex, ey = area
         return layer.render_as_pixbuf(
                 int(sx), int(sy), int(ex-sx)+1, int(ey-sy)+1,
                 alpha=True)
 
     def refresh_surface(self, tile_index, source=None):
-        if tile_index < len(self._sel_areas):
-            if not tile_index in self._area_layers:
-                layer = self._rootstack.current
-                self.set_layer_for_area(tile_index, layer)
-            else:
-                layer = self.get_layer_for_area(tile_index)
-
+        if tile_index in self._sel_areas:
+            area, layer = self._sel_areas[tile_index]
+            layer = layer() # restore reference
             if layer != None:
                 if source == None:
                     source = self._pixbuf_src
                 source.set_pixbuf(tile_index, 
-                        self._fetch_single_area(layer, tile_index))
+                        self._fetch_single_area(layer, area))
 
     def surface_requested_cb(self, source, tile_index):
         """
@@ -907,6 +915,52 @@ class LayerStamp(_DynamicStampMixin):
         if source.get_surface(tile_index) == None:
             self.refresh_surface(tile_index,source=source)
 
+    ## Phase related
+
+    def initialize_phase(self):
+        """ Initialize when a entire phase stated
+        i.e. where self.phase is set to _Phase.CAPTURE.
+        """
+        pass
+       #self._pixbuf_src.clear_all_cache()
+       #
+       #rejected_layers = []
+       #
+       #for tile_idx in self._sel_areas.keys():
+       #    area, layer = self._sel_areas[tile_idx]
+       #    layer = layer()
+       #    if layer == None or layer in rejected_layers:
+       #        del self._sel_areas[tile_idx]
+       #    else:
+       #        lidx = self._rootstack.deepindex(layer)
+       #        if lidx == None:
+       #            del self._sel_areas[tile_idx]
+       #            rejected_layers.append(layer)
+
+    ## Entering callback
+    def enter(self):
+        model = self._rootstack.doc
+        model.sync_pending_changes += self.sync_pending_changes_cb
+
+    def leave(self):
+        model = self._rootstack.doc
+        model.sync_pending_changes -= self.sync_pending_changes_cb
+
+    def sync_pending_changes_cb(self, model, flush=True, **kwargs):
+        self._pixbuf_src.clear_all_cache()
+
+        rejected_layers = []
+
+        for tile_idx in self._sel_areas.keys():
+            area, layer = self._sel_areas[tile_idx]
+            layer = layer()
+            if layer == None or layer in rejected_layers:
+                del self._sel_areas[tile_idx]
+            else:
+                lidx = self._rootstack.deepindex(layer)
+                if lidx == None:
+                    del self._sel_areas[tile_idx]
+                    rejected_layers.append(layer)
 
 
 class VisibleStamp(LayerStamp):
@@ -915,7 +969,7 @@ class VisibleStamp(LayerStamp):
 
     def __init__(self, name, rootstack):
         self._reset_members(name)
-        self._sel_areas = []
+        self._sel_areas = {}
         self._rootstack = rootstack
 
     def set_layer_for_area(self, tile_index, layer):
@@ -926,10 +980,12 @@ class VisibleStamp(LayerStamp):
         Pixbuf requested callback, called from 
         self._pixbuf_src._ensure_current_pixbuf()
         """
-        if source.get_surface(tile_index) == None:
-            source.set_pixbuf(tile_index, 
-                    self._fetch_single_area(self._rootstack, tile_index))
-        return True
+        if tile_index in self._sel_areas:
+            if source.get_surface(tile_index) == None:
+                area, junk = self._sel_areas[tile_index]
+                source.set_pixbuf(tile_index, 
+                        self._fetch_single_area(self._rootstack, area))
+            return True
 
 
 class ForegroundStamp(_DynamicStampMixin):
