@@ -673,13 +673,13 @@ class _StampMixin(object):
     #  These callbacks called when stamptool.stamp attribute
     #  has been changed.
 
-    def enter(self):
+    def enter(self, doc):
         """
         Called when stamp has selected.
         """
         pass
 
-    def leave(self):
+    def leave(self, doc):
         """
         Called when stamp has unselected.
         """
@@ -774,25 +774,24 @@ class TiledStamp(_StampMixin):
 
 class ClipboardStamp(_DynamicStampMixin):
 
-    def __init__(self, name, doc):
+    def __init__(self, name):
         self._reset_members(name)
-        self._doc = doc
 
     @property
     def is_ready(self):
         return self._pixbuf_src.tile_count == 1
 
-    def _get_clipboard(self):
+    def _get_clipboard(self, tdw):
         # XXX almost copied from gui.document._get_clipboard()
         # we might need some property interface to get it from
         # document class directly...?
-        display = self._doc.tdw.get_display()
+        display = tdw.get_display()
         cb = Gtk.Clipboard.get_for_display(display, Gdk.SELECTION_CLIPBOARD)
         return cb
 
-    def _load_clipboard_image(self): 
+    def _load_clipboard_image(self, tdw): 
         # XXX almost copied from gui.document.paste_cb()
-        clipboard = self._get_clipboard()
+        clipboard = self._get_clipboard(tdw)
 
         targs_avail, targets = clipboard.wait_for_targets()
         if not targs_avail:
@@ -811,7 +810,7 @@ class ClipboardStamp(_DynamicStampMixin):
         CAUTION: This method is not called when drawing to
         layer.
         """
-        self._load_clipboard_image()
+        self._load_clipboard_image(mode.doc.tdw)
 
     def pixbuf_requested_cb(self, source, tile_index):
         assert tile_index == 0
@@ -833,9 +832,8 @@ class LayerStamp(_DynamicStampMixin):
     Each area is model coordinate.
     """
 
-    def __init__(self, name, rootstack):
+    def __init__(self, name):
         self._reset_members(name)
-        self._rootstack = rootstack
 
     def _reset_members(self, name):
         super(LayerStamp, self)._reset_members(name)
@@ -851,26 +849,32 @@ class LayerStamp(_DynamicStampMixin):
     def is_ready(self):
         return len(self._sel_areas) > 0
 
-    def set_selection_area(self, tile_index, area):
+    def get_selection_area(self, tile_index):
+        return self._sel_areas.get(tile_index, (None,None))[0]
+
+    def set_selection_area(self, tile_index, area, layer):
         """ Set (add) selection area to this object.
-        when the new area added, the source is always
-        'currently selected layer'
 
         :param tile_index: the index of tile == index of selection area
                            if this is -1, area added.
         :param area: a tuple of (sx, sy, ex, ey) , in model.
+        :param layer: the layer correspond to tile.
         """
         if tile_index == -1:
             # Set last selection area == add selection area
             tile_index = self._tile_index_seed 
             assert not tile_index in self._sel_areas
-            self._sel_areas[tile_index] = \
-                    (area, weakref.ref(self._rootstack.current))
+            layer_ref = weakref.ref(layer)
             self._tile_index_seed += 1
         else:
             assert tile_index in self._sel_areas
-            oldarea, layer = self._sel_areas[tile_index]
-            self._sel_areas[tile_index] = (area, layer)
+            oldarea, oldlayer = self._sel_areas[tile_index]
+            if layer == None:
+                layer_ref = oldlayer
+            else:
+                layer_ref = weakref.ref(layer)
+
+        self._sel_areas[tile_index] = (area, layer_ref)
         return tile_index
 
     def remove_selection_area(self, tile_index):
@@ -884,15 +888,17 @@ class LayerStamp(_DynamicStampMixin):
             if mode:
                 mode.stamp_tile_deleted_cb(tile_index)
 
-    def enum_visible_selection_areas(self, tdw, indexes=None, enum_raw_area=False):
+    def enum_visible_selection_areas(self, tdw, indexes=None, 
+            enum_outmost_area=True):
         """
-        Enumerate visible selection areas at tdw.
-        :param tdw: TiledDrawWidget to display
-        :param offsets: a tuple of (dx, dy), this should be dragging offset in display
+        Enumerate visible selection areas in display coordinate at tdw.
+        :param tdw: TiledDrawWidget to convert display. 
         :param indexes: sequence of index of self._sel_areas. 
                         an index might be None.
+        :param enum_raw_area: if True, yields outmost area of a selection. 
+                              otherwise, yields a selection area.
         :rtype: yielding a tuple of (tile_index, (start_x, start_y, end_x, end_y)).
-                returned values are display coordinate.
+                they are in display coordinate.
         """
 
         alloc = tdw.get_allocation()
@@ -902,14 +908,14 @@ class LayerStamp(_DynamicStampMixin):
             w = (ex - sx) + 1
             h = (ey - sy) + 1
             
-            node_on_screen = (
+            area_on_screen = (
                 sx > alloc.x - w  and
                 sy > alloc.y - h and
                 sx < alloc.x + alloc.width + w and
                 sy < alloc.y + alloc.height + h
             )
             
-            if node_on_screen:
+            if area_on_screen:
                 return (sx, sy, ex, ey)
 
         if indexes == None:
@@ -917,13 +923,14 @@ class LayerStamp(_DynamicStampMixin):
                 area, layer = self._sel_areas[tile_idx]
                 ret = check_area(area)
                 if ret:
-                    if enum_raw_area:
+                    if enum_outmost_area:
+                        yield (tile_idx, ret)
+                    else:
                         sx, sy = tdw.model_to_display(area[0], area[1])
                         ex, ey = tdw.model_to_display(area[2], area[3])
                         yield (tile_idx, 
                                 (sx, sy, ex, ey))
-                    else:
-                        yield (tile_idx, ret)
+
         else:
             for i in indexes:
                 if i != None:
@@ -931,12 +938,13 @@ class LayerStamp(_DynamicStampMixin):
                         area, layer = self._sel_areas[i]
                         ret = check_area(area)
                         if ret:
-                            if enum_raw_area:
+                            if enum_outmost_area:
+                                yield (i, ret)
+                            else:
                                 sx, sy = tdw.model_to_display(area[0], area[1])
                                 ex, ey = tdw.model_to_display(area[2], area[3])
                                 yield (i, (sx, sy, ex, ey))
-                            else:
-                                yield (i, ret)
+
 
     @property
     def tile_count(self):
@@ -990,7 +998,7 @@ class LayerStamp(_DynamicStampMixin):
         # set 'PIXBUF' into source object. not SURFACE.
         # (and the pixbuf is coverted to surface inside set_pixbuf method)
         if source.get_surface(tile_index) == None:
-            self.refresh_surface(tile_index,source=source)
+            self.refresh_surface(tile_index, source=source)
 
     ## Phase related
 
@@ -1001,13 +1009,11 @@ class LayerStamp(_DynamicStampMixin):
         self._mode_ref = weakref.ref(mode)
 
     ## Entering/Leaving stamp callbacks
-    def enter(self):
-        model = self._rootstack.doc
-        model.sync_pending_changes += self.sync_pending_changes_cb
+    def enter(self, doc):
+        doc.model.sync_pending_changes += self.sync_pending_changes_cb
 
-    def leave(self):
-        model = self._rootstack.doc
-        model.sync_pending_changes -= self.sync_pending_changes_cb
+    def leave(self, doc):
+        doc.model.sync_pending_changes -= self.sync_pending_changes_cb
 
     def sync_pending_changes_cb(self, model, flush=True, **kwargs):
         self._pixbuf_src.clear_all_cache()
@@ -1020,7 +1026,7 @@ class LayerStamp(_DynamicStampMixin):
             if layer == None or layer in rejected_layers:
                 self.remove_selection_area(tile_idx)
             else:
-                lidx = self._rootstack.deepindex(layer)
+                lidx = model.layer_stack.deepindex(layer)
                 if lidx == None:
                     self.remove_selection_area(tile_idx)
                     rejected_layers.append(layer)
@@ -1029,25 +1035,27 @@ class VisibleStamp(LayerStamp):
     """ A Stamp which sources the currently visible area.
     """
 
-    def __init__(self, name, rootstack):
+    def __init__(self, name):
         self._reset_members(name)
-        self._rootstack = rootstack
+
+    def set_selection_area(self, tile_index, area, layer):
+        super(VisibleStamp, self).set_selection_area(tile_index, area, layer.root)
 
     def set_layer_for_area(self, tile_index, layer):
-        pass # Disable this method
+        super(VisibleStamp, self).set_layer_for_area(tile_index, layer.root)
 
-    def surface_requested_cb(self, source, tile_index):
-        """
-        Pixbuf requested callback, called from 
-        self._pixbuf_src._ensure_current_pixbuf()
-        """
-        assert tile_index == 0
-        if tile_index in self._sel_areas:
-            if source.get_surface(tile_index) == None:
-                area, junk = self._sel_areas[tile_index]
-                source.set_pixbuf(tile_index, 
-                        self._fetch_single_area(self._rootstack, area))
-            return True
+   #def surface_requested_cb(self, source, tile_index):
+   #    """
+   #    Pixbuf requested callback, called from 
+   #    self._pixbuf_src._ensure_current_pixbuf()
+   #    """
+   #    assert tile_index == 0
+   #    if tile_index in self._sel_areas:
+   #        if source.get_surface(tile_index) == None:
+   #            area, junk = self._sel_areas[tile_index]
+   #            source.set_pixbuf(tile_index, 
+   #                    self._fetch_single_area(self._rootstack, area))
+   #        return True
 
 
 class ForegroundStamp(_DynamicStampMixin):
@@ -1130,9 +1138,9 @@ class ForegroundLayerStamp(ForegroundStamp,
     """
 
     def __init__(self, name, app):
-        layerstack = app.doc.model.layer_stack
         # Call LayerStamp constructor
-        super(ForegroundStamp, self).__init__(name, layerstack)
+        # (CAUTION: NOT ForegroundStamp)
+        super(ForegroundStamp, self).__init__(name)
         self._app = app
 
 
@@ -1323,11 +1331,11 @@ class StampPresetManager(object):
                 stamp = TiledStamp(jo['name'], *settings.get('tile', (1, 1)))
                 stamp.set_file_sources(settings['filenames'])
             elif source == 'clipboard':
-                stamp = ClipboardStamp(jo['name'], self._app.doc)
+                stamp = ClipboardStamp(jo['name'])
             elif source == 'layer':
-                stamp = LayerStamp(jo['name'],self._app.doc.model.layer_stack)
+                stamp = LayerStamp(jo['name'])
             elif source == 'current-visible':
-                stamp = VisibleStamp(jo['name'],self._app.doc.model.layer_stack)
+                stamp = VisibleStamp(jo['name'])
             elif source == 'foreground':
                 stamp = ForegroundStamp(jo['name'], self._app, *settings.get('tile', (1, 1)))
                 assert 'mask' in settings

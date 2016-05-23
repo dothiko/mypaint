@@ -27,7 +27,7 @@ import gui.overlays
 import gui.ui_utils
 
 """ 
-HOW TO ADD Selection FUNCTIONALITY TO MODE
+HOW TO ADD Selection FUNCTIONALITY TO (YOUR) MODE CLASS
 
  1. add 'SelectionMode' to 'permitted_switch_actions' of the mode class.
 
@@ -41,9 +41,16 @@ HOW TO ADD Selection FUNCTIONALITY TO MODE
 ```
 
  2. add callback 'select_area_cb(self, selection_mode)' to the mode class.
-    argument selection_mode is the SelectionMode,it has
-    'is_inside_model/is_inside_display' method to 
-    distinguish whether the point(s) are inside the selection area or not.
+    argument selection_mode is the SelectionMode itself.
+    it has utility methods such as 'is_inside_model/is_inside_display',
+    to distinguish whether the point(s) are inside the selection area or not.
+
+    CAUTION:
+    you cannot access your modeclass's 'self.doc' inside the callback, 
+    because doc attribute is invalidated by modestack,
+    until self.enter() is called.
+    so you must use parameter selection_mode,
+    i.e. 'selection_mode.doc', instead of 'self.doc'.
 
 ```
     def select_area_cb(self, selection_mode):

@@ -42,6 +42,7 @@ import lib.helpers
 ## Functions
 
 
+
 ## Class defs
 
 _NODE_FIELDS = ("x", "y", "angle", "scale_x", "scale_y", "tile_index")
@@ -208,9 +209,9 @@ class StampMode (InkingMode):
         """
         old_stamp = StampMode._stamp
         if old_stamp:
-            old_stamp.leave()
+            old_stamp.leave(self.doc)
         StampMode._stamp = stamp
-        stamp.enter()
+        stamp.enter(self.doc)
         stamp.initialize_phase(self)
 
     ## Status methods
@@ -462,15 +463,18 @@ class StampMode (InkingMode):
 
         CAUTION: you can not access the self.doc attribute here
         (it is disabled as None, with modestack facility)
+        so you must use 'selection_mode.doc', instead of it.
         """
         if self.phase in (_Phase.CAPTURE, _Phase.ADJUST):
             if self.stamp and self.stamp.is_support_selection:
                 self.stamp.set_selection_area(-1,
-                        selection_mode.get_min_max_pos_model())
+                        selection_mode.get_min_max_pos_model(),
+                        selection_mode.doc.model.layer_stack.current)
 
                 self.stamp.initialize_phase(self)
                 self._notify_stamp_changed()
         else:
+            # Ordinary selection, which means 'node selection'
             modified = False
             for idx,cn in enumerate(self.nodes):
                 if selection_mode.is_inside_model(cn.x, cn.y):
@@ -552,9 +556,9 @@ class StampMode (InkingMode):
                 area = self.adjust_selection_area(i, area)
                 sx, sy, ex, ey = gui.ui_utils.get_outmost_area(tdw, *area, 
                         margin=gui.style.DRAGGABLE_POINT_HANDLE_SIZE+4)
-
+                print (sx, sy, ex, ey)
                 tdw.queue_draw_area(sx, sy, 
-                        ex - sx + 1, ey - sy + 1)
+                        abs(ex - sx) + 1, abs(ey - sy) + 1)
 
     ## Raw event handling (prelight & zone selection in adjust phase)
 
@@ -1309,15 +1313,17 @@ class Overlay_Stamp (Overlay):
         current_layer = tdw.doc.layer_stack.current
         assert mode.stamp and hasattr(mode.stamp, "enum_visible_selection_areas")
 
-        for i, area in mode.stamp.enum_visible_selection_areas(tdw, enum_raw_area=True):
-            # NOTE: area and dx/dy MUST BE in display coordinate.
-            sx, sy, ex, ey = area
+        for i, junk in mode.stamp.enum_visible_selection_areas(tdw): 
 
-            if (i == mode.target_area_index):
-                sx += dx
-                ex += dx
-                sy += dy
-                ey += dy
+            # To modify some corners of selection rectangle,
+            # use StampMode.adjust_selection_area() method.
+            # that method accepts only model coodinate area,
+            # so we cannot use the yielded areas of 
+            # enum_visible_selection_areas().
+            area = mode.stamp.get_selection_area(i)
+            sx, sy, ex, ey = mode.adjust_selection_area(i, area)
+            sx, sy = tdw.model_to_display(sx, sy)
+            ex, ey = tdw.model_to_display(ex, ey)
 
             # We MUST consider rotation, to draw rectangle
 
@@ -1363,7 +1369,7 @@ class Overlay_Stamp (Overlay):
                         btn_color = gui.style.EDITABLE_ITEM_COLOR
 
                     gui.drawutils.render_round_floating_button(
-                        cr=cr, x=sx+(ex-sx)/2, y=sy+(ey-sy)/2,
+                        cr=cr, x=sx+abs(ex-sx)/2, y=sy+abs(ey-sy)/2,
                         color=btn_color,
                         pixbuf=icon_pixbuf,
                         radius=radius,
