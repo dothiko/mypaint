@@ -26,11 +26,12 @@ from lib.observable import event
 
 ## Function defs
 
-def draw_stamp_to_layer(target_layer, stamp, nodes, bbox):
+def render_stamp_to_layer(target_layer, stamp, nodes, bbox):
     """
     :param bbox: boundary box, in model coordinate
     """
     sx, sy, w, h = bbox
+    print bbox
     surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, int(w), int(h))
     cr = cairo.Context(surf)
 
@@ -90,6 +91,19 @@ class _SourceMixin(object):
         return (-(pixbuf.get_width() / 2),
                 -(pixbuf.get_height() / 2))
 
+    def set_pixbuf(self, tile_index, pixbuf):
+        surf = Gdk.cairo_surface_create_from_pixbuf(pixbuf, 1, None)
+        self._surfs[tile_index] = surf
+
+    def set_surface(self, tile_index, surf):
+        if surf:
+            self._surfs[tile_index] = surf
+        else:
+            del self._surfs[tile_index]
+
+    def get_surface(self, tile_index):
+        return self._surfs.get(tile_index, None)
+
 
 class _Pixbuf_Source(_SourceMixin):
     """ Pixbuf source management class.
@@ -120,15 +134,11 @@ class _Pixbuf_Source(_SourceMixin):
             self._source_files = filenames
         self._reset_info()
 
-    def set_pixbuf(self, tile_index, pixbuf):
-        surf = Gdk.cairo_surface_create_from_pixbuf(pixbuf, 1, None)
-        self._surfs[tile_index] = surf
 
-    def set_surface(self, tile_index, surf):
-        self._surfs[tile_index] = surf
+    @property
+    def latest_tile_index(self):
+        return len(self._source_files) - 1
 
-    def get_surface(self, tile_index):
-        return self._surfs.get(tile_index, None)
 
     def _reset_info(self):
         """
@@ -139,6 +149,13 @@ class _Pixbuf_Source(_SourceMixin):
     ## Source Pixbuf methods
 
     def _ensure_current_pixbuf(self, tile_index):
+        """
+        To ensure current pixbuf (and cached surface) loaded. 
+        Automatically called from get_current_src() method.
+
+        This facility is completely different at _Dynamic_Source.
+        see _Dynamic_source.get_current_src()
+        """
         if self._source_files and len(self._source_files) > 0:
             if not tile_index in self._surfs:
                 filename = self._source_files[tile_index]
@@ -229,8 +246,18 @@ class _Dynamic_Source(_Pixbuf_Source):
         """
 
     def get_current_src(self, tile_index):
+        """
+        Differred from _Pixbuf_Source, 
+        ensureing cached surface should be executed 
+        surface_requested observable event,
+        which is implemented at Stamp class.
+        """
         self.surface_requested(tile_index)
         return self._surfs.get(tile_index, None)
+
+    def clear_surface(self, tile_index):
+        if tile_index in self._surfs:
+            del self._surfs[tile_index]
 
 
 class _Tiled_Source(_Pixbuf_Source):
@@ -326,6 +353,7 @@ class _StampMixin(object):
         self._default_scale_y = 1.0
         self._default_angle = 0.0
         self._thumbnail = None
+        self._tile_index_seed = 0
 
     ## Information methods
 
@@ -390,8 +418,14 @@ class _StampMixin(object):
     def is_support_selection(self):
         return False
 
+    @property
+    def latest_tile_index(self):
+        return self.tile_count - 1
+
+    ## Static methods
+
     @staticmethod
-    def _get_outmost_rect_from_points(pts):
+    def _get_outmost_area_from_points(pts):
         sx, sy = pts[0]
         ex, ey = sx, sy
         for tx, ty in pts[1:]:
@@ -405,6 +439,8 @@ class _StampMixin(object):
             elif ty > ey:
                 ey = ty
         return (sx, sy, ex, ey)
+
+    
 
     ## Drawing methods
 
@@ -546,6 +582,7 @@ class _StampMixin(object):
         """
         if self._pixbuf_src:
             stamp_src = self._pixbuf_src.get_current_src(node.tile_index)
+            print 'tile-index %d' % node.tile_index
             if stamp_src:
                 w = stamp_src.get_width() 
                 h = stamp_src.get_height()
@@ -580,7 +617,10 @@ class _StampMixin(object):
                 if tdw:
                     points = [ tdw.model_to_display(x,y) for x,y in points ]
 
+                print points
                 return points
+        else:
+            logger.warning('stamp bbox query under no pixbuf')
 
     def get_bbox(self, tdw, node, dx=0.0, dy=0.0, margin = 0):
         """ Get outmost boundary box, to get displaying area or 
@@ -590,18 +630,22 @@ class _StampMixin(object):
         """
         pos = self.get_boundary_points(node, dx=dx, dy=dy)
         if pos:
-            area = _StampMixin._get_outmost_rect_from_points(pos)
-            return get_outmost_area(tdw, 
+            area = _StampMixin._get_outmost_area_from_points(pos)
+            sx, sy, ex, ey = get_outmost_area(tdw, 
                     *area,
                     margin=margin)
+            return (sx, sy, abs(ex-sx)+1, abs(ey-sy)+1)
+            
 
 
     ## Phase related methods
     #  these methods should be called from 
     #  Stamptool._start_new_capture_phase()
 
-    def initialize_phase(self):
+    def initialize_phase(self, mode):
         """ Initializing for start of each drawing phase.
+        :param mode: the stampmode which use this stamp class.
+
         CAUTION: This method is not called when drawing to
         layer.
 
@@ -609,7 +653,7 @@ class _StampMixin(object):
 
         ACCEPT BUTTON Pressed (end of drawing phase)
         |
-        +-- draw_stamp_to_layer called (from Command object : asynchronously)
+        +-- render_stamp_to_layer called (from Command object : asynchronously)
         |
         self.finalize_phase() called
         |
@@ -619,13 +663,15 @@ class _StampMixin(object):
         """
         pass
 
-    def finalize_phase(self):
+    def finalize_phase(self, mode):
         """ This called when stamptool comes to end of
         capture(drawing) phase.
         """
         pass
 
-    ## Event callbacks
+    ## Enter/Leave callbacks
+    #  These callbacks called when stamptool.stamp attribute
+    #  has been changed.
 
     def enter(self):
         """
@@ -760,7 +806,7 @@ class ClipboardStamp(_DynamicStampMixin):
 
         self._pixbuf_src.set_pixbuf(0, pixbuf)
 
-    def initialize_phase(self):
+    def initialize_phase(self, mode):
         """ Initializing for start of each drawing phase.
         CAUTION: This method is not called when drawing to
         layer.
@@ -772,6 +818,13 @@ class ClipboardStamp(_DynamicStampMixin):
         if self._pixbuf_src.tile_count == 0:
             self._load_clipboard_image()
 
+    @property
+    def latest_tile_index(self):
+        """
+        Clipboard stamp has always 1 source, so index is 0.
+        """
+        return 0
+
 class LayerStamp(_DynamicStampMixin):
     """ A Stamp which sources the current layer.
 
@@ -782,9 +835,13 @@ class LayerStamp(_DynamicStampMixin):
 
     def __init__(self, name, rootstack):
         self._reset_members(name)
-        self._sel_areas = {}
         self._rootstack = rootstack
+
+    def _reset_members(self, name):
+        super(LayerStamp, self)._reset_members(name)
+        self._sel_areas = {}
         self._tile_index_seed = 0
+        self._mode_ref = None
 
     @property
     def is_support_selection(self):
@@ -816,27 +873,27 @@ class LayerStamp(_DynamicStampMixin):
             self._sel_areas[tile_index] = (area, layer)
         return tile_index
 
-    def get_selection_area(self, tile_index):
-        if tile_index < len(self._sel_areas):
-            return self._sel_areas[tile_index][0]
-
     def remove_selection_area(self, tile_index):
         if tile_index in self._sel_areas:
             del self._sel_areas[tile_index]
+            self._pixbuf_src.clear_surface(tile_index)
 
-    def enum_visible_selection_areas(self, tdw, indexes=None):
+            # Notify deletion to stamptool mode
+            assert self._mode_ref != None
+            mode = self._mode_ref()
+            if mode:
+                mode.stamp_tile_deleted_cb(tile_index)
+
+    def enum_visible_selection_areas(self, tdw, indexes=None, enum_raw_area=False):
         """
         Enumerate visible selection areas at tdw.
         :param tdw: TiledDrawWidget to display
+        :param offsets: a tuple of (dx, dy), this should be dragging offset in display
         :param indexes: sequence of index of self._sel_areas. 
                         an index might be None.
         :rtype: yielding a tuple of (tile_index, (start_x, start_y, end_x, end_y)).
                 returned values are display coordinate.
         """
-
-        # XXX mostly same as Overlay_Stamp._get_oncscreen_areas()
-        # but that method needs to adjust the points with
-        # user dragging.
 
         alloc = tdw.get_allocation()
 
@@ -860,7 +917,13 @@ class LayerStamp(_DynamicStampMixin):
                 area, layer = self._sel_areas[tile_idx]
                 ret = check_area(area)
                 if ret:
-                    yield (tile_idx, ret)
+                    if enum_raw_area:
+                        sx, sy = tdw.model_to_display(area[0], area[1])
+                        ex, ey = tdw.model_to_display(area[2], area[3])
+                        yield (tile_idx, 
+                                (sx, sy, ex, ey))
+                    else:
+                        yield (tile_idx, ret)
         else:
             for i in indexes:
                 if i != None:
@@ -868,12 +931,23 @@ class LayerStamp(_DynamicStampMixin):
                         area, layer = self._sel_areas[i]
                         ret = check_area(area)
                         if ret:
-                            yield (i, ret)
+                            if enum_raw_area:
+                                sx, sy = tdw.model_to_display(area[0], area[1])
+                                ex, ey = tdw.model_to_display(area[2], area[3])
+                                yield (i, (sx, sy, ex, ey))
+                            else:
+                                yield (i, ret)
 
     @property
     def tile_count(self):
         return len(self._sel_areas)
 
+    @property
+    def latest_tile_index(self):
+        if len(self._sel_areas) > 0:
+            return self._sel_areas.keys()[-1]
+        else:
+            return -1
 
     # Pixbuf Source related  
     def set_layer_for_area(self, tile_index, layer):
@@ -899,6 +973,9 @@ class LayerStamp(_DynamicStampMixin):
                     source = self._pixbuf_src
                 source.set_pixbuf(tile_index, 
                         self._fetch_single_area(layer, area))
+       #else:
+       #    print 'tile index invalid %d' % tile_index
+       #    print self._sel_areas
 
     def surface_requested_cb(self, source, tile_index):
         """
@@ -917,27 +994,13 @@ class LayerStamp(_DynamicStampMixin):
 
     ## Phase related
 
-    def initialize_phase(self):
+    def initialize_phase(self, mode):
         """ Initialize when a entire phase stated
         i.e. where self.phase is set to _Phase.CAPTURE.
         """
-        pass
-       #self._pixbuf_src.clear_all_cache()
-       #
-       #rejected_layers = []
-       #
-       #for tile_idx in self._sel_areas.keys():
-       #    area, layer = self._sel_areas[tile_idx]
-       #    layer = layer()
-       #    if layer == None or layer in rejected_layers:
-       #        del self._sel_areas[tile_idx]
-       #    else:
-       #        lidx = self._rootstack.deepindex(layer)
-       #        if lidx == None:
-       #            del self._sel_areas[tile_idx]
-       #            rejected_layers.append(layer)
+        self._mode_ref = weakref.ref(mode)
 
-    ## Entering callback
+    ## Entering/Leaving stamp callbacks
     def enter(self):
         model = self._rootstack.doc
         model.sync_pending_changes += self.sync_pending_changes_cb
@@ -955,13 +1018,12 @@ class LayerStamp(_DynamicStampMixin):
             area, layer = self._sel_areas[tile_idx]
             layer = layer()
             if layer == None or layer in rejected_layers:
-                del self._sel_areas[tile_idx]
+                self.remove_selection_area(tile_idx)
             else:
                 lidx = self._rootstack.deepindex(layer)
                 if lidx == None:
-                    del self._sel_areas[tile_idx]
+                    self.remove_selection_area(tile_idx)
                     rejected_layers.append(layer)
-
 
 class VisibleStamp(LayerStamp):
     """ A Stamp which sources the currently visible area.
@@ -969,7 +1031,6 @@ class VisibleStamp(LayerStamp):
 
     def __init__(self, name, rootstack):
         self._reset_members(name)
-        self._sel_areas = {}
         self._rootstack = rootstack
 
     def set_layer_for_area(self, tile_index, layer):
@@ -980,6 +1041,7 @@ class VisibleStamp(LayerStamp):
         Pixbuf requested callback, called from 
         self._pixbuf_src._ensure_current_pixbuf()
         """
+        assert tile_index == 0
         if tile_index in self._sel_areas:
             if source.get_surface(tile_index) == None:
                 area, junk = self._sel_areas[tile_index]
@@ -1080,9 +1142,9 @@ class ForegroundLayerStamp(ForegroundStamp,
         self._pixbuf_src = self.mask_src
         self._pixbuf_src.surface_requested += self.surface_requested_cb
 
-class PixbufStamp(_DynamicStampMixin):
+class ProxyStamp(_DynamicStampMixin):
     """ 
-    A Stamp for dynamically changeable pixbuf stamps
+    A Proxy Stamp for dynamically changeable pixbuf stamps
     (Currently, it is only ClipboardStamp)
     to fix its contents within DrawStamp command.
     This stamp would only use inside program,have no any user
@@ -1090,7 +1152,7 @@ class PixbufStamp(_DynamicStampMixin):
 
     Due to MyPaint 'Command' processing done in asynchronously,
     Clipboard stamp might be updated its content(pixbuf)
-    when actually draw_stamp_to_layer() called
+    when actually render_stamp_to_layer() called
     i.e. StampCommand has issued.
 
     Therefore, we need to pass the pixbuf used when editing

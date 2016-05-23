@@ -101,7 +101,7 @@ class DrawStamp(Command):
         self.snapshot = target.save_snapshot()
         target.autosave_dirty = True
         # Draw stamp at each nodes location 
-        draw_stamp_to_layer(target,
+        render_stamp_to_layer(target,
                 self._stamp, self.nodes, self.bbox)
 
     def undo(self):
@@ -167,13 +167,14 @@ class StampMode (InkingMode):
     ## Class config vars
 
 
+    ## Class variable & objects
+
+    _stamp = None
 
     ## Initialization & lifecycle methods
 
     def __init__(self, **kwargs):
         super(StampMode, self).__init__(**kwargs)
-
-        self._stamp = None
         self.current_handle_index = -1
         self.forced_button_pos = False
 
@@ -187,7 +188,7 @@ class StampMode (InkingMode):
 
     @property
     def stamp(self):
-        return self._stamp
+        return StampMode._stamp
 
     @property
     def target_area_index(self):
@@ -205,11 +206,12 @@ class StampMode (InkingMode):
         """ Called from OptionPresenter, 
         This is to make stamp property as if it is read-only.
         """
-        if self._stamp:
-            self._stamp.leave()
-        self._stamp = stamp
-        self._stamp.enter()
-        self._stamp.initialize_phase()
+        old_stamp = StampMode._stamp
+        if old_stamp:
+            old_stamp.leave()
+        StampMode._stamp = stamp
+        stamp.enter()
+        stamp.initialize_phase(self)
 
     ## Status methods
 
@@ -220,6 +222,8 @@ class StampMode (InkingMode):
             gui.cursor.Name.ADD
         )
         self.options_presenter.target = (self, None)
+        if self.stamp:
+            self.stamp.initialize_phase(self)
         super(StampMode, self).enter(doc, **kwds)
 
     def leave(self, **kwds):
@@ -256,8 +260,8 @@ class StampMode (InkingMode):
         if bbox:
             sx, sy, w, h = bbox
 
-            ex = sx+w
-            ey = sy+h
+            ex = sx + w
+            ey = sy + h
             for cn in self.nodes[1:]:
                 tsx, tsy, tw, th = self._stamp.get_bbox(None, cn)
                 sx = min(sx, tsx)
@@ -269,14 +273,14 @@ class StampMode (InkingMode):
                 # This means 'Current stamp is dynamic'. 
                 # Therefore we need save its current content 
                 # during draw command exist.
-                stamp = PixbufStamp('', self._stamp.pixbuf)
+                stamp = ProxyStamp('', self._stamp.pixbuf)
             else:
                 stamp = self._stamp
 
             cmd = DrawStamp(self.doc.model,
                     stamp,
                     self.nodes,
-                    (sx, sy, ex - sx + 1, ey - sy + 1))
+                    (sx, sy, abs(ex-sx)+1, abs(ey-sy)+1))
             self.doc.model.do(cmd)
         else:
             logger.warning("stamptool.commit_all encounter enpty bbox")
@@ -292,7 +296,7 @@ class StampMode (InkingMode):
             self._commit_all()
 
         if self.stamp:
-            self.stamp.finalize_phase()
+            self.stamp.finalize_phase(self)
             
         self.options_presenter.target = (self, None)
         self._queue_redraw_curve(force_margin=True)  # call this before reset node
@@ -304,7 +308,7 @@ class StampMode (InkingMode):
         self.phase = _Phase.CAPTURE
 
         if self.stamp:
-            self.stamp.initialize_phase()
+            self.stamp.initialize_phase(self)
 
     def _ensure_overlay_for_tdw(self, tdw):
         overlay = self._overlays.get(tdw)
@@ -464,7 +468,7 @@ class StampMode (InkingMode):
                 self.stamp.set_selection_area(-1,
                         selection_mode.get_min_max_pos_model())
 
-                self.stamp.initialize_phase()
+                self.stamp.initialize_phase(self)
                 self._notify_stamp_changed()
         else:
             modified = False
@@ -761,12 +765,12 @@ class StampMode (InkingMode):
                 # here when something go wrong,and cancelled.
                 self.current_node_index = None
                 return super(InkingMode, self).drag_start_cb(tdw, event)
-            else:
+            elif self.stamp.tile_count > 0:
                 node = _StampNode(mx, my, 
                         self._stamp.default_angle,
                         self._stamp.default_scale_x,
                         self._stamp.default_scale_y,
-                        0)
+                        self._stamp.latest_tile_index)
                 self.nodes.append(node)
                 self.target_node_index = len(self.nodes) -1
                 self._update_current_node_index()
@@ -1053,6 +1057,32 @@ class StampMode (InkingMode):
 
     ## Interrogating events
 
+    def stamp_tile_deleted_cb(self, tile_index):
+        """
+        A notification callback when stamp tile has been changed
+        (deleted)
+        """
+
+        # First of all, queue redraw the nodes to be deleted.
+        for i, cn in enumerate(self.nodes):
+            if cn.tile_index == tile_index:
+                self._queue_draw_node(i, force_margin=True) 
+
+        # After that, delete it.
+        for i, cn in enumerate(self.nodes[:]):
+            if cn.tile_index == tile_index:
+                self.nodes.remove(cn)
+                if i in self.selected_nodes:
+                    self.selected_nodes.remove(i)
+                if i == self.current_node_index:
+                    self.current_node_index = None
+                if i == self.target_node_index:
+                    self.target_node_index = None
+
+        if len(self.nodes) == 0:
+            self.phase == _Phase.CAPTURE
+            logger.info('stamp tile deleted, and all nodes deleted')
+
     ## Node editing
     def update_node(self, i, **kwargs):
         self._queue_draw_node(i, force_margin=True) 
@@ -1130,42 +1160,9 @@ class Overlay_Stamp (Overlay):
 
                 if node_on_screen:
                     yield (i, node)
-
-    def _get_onscreen_areas(self):
-        """Iterates across only the on-screen areas.
-
-        :rtype: yielding a tuple of (index, (start_x, start_y, end_x, end_y)).
-                returned values are display coordinate.
-        """
-        mode = self._inkmode
-        tdw = self._tdw
-        alloc = tdw.get_allocation()
-
-        for i in xrange(mode.stamp.tile_count):
-            area = mode.stamp.get_selection_area(i)
-            sx, sy, ex, ey = mode.adjust_selection_area(i, area)
-            sx, sy = tdw.model_to_display(sx, sy)
-            ex, ey = tdw.model_to_display(ex, ey)
-
-            # sort area again, because the order
-            # might be changed by coordinate conversion.
-            if sx > ex:
-                sx, ex = ex, sx
-            if sy > ey:
-                sy, ey = ey, sy
-
-            w = (ex - sx) + 1
-            h = (ey - sy) + 1
-            
-            node_on_screen = (
-                sx > alloc.x - w  and
-                sy > alloc.y - h and
-                sx < alloc.x + alloc.width + w and
-                sy < alloc.y + alloc.height + h
-            )
-            
-            if node_on_screen:
-                yield (i, (sx, sy, ex, ey))
+            else:
+                print 'node bbox off'
+                print bbox
 
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
@@ -1301,7 +1298,7 @@ class Overlay_Stamp (Overlay):
         cr.stroke()
         cr.restore()
 
-    def draw_selection_area(self, cr, right_color, other_color):
+    def draw_selection_area(self, cr, dx, dy, right_color, other_color):
         """ Drawing LayerStamp's source-target rectangle.
         """
         cr.save()
@@ -1310,14 +1307,26 @@ class Overlay_Stamp (Overlay):
         mode = self._inkmode
         icon_pixbuf = None
         current_layer = tdw.doc.layer_stack.current
+        assert mode.stamp and hasattr(mode.stamp, "enum_visible_selection_areas")
 
-        for i, area in self._get_onscreen_areas():
+        for i, area in mode.stamp.enum_visible_selection_areas(tdw, enum_raw_area=True):
+            # NOTE: area and dx/dy MUST BE in display coordinate.
             sx, sy, ex, ey = area
+
+            if (i == mode.target_area_index):
+                sx += dx
+                ex += dx
+                sy += dy
+                ey += dy
+
             # We MUST consider rotation, to draw rectangle
 
             # _get_onscreen_areas() returns display coordinate area
             # (with offseted one when user move it by dragging)
             # so use it. 
+            #
+            # passing None to tdw parameter here, because the area
+            # is already in display coordinate.
             gui.drawutils.draw_rectangle_follow_canvas(cr, None,
                     sx, sy, ex, ey) 
             cr.set_dash((), 0)
@@ -1394,12 +1403,13 @@ class Overlay_Stamp (Overlay):
             # correctly configured at gui/style.py
             if mode.stamp.tile_count > 0:
                 self.draw_selection_area(cr, 
+                        dx, dy,
                         self.SELECTED_AREA_COLOR, (1, 0 ,0) )
 
         # Buttons
-        if (mode.phase in
-                (_Phase.ADJUST,)
+        if (mode.phase in (_Phase.ADJUST,)
                 and
+                len(mode.nodes) > 0 and
                 not mode.in_drag):
             self.update_button_positions()
             radius = gui.style.FLOATING_BUTTON_RADIUS
