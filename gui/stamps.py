@@ -31,7 +31,6 @@ def render_stamp_to_layer(target_layer, stamp, nodes, bbox):
     :param bbox: boundary box, in model coordinate
     """
     sx, sy, w, h = bbox
-    print bbox
     surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, int(w), int(h))
     cr = cairo.Context(surf)
 
@@ -582,7 +581,7 @@ class _StampMixin(object):
         """
         if self._pixbuf_src:
             stamp_src = self._pixbuf_src.get_current_src(node.tile_index)
-            print 'tile-index %d' % node.tile_index
+           #print 'tile-index %d' % node.tile_index
             if stamp_src:
                 w = stamp_src.get_width() 
                 h = stamp_src.get_height()
@@ -617,7 +616,7 @@ class _StampMixin(object):
                 if tdw:
                     points = [ tdw.model_to_display(x,y) for x,y in points ]
 
-                print points
+               #print points
                 return points
         else:
             logger.warning('stamp bbox query under no pixbuf')
@@ -981,9 +980,6 @@ class LayerStamp(_DynamicStampMixin):
                     source = self._pixbuf_src
                 source.set_pixbuf(tile_index, 
                         self._fetch_single_area(layer, area))
-       #else:
-       #    print 'tile index invalid %d' % tile_index
-       #    print self._sel_areas
 
     def surface_requested_cb(self, source, tile_index):
         """

@@ -151,15 +151,15 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
             self._mx[i], self._my[i] = tdw.display_to_model(
                     self._x[i], self._y[i])
 
-    def _get_min_max_pos(self, tdw):
+    def _get_min_max_pos(self, tdw, margin=2):
         return gui.ui_utils.get_outmost_area(tdw,
                 self._mx[0], self._my[0], self._mx[1], self._my[1], 
-                margin=2)
+                margin=margin)
 
-    def get_min_max_pos_model(self):
+    def get_min_max_pos_model(self, margin=0):
         return gui.ui_utils.get_outmost_area(None,
                 self._mx[0], self._my[0], self._mx[1], self._my[1], 
-                margin=0)
+                margin=margin)
 
 
     ## InteractionMode/DragMode implementation

@@ -468,7 +468,7 @@ class StampMode (InkingMode):
         if self.phase in (_Phase.CAPTURE, _Phase.ADJUST):
             if self.stamp and self.stamp.is_support_selection:
                 self.stamp.set_selection_area(-1,
-                        selection_mode.get_min_max_pos_model(),
+                        selection_mode.get_min_max_pos_model(margin=0),
                         selection_mode.doc.model.layer_stack.current)
 
                 self.stamp.initialize_phase(self)
@@ -541,9 +541,11 @@ class StampMode (InkingMode):
             for i, cn in enumerate(self.nodes):
                 targetted = (i == self.current_node_index)
                 if i in self.selected_nodes:
-                    self._queue_draw_node_internal(tdw, cn, dx, dy, targetted)
+                    self._queue_draw_node_internal(tdw, cn, dx, dy, 
+                            targetted or force_margin)
                 else:
-                    self._queue_draw_node_internal(tdw, cn, 0.0, 0.0, targetted)
+                    self._queue_draw_node_internal(tdw, cn, 0.0, 0.0, 
+                            targetted or force_margin)
 
             self._queue_selection_area(tdw)
 
@@ -552,11 +554,11 @@ class StampMode (InkingMode):
         stamp = self.stamp
 
         if stamp and stamp.is_support_selection:
-            for i, area in stamp.enum_visible_selection_areas(tdw, indexes=indexes):
+            for i, junk in stamp.enum_visible_selection_areas(tdw, indexes=indexes):
+                area = stamp.get_selection_area(i)
                 area = self.adjust_selection_area(i, area)
                 sx, sy, ex, ey = gui.ui_utils.get_outmost_area(tdw, *area, 
                         margin=gui.style.DRAGGABLE_POINT_HANDLE_SIZE+4)
-                print (sx, sy, ex, ey)
                 tdw.queue_draw_area(sx, sy, 
                         abs(ex - sx) + 1, abs(ey - sy) + 1)
 
@@ -1098,6 +1100,8 @@ class StampMode (InkingMode):
         """
         Adjust selection(source-target) area
         against user interaction(i.e. dragging selection area).
+
+        CAUTION: THIS METHOD ACCEPTS ONLY MODEL COORDINATE.
 
         :param index: area index of LayerStamp source area
         :param area: area, i.e. a tuple of (sx, sy, ex, ey)
