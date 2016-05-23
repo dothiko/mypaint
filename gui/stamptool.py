@@ -1004,7 +1004,8 @@ class StampMode (InkingMode):
             area = self.adjust_selection_area(
                             self.target_area_index,
                             self.stamp.get_selection_area(self.target_area_index))
-            self.stamp.set_selection_area(self.target_area_index, area)
+            self.stamp.set_selection_area(self.target_area_index, area,
+                    self.doc.model.layer_stack.current)
             self.stamp.refresh_surface(self.target_area_index)
 
             self.phase = _Phase.ADJUST
