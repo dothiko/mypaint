@@ -930,10 +930,12 @@ class VisibleStamp(LayerStamp):
         self._init_stamp(name)
 
     def set_selection_area(self, tile_index, area, layer):
-        super(VisibleStamp, self).set_selection_area(tile_index, area, layer.root)
+        super(VisibleStamp, self).set_selection_area(
+                tile_index, area, layer.root)
 
     def set_layer_for_area(self, tile_index, layer):
-        super(VisibleStamp, self).set_layer_for_area(tile_index, layer.root)
+        super(VisibleStamp, self).set_layer_for_area(
+                tile_index, layer.root)
 
 
 
@@ -941,15 +943,9 @@ class ForegroundStamp(_PixbufMaskMixin, _StampMixin):
     """ Foreground color stamp.
     """
 
-    def __init__(self, name, app, tw, th):
+    def __init__(self, name):
+        self._init_source()
         self._init_stamp(name)
-        self._app = app
-        self._tile_w = tw
-        self._tile_h = th
-
-    @property
-    def foreground_color(self):
-        return self._app.brush_color_manager.get_color().get_rgb()
 
     def draw(self, tdw, cr, x, y, node, save_context=False):
         """ Draw this stamp into cairo surface.
@@ -990,7 +986,9 @@ class ForegroundStamp(_PixbufMaskMixin, _StampMixin):
             if scale_x != 0.0 and scale_y != 0.0:
                 cr.scale(scale_x, scale_y)
 
-        cr.set_source_rgb(*self.foreground_color)
+        fg_col = tdw.app.brush_color_manager.get_color().get_rgb()
+
+        cr.set_source_rgb(*fg_col)
         cr.rectangle(ox, oy, w, h) 
         cr.clip()
         cr.fill()
@@ -1006,13 +1004,17 @@ class ForegroundLayerStamp(ForegroundStamp,
     In this version,mask is generated from current layer.
     """
 
-    def __init__(self, name, app):
+    def __init__(self, name):
         # Call LayerStamp constructor
         # (CAUTION: NOT ForegroundStamp)
-        super(ForegroundStamp, self).__init__(name)
-        self._app = app
-        self._init_source()
-        self._init_stamp(name)
+        # actually & currently, the both is same
+        # but this class largely based on layerstamp
+        # except for draw() method.
+        LayerStamp.__init__(self, name)
+
+    def draw(self, tdw, cr, x, y, node, save_context=False):
+        ForegroundStamp.draw(self, tdw,  cr,
+                x, y, node, save_context)
 
 class ProxyStamp(ClipboardStamp):
     """ 
@@ -1201,11 +1203,11 @@ class StampPresetManager(object):
             elif source == 'current-visible':
                 stamp = VisibleStamp(jo['name'])
             elif source == 'foreground':
-                stamp = ForegroundStamp(jo['name'], self._app, *settings.get('tile', (1, 1)))
+                stamp = ForegroundStamp(jo['name'])
                 assert 'mask' in settings
                 stamp.set_file_sources(settings['mask'])
             elif source == 'foreground-layermask':
-                stamp = ForegroundLayerStamp(jo['name'], self._app)
+                stamp = ForegroundLayerStamp(jo['name'])
             else:
                 raise NotImplementedError("Unknown source %r" % source)
 
