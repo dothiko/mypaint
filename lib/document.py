@@ -1765,15 +1765,19 @@ class Document (object):
                             if hasattr(cl,'workfilename'):
                                 filepath = cl.workfilename
                             elif hasattr(cl,'get_filename_for_project'):
-                                testfname = cl.get_filename_for_project()
-                                if os.path.exists(testfname):
-                                    filepath = testfname
-                                    logger.info("Layer %s is dirty but has no file-entity information.but uuid-png file found." % cl.name )
+                                testpath = cl.get_filename_for_project(
+                                        path_prefix=(source_dir, 'data'))
+                                if os.path.exists(testpath):
+                                    filepath = testpath
+                                    logger.info("Layer %s is dirty and file found." % cl.name )
                                     strokepath = cl.get_filename_for_project(
                                             ext=None,
-                                            formatstr=u"%s-strokemap.dat")
+                                            formatstr=u"%s-strokemap.dat",
+                                            path_prefix=(source_dir, 'data'))
+
                                 else:
                                     logger.info("Layer %s is dirty but has no file-entity information. and uuid-png file also not found." % cl.name )
+                                    logger.info("Expected filename is %s." % testpath )
 
                             else:
                                 logger.warning(u"no any filename attributes for layer %r", cl.name)
@@ -1782,8 +1786,11 @@ class Document (object):
                                 assert os.path.exists(filepath)
                                 shutil.move(filepath, destdirname) 
 
-                                if strokepath and os.path.exists(strokepath):
-                                    shutil.move(strokepath, destdirname) 
+                                if strokepath: 
+                                    if os.path.exists(strokepath):
+                                        shutil.move(strokepath, destdirname) 
+                                    else:
+                                        logger.warning(u"stroke data file %s does not found", strokepath)
 
                     # fallthrough.
 
@@ -1830,9 +1837,13 @@ class Document (object):
              
             # All preprocess has done.
             # Then do the project writing.
+            frame_bbox = None
+            if self.frame_enabled:
+                frame_bbox = tuple(self.get_frame())
             self._project_write(dirname, 
                     xres=self._xres if self._xres else None,
                     yres=self._yres if self._yres else None,
+                    bbox=frame_bbox,
                     frame_active = self.frame_enabled,
                     force_write = not os.path.exists(dirname), 
                     **kwargs)
@@ -1889,6 +1900,7 @@ class Document (object):
 
     def _project_write(self, dirname, 
             xres=None,yres=None,
+            bbox=None,
             frame_active=False, force_write=False, 
             **kwargs):
         """
@@ -1931,7 +1943,8 @@ class Document (object):
 
         # Save the layer stack
         image = ET.Element('image')
-        bbox = tuple(data_bbox)
+        if bbox is None:
+            bbox = data_bbox
         x0, y0, w0, h0 = bbox
         image.attrib['w'] = str(w0)
         image.attrib['h'] = str(h0)

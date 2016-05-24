@@ -165,22 +165,31 @@ class Autosaveable:
         except AttributeError:
             return None
 
-    def get_filename_for_project(self, ext=u".png", formatstr=None):
+    def get_filename_for_project(self, ext=u".png", formatstr=None, 
+            path_prefix=None):
         """
         Get a unique filename in a project.
-        :param ext: file extension.
+        :param ext: default file extension, used when uuid exists.
         :param formatstr: format strings, in unicode.
+        :param path_prefix: a tuple of path components, 
+                    to be added the filename with os.path.join().
         """
+        retfname = None
         if self.src != None:
             basename = os.path.basename(self.src)
             if formatstr:
                 basename, ext = os.path.splitext(basename)
-                return formatstr % (basename,)
+                retfname = formatstr % (basename,)
             else:
-                return basename
+                retfname = basename
         else:
             if formatstr:
-                return formatstr % (self.autosave_uuid,)
+                retfname = formatstr % (self.autosave_uuid,)
             else:
-                return self.autosave_uuid + ext
+                retfname = self.autosave_uuid + ext
+
+        if path_prefix:
+            return os.path.join(os.path.join(*path_prefix), retfname)
+        else:
+            return retfname
     
