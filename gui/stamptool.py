@@ -1376,7 +1376,7 @@ class Overlay_Stamp (Overlay):
                #and 
                #    mode.target_area_handle != None):
 
-                for i, x, y in enum_area_point(*area):
+                for i, x, y in enum_area_point(sx, sy, ex, ey):
                     gui.drawutils.render_square_floating_color_chip(
                         cr, x, y,
                         gui.style.ACTIVE_ITEM_COLOR, 
