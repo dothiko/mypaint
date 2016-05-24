@@ -63,6 +63,7 @@ def render_stamp_to_layer(target_layer, stamp, nodes, bbox):
     bbox = tuple(target_layer.get_full_redraw_bbox())
     target_layer.root.layer_content_changed(target_layer, *bbox)
     target_layer.autosave_dirty = True
+    dstsurf.remove_empty_tiles()
     del layer
 
 

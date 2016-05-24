@@ -197,6 +197,7 @@ def _draw_polygon_to_layer(model, target_layer,nodes,
                     lib.mypaintlib.tile_clear_rgba16(dst)
                 else:
                     layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+        srcsurf.remove_empty_tiles()
     else:
         tiles.update(layer.get_tile_coords())
         dstsurf = target_layer._surface
@@ -207,6 +208,7 @@ def _draw_polygon_to_layer(model, target_layer,nodes,
 
     bbox = tuple(target_layer.get_full_redraw_bbox())
     target_layer.root.layer_content_changed(target_layer, *bbox)
+    dstsurf.remove_empty_tiles()
     target_layer.autosave_dirty = True
     del layer
 
