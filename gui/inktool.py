@@ -1251,12 +1251,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
     def delete_selected_nodes(self):
 
-        # First of all,queue redraw area.
         self._queue_draw_buttons()
         for idx in self.selected_nodes:
             self._queue_draw_node(idx)
 
-        # after then,delete it.
         new_nodes = [self.nodes[0]]
         for idx,cn in enumerate(self.nodes[1:-1]):
             t_idx = idx + 1
