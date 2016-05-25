@@ -40,6 +40,7 @@ from gui.linemode import *
 from gui.beziertool import *
 from gui.beziertool import _Control_Handle, _Node_Bezier, _EditZone_Bezier, _PhaseBezier
 from lib.command import Command
+import lib.surface
 import lib.mypaintlib
 
 ## Module constants
@@ -197,7 +198,6 @@ def _draw_polygon_to_layer(model, target_layer,nodes,
                     lib.mypaintlib.tile_clear_rgba16(dst)
                 else:
                     layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
-        srcsurf.remove_empty_tiles()
     else:
         tiles.update(layer.get_tile_coords())
         dstsurf = target_layer._surface
@@ -206,9 +206,14 @@ def _draw_polygon_to_layer(model, target_layer,nodes,
                 layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
 
 
+    for pos in tiles:
+        dstsurf._mark_mipmap_dirty(*pos)
+    bbox = lib.surface.get_tiles_bbox(tiles)
+    dstsurf.notify_observers(*bbox)
+    dstsurf.remove_empty_tiles()
+
     bbox = tuple(target_layer.get_full_redraw_bbox())
     target_layer.root.layer_content_changed(target_layer, *bbox)
-    dstsurf.remove_empty_tiles()
     target_layer.autosave_dirty = True
     del layer
 
@@ -784,6 +789,7 @@ class PolyfillMode (BezierMode):
 
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
         ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
+        meta_state = event.state & Gdk.ModifierType.MOD1_MASK
 
         if self.phase == _PhaseBezier.INITIAL: 
             self.phase = _PhaseBezier.CREATE_PATH
@@ -841,7 +847,8 @@ class PolyfillMode (BezierMode):
                 
                 if self.phase == _PhaseBezier.CREATE_PATH:
                     if (len(self.nodes) > 0): 
-                        if shift_state and ctrl_state:
+                       #if shift_state and ctrl_state:
+                        if meta_state:
                             self._queue_draw_buttons() 
                             self.forced_button_pos = (event.x, event.y)
                             self.phase = _PhaseBezier.CHANGE_PHASE 
@@ -1103,15 +1110,14 @@ class PolyfillMode (BezierMode):
     
     ## Generic Oncanvas-editing handler
     def accept_edit(self):
-        if (self.phase in (_Phase.ADJUST ,_Phase.ADJUST_PRESSURE) and
+        if (self.phase in (_PhaseBezier.CREATE_PATH, ) and
                 len(self.nodes) > 1):
             self._start_new_capture_phase_polyfill(
                 self.button_info.get_mode_from_zone(self.zone),
                 rollback=False)
-            assert self.phase == _Phase.CAPTURE
 
     def discard_edit(self):
-        if (self.phase in (_Phase.ADJUST ,_Phase.ADJUST_PRESSURE)): 
+        if (self.phase in (_PhaseBezier.CREATE_PATH, )):
             self._start_new_capture_phase_polyfill(
                 None, rollback=True)
 

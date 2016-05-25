@@ -1832,9 +1832,18 @@ class CutCurrentLayer (Command):
                 layer._surface.composite_tile(dst, True, tx, ty, mipmap_level=0,
                         mode=mode)
 
+        self._finalize_surface(dstsurf, tiles)
+
     def _cut_opaque(self, target_layer, cutting_layer):
         CutCurrentLayer._merge(target_layer, cutting_layer,
                 lib.mypaintlib.CombineDestinationOut)
+
+    def _finalize_surface(self, dstsurf, tiles):
+        for pos in tiles:
+            dstsurf._mark_mipmap_dirty(*pos)
+        bbox = lib.surface.get_tiles_bbox(tiles)
+        dstsurf.notify_observers(*bbox)
+        dstsurf.remove_empty_tiles()
 
     def _cut_transparent(self, target_layer, cutting_layer):
         tiles = set()
@@ -1849,6 +1858,8 @@ class CutCurrentLayer (Command):
                     cutting_layer._surface.composite_tile(
                             dst, True, tx, ty, mipmap_level=0,
                             mode = lib.mypaintlib.CombineDestinationIn)
+
+        self._finalize_surface(dstsurf, tiles)
 
     def redo(self):
         rootstack = self.doc.layer_stack
@@ -1879,6 +1890,7 @@ class CutCurrentLayer (Command):
             self._cut_transparent(target, _merged_layer)
             _merged_layer = None
 
+        target.autosave_dirty = True
         # Redraw target layer 
         self._notify_canvas_observers( (target.get_full_redraw_bbox(), ) )
 
