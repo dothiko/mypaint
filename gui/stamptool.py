@@ -1195,8 +1195,7 @@ class Overlay_Stamp (Overlay):
 
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
-        # FIXME mostly copied from inktool.Overlay.update_button_positions
-        # The difference is for-loop of nodes , to deal with control handles.
+
         mode = self._inkmode
         nodes = mode.nodes
         num_nodes = len(nodes)
@@ -1516,13 +1515,16 @@ class OptionsPresenter_Stamp (object):
         self._yscale_adj = builder.get_object("yscale_adj")
         self._tile_adj = builder.get_object("tile_adj")
         self._tile_scale = builder.get_object("tile_scale")
-        self._random_tile_button = builder.get_object("random_tile_button")
-        self._random_tile_button.set_sensitive(False)
+       #self._random_tile_button = builder.get_object("random_tile_button")
+       #self._random_tile_button.set_sensitive(False)
+
         base_grid = builder.get_object("preset_editing_grid")
+        self._init_stamp_preset_view(2, base_grid)
 
-        self.init_stamp_preset_view(1, base_grid)
+        base_grid = builder.get_object("additional_button_grid")
+        self._init_toolbar(0, base_grid)
 
-    def init_stamp_preset_view(self, row, box):
+    def _init_stamp_preset_view(self, row, box):
         # XXX we'll need reconsider fixed value 
         # such as item width of 48 or icon size of 32 
         # in hidpi environment
@@ -1546,6 +1548,21 @@ class OptionsPresenter_Stamp (object):
         sw.add(iconview)
         box.attach(sw, 0, row, 2, 1)
         self.preset_view = iconview
+
+    def _init_toolbar(self, row, box):
+        toolbar = gui.widgets.inline_toolbar(
+            self._app,
+            [
+                ("StampRandomize", "mypaint-up-symbolic"),
+                ("DeleteItem", "mypaint-remove-symbolic"),
+                ("AcceptEdit", "mypaint-ok-symbolic"),
+                ("DiscardEdit", "mypaint-trash-symbolic"),
+            ]
+        )
+        style = toolbar.get_style_context()
+        style.set_junction_sides(Gtk.JunctionSides.TOP)
+        box.attach(toolbar, 0, row, 1, 1)
+
 
     @property
     def widget(self):
@@ -1606,10 +1623,11 @@ class OptionsPresenter_Stamp (object):
                 self._point_values_grid.set_sensitive(True)
 
                 if self.refresh_tile_count():
-                    self._random_tile_button.set_sensitive(True)
+                   #self._random_tile_button.set_sensitive(True)
                     self._tile_adj.set_value(cn.tile_index)
                 else:
-                    self._random_tile_button.set_sensitive(False)
+                   #self._random_tile_button.set_sensitive(False)
+                    pass
             else:
                 self._point_values_grid.set_sensitive(False)
 

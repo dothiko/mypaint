@@ -2161,18 +2161,6 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         if getattr(mode, 'average_nodes_pressure', False):
             mode.average_nodes_pressure()
 
-    def select_all_cb(self, action):
-        """Callback: mark all inktool nodes as selected"""
-        mode=self.modes.top
-        if (action.get_name().startswith('De')
-                and getattr(mode, 'deselect_all', False)):
-            mode.deselect_all()
-        elif getattr(mode, 'select_all', False):
-            mode.select_all()
-        else:
-            logger.debug("select/deselect all: the action %r does not have such method.", action)
-
-
     def apply_pressure_variation_nodes_cb(self, action):
         """Callback: Apply current OptionWidget's pressure variation 
         into current control points"""
@@ -2207,21 +2195,68 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             # inside of the mode class.
             mode.toggle_current_node_curve()
 
-    ##+ Polygon fill 
-    def polygon_fill_cb(self, action):
+    ##+ Polygon / Stamp fill 
+    def item_fill_contents_cb(self, action):
         mode=self.modes.top
-        if hasattr(mode, 'execute_draw_polygon'):
-            mode.execute_draw_polygon(
-                    fill=True,
-                    fill_atop=action.get_name().endswith('Atop'))
+        if action.get_name().startswith('Polygon'):
+            if hasattr(mode, 'execute_draw_polygon'):
+                mode.execute_draw_polygon(
+                        fill=True,
+                        fill_atop=action.get_name().endswith('Atop'))
+        elif action.get_name().startswith('Stamp'):
+            if hasattr(mode, 'execute_draw'):
+                mode.execute_draw(
+                        fill_atop=action.get_name().endswith('Atop'))
 
-    def polygon_erase_cb(self, action):
+    def item_erase_contents_cb(self, action):
+        """ 
+        Callback: Erase current layer contents with oncanvas item.
+        This is NOT for erase item,but erase canvas contents.
+        (Although, item might disappear as a consequence of
+        this action. It is rely on the mode.)
+        """
         mode=self.modes.top
-        if hasattr(mode, 'execute_draw_polygon'):
-            mode.execute_draw_polygon(
-                    fill=False,
-                    erase_outside=action.get_name().endswith('Outside'))
+        if action.get_name().startswith('Polygon'):
+            if hasattr(mode, 'execute_draw_polygon'):
+                mode.execute_draw_polygon(
+                        fill=False,
+                        erase_outside=action.get_name().endswith('Outside'))
+
+    ##+ Generic oncanvas item actions
     
+    def select_all_cb(self, action):
+        """Callback: mark all oncanvas item as selected/deselected"""
+        mode=self.modes.top
+        if (action.get_name().startswith('De')
+                and getattr(mode, 'deselect_all', False)):
+            mode.deselect_all()
+        elif getattr(mode, 'select_all', False):
+            mode.select_all()
+        else:
+            logger.debug("select/deselect all: the action %r does not have such method.", action)
+
+    def decide_edit_cb(self, action):
+        """Callback: accept/discard currently undergo editing"""
+        mode=self.modes.top
+        if (action.get_name().startswith('Accept')
+                and hasattr(mode, 'accept_edit')):
+            mode.accept_edit()
+        elif (action.get_name().startswith('Discard')
+                and hasattr(mode, 'discard_edit')):
+            mode.discard_edit()
+        else:
+            logger.debug("decide_edit_cb: the action %r does not have such method.", action)
+
+    def delete_item_cb(self, action):
+        """
+        Callback: delete currently active oncanvas item.
+        This is completely different from 
+        item_erase_contents_cb()
+        """
+        mode=self.modes.top
+        if hasattr(mode, 'delete_current_item'):
+            mode.delete_item()
+
 
     ##+ Assist modifier
 

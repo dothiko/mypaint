@@ -112,6 +112,16 @@ class _SourceMixin(object):
     def get_surface(self, tile_index):
         return self._surfs.get(tile_index, None)
 
+    def get_tileindex_from_rawindex(self, index):
+        """
+        Get tile index from raw index.
+        'raw index' means , the index of self._surfs.keys().
+        not tileindex itself.
+        """
+        if index < len(self._surfs):
+            return self._surfs.keys()[index]
+        else:
+            return -1
 
 class _PixbufSourceMixin(_SourceMixin):
     """ Pixbuf source management class.
@@ -326,7 +336,7 @@ class _StampMixin(object):
         self._thumbnail = None
         self._tile_index_seed = 0
 
-    ## Information methods
+    ## Information methods / properties
 
     def set_default_scale(self, scale_x, scale_y):
         if scale_x == 0.0:
@@ -371,6 +381,8 @@ class _StampMixin(object):
     @property
     def latest_tile_index(self):
         return self.tile_count - 1
+
+
 
     ## Static methods
 

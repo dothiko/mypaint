@@ -538,6 +538,7 @@ class BezierMode (InkingMode):
         self._stroke_from_history = False
         self.options_presenter.reset_stroke_history()
         self.forced_button_pos = None
+        self._reset_adjust_data()
 
     ## Stroke related
     def _detect_on_stroke(self, x, y, allow_distance = 4.0):
@@ -876,11 +877,9 @@ class BezierMode (InkingMode):
                         # To avoid some of visual glitches,
                         # we need to process button here.
                         if self.zone == _EditZone_Bezier.REJECT_BUTTON:
-                            self._start_new_capture_phase_bezier(rollback=True)
+                            self.discard_edit()
                         elif self.zone == _EditZone_Bezier.ACCEPT_BUTTON:
-                            self._queue_redraw_curve(BezierMode.FINAL_STEP) # Redraw with hi-fidely curve
-                            self._start_new_capture_phase_bezier(rollback=False)
-                        self._reset_adjust_data()
+                            self.accept_edit()
                         return False
                     
                     
@@ -1400,6 +1399,17 @@ class BezierMode (InkingMode):
                     cn.curve)
 
 
+    ## Generic Oncanvas-editing handler
+
+    def accept_edit(self):
+        if (self.phase in (_Phase.ADJUST ,_Phase.ADJUST_PRESSURE) and
+                len(self.nodes) > 1):
+            self._queue_redraw_curve(BezierMode.FINAL_STEP) # Redraw with hi-fidely curve
+            self._start_new_capture_phase_bezier(rollback=False)
+
+    def discard_edit(self):
+        if (self.phase in (_Phase.ADJUST ,_Phase.ADJUST_PRESSURE)):
+            self._start_new_capture_phase_bezier(rollback=True)
 
 class OverlayBezier (Overlay):
     """Overlay for an BezierMode's adjustable points"""

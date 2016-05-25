@@ -907,28 +907,67 @@ Vocabulary
         <object class="GtkAction" id="PolygonFill">
           <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Polygon Fill</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Fill a polygon area with current foreground color or selected gradient</property>
-          <signal name="activate" handler="polygon_fill_cb"/>
+          <signal name="activate" handler="item_fill_contents_cb"/>
         </object>
       </child>
       <child>
         <object class="GtkAction" id="PolygonErase">
           <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Polygon Erase</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Erase inside polygon from current layer.</property>
-          <signal name="activate" handler="polygon_erase_cb"/>
+          <signal name="activate" handler="item_erase_contents_cb"/>
         </object>
       </child>
       <child>
         <object class="GtkAction" id="PolygonEraseOutside">
           <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Polygon Erase Outside</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Erase outside polygon from current layer.</property>
-          <signal name="activate" handler="polygon_erase_cb"/>
+          <signal name="activate" handler="item_erase_contents_cb"/>
         </object>
       </child>
       <child>
         <object class="GtkAction" id="PolygonFillAtop">
           <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Polygon Fill Atop</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Fill polygon with current foreground color or selected gradient, only currently opaque area.</property>
-          <signal name="activate" handler="polygon_fill_cb"/>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Fill polygon with current setting, only opaque area of current layer.</property>
+          <signal name="activate" handler="item_fill_contents_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
+      <!-- {{{ Stamptool actions -->
+      <child>
+        <object class="GtkAction" id="StampRandomize">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Randomize stamp</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Randomize stamp tile index.</property>
+          <signal name="activate" handler="stamp_randomize_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="StampFillAtop">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Stamp Fill Atop</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Draw stamps over opaque area of current layer.</property>
+          <signal name="activate" handler="item_fill_contents_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
+      <!-- {{{ generic oncanvas actions -->
+      <child>
+        <object class="GtkAction" id="AcceptEdit">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Accept current edit</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Accept(finalize) current editing.</property>
+          <signal name="activate" handler="decide_edit_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="DiscardEdit">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Discard current edit</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Discard(abort) current editing.</property>
+          <signal name="activate" handler="decide_edit_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="DeleteItem">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Delete oncanvas item</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Delete currently active oncanvas item(s).</property>
+          <signal name="activate" handler="delete_item_cb"/>
         </object>
       </child>
       <!-- }}} -->

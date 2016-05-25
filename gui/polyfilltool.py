@@ -731,13 +731,15 @@ class PolyfillMode (BezierMode):
     def is_drawn_handle(self, i, hi):
         return True # All handle should be drawn, in Polyfill tool
 
-    def _start_new_capture_phase_polyfill(self, tdw, mode, rollback=False):
+    def _start_new_capture_phase_polyfill(self, mode, rollback=False):
         if rollback:
             self._stop_task_queue_runner(complete=False)
             self._reset_all_internal_state()
         else:
             self._stop_task_queue_runner(complete=True)
             self.execute_draw_polygon(mode=mode)
+
+        self._reset_adjust_data()
 
 
     def leave(self):
@@ -796,15 +798,10 @@ class PolyfillMode (BezierMode):
                         # To avoid some of visual glitches,
                         # we need to process button here.
                         if self.zone == _EditZone_Bezier.REJECT_BUTTON:
-                            self._start_new_capture_phase_polyfill(
-                                tdw, None, rollback=True)
+                            self.discard_edit()
                         else:
-                            self._start_new_capture_phase_polyfill(
-                                tdw, 
-                                self.button_info.get_mode_from_zone(self.zone),
-                                rollback=False)
+                            self.accept_edit()
                         
-                        self._reset_adjust_data()
                         return False
                     
                     
@@ -1104,6 +1101,19 @@ class PolyfillMode (BezierMode):
         self._polygon_preview_fill = flag
         self._queue_redraw_curve()
     
+    ## Generic Oncanvas-editing handler
+    def accept_edit(self):
+        if (self.phase in (_Phase.ADJUST ,_Phase.ADJUST_PRESSURE) and
+                len(self.nodes) > 1):
+            self._start_new_capture_phase_polyfill(
+                self.button_info.get_mode_from_zone(self.zone),
+                rollback=False)
+            assert self.phase == _Phase.CAPTURE
+
+    def discard_edit(self):
+        if (self.phase in (_Phase.ADJUST ,_Phase.ADJUST_PRESSURE)): 
+            self._start_new_capture_phase_polyfill(
+                None, rollback=True)
 
 
 class OverlayPolyfill (OverlayBezier):

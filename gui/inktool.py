@@ -547,9 +547,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 if event.button == button0:
                     if self.zone == zone0:
                         if zone0 == _EditZone.REJECT_BUTTON:
-                            self._start_new_capture_phase(rollback=True)
-                            assert self.phase == _Phase.CAPTURE
+                            self.accept_edit()
                         elif zone0 == _EditZone.ACCEPT_BUTTON:
+                            self.discard_edit()
                             self._start_new_capture_phase(rollback=False)
                             assert self.phase == _Phase.CAPTURE
                     self._click_info = None
@@ -1647,6 +1647,21 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         elif self.phase == _Phase.ADJUST_PRESSURE:
             self.phase = _Phase.ADJUST
             self._queue_redraw_all_nodes()
+
+    ## Generic Oncanvas-editing handler
+    def delete_item(self):
+        self.delete_selected_nodes()
+
+    def accept_edit(self):
+        if (self.phase in (_Phase.ADJUST ,_Phase.ADJUST_PRESSURE) and
+                len(self.nodes) > 1):
+            self._start_new_capture_phase(rollback=True)
+            assert self.phase == _Phase.CAPTURE
+
+    def discard_edit(self):
+        if (self.phase in (_Phase.ADJUST ,_Phase.ADJUST_PRESSURE)):
+            self._start_new_capture_phase(rollback=False)
+            assert self.phase == _Phase.CAPTURE
 
 
 class Overlay (gui.overlays.Overlay):
