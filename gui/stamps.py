@@ -112,16 +112,23 @@ class _SourceMixin(object):
     def get_surface(self, tile_index):
         return self._surfs.get(tile_index, None)
 
-    def get_tileindex_from_rawindex(self, index):
+    def get_tileindex_from_rawindex(self, raw_index):
         """
         Get tile index from raw index.
         'raw index' means , the index of self._surfs.keys().
         not tileindex itself.
         """
-        if index < len(self._surfs):
-            return self._surfs.keys()[index]
+        if raw_index < len(self._surfs):
+            return self._surfs.keys()[raw_index]
         else:
             return -1
+
+    def get_rawindex_from_tileindex(self, tile_index):
+        if tile_index in self._surfs:
+            return self._surfs.keys().index(tile_index)
+        else:
+            return -1
+
 
 class _PixbufSourceMixin(_SourceMixin):
     """ Pixbuf source management class.

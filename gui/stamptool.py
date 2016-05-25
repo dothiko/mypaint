@@ -1600,19 +1600,6 @@ class OptionsPresenter_Stamp (object):
         self._updating_ui = True
         try:
             self._ensure_ui_populated()
-           #tile_adj = None
-           #if mode.stamp != None:
-           #    if mode.stamp.tile_count > 1:
-           #        self._tile_adj.set_upper(mode.stamp.tile_count-1)
-           #        tile_adj = self._tile_adj
-           #    else:
-           #        self._tile_adj.set_upper(0)
-           #
-           #    self._random_tile_button.set_sensitive(
-           #            mode.stamp.tile_count > 1)
-           #else:
-           #    self._random_tile_button.set_sensitive(False)
-
 
             if 0 <= cn_idx < len(mode.nodes):
                 cn = mode.nodes[cn_idx]
@@ -1624,7 +1611,8 @@ class OptionsPresenter_Stamp (object):
 
                 if self.refresh_tile_count():
                    #self._random_tile_button.set_sensitive(True)
-                    self._tile_adj.set_value(cn.tile_index)
+                    ti = mode.stamp.get_rawindex_from_tileindex(cn.tile_index)
+                    self._tile_adj.set_value(ti)
                 else:
                    #self._random_tile_button.set_sensitive(False)
                     pass
@@ -1658,7 +1646,8 @@ class OptionsPresenter_Stamp (object):
         if self._updating_ui:
             return
         mode, node_idx = self.target
-        mode.update_node(node_idx, tile_index=int(adj.get_value()))
+        ti = mode.stamp.get_tileindex_from_rawindex(int(adj.get_value()))
+        mode.update_node(node_idx, tile_index=ti)
 
     def _xscale_adj_value_changed_cb(self, adj):
         if self._updating_ui:
