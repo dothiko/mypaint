@@ -1129,6 +1129,26 @@ class StampMode (InkingMode):
 
         return area
 
+    def delete_selected_nodes(self):
+        self._queue_draw_buttons()
+        for idx in self.selected_nodes:
+            self._queue_draw_node(idx)
+
+        new_nodes = []
+        for idx,cn in enumerate(self.nodes):
+            if not idx in self.selected_nodes:
+                new_nodes.append(cn)
+
+        self.nodes = new_nodes
+        self._reset_selected_nodes()
+        self.current_node_index = None
+        self.target_node_index = None
+
+        self._queue_redraw_curve()
+        self._queue_redraw_all_nodes()
+        self._queue_draw_buttons()
+
+
 
 
 class Overlay_Stamp (Overlay):
