@@ -1431,7 +1431,6 @@ class OverlayBezier (Overlay):
             return False
 
         button_radius = gui.style.FLOATING_BUTTON_RADIUS
-        margin = 1.5 * button_radius
         alloc = self._tdw.get_allocation()
         view_x0, view_y0 = alloc.x, alloc.y
         view_x1, view_y1 = view_x0+alloc.width, view_y0+alloc.height
@@ -1451,6 +1450,7 @@ class OverlayBezier (Overlay):
         if mode.forced_button_pos:
             # User deceided button position 
             cx, cy = mode.forced_button_pos
+            margin = 1.5 * button_radius
             area_radius = 64 + margin #gui.style.FLOATING_TOOL_RADIUS
 
             cx, cy = adjust_button_inside(cx, cy, area_radius)
@@ -1475,11 +1475,12 @@ class OverlayBezier (Overlay):
             node = nodes[0]
             cx, cy = self._tdw.model_to_display(node.x, node.y)
 
+
             handle = node.get_control_handle(1)
             nx, ny = self._tdw.model_to_display(handle.x, handle.y)
 
-            vx = nx-cx
-            vy = ny-cy
+            vx = nx - cx
+            vy = ny - cy
             s  = math.hypot(vx, vy)
             if s > 0.0:
                 vx /= s
@@ -1487,14 +1488,16 @@ class OverlayBezier (Overlay):
             else:
                 pass
 
-            margin = 4.0 * button_radius
-            dx = vx * margin
-            dy = vy * margin
+            margin = 2.0 * button_radius
+
+            # reverse vx, vy, to get right-angled position.
+            dx = vy * margin
+            dy = vx * margin
             
             self.accept_button_pos = adjust_button_inside(
-                    cx + dy, cy - dx, button_radius * 1.5)
+                    cx + dx, cy - dy, button_radius * 1.5)
             self.reject_button_pos = adjust_button_inside(
-                    cx - dy, cy + dx, button_radius * 1.5)
+                    cx - dx, cy + dy, button_radius * 1.5)
 
         return True
 
