@@ -1189,9 +1189,6 @@ class Overlay_Stamp (Overlay):
 
                 if node_on_screen:
                     yield (i, node)
-            else:
-                print 'node bbox off'
-                print bbox
 
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""

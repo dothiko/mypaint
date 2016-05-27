@@ -555,7 +555,6 @@ class _StampMixin(object):
         :rtype: a list of tuple,[ (pt0.x, pt0.y) ... (pt3.x, pt3.y) ]
         """
         stamp_src = self.get_current_src(node.tile_index)
-       #print 'tile-index %d' % node.tile_index
         if stamp_src:
             w = stamp_src.get_width() 
             h = stamp_src.get_height()
@@ -590,7 +589,6 @@ class _StampMixin(object):
             if tdw:
                 points = [ tdw.model_to_display(x,y) for x,y in points ]
 
-           #print points
             return points
 
     def get_bbox(self, tdw, node, dx=0.0, dy=0.0, margin = 0):
@@ -598,8 +596,14 @@ class _StampMixin(object):
         to do initial collision detection.
         return value is a tuple of rectangle,
         (x, y, width, height)
+
+        :param tdw: Tiledrawwidget to get display coordinate.
+                    if tdw is None, result is in model coordinate.
         """
-        pos = self.get_boundary_points(node, dx=dx, dy=dy)
+
+        # We need outmost position in model coordinate,
+        # and convert it after all processing finished.
+        pos = self.get_boundary_points(node, tdw=None, dx=dx, dy=dy)
         if pos:
             area = _StampMixin._get_outmost_area_from_points(pos)
             sx, sy, ex, ey = get_outmost_area(tdw, 

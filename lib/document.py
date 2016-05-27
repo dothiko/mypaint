@@ -1938,7 +1938,8 @@ class Document (object):
         for s_path, s_layer in root_stack.walk():
             selected = (s_path == root_stack.current_path)
             if s_layer.project_dirty or force_write:
-                s_layer._surface.remove_empty_tiles()
+                if hasattr(s_layer, '_surface'):
+                    s_layer._surface.remove_empty_tiles()
             s_layer.initially_selected = selected
             data_bbox.expandToIncludeRect(s_layer.get_bbox())
         data_bbox = tuple(data_bbox)
