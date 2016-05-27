@@ -253,6 +253,7 @@ class _ButtonInfo(object):
 
     button_zones = {
         _EditZone_Polyfill.ACCEPT_BUTTON:lib.mypaintlib.CombineNormal,
+        _EditZone_Polyfill.REJECT_BUTTON:None,
         _EditZone_Polyfill.ERASE_BUTTON:lib.mypaintlib.CombineDestinationOut,
         _EditZone_Polyfill.ERASE_OUTSIDE_BUTTON:lib.mypaintlib.CombineDestinationIn,
         _EditZone_Polyfill.FILL_ATOP_BUTTON:lib.mypaintlib.CombineSourceAtop,
@@ -800,7 +801,6 @@ class PolyfillMode (BezierMode):
                             self.accept_edit()
                         
                         return False
-                    
                     
             elif self.zone == _EditZone_Bezier.CONTROL_NODE:
                 # Grabbing a node...
