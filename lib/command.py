@@ -17,6 +17,7 @@ from observable import event
 import lib.stroke
 from warnings import warn
 import lib.mypaintlib
+import lib.surface
 
 
 from copy import deepcopy
@@ -1832,15 +1833,7 @@ class CutCurrentLayer (Command):
                 layer._surface.composite_tile(dst, True, tx, ty, mipmap_level=0,
                         mode=mode)
 
-        CutCurrentLayer._finalize_surface(dstsurf, tiles)
-
-    @staticmethod
-    def _finalize_surface(dstsurf, tiles):
-        for pos in tiles:
-            dstsurf._mark_mipmap_dirty(*pos)
-        bbox = lib.surface.get_tiles_bbox(tiles)
-        dstsurf.notify_observers(*bbox)
-        dstsurf.remove_empty_tiles()
+        lib.surface.finalize_surface(dstsurf, tiles)
 
     def _cut_opaque(self, target_layer, cutting_layer):
         CutCurrentLayer._merge(target_layer, cutting_layer,
@@ -1861,7 +1854,7 @@ class CutCurrentLayer (Command):
                             dst, True, tx, ty, mipmap_level=0,
                             mode = lib.mypaintlib.CombineDestinationIn)
 
-        CutCurrentLayer._finalize_surface(dstsurf, tiles)
+        lib.surface.finalize_surface(dstsurf, tiles)
 
     def redo(self):
         rootstack = self.doc.layer_stack

@@ -61,11 +61,7 @@ def render_stamp_to_layer(target_layer, stamp, nodes, bbox):
         with dstsurf.tile_request(tx, ty, readonly=False) as dst:
             layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
 
-    for pos in tiles:
-        dstsurf._mark_mipmap_dirty(*pos)
-    bbox = lib.surface.get_tiles_bbox(tiles)
-    dstsurf.notify_observers(*bbox)
-    dstsurf.remove_empty_tiles()
+    lib.surface.finalize_surface(dstsurf, tiles)
 
     bbox = tuple(target_layer.get_full_redraw_bbox())
     target_layer.root.layer_content_changed(target_layer, *bbox)
