@@ -106,6 +106,31 @@ def inline_toolbar(app, tool_defs):
     bar.set_hexpand(True)
     return bar
 
+def inline_toolbar_noaction(app, tool_defs):
+    """
+    Builds a styled inline toolbar
+    This toolbar is not for gtkaction, instead of that,
+    use callback.
+    and, icon is REQUIRED.
+    """
+    bar = Gtk.Toolbar(
+        show_arrow = False,
+        icon_size = ICON_SIZE_SMALL,
+    )
+    bar.set_style(Gtk.ToolbarStyle.ICONS)
+    styles = bar.get_style_context()
+    styles.add_class(Gtk.STYLE_CLASS_INLINE_TOOLBAR)
+    for callback, icon in tool_defs:
+        toolitem = Gtk.ToolButton()
+        toolitem.connect('clicked', callback)
+        toolitem.set_icon_name(icon)
+        bar.insert(toolitem, -1)
+        bar.child_set_property(toolitem, "expand", True)
+        bar.child_set_property(toolitem, "homogeneous", True)
+    bar.set_vexpand(False)
+    bar.set_hexpand(True)
+    return bar
+
 
 class MenuButtonToolItem (Gtk.ToolItem):
     """ToolItem which contains a Gtk.MenuButton"""
