@@ -196,7 +196,10 @@ class _EditZone_Bezier(_EditZone):
 
 class _PhaseBezier(_Phase):
     """Enumeration of the states that an BezierCurveMode can be in"""
-    INITIAL = _Phase.CAPTURE     #: Initial Phase,creating node.
+    INITIAL = _Phase.CAPTURE     #: Initial Phase,before creating any node.
+                                 #  This is needed when change changing brush size 
+                                 #  before create path.
+
     CREATE_PATH = _Phase.ADJUST  #: Main Phase.creating path(adding node)
                                  # THIS MEMBER MUST SAME AS _Phase.ADJUST
                                  # because for InkingMode.scroll_cb()
@@ -1418,7 +1421,7 @@ class OverlayBezier (Overlay):
         super(OverlayBezier, self).__init__(mode, tdw)
         self._draw_initial_handle_both = False
         
-    def update_button_positions(self):
+    def update_button_positions(self, ignore_control_handle=False):
         """Recalculates the positions of the mode's buttons."""
         # FIXME mostly copied from inktool.Overlay.update_button_positions
         # The difference is for-loop of nodes , to deal with control handles.
@@ -1474,25 +1477,29 @@ class OverlayBezier (Overlay):
             
             node = nodes[0]
             cx, cy = self._tdw.model_to_display(node.x, node.y)
-
-
-            handle = node.get_control_handle(1)
-            nx, ny = self._tdw.model_to_display(handle.x, handle.y)
-
-            vx = nx - cx
-            vy = ny - cy
-            s  = math.hypot(vx, vy)
-            if s > 0.0:
-                vx /= s
-                vy /= s
-            else:
-                pass
-
             margin = 2.0 * button_radius
+               
+            if ignore_control_handle:
+                dx = margin
+                dy = margin
+            else:
+                handle = node.get_control_handle(1)
+                nx, ny = self._tdw.model_to_display(handle.x, handle.y)
 
-            # reverse vx, vy, to get right-angled position.
-            dx = vy * margin
-            dy = vx * margin
+                vx = nx - cx
+                vy = ny - cy
+                s  = math.hypot(vx, vy)
+                if s > 0.0:
+                    vx /= s
+                    vy /= s
+                else:
+                    vx = 0.0
+                    vy = 1.0
+
+
+                # reverse vx, vy, to get right-angled position.
+                dx = vy * margin
+                dy = vx * margin
             
             self.accept_button_pos = adjust_button_inside(
                     cx + dx, cy - dy, button_radius * 1.5)
