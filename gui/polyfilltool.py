@@ -615,12 +615,27 @@ class PolyfillMode (BezierMode):
         """
         if len(self.nodes) < 2:
             return (0,0,0,0)
-        sx = ex = self.nodes[0].x
-        sy = ey = self.nodes[0].y
+        margin = 3.0
+
+        def adjust_from_control_handle(tdw, cn, n_index, h_index, 
+                sx, sy, ex, ey, dx, dy, margin):
+            if tdw:
+                cx, cy = tdw.model_to_display(*cn.get_control_handle(h_index))
+            else:
+                cx, cy = cn.get_control_handle(h_index)
+
+            if n_index in self.selected_nodes:
+                cx += dx
+                cy += dy
+
+            return (min(sx, cx - margin), min(sy, cy - margin),
+                    max(ex, cx + margin), max(ey, cy + margin))
+
+
+
+
         for i,cn in enumerate(self.nodes):
             # Get boundary rectangle,to reduce processing segment
-            n = (i+1) % len(self.nodes)
-            nn = self.nodes[n]
             if tdw:
                 cnx, cny = tdw.model_to_display(cn.x, cn.y)
             else:
@@ -630,42 +645,22 @@ class PolyfillMode (BezierMode):
                 cnx+=dx
                 cny+=dy
 
-            if tdw:
-                nnx, nny = tdw.model_to_display(nn.x, nn.y)
+            if i == 0:
+                sx = cnx - margin 
+                ex = cnx + margin 
+                sy = cny - margin 
+                ey = cny + margin 
             else:
-                nnx, nny = nn
+                sx = min(sx, cnx - margin)
+                ex = max(ex, cnx + margin)
+                sy = min(sy, cny - margin)
+                ey = max(ey, cny + margin)
 
-            if n in self.selected_nodes:
-                nnx+=dx
-                nny+=dy
+            sx, sy, ex, ey = adjust_from_control_handle(tdw, cn, i, 0,
+                sx, sy, ex, ey, dx, dy, margin)
 
-            sx = min(min(sx,cnx), nnx)
-            ex = max(max(ex,cnx), nnx)
-            sy = min(min(sy,cny), nny)
-            ey = max(max(ey,cny), nny)
-
-            if tdw:
-                cx, cy = tdw.model_to_display(*cn.get_control_handle(1))
-            else:
-                cx, cy = cn.get_control_handle(1)
-
-            if i in self.selected_nodes:
-                cx+=dx
-                cy+=dy
-
-            if tdw:
-                nx, ny = tdw.model_to_display(*nn.get_control_handle(0))
-            else:
-                nx, ny = cn.get_control_handle(0)
-
-            if n in self.selected_nodes:
-                nx+=dx
-                ny+=dy
-
-            sx = min(min(sx, cx), nx)
-            ex = max(max(ex, cx), nx)
-            sy = min(min(sy, cy), ny)
-            ey = max(max(ey, cy), ny)
+            sx, sy, ex, ey = adjust_from_control_handle(tdw, cn, i, 1,
+                sx, sy, ex, ey, dx, dy, margin)
 
         return (sx, sy, ex, ey)
 
@@ -711,7 +706,7 @@ class PolyfillMode (BezierMode):
 
     def _queue_polygon_area(self, sx, sy, ex, ey):
         for tdw in self._overlays:
-            tdw.queue_draw_area(sx, sy, ex-sx+1, ey-sy+1)
+            tdw.queue_draw_area(sx, sy, abs(ex-sx)+1, abs(ey-sy)+1)
 
     def _queue_draw_buttons(self):
         for tdw, overlay in self._overlays.items():
