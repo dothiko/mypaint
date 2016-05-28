@@ -848,8 +848,11 @@ class _Shape_Polyline(_Shape_Bezier):
                     node = mode._get_event_data(tdw, event)
                     mode.nodes.append(node)
                     mode._last_event_node = node
-                    mode.current_node_index=len(mode.nodes)-1
+                    mode.current_node_index = len(mode.nodes)-1
+                    mode._reset_selected_nodes(mode.current_node_index)
                     mode._queue_draw_node(mode.current_node_index)
+                    mode.phase = _PhaseBezier.MOVE_NODE
+                    mode.drag_offset.start(mx, my)
         else:
             return super(_Shape_Polyline, self).drag_start_cb(
                     mode, tdw, event)
@@ -1304,6 +1307,7 @@ class PolyfillMode (BezierMode):
                     _Shape.TYPE_POLYLINE : _Shape_Polyline() ,
                     _Shape.TYPE_RECTANGLE : _Shape_Rectangle() ,
                     _Shape.TYPE_ELLIPSE : _Shape_Ellipse() }
+    _shape = None
 
 
     ## Initialization & lifecycle methods
@@ -1311,9 +1315,10 @@ class PolyfillMode (BezierMode):
     def __init__(self, **kwargs):
         super(PolyfillMode, self).__init__(**kwargs)
         self._polygon_preview_fill = False
-        self.shape_type = _Shape.TYPE_BEZIER
         self.options_presenter.target = (self, None)
         self.phase = _PhaseBezier.CREATE_PATH
+        if PolyfillMode._shape == None:
+            self.shape_type = _Shape.TYPE_BEZIER
 
 
 
@@ -1426,7 +1431,6 @@ class PolyfillMode (BezierMode):
         self._reset_nodes()
         self._reset_capture_data()
         self._reset_adjust_data()
-        self.phase = _PhaseBezier.CREATE_PATH
         self._stroke_from_history = False
         self.forced_button_pos = None
 
@@ -1452,7 +1456,6 @@ class PolyfillMode (BezierMode):
         pass # do nothing
 
     def _queue_redraw_curve(self, tdw=None):
-       #self._stop_task_queue_runner(complete=False)
 
         for tdw in self._overlays:
             
@@ -1460,20 +1463,9 @@ class PolyfillMode (BezierMode):
                 continue
 
             sdx, sdy = self.drag_offset.get_display_offset(tdw)
-           #self._queue_task(
-           #        self._queue_shape_area,
-           #        *self._shape.get_maximum_area(tdw, self, sdx, sdy)
-           #)
-            # XXX queue_task shows some glitch...
-            # is it not for overlay?
-            self._queue_shape_area(
+            tdw.queue_draw_area(
                     *self._shape.get_maximum_area(tdw, self, sdx, sdy))
 
-       #self._start_task_queue_runner()
-
-    def _queue_shape_area(self, sx, sy, ex, ey):
-        for tdw in self._overlays:
-            tdw.queue_draw_area(sx, sy, abs(ex-sx)+1, abs(ey-sy)+1)
 
     def _queue_draw_buttons(self):
         for tdw, overlay in self._overlays.items():
