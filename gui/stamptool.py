@@ -257,6 +257,8 @@ class StampMode (InkingMode):
             self._queue_redraw_curve()
         
     def _commit_all(self):
+        # We need that the target layer(current layer)
+        # has surface and not locked. 
         bbox = self._stamp.get_bbox(None, self.nodes[0])
         if bbox:
             sx, sy, w, h = bbox
@@ -277,6 +279,7 @@ class StampMode (InkingMode):
                 stamp = ProxyStamp('', self._stamp.pixbuf)
             else:
                 stamp = self._stamp
+
 
             cmd = DrawStamp(self.doc.model,
                     stamp,
@@ -565,13 +568,14 @@ class StampMode (InkingMode):
     ## Raw event handling (prelight & zone selection in adjust phase)
 
     def button_press_cb(self, tdw, event):
-        if not self._stamp or not self._stamp.is_ready:
-            return super(InkingMode, self).button_press_cb(tdw, event)
-
         self._ensure_overlay_for_tdw(tdw)
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
+
+        if not self._stamp or not self._stamp.is_ready:
+            return super(InkingMode, self).button_press_cb(tdw, event)
+
         self._update_zone_and_target(tdw, event.x, event.y)
         self._update_current_node_index()
         self.drag_offset.reset()
@@ -658,13 +662,13 @@ class StampMode (InkingMode):
         return super(InkingMode, self).button_press_cb(tdw, event)
 
     def button_release_cb(self, tdw, event):
-        if not self._stamp or not self._stamp.is_ready:
-            return super(InkingMode, self).button_release_cb(tdw, event)
-
         self._ensure_overlay_for_tdw(tdw)
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
+
+        if not self._stamp or not self._stamp.is_ready:
+            return super(InkingMode, self).button_release_cb(tdw, event)
 
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
         ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
@@ -876,8 +880,7 @@ class StampMode (InkingMode):
             assert self.target_node_index is not None
             self._queue_redraw_curve()
             node = self.nodes[self.target_node_index]
-            pos = self._stamp.get_boundary_points(node, 
-                    no_transform=True)
+            pos = self._stamp.get_boundary_points(node)
 
             # At here, we consider the movement of control handle(i.e. cursor)
             # as a Triangle from origin.
@@ -888,41 +891,53 @@ class StampMode (InkingMode):
                     node.x, node.y,
                     mx, my)
 
-            bx = node.x - mx
-            by = node.y - my
+            bx = mx - node.x 
+            by = my - node.y
 
             if self.phase == _PhaseStamp.SCALE_BY_HANDLE:
+                orig_pos = self._stamp.get_boundary_points(node, 
+                        no_scale=True)
 
-                # 2. Get 'original vertical leg' of triangle,
-                # it is equal the half of 'side' ridge of stamp rectangle
+                ti = self.current_handle_index
+
+                # get original side and top length
+                # and its identity vector
                 side_length, snx, sny = length_and_normal(
-                        pos[2][0], pos[2][1],
-                        pos[1][0], pos[1][1])
-                side_length /= 2.0
+                        orig_pos[1][0], orig_pos[1][1],
+                        orig_pos[2][0], orig_pos[2][1])
+                top_length, tnx, tny = length_and_normal(
+                        orig_pos[0][0], orig_pos[0][1],
+                        orig_pos[1][0], orig_pos[1][1])
 
-
-                # 3. Use the identity vector of side ridge from above
-                # to get 'current' base leg of triangle.
+                # get the 'leg' of new vectors
                 dp = dot_product(snx, sny, bx, by)
                 vx = dp * snx
                 vy = dp * sny
-                v_length = vector_length(vx, vy)
-
+                v_length = vector_length(vx, vy) * 2
+                
                 # 4. Then, get another leg of triangle.
                 hx = bx - vx
                 hy = by - vy
-                h_length = vector_length(hx, hy)
+                h_length = vector_length(hx, hy) * 2
 
-                # 5. Finally, we can get the new scaling ratios.
-                top_length = vector_length(pos[1][0] - pos[0][0],
-                        pos[1][1] - pos[0][1]) / 2.0
+                scale_x = h_length / top_length 
+                scale_y = v_length / side_length 
 
-                # Replace the attributes and redraw.
-                assert top_length != 0.0
-                assert side_length != 0.0
+                # Also, scaling might be inverted(mirrored).
+                # it can detect from cross product
+                # between side and top vector.
+                ni = (ti-1) % 4
+                nx, ny = normal(node.x, node.y, mx, my)
+                if cross_product(snx, sny, nx, ny) > 0.0:
+                    scale_x = -scale_x
+
+                ni = (ti+1) % 4
+                if cross_product(tnx, tny, nx, ny) > 0.0:
+                    scale_y = -scale_y
+
                 self.nodes[self.target_node_index] = node._replace(
-                        scale_x=h_length / top_length,
-                        scale_y=v_length / side_length)
+                        scale_x=scale_x,
+                        scale_y=scale_y)
 
             else:
                 # 2. Get angle between current cursor position

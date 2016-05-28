@@ -528,7 +528,7 @@ class _StampMixin(object):
 
         return -1
 
-    def get_boundary_points(self, node, tdw=None, dx=0.0, dy=0.0, no_transform=False):
+    def get_boundary_points(self, node, tdw=None, dx=0.0, dy=0.0, no_rotate=False, no_scale=False):
         """ Get boundary corner points, when this stamp is
         placed/rotated/scaled into the node.
 
@@ -554,7 +554,7 @@ class _StampMixin(object):
         if stamp_src:
             w = stamp_src.get_width() 
             h = stamp_src.get_height()
-            if not no_transform:
+            if not no_scale:
                 w *= node.scale_x 
                 h *= node.scale_y
             sx = - w / 2
@@ -564,7 +564,7 @@ class _StampMixin(object):
             bx = node.x + dx
             by = node.y + dy
 
-            if node.angle != 0.0 and not no_transform:
+            if node.angle != 0.0 and not no_rotate:
                 cos_s = math.cos(node.angle)
                 sin_s = math.sin(node.angle)
                 points = []
