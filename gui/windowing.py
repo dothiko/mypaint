@@ -218,8 +218,10 @@ class ChooserPopup (Gtk.Window):
         self.connect("hide", self._hide_cb)
         self.connect("button-press-event", self._button_press_cb)
         self.connect("button-release-event", self._button_release_cb)
+        self.connect("key-press-event", self._key_press_cb)
         self.add_events( Gdk.EventMask.BUTTON_PRESS_MASK |
-                         Gdk.EventMask.BUTTON_RELEASE_MASK )
+                         Gdk.EventMask.BUTTON_RELEASE_MASK |
+                         Gdk.EventMask.KEY_PRESS_MASK)
 
         # Appearance
         self._frame = Gtk.Frame()
@@ -612,3 +614,9 @@ class ChooserPopup (Gtk.Window):
         if outside_tolerance:
             self.hide()
             return True
+
+    def _key_press_cb(self, widget, event):
+        # I would like to invoke hide action with Gdk.KEY_Escape
+        # But this handler does not respond that key.why?
+        if event.keyval == Gdk.KEY_Tab:
+            self.hide()
