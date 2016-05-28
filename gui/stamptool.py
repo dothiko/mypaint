@@ -497,9 +497,9 @@ class StampMode (InkingMode):
         new_target_node_index = None
         handle_idx = -1
         stamp = self._stamp
-        mx, my = tdw.display_to_model(x, y)
+       #mx, my = tdw.display_to_model(x, y)
         for i, node in reversed(list(enumerate(self.nodes))):
-            handle_idx = stamp.get_handle_index(mx, my, node,
+            handle_idx = stamp.get_handle_index(tdw, x, y, node,
                    gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
             if handle_idx >= 0:
                 new_target_node_index = i

@@ -482,25 +482,10 @@ class _StampMixin(object):
 
     ## Boundary / hit-check methods
 
-    def is_inside(self, mx, my, node):
-        """ 
-        THIS METHOD IS OBSOLUTED,USE get_handle_index INSTEAD.
-        Check whether the point(mx, my) is inside of the stamp
-        which placed as node information.
-        """
-        pos = self.get_boundary_points(node)
-        if pos:
-            if not is_inside_triangle(mx, my, (pos[0], pos[1], pos[2])):
-                return is_inside_triangle(mx, my, (pos[0], pos[2], pos[3]))
-            else:
-                return True
-
-        return False
-
-    def get_handle_index(self, mx, my, node, margin):
+    def get_handle_index(self, tdw, x, y, node, margin):
         """
         Get control handle index
-        :param mx,my: Cursor position in model coordination.
+        :param x,y: Cursor position in display coordinate.
         :param node: Target node,which contains scale/angle information.
         :param margin: i.e. the half of control handle rectangle
 
@@ -511,24 +496,23 @@ class _StampMixin(object):
                 return 4.
 
         """
-        pos = self.get_boundary_points(node)
+        pos = self.get_boundary_points(node, tdw=tdw)
         if pos:
-            for i,cp in enumerate(pos):
+            for i, cp in enumerate(pos):
                 cx, cy = cp
-                if (cx - margin <= mx <= cx + margin and
-                        cy - margin <= my <= cy + margin):
+                if (cx - margin <= x <= cx + margin and
+                        cy - margin <= y <= cy + margin):
                     return i
 
             # Returning 4 means 'inside but not on a handle'
-            if not is_inside_triangle(mx, my, (pos[0], pos[1], pos[2])):
-                if is_inside_triangle(mx, my, (pos[0], pos[2], pos[3])):
-                    return 4 
-            else:
-                return 4
+            if (is_inside_triangle(x, y, (pos[0], pos[1], pos[2])) or
+                    is_inside_triangle(x, y, (pos[0], pos[2], pos[3]))):
+                return 4 
 
         return -1
 
-    def get_boundary_points(self, node, tdw=None, dx=0.0, dy=0.0, no_rotate=False, no_scale=False):
+    def get_boundary_points(self, node, tdw=None, 
+            dx=0.0, dy=0.0, no_rotate=False, no_scale=False):
         """ Get boundary corner points, when this stamp is
         placed/rotated/scaled into the node.
 
