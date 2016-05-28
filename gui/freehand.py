@@ -334,13 +334,13 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             workaround_used = EVCOMPRESSION_WORKAROUND_EVHACK_FILTER
             assert drawstate.evhack_data is None
             data = (tdw, self)
-            logger.warning(msg_prefix + "using evhack filter %r", data)
+          #!logger.warning(msg_prefix + "using evhack filter %r", data)
             mypaintlib.evhack_gdk_window_add_filter(win, data)
             drawstate.evhack_data = data
             drawstate.evhack_positions = []
         else:
             workaround_used = EVCOMPRESSION_WORKAROUND_NONE
-            logger.warning(msg_prefix + "not using any workaround")
+          #!logger.warning(msg_prefix + "not using any workaround")
         drawstate.event_compression_workaround = workaround_used
 
     def _remove_event_compression_workarounds(self):
@@ -361,12 +361,13 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                 drawstate = self._get_drawing_state(tdw)
                 data = drawstate.evhack_data
                 assert data is not None
-                logger.warning(msg_prefix + "removing evhack filter %r", data)
+              #!logger.warning(msg_prefix + "removing evhack filter %r", data)
                 mypaintlib.evhack_gdk_window_remove_filter(win, data)
                 drawstate.evhack_data = None
                 drawstate.evhack_positions = []
             else:
-                logger.warning(msg_prefix + "no workaround to disable")
+              #!logger.warning(msg_prefix + "no workaround to disable")
+                pass
             drawstate.event_compression_workaround = None
 
     def queue_evhack_position(self, tdw, x, y, t):
