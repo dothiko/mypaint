@@ -899,19 +899,23 @@ class StampMode (InkingMode):
                         no_scale=True)
 
                 ti = self.current_handle_index
+                nlen, nx, ny = length_and_normal(node.x, node.y, mx, my)
 
-                # get original side and top length
+                # get original side and top ridge length
                 # and its identity vector
+                si,ei = (2, 1) if ti in (0, 1) else (1, 2)
                 side_length, snx, sny = length_and_normal(
-                        orig_pos[1][0], orig_pos[1][1],
-                        orig_pos[2][0], orig_pos[2][1])
+                        orig_pos[si][0], orig_pos[si][1],
+                        orig_pos[ei][0], orig_pos[ei][1])
+
+                si,ei = (0, 1) if ti in (1, 2) else (1, 0)
                 top_length, tnx, tny = length_and_normal(
-                        orig_pos[0][0], orig_pos[0][1],
-                        orig_pos[1][0], orig_pos[1][1])
+                        orig_pos[si][0], orig_pos[si][1],
+                        orig_pos[ei][0], orig_pos[ei][1])
 
                 # get the 'leg' of new vectors
                 dp = dot_product(snx, sny, bx, by)
-                vx = dp * snx
+                vx = dp * snx 
                 vy = dp * sny
                 v_length = vector_length(vx, vy) * 2
                 
@@ -924,16 +928,17 @@ class StampMode (InkingMode):
                 scale_y = v_length / side_length 
 
                 # Also, scaling might be inverted(mirrored).
-                # it can detect from cross product
+                # it can detect from 'psuedo' cross product
                 # between side and top vector.
-                ni = (ti-1) % 4
-                nx, ny = normal(node.x, node.y, mx, my)
-                if cross_product(snx, sny, nx, ny) > 0.0:
-                    scale_x = -scale_x
-
-                ni = (ti+1) % 4
-                if cross_product(tnx, tny, nx, ny) > 0.0:
+                cp = cross_product(tnx, tny, nx, ny)
+                if ((ti in (1, 3) and cp > 0.0)
+                        or (ti in (0, 2) and cp < 0.0)):
                     scale_y = -scale_y
+
+                cp = cross_product(snx, sny, nx, ny)
+                if ((ti in (1, 3) and cp < 0.0)
+                        or (ti in (0, 2) and cp > 0.0)):
+                    scale_x = -scale_x
 
                 self.nodes[self.target_node_index] = node._replace(
                         scale_x=scale_x,
