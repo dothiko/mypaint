@@ -18,6 +18,7 @@ import lib.stroke
 from warnings import warn
 import lib.mypaintlib
 import lib.surface
+import lib.tiledsurface
 
 
 from copy import deepcopy
@@ -1847,12 +1848,13 @@ class CutCurrentLayer (Command):
         srcsurf = cutting_layer._surface
         for tx, ty in tiles:
             with dstsurf.tile_request(tx, ty, readonly=False) as dst:
-                if srcsurf.tile_request(tx, ty, readonly=False) == None:
-                    lib.mypaintlib.tile_clear_rgba16(dst)
-                else:
-                    cutting_layer._surface.composite_tile(
-                            dst, True, tx, ty, mipmap_level=0,
-                            mode = lib.mypaintlib.CombineDestinationIn)
+                with srcsurf.tile_request(tx, ty, readonly=True) as src:
+                    if src is lib.tiledsurface.transparent_tile.rgba:
+                        lib.mypaintlib.tile_clear_rgba16(dst)
+                    else:
+                        cutting_layer._surface.composite_tile(
+                                dst, True, tx, ty, mipmap_level=0,
+                                mode = lib.mypaintlib.CombineDestinationIn)
 
         lib.surface.finalize_surface(dstsurf, tiles)
 

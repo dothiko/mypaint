@@ -42,6 +42,7 @@ from gui.beziertool import _Control_Handle, _Node_Bezier, _EditZone_Bezier, _Pha
 from lib.command import Command
 import lib.surface
 import lib.mypaintlib
+import lib.tiledsurface
 
 ## Module constants
 
@@ -194,10 +195,11 @@ def _render_polygon_to_layer(model, target_layer, shape, nodes,
         srcsurf = layer._surface
         for tx, ty in tiles:
             with dstsurf.tile_request(tx, ty, readonly=False) as dst:
-                if srcsurf.tile_request(tx, ty, readonly=False) == None:
-                    lib.mypaintlib.tile_clear_rgba16(dst)
-                else:
-                    layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+                with srcsurf.tile_request(tx, ty, readonly=True) as src:
+                    if src is lib.tiledsurface.transparent_tile.rgba:
+                        lib.mypaintlib.tile_clear_rgba16(dst)
+                    else:
+                        layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
     else:
         tiles.update(layer.get_tile_coords())
         dstsurf = target_layer._surface
