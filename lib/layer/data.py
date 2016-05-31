@@ -36,13 +36,15 @@ from lib.modes import *
 import core
 import lib.layer.error
 import lib.autosave
+import lib.projectsave
 import lib.xml
 
 
 ## Base classes
 
 
-class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
+class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable,
+        lib.projectsave.Projectsaveable):
     """Minimal Surface-backed layer implementation
 
     This minimal implementation is backed by a surface, which is used
@@ -68,6 +70,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
 
     #: Substitute content if the layer cannot be loaded.
     FALLBACK_CONTENT = None
+
 
     ## Initialization
 
@@ -510,16 +513,8 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
         pngname = self.get_filename_for_project()
         png_relpath = os.path.join('data', pngname)
         png_path = os.path.join(projdir, png_relpath)
+        is_dirty = (self.project_dirty or force_write)
 
-        if ('only_element' not in kwargs and 
-                (self.project_dirty or force_write)):
-            # Write PNG data via a tempfile
-            logger.debug('layer %s of surface %r is marked as dirty or forced write!', self.name , pngname)
-            t0 = time.time()
-            self._surface.save_as_png(png_path, *rect, **kwargs)
-            t1 = time.time()
-            logger.debug('%.3fs surface saving %r', t1-t0, pngname)
-            self.clear_project_dirty()
 
         # Return details
         png_bbox = tuple(rect)
@@ -530,6 +525,19 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
         assert (x == y == 0) or not self._surface.looped
         elem = self._get_stackxml_element("layer", x, y)
         elem.attrib["src"] = png_relpath
+
+        self._retract_old_file(elem, projdir, pngname, force_write)
+
+        if ('only_element' not in kwargs and is_dirty):
+            # Write PNG data via a tempfile
+            logger.debug('layer %s of surface %r is marked as dirty or forced write!', self.name , pngname)
+            t0 = time.time()
+            self._surface.save_as_png(png_path, *rect, **kwargs)
+            t1 = time.time()
+            logger.debug('%.3fs surface saving %r', t1-t0, pngname)
+            self.clear_project_dirty()
+
+
         return elem
 
     ## Painting symmetry axis

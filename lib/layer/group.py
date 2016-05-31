@@ -28,11 +28,13 @@ import data
 import lib.layer.error
 import lib.surface
 import lib.autosave
+import lib.projectsave
 
 
 ## Class defs
 
-class LayerStack (core.LayerBase, lib.autosave.Autosaveable):
+class LayerStack (core.LayerBase, lib.autosave.Autosaveable,
+        lib.projectsave.Projectsaveable):
     """Ordered stack of layers, linear but nestable
 
     A stack's sub-layers are stored in the reverse order to that used by

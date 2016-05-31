@@ -53,6 +53,7 @@ from lib.gettext import C_
 import lib.xml
 import lib.glib
 import lib.autosave
+import lib.projectsave
 
 
 ## Module constants
@@ -1707,94 +1708,12 @@ class Document (object):
         
         try:
             
+            processed = False
             if (kwargs != None):
 
                 source_dir = None
 
-                if ('version_save' in kwargs): 
-                    # Version save of project is assigned.
-                    # 
-                    # The system of version save is ,
-                    # 1. create 'backup' directory,which named with 
-                    #    'year-month-day/hour-min-sec' format. 
-                    #    for example,if you saved a project at 
-                    #    2016.march.3 00:11:22,
-                    #    the directory name should be such as
-                    #    such as 'backup/2016-03-03/00-11-22/'
-                    # 2. MOVE current stack.xml and thumbnail.png file 
-                    #    into backup dir.
-                    #    revert should executed with based on this file.
-                    # 3. MOVE (not copy) 'dirty' files into backup dir.
-                    #
-                    # After that, ordinary project-save should be done.
-                    # moved files are generated as new one.
-
-                    logger.info("version save of project is initiated.")
-
-                    source_dir = kwargs['version_save']
-
-                    lt = time.localtime()
-                    destdirname = os.path.join(
-                            source_dir,
-                            'backup',
-                            '%04d-%02d-%02d' % (lt.tm_year, lt.tm_mon, lt.tm_mday),
-                            '%02d-%02d-%02d' % (lt.tm_hour, lt.tm_min, lt.tm_sec))
-
-                    assert not os.path.exists(destdirname)
-                    os.makedirs(destdirname)       
-
-                    # First of all,
-                    # old Thumbnail and stack.xml moved at here
-                    # They are always rewritten, and no dirty flag.
-                    
-                    filepaths = ( 
-                        os.path.join(source_dir, 'stack.xml'),
-                        os.path.join(source_dir, 'Thumbnails', 'thumbnail.png')
-                        )
-
-                    for cpath in filepaths:
-                        assert os.path.exists(cpath)
-                        shutil.move(cpath.decode('utf-8'), destdirname)
-
-                    # After that, 'dirty' layers should be moved.
-                    for path, cl in self.layer_stack.walk():
-                        if cl.project_dirty:
-                            filepath = None
-                            strokepath = None
-                            
-                            if hasattr(cl,'workfilename'):
-                                filepath = cl.workfilename
-                            elif hasattr(cl,'get_filename_for_project'):
-                                testpath = cl.get_filename_for_project(
-                                        path_prefix=(source_dir, 'data'))
-                                if os.path.exists(testpath):
-                                    filepath = testpath
-                                    logger.info("Layer %s is dirty and file found." % cl.name )
-                                    strokepath = cl.get_filename_for_project(
-                                            ext=None,
-                                            formatstr=u"%s-strokemap.dat",
-                                            path_prefix=(source_dir, 'data'))
-
-                                else:
-                                    logger.info("Layer %s is dirty but has no file-entity information. and uuid-png file also not found." % cl.name )
-                                    logger.info("Expected filename is %s." % testpath )
-
-                            else:
-                                logger.warning(u"no any filename attributes for layer %r", cl.name)
-           
-                            if filepath: 
-                                assert os.path.exists(filepath)
-                                shutil.move(filepath, destdirname) 
-
-                                if strokepath: 
-                                    if os.path.exists(strokepath):
-                                        shutil.move(strokepath, destdirname) 
-                                    else:
-                                        logger.warning(u"stroke data file %s does not found", strokepath)
-
-                    # fallthrough.
-
-                elif 'source_dir' in kwargs:
+                if 'source_dir' in kwargs:
                     # This document is a project and assigned to 'save as 
                     # another project'
                     # this means "copy entire project into another directory"
@@ -1833,8 +1752,87 @@ class Document (object):
                         else:
                             logger.info('%s has marked as dirty,so not copied', cl.name)
 
+                    processed = True
+
                     # fallthrough.
+
+            if not processed:
              
+                # Currently, version-save functionality is forced.
+                # 
+                # The system of version save is ,
+                # 
+                # * move the old file of a changed layer into 
+                #   'backup' directory, with prefixed by
+                #   stat.st_mtime(the last modified timestamp) value
+                #   of that file.   
+                #   that value is converted to integer.
+                #
+                # * move current stack.xml and thumbnail.png file 
+                #   into backup dir.
+                #   these files also prefixed with timestamp.
+
+                backupdir = os.path.join(dirname, u'backup')
+                if not os.path.exists(backupdir):
+                    os.makedirs(backupdir)       
+                    logger.info('backup directory %s created.' % backupdir)
+
+                # First of all,
+                # old Thumbnail and stack.xml moved at here
+                # They are always rewritten, and no dirty flag.
+                
+                filename_source = ( 
+                    (u'stack.xml', ),
+                    (u'Thumbnails', u'thumbnail.png')
+                    )
+
+                for components in filename_source:
+                    basename = components[-1]
+                    cpath = os.path.join(dirname, *components) 
+                    destpath = lib.projectsave.get_project_backup_filename(
+                            dirname, basename, cpath)
+                    shutil.move(cpath.decode('utf-8'), destpath.decode('utf-8'))
+
+                # After that, 'dirty' layers should be moved.
+                for path, cl in self.layer_stack.walk():
+                    if cl.project_dirty:
+                        filepath = None
+                        strokepath = None
+                        
+                        if hasattr(cl,'workfilename'):
+                            filepath = cl.workfilename
+                        elif hasattr(cl,'get_filename_for_project'):
+                            testpath = cl.get_filename_for_project(
+                                    path_prefix=(dirname, 'data'))
+                            if os.path.exists(testpath):
+                                filepath = testpath
+                                logger.info("Layer %s is dirty and file found." % cl.name )
+                                strokepath = cl.get_filename_for_project(
+                                        ext=None,
+                                        formatstr=u"%s-strokemap.dat",
+                                        path_prefix=(dirname, 'data'))
+
+                            else:
+                                logger.info("Layer %s is dirty but has no file-entity information. and uuid-png file also not found." % cl.name )
+                                logger.info("Expected filename is %s." % testpath )
+
+                        else:
+                            logger.warning(u"no any filename attributes for layer %r", cl.name)
+       
+                        if filepath: 
+                            destpath = lib.projectsave.get_project_backup_filename(
+                                    dirname, None, filepath) 
+                            shutil.move(filepath, destpath) 
+
+                            if strokepath: 
+                                if os.path.exists(strokepath):
+                                    destpath = lib.projectsave.get_project_backup_filename(
+                                            dirname, None, strokepath) 
+                                    shutil.move(strokepath, destpath) 
+                                else:
+                                    logger.warning(u"stroke data file %s does not found", strokepath)
+
+                # fallthrough.
             # All preprocess has done.
             # Then do the project writing.
             frame_bbox = None

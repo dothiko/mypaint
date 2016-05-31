@@ -52,31 +52,7 @@ class Autosaveable:
         self.__autosave_dirty = value
         if value == True:
             self.__project_dirty = True
-
-    @property
-    def project_dirty(self):
-        """
-        Dirty flag for project-save feature.
-
-        CAUTION: Project_dirty flag cannot be set alone.
-        this is nearly read-only flag,
-        we can only clear this.
-        """
-        try:
-            return self.__project_dirty
-        except AttributeError:
-            self.__project_dirty = True
-            return self.__project_dirty
         
-    def clear_project_dirty(self):
-        """
-        clear dirty flag for project.
-
-        setting dirty flag should be done from
-        autosave_dirty.
-        """
-        self.__project_dirty = False
-
     @property
     def autosave_uuid(self):
         """UUID prefix for autosave (layer) data filenames
@@ -148,48 +124,4 @@ class Autosaveable:
 
         """
 
-    @property
-    def src(self):
-        """Read-only property.This is previously recorded filename, in data/ dir.
-        This property is for referring from project-save related functionality.
-        
-        self._src is set at derived class internally.
-        so, there is no setter property.
-        
-        This property is copy of 'src' value of layer tag in stack.xml.
-        It should be related path,something like
-        'data/foobar-blablabla-bla.png'
-        """
-        try:
-            return self._src
-        except AttributeError:
-            return None
-
-    def get_filename_for_project(self, ext=u".png", formatstr=None, 
-            path_prefix=None):
-        """
-        Get a unique filename in a project.
-        :param ext: default file extension, used when uuid exists.
-        :param formatstr: format strings, in unicode.
-        :param path_prefix: a tuple of path components, 
-                    to be added the filename with os.path.join().
-        """
-        retfname = None
-        if self.src != None:
-            basename = os.path.basename(self.src)
-            if formatstr:
-                basename, ext = os.path.splitext(basename)
-                retfname = formatstr % (basename,)
-            else:
-                retfname = basename
-        else:
-            if formatstr:
-                retfname = formatstr % (self.autosave_uuid,)
-            else:
-                retfname = self.autosave_uuid + ext
-
-        if path_prefix:
-            return os.path.join(os.path.join(*path_prefix), retfname)
-        else:
-            return retfname
     
