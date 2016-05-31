@@ -43,8 +43,7 @@ import lib.xml
 ## Base classes
 
 
-class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable,
-        lib.projectsave.Projectsaveable):
+class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
     """Minimal Surface-backed layer implementation
 
     This minimal implementation is backed by a surface, which is used

@@ -6,17 +6,39 @@ import os
 import shutil
 import logging
 logger = logging.getLogger(__name__)
+import glob
+
+import lib.autosave
 
 #: A name of timestamp attribute for stack.xml
 #: This is for project-save functionality
 PROJECT_OLD_TIMESTAMP_ATTR = "mypaint:project-old-timestamp"
 PROJECT_CURRENT_TIMESTAMP_ATTR = "mypaint:project-current-timestamp"
 
-class Projectsaveable:
+class Projectsaveable(lib.autosave.Autosaveable):
     """Mixin and abstract base for projectsaveable structures"""
 
     __metaclass__ = abc.ABCMeta
 
+    @property
+    def autosave_dirty(self):
+        return super(Projectsaveable, self).autosave_dirty()
+
+    @autosave_dirty.setter
+    def autosave_dirty(self, value):
+        """
+        Setter for the dirty flag
+        
+        if autosave_dirty set as dirty,
+        also project_dirty flag set as dirty.
+        but when autosave_dirty is cleared,
+        project_dirty is remained.
+        """
+        value = bool(value)
+        self.__autosave_dirty = value
+        if value == True:
+            self.__project_dirty = True
+        
     def save_to_project(self, projdir, path,
                            canvas_bbox, frame_bbox, force_write, **kwargs):
         """Saves the layer(or stack) data into an project directory
@@ -146,26 +168,44 @@ class Projectsaveable:
 
         if os.path.exists(file_path):
             st = os.stat(file_path)
-            elem.attrib[name] = str(int(st.st_mtime))
+            timestamp = str(int(st.st_mtime))
+            elem.attrib[name] = timestamp
 
             if self.project_dirty or force_write:
                 backup_path = get_project_backup_filename(
-                        proj_dir, file_name, file_path)
+                        proj_dir, file_name, 
+                        orig_path=file_path, timestamp=timestamp)
                 shutil.move(file_path, backup_path)
-        else:
-            logger.warning("We need a timestamp of file %s, but that file does not found.(or newly created project?)" % file_path)
+       #else:
+       #    logger.warning("We need a timestamp of file %s, but that file does not found.(or newly created project?)" % file_path)
 
 
+def cleanup_backup(backup_dir, max_count):
+    """ Cleanup old backup files.
+    this is called from lib.document.save_project()
 
-def get_project_backup_filename(projdir, basename, origpath=None):
+    When backup generation count exceed the max_count,
+    the oldest generation files are deleted.
+
+    :param backup_dir: the directory of backup file placed.
+    :param max_count: the maximum count of backup.
+                      actually the backup count is 
+                      the number of '*-stack.xml' files.
+    """
+    pass
+
+def get_project_backup_filename(projdir, basename, origpath=None, timestamp=None):
     """ Get 'prefixed' project backup filename.
+    Either basename or origpath should be assigned valid one.
 
     :param projdir: the existing project directory
     :param basename: the base filename of target file.
                      if this is None, it is generated from origpath.
     :param origpath: the original file absolute path (optional)
-
-    Either basename or origpath should be assigned valid one.
+    :param int timestamp: the timestamp (optional)
+                          this is for when using a exactly same prefix
+                          between multiple files.
+    :rtype str: the fullpath of backup file.
     """
 
     assert not (origpath == basename == None)
@@ -175,9 +215,11 @@ def get_project_backup_filename(projdir, basename, origpath=None):
     assert os.path.exists(origpath)
     if basename == None:
         basename = os.path.basename(origpath)
-    st = os.stat(origpath)
+    if timestamp == None:
+        st = os.stat(origpath)
+        timestamp = int(st.st_mtime)
     return os.path.join(projdir, 'backup',
-            u"%d-%s" % (int(st.st_mtime), basename))
+            u"%d-%s" % (timestamp, basename))
 
 if __name__ == '__main__':
 
