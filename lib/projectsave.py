@@ -12,8 +12,8 @@ import lib.autosave
 
 #: A name of timestamp attribute for stack.xml
 #: This is for project-save functionality
-PROJECT_OLD_TIMESTAMP_ATTR = "mypaint:project-old-timestamp"
-PROJECT_CURRENT_TIMESTAMP_ATTR = "mypaint:project-current-timestamp"
+PROJECT_REVISION_ATTR = "mypaint:project-revision"
+PROJECT_FILE_REVISION_ATTR = "mypaint:project-file-revision"
 
 class Projectsaveable(lib.autosave.Autosaveable):
     """Mixin and abstract base for projectsaveable structures"""
@@ -63,6 +63,17 @@ class Projectsaveable(lib.autosave.Autosaveable):
         :param \*\*kwargs: To be passed to underlying save routines.
         """
 
+    def load_from_project_dir(self, projdir, elem, cache_dir, feedback_cb,
+                                 x=0, y=0, **kwargs):
+        """
+        Load layer(or stack) from a directory.
+
+        This mainly utilize load_from_openraster_dir internally.
+        """
+        self.load_from_openraster_dir(projdir, elem, cache_dir, feedback_cb,
+                                x=x, y=y, **kwargs)
+        self.decode_revision(elem, kwargs['project_revision'])
+
     def clear_project_dirty(self):
         """
         clear dirty flag for project.
@@ -105,6 +116,24 @@ class Projectsaveable(lib.autosave.Autosaveable):
         except AttributeError:
             return None
 
+    @property
+    def revision(self):
+        """ The revision of source file.
+        """
+        try:
+            return self.__revision
+        except AttributeError:
+            return None
+
+    def decode_revision(self, elem, project_rev):
+        """ Decode revision number of source file
+        from ElementTree.
+
+        :param project_rev: the default project revision.
+        """
+        self.__revision = elem.attrib.get(PROJECT_FILE_REVISION_ATTR, project_rev)
+        print self.__revision
+
     def get_filename_for_project(self, ext=u".png", formatstr=None, 
             path_prefix=None):
         """
@@ -133,26 +162,25 @@ class Projectsaveable(lib.autosave.Autosaveable):
         else:
             return retfname
     
-    def _retract_old_file(self, elem, proj_dir, backup_dir, file_name, force_write):
-        """ Retract a file(to be overwritten after this method called)
-        and set a file timestamp to elementtree object. 
-        This needs from project-save's version management functionality.
+    def _process_old_file(self, elem, proj_dir, backup_dir, 
+            project_revision, file_name, force_write):
+        """ Retract a 'old' file(to be overwritten after this method called)
+        into backup directory if needed, and also set a file revision to 
+        an attribute of elementtree object.
+        This attribute needs from project-save's version management functionality.
 
-        All 'save_to_project' method MUST call this method
-        PRIOR TO OVERWRITING ITS IMAGE FILE.
+        All the 'save_to_project' method, which (might) overwrites existing
+        layer png, MUST call this method BEFORE OVERWRITING ITS IMAGE FILE.
+        (actually, such method would call _save_rect_to_project(), 
+         so _save_rect_to_project() do it instead of that methods automatically.)
 
-        With this file timestamp, project-save can do version-management
-        for overwritten files.
+        With this file revision string, project-save can do version management.
 
-        HOW WORK THE PROJECTSAVE IS ABOUT THIS METHOD:
-        When a layer changed and save has done, the overwritten files are 
-        retracted(moved) into the specific directory for backup.
-        With this method, we mark that old layer file's timestamp into elementtree.
-        
-        And when reverting the picture project, the version management functionality 
-        searches the old picture file from the timestamp.
+        when reverting the picture project, the version management functionality 
+        searches the needed old picture file from the revision number.
         
         :param elem: the elementtree object, to be added the timestamp attribute.
+                     this should be contains the attribute 'PROJECT_REVISION_ATTR'
         :param backup_dir: the backup directory, it must be prefixed by generation of 
                             backup. if this is None, this method exits immidiately.
         :param file_name: layer file name. this is only basename, NOT fullpath. 
@@ -160,50 +188,113 @@ class Projectsaveable(lib.autosave.Autosaveable):
                             (ignore dirty flag, every layer is written) or not.
         """
 
+
+        if self.project_dirty or force_write:
+            assert project_revision != None
+            elem.attrib[PROJECT_FILE_REVISION_ATTR] = project_revision
+            self.__revision = project_revision
+        else:
+            # does not overwritten.
+            assert self.revision != None
+            elem.attrib[PROJECT_FILE_REVISION_ATTR] = self.revision
+
         # When backup_dir is None, it means
         # 'This project is completely new one'
         # so nothing to be backuped, exit now.
         if backup_dir == None:
             return
 
-        if self.project_dirty or force_write:
-            name = PROJECT_OLD_TIMESTAMP_ATTR
-        else:
-            # does not overwritten.
-            name = PROJECT_CURRENT_TIMESTAMP_ATTR
-
         file_path = os.path.join(proj_dir, 'data', file_name)
-
-
         if os.path.exists(file_path):
-            st = os.stat(file_path)
-            timestamp = str(int(st.st_mtime))
-            elem.attrib[name] = timestamp
-
             if self.project_dirty or force_write:
                 backup_path = get_project_backup_filename(
                         backup_dir, file_name, 
-                        orig_path=file_path, timestamp=timestamp)
+                        orig_path=file_path, revision = self.revision)
                 shutil.move(file_path, backup_path)
        #else:
        #    logger.warning("We need a timestamp of file %s, but that file does not found.(or newly created project?)" % file_path)
 
+class BackupManager(object):
 
-def cleanup_backup(backup_dir, max_count):
-    """ Cleanup old backup files.
-    this is called from lib.document.save_project()
+    """ Backup file cleanup manager class.
+    This class manage the generations of file at backup file pool.
+    If a file is not referred from any generation of stack.xml,
+    (i.e not referred from even oldest stack.xml)
+    that file is deleted.
 
-    When backup generation count exceed the max_count,
-    the oldest generation files are deleted.
-
-    :param backup_dir: the directory of backup file placed.
-    :param max_count: the maximum count of backup.
-                      actually the backup count is 
-                      the number of '*-stack.xml' files.
+    This class should runs as queued idling task, so processing
+    workload should be minimum...
     """
-    pass
 
-def get_project_backup_filename(backupdir, basename, origpath=None, file_timestamp=None):
+    def __init__(self, backup_dir, max_gen):
+        self._backup_dir = backup_dir
+        self._max_gen = max_gen
+
+    def _query_xml(self, stack_xml_path):
+        """ Query a stack.xml and return the file revisions.
+        """
+        doc = ET.parse(stack_xml_path)
+        elem = doc.getroot()
+        files_rev = {}
+        root_stack_elem = image_elem.find("stack")
+
+        def _decode_walk(elem, files_rev):
+            if elem.tag != "stack":
+                name = elem.attrib['src']
+                rev = elem.attrib.get(PROJECT_FILE_REVISION_ATTR, None)
+                files_rev[name] = rev
+                return 
+            else:
+                for child_elem in elem.findall("./*"):
+                    _decode_recursive(elem, files_rev)
+
+        _decode_walk(root_stack_elem, files_rev)
+        return files_rev
+
+    def _get_older_paths(self, filesrc, revision):
+        basename = '-'.join(os.path.basename(filesrc).split('-')[1:])
+        glob_basename = "*-%s" % basename
+        files = sorted(
+                glob.glob(os.path.join(self._backup_dir, glob_basename))
+                )
+        return files[:files.index(srcname)]
+
+    def execute(self):
+        logger.info('generation management starts.') 
+        xmls = sorted(
+                glob.glob(os.path.join(self._backup_dir, '*_stack.xml'))
+                )
+
+        if 2 <= len(xmls) < self._max_gen:
+            target_gen_idx = len(xmls) - self._max_gen
+            second_oldest_xml = xmls[target_gen_idx]
+            files_rev = self._query_xml(second_oldest_xml)
+            for ck in files_rev:
+                logger.info('Against a backup file %s...' % ck)
+                for cpath in self._get_older_paths(ck, files_rev[ck]):
+                    if os.path.exists(cpath):
+                       #os.unlink(cpath)
+                        logger.info('older backup file %s is removed' % cpath)
+                        
+            for oldxml in xmls[:target_gen_idx]:
+               #os.unlink(oldest_xml)
+                logger.info('older xml file %s is removed' % oldxml)
+        else:
+            logger.info('there is no files to be removed at %s.' %
+                    self._backup_dir) 
+
+        logger.info('generation management end.') 
+
+
+## Functions
+
+def clear_old_backup(backupdir, max_gen=5):
+    """ clear old backup generation.
+    """
+    bm = BackupManager(backupdir, max_gen)
+    bm.execute()
+
+def get_project_backup_filename(backupdir, basename, origpath=None, revision=None):
     """ Get 'prefixed' project backup filename.
     Either basename or origpath should be assigned valid one.
 
@@ -219,7 +310,7 @@ def get_project_backup_filename(backupdir, basename, origpath=None, file_timesta
     :param str backup_timestamp: the backup timestamp, 
                      this indicates the generation of backup.
     :param origpath: the original file absolute path (optional)
-    :param int file_timestamp: the timestamp of file (optional)
+    :param str revision: the revision of file (optional)
                           this is for when using a exactly same prefix
                           between multiple files.
     :rtype str: the fullpath of backup file.
@@ -232,11 +323,8 @@ def get_project_backup_filename(backupdir, basename, origpath=None, file_timesta
     assert os.path.exists(origpath)
     if basename == None:
         basename = os.path.basename(origpath)
-    if file_timestamp == None:
-        st = os.stat(origpath)
-        file_timestamp = int(st.st_mtime)
     return os.path.join(backupdir, 
-            u"%d-%s" % (file_timestamp, basename))
+            u"%s-%s" % (revision, basename))
 
 if __name__ == '__main__':
 

@@ -245,6 +245,8 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             x, y,
         )
 
+                            
+
     def _load_surface_from_oradir_member(self, oradir, cache_dir,
                                          src, feedback_cb, x, y):
         """Loads the surface from a file in an OpenRaster-like folder
@@ -499,7 +501,9 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         return elem
 
     def _save_rect_to_project(self, projdir, backupdir,
-                          frame_bbox, rect, force_write, **kwargs):
+                          frame_bbox, rect, force_write, 
+                          only_element = False,
+                          **kwargs):
         """
         Internal: saves a rectangle of the surface to a project dir
 
@@ -525,9 +529,11 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         elem = self._get_stackxml_element("layer", x, y)
         elem.attrib["src"] = png_relpath
 
-        self._retract_old_file(elem, projdir, backupdir, pngname, force_write)
+        self._process_old_file(elem, projdir, backupdir,
+                kwargs['project_revision'],
+                pngname, force_write)
 
-        if ('only_element' not in kwargs and is_dirty):
+        if (not only_element and is_dirty):
             # Write PNG data via a tempfile
             logger.debug('layer %s of surface %r is marked as dirty or forced write!', self.name , pngname)
             t0 = time.time()
@@ -1149,14 +1155,14 @@ class BackgroundLayer (SurfaceBackedLayer):
 
         is_dirty = self.project_dirty or force_write
 
-        # Get only element for this method
-        kwargs = dict(kwargs)
-        kwargs['only_element'] = True
-
-        # Dirty flag cleared in _save_rect_to_project()
+        # To generate element (but no file writing), 
+        # utilize _save_rect_to_project with only_element flag. 
+        # And, dirty flag cleared in following _save_rect_to_project()
+        # so that flag is reserved at above line.
         elem = self._save_rect_to_project(
             projdir, backupdir,
-            frame_bbox, frame_bbox, force_write, **kwargs
+            frame_bbox, frame_bbox, False, 
+            only_element=True, **kwargs
         )
 
         # Also save as single pattern (with corrected origin)
