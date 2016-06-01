@@ -797,7 +797,7 @@ class LayerBase (TileBlittable, TileCompositable):
         """
         raise NotImplementedError
 
-    def save_to_project(self, projdir, path,
+    def save_to_project(self, projdir, backupdir, path,
                            canvas_bbox, frame_bbox, force_write, **kwargs):
 
         """Saves the layer's data into an project directory

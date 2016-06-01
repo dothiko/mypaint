@@ -133,7 +133,7 @@ class Projectsaveable(lib.autosave.Autosaveable):
         else:
             return retfname
     
-    def _retract_old_file(self, elem, proj_dir, file_name, force_write):
+    def _retract_old_file(self, elem, proj_dir, backup_dir, file_name, force_write):
         """ Retract a file(to be overwritten after this method called)
         and set a file timestamp to elementtree object. 
         This needs from project-save's version management functionality.
@@ -153,10 +153,19 @@ class Projectsaveable(lib.autosave.Autosaveable):
         searches the old picture file from the timestamp.
         
         :param elem: the elementtree object, to be added the timestamp attribute.
+        :param backup_dir: the backup directory, it must be prefixed by generation of 
+                            backup. if this is None, this method exits immidiately.
         :param file_name: layer file name. this is only basename, NOT fullpath. 
         :param force_write: a flag, to tell the current writing is forced
                             (ignore dirty flag, every layer is written) or not.
         """
+
+        # When backup_dir is None, it means
+        # 'This project is completely new one'
+        # so nothing to be backuped, exit now.
+        if backup_dir == None:
+            return
+
         if self.project_dirty or force_write:
             name = PROJECT_OLD_TIMESTAMP_ATTR
         else:
@@ -173,7 +182,7 @@ class Projectsaveable(lib.autosave.Autosaveable):
 
             if self.project_dirty or force_write:
                 backup_path = get_project_backup_filename(
-                        proj_dir, file_name, 
+                        backup_dir, file_name, 
                         orig_path=file_path, timestamp=timestamp)
                 shutil.move(file_path, backup_path)
        #else:
@@ -194,15 +203,23 @@ def cleanup_backup(backup_dir, max_count):
     """
     pass
 
-def get_project_backup_filename(projdir, basename, origpath=None, timestamp=None):
+def get_project_backup_filename(backupdir, basename, origpath=None, file_timestamp=None):
     """ Get 'prefixed' project backup filename.
     Either basename or origpath should be assigned valid one.
+
+    CAUTION:
+    * Either basename or origpath should be assigned valid one.
+    * The path that generates with 
+      os.path.join(projdir, 'backup', backup_timestamp) 
+      MUST exist prior to call this function.
 
     :param projdir: the existing project directory
     :param basename: the base filename of target file.
                      if this is None, it is generated from origpath.
+    :param str backup_timestamp: the backup timestamp, 
+                     this indicates the generation of backup.
     :param origpath: the original file absolute path (optional)
-    :param int timestamp: the timestamp (optional)
+    :param int file_timestamp: the timestamp of file (optional)
                           this is for when using a exactly same prefix
                           between multiple files.
     :rtype str: the fullpath of backup file.
@@ -215,11 +232,11 @@ def get_project_backup_filename(projdir, basename, origpath=None, timestamp=None
     assert os.path.exists(origpath)
     if basename == None:
         basename = os.path.basename(origpath)
-    if timestamp == None:
+    if file_timestamp == None:
         st = os.stat(origpath)
-        timestamp = int(st.st_mtime)
-    return os.path.join(projdir, 'backup',
-            u"%d-%s" % (timestamp, basename))
+        file_timestamp = int(st.st_mtime)
+    return os.path.join(backupdir, 
+            u"%d-%s" % (file_timestamp, basename))
 
 if __name__ == '__main__':
 

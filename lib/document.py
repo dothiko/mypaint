@@ -1705,6 +1705,7 @@ class Document (object):
         """
         t0 = time.time()
         logger.debug("projectsave started")
+        backupdir = None # Disabled backup for new project
         
         try:
             
@@ -1756,7 +1757,8 @@ class Document (object):
 
                     # fallthrough.
 
-            if not processed:
+            if (not processed and
+                    os.path.exists(os.path.join(dirname, 'stack.xml'))):
              
                 # Currently, version-save functionality is forced.
                 # 
@@ -1772,10 +1774,11 @@ class Document (object):
                 #   into backup dir.
                 #   these files also prefixed with timestamp.
 
-                backupdir = os.path.join(dirname, u'backup')
+                backupdir = os.path.join(dirname, 'backup', str(int(t0)))
                 if not os.path.exists(backupdir):
                     os.makedirs(backupdir)       
                     logger.info('backup directory %s created.' % backupdir)
+
 
                 # First of all,
                 # old Thumbnail and stack.xml moved at here
@@ -1790,7 +1793,7 @@ class Document (object):
                     basename = components[-1]
                     cpath = os.path.join(dirname, *components) 
                     destpath = lib.projectsave.get_project_backup_filename(
-                            dirname, basename, cpath)
+                            backupdir, basename, origpath=cpath)
                     shutil.move(cpath.decode('utf-8'), destpath.decode('utf-8'))
 
                 # After that, 'dirty' layers should be moved.
@@ -1821,24 +1824,25 @@ class Document (object):
        
                         if filepath: 
                             destpath = lib.projectsave.get_project_backup_filename(
-                                    dirname, None, filepath) 
+                                    backupdir, None, origpath=filepath) 
                             shutil.move(filepath, destpath) 
 
                             if strokepath: 
                                 if os.path.exists(strokepath):
                                     destpath = lib.projectsave.get_project_backup_filename(
-                                            dirname, None, strokepath) 
+                                            backupdir, None, origpath=strokepath) 
                                     shutil.move(strokepath, destpath) 
                                 else:
                                     logger.warning(u"stroke data file %s does not found", strokepath)
 
                 # fallthrough.
+
             # All preprocess has done.
             # Then do the project writing.
             frame_bbox = None
             if self.frame_enabled:
                 frame_bbox = tuple(self.get_frame())
-            self._project_write(dirname, 
+            self._project_write(dirname, backupdir,
                     xres=self._xres if self._xres else None,
                     yres=self._yres if self._yres else None,
                     bbox=frame_bbox,
@@ -1896,7 +1900,7 @@ class Document (object):
             for pos, cl in self.layer_stack.walk():
                 cl.clear_project_dirty()
 
-    def _project_write(self, dirname, 
+    def _project_write(self, dirname, backupdir,
             xres=None,yres=None,
             bbox=None,
             frame_active=False, force_write=False, 
@@ -1951,7 +1955,7 @@ class Document (object):
         image.attrib['h'] = str(h0)
         root_stack_path = ()
         root_stack_elem = root_stack.save_to_project(
-            dirname, root_stack_path,
+            dirname, backupdir, root_stack_path,
             data_bbox, bbox, force_write, 
             **kwargs
         )

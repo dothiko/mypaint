@@ -1961,11 +1961,11 @@ class RootLayerStack (group.LayerStack):
         stack_elem.append(bg_elem)
         return stack_elem
 
-    def save_to_project(self, projdir, path, canvas_bbox,
+    def save_to_project(self, projdir, backupdir, path, canvas_bbox,
                            frame_bbox, force_write, **kwargs):
         """Saves the stack's data into an project directory"""
         stack_elem = super(RootLayerStack, self).save_to_project(
-            projdir, path, canvas_bbox,
+            projdir, backupdir, path, canvas_bbox,
             frame_bbox, force_write, **kwargs
         )
         # Save background
@@ -1974,7 +1974,7 @@ class RootLayerStack (group.LayerStack):
             bg_layer.initially_selected = False
             bg_path = (len(self),)
             bg_elem = bg_layer.save_to_project(
-                projdir, bg_path,
+                projdir, backupdir, bg_path,
                 canvas_bbox, frame_bbox,
                 force_write,
                 **kwargs

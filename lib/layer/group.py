@@ -499,7 +499,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
 
         return stack_elem
 
-    def save_to_project(self, projdir, path,
+    def save_to_project(self, projdir, backupdir, path,
                            canvas_bbox, frame_bbox, force_write, **kwargs):
         """Saves the stack's data into an project directory"""
 
@@ -514,7 +514,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
             layer_path = tuple(list(path) + [layer_idx])
             # the layer might not be written when it is not dirty,
             # anyway it returns element.
-            layer_elem = layer.save_to_project(projdir, layer_path,
+            layer_elem = layer.save_to_project(projdir, backupdir, layer_path,
                                                canvas_bbox, frame_bbox,
                                                force_write,
                                                **kwargs)

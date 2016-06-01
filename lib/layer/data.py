@@ -411,12 +411,12 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         return self._save_rect_to_ora(orazip, tmpdir, "layer", path,
                                       frame_bbox, rect, **kwargs)
 
-    def save_to_project(self, projdir, path,
+    def save_to_project(self, projdir, backupdir, path,
                            canvas_bbox, frame_bbox, 
                            force_write, **kwargs):
         """Saves the layer's data into an project directory"""
         rect = self.get_bbox()
-        return self._save_rect_to_project(projdir, 
+        return self._save_rect_to_project(projdir, backupdir, 
                                       frame_bbox, rect, force_write, **kwargs)
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
@@ -498,7 +498,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         elem.attrib["src"] = storepath
         return elem
 
-    def _save_rect_to_project(self, projdir,
+    def _save_rect_to_project(self, projdir, backupdir,
                           frame_bbox, rect, force_write, **kwargs):
         """
         Internal: saves a rectangle of the surface to a project dir
@@ -525,7 +525,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         elem = self._get_stackxml_element("layer", x, y)
         elem.attrib["src"] = png_relpath
 
-        self._retract_old_file(elem, projdir, pngname, force_write)
+        self._retract_old_file(elem, projdir, backupdir, pngname, force_write)
 
         if ('only_element' not in kwargs and is_dirty):
             # Write PNG data via a tempfile
@@ -800,7 +800,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         elem.attrib["src"] = unicode(storepath)
         return elem
 
-    def save_to_project(self, projdir, path,
+    def save_to_project(self, projdir, backupdir, path,
                            canvas_bbox, frame_bbox, 
                            force_write, **kwargs):
         """Saves the working file to an project directory"""
@@ -1142,7 +1142,7 @@ class BackgroundLayer (SurfaceBackedLayer):
         elem.attrib[self.ORA_BGTILE_ATTR] = storename
         return elem
 
-    def save_to_project(self, projdir, path,
+    def save_to_project(self, projdir, backupdir, path,
                            canvas_bbox, frame_bbox, force_write, **kwargs):
         # Save as a regular layer for other apps.
         # Background surfaces repeat, so just the bit filling the frame.
@@ -1155,7 +1155,7 @@ class BackgroundLayer (SurfaceBackedLayer):
 
         # Dirty flag cleared in _save_rect_to_project()
         elem = self._save_rect_to_project(
-            projdir, 
+            projdir, backupdir,
             frame_bbox, frame_bbox, force_write, **kwargs
         )
 
@@ -1651,7 +1651,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = storepath
         return elem
 
-    def save_to_project(self, projdir, path,
+    def save_to_project(self, projdir, backupdir, path,
                            canvas_bbox, frame_bbox, force_write, **kwargs):
         """Save the strokemap too, in addition to the base implementation"""
         # Save the layer normally
@@ -1659,7 +1659,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         dirty_flag = self.project_dirty or force_write
 
         elem = super(PaintingLayer, self).save_to_project(
-            projdir, path,
+            projdir, backupdir, path,
             canvas_bbox, frame_bbox, force_write, **kwargs
         )
         # Store stroke shape data too
