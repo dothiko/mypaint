@@ -1708,6 +1708,7 @@ class Document (object):
         logger.debug("projectsave started")
         backupdir = None # Disabled backup for new project
         project_revision = str(int(t0))
+        force_write = not os.path.exists(dirname) 
         
         if self._projectsave_processor.has_work():
             logger.info('project copy processor still have pending works. it is forced to finish.')
@@ -1715,10 +1716,7 @@ class Document (object):
 
         try:
             
-            processed = False
             if (kwargs != None):
-
-                source_dir = None
 
                 if 'source_dir' in kwargs:
                     # This document is a project and assigned to 'save as 
@@ -1739,123 +1737,59 @@ class Document (object):
                                     
                     for path, cl in self.layer_stack.walk():
                         if not cl.project_dirty:
-                            filepath = None
-                            strokepath = None
-                            
-                            if hasattr(cl,'workfilename'):
-                                filepath = cl.workfilename
-                            elif hasattr(cl,'get_filename_for_project'):
-                                filepath = cl.get_filename_for_project()
-                                strokepath = cl.get_filename_for_project(
-                                        ext=None,
-                                        formatstr=u"%s-strokemap.dat")
-                            else:
-                                logger.warning(u"no any filename attributes for layer %r", cl.name)
-           
-                            for cpath in (filepath, strokepath):
-                                if cpath and os.path.exists(cpath):
-                                    shutil.copy(cpath, destdirname)
-
+                            cl.backup(destdirname)
                         else:
                             logger.info('%s has marked as dirty,so not copied', cl.name)
 
-                    processed = True
-
                     # fallthrough.
 
-            # Version management 
-            if (not processed and
-                    os.path.exists(os.path.join(dirname, 'stack.xml'))):
+                elif 'backup_dir' in kwargs:
+                    # This document is backuped as current state.
+                    # i.e. Entire document files are copied as current state.
 
-                # If 'stack.xml' does not exist, it means
-                # completely new project. 
-                # There is nothing to be backuped.
-                
-             
-                # The system of version save is ,
-                # 
-                # * move the old file of a changed layer into 
-                #   'backup' directory, with prefixed by
-                #   the revision number of that file.   
-                #
-                # * move current(=old) stack.xml and thumbnail.png file 
-                #   into backup dir.
-                #   these files are prefixed by project revision number,
-                #   not its revision.(they have no their own revision).
+                    # All 'previous' (which are changed,dirty) layers are 
+                    # copied into the backup directory,prior to 
+                    # copying unchanged layers.
+                    #
+                    # Actually, unchanged layers are 'copied' as hard-link, in *nux
+                    # by os.link() function.
 
-                backupdir = os.path.join(dirname, 'backup')
-                if not os.path.exists(backupdir):
-                    os.makedirs(backupdir)       
-                    logger.info('backup directory %s created.' % backupdir)
+                    lt = time.localtime()
+                    backup_base = "%04d-%02d-%02d" % lt[0:3] # YEAR-MONTH-DAY
+                    backup_current = "%02d-%02d-%02d" % lt[3:6] # HOUR-MIN-SEC
+                    backupdir = os.path.join(dirname, 'backup', 
+                            backup_base, backup_current)
 
-                assert hasattr(self, "_project_revision")
+                    if not os.path.exists(backupdir):
+                        os.makedirs(backupdir)       
+                        logger.info('backup directory %s created.' % backupdir)
 
-                # First of all,
-                # old Thumbnail and stack.xml moved at here
-                # They are always rewritten, and no dirty flag.
-                
-                filename_source = ( 
-                    (u'stack.xml', ),
-                    (u'Thumbnails', u'thumbnail.png')
-                    )
-
-                for components in filename_source:
-                    basename = components[-1]
-                    cpath = os.path.join(dirname, *components) 
-                    destpath = lib.projectsave.get_project_backup_filename(
-                            backupdir, basename, origpath=cpath,
-                            revision=self._project_revision)
-                    shutil.move(cpath.decode('utf-8'), destpath.decode('utf-8'))
-
-                # After that, 'dirty' layers should be moved.
-                for path, cl in self.layer_stack.walk():
-                    if cl.project_dirty:
-                        filepath = None
-                        strokepath = None
-                        
-                        if hasattr(cl,'workfilename'):
-                            filepath = cl.workfilename
-                        elif hasattr(cl,'get_filename_for_project'):
-                            testpath = cl.get_filename_for_project(
-                                    path_prefix=(dirname, 'data'))
-                            if os.path.exists(testpath):
-                                filepath = testpath
-                                logger.info("Layer %s is dirty and file found." % cl.name )
-                                strokepath = cl.get_filename_for_project(
-                                        ext=None,
-                                        formatstr=u"%s-strokemap.dat",
-                                        path_prefix=(dirname, 'data'))
-
-                            else:
-                                logger.info("Layer %s is dirty but has no file-entity information. and uuid-png file also not found." % cl.name )
-                                logger.info("Expected filename is %s." % testpath )
-
+                    # First of all, stack.xml and thumbnails/thumbnail.png
+                    # MUST be copied, prior to project-save.
+                    # Because they are always overwritten.
+                    for cpath in ('stack.xml', 
+                            os.path.join('Thumbnails', 'thumbnail.png')):
+                        cpath = os.path.join(dirname, cpath)
+                        if os.path.exists(cpath):
+                            shutil.copy(cpath, backupdir)
                         else:
-                            logger.warning(u"no any filename attributes for layer %r", cl.name)
-       
-                        if filepath: 
-                            destpath = lib.projectsave.get_project_backup_filename(
-                                    backupdir, None, origpath=filepath, 
-                                    revision=self._project_revision) 
-                            shutil.move(filepath, destpath) 
+                            logger.warning('Essential file %s does not exist.' % cpath)
 
-                            if strokepath: 
-                                if os.path.exists(strokepath):
-                                    destpath = lib.projectsave.get_project_backup_filename(
-                                            backupdir, None, origpath=strokepath,
-                                            revision=self._project_revision) 
-                                    shutil.move(strokepath, destpath) 
-                                else:
-                                    logger.warning(u"stroke data file %s does not found", strokepath)
+                    backup_layers = []
 
-                # Copy to backup dir finished.
-                # after that, old generation (might) be deleted.
-                self._projectsave_processor.add_work(
-                    lib.projectsave.clear_old_backup,
-                    backupdir
-                )
+                    for path, cl in self.layer_stack.walk():
+                        if cl.project_dirty or force_write:
+                            cl.backup(backupdir) # backup it NOW.
+                        else:
+                            backup_layers.append(cl) # backup it later, asynchronously. 
+
+                    self._projectsave_processor.add_work(
+                        lib.projectsave.do_backup,
+                        backup_layers,
+                        backupdir
+                    )
      
-                # fallthrough.
+                    # fallthrough.
 
             # All preprocess has done.
             # Then do the project writing.
@@ -1863,12 +1797,11 @@ class Document (object):
             if self.frame_enabled:
                 frame_bbox = tuple(self.get_frame())
             self._project_write(dirname, backupdir,
-                    project_revision,
                     xres=self._xres if self._xres else None,
                     yres=self._yres if self._yres else None,
                     bbox=frame_bbox,
                     frame_active = self.frame_enabled,
-                    force_write = not os.path.exists(dirname), 
+                    force_write = force_write,
                     **kwargs)
         finally:
             t1 = time.time()
@@ -1890,7 +1823,7 @@ class Document (object):
         self._autosave_dirty = False
 
         try:
-            if os.path.exists(os.path.join(dirname, 'stack.xml')):
+            if not os.path.exists(os.path.join(dirname, 'stack.xml')):
                 raise ValueError
 
             self._load_from_project_dir(
@@ -1932,12 +1865,8 @@ class Document (object):
 
         This method is MOSTLY same as _load_from_openraster_dir(). 
         the difference is:
-            * kwarg has a key lib.projectsave.PROJECT_REVISION_ATTR
-              which contains the revision number of currently 
-              loaded project.
             * call layer_stack.load_from_project_dir(),
               instead of load_from_openraster_dir()
-            * retreive internal revision number from element
 
         :param unicode projdir: Directory with a .ORA-like structure
         :param unicode cache_dir: Doc cache for storing layer revs etc.
@@ -1956,12 +1885,6 @@ class Document (object):
         height = max(0, int(image_elem.attrib.get('h', 0)))
         xres = max(0, int(image_elem.attrib.get('xres', 0)))
         yres = max(0, int(image_elem.attrib.get('yres', 0)))
-
-        revision = image_elem.attrib.get(
-                lib.projectsave.PROJECT_REVISION_ATTR,
-                str(int(time.time())))
-        kwargs['project_revision'] = revision
-        logger.info('project revision is %s' % revision)
 
         # Delegate layer loading to the layers tree.
         root_stack_elem = image_elem.find("stack")
@@ -1996,11 +1919,9 @@ class Document (object):
         )
         self.set_frame_enabled(frame_enab, user_initiated=False)
 
-        self._project_revision = revision
 
 
     def _project_write(self, dirname, backupdir,
-            project_revision,
             xres=None,yres=None,
             bbox=None,
             frame_active=False, force_write=False, 
@@ -2011,8 +1932,6 @@ class Document (object):
         The difference from the original is,this method (basically)
         process only 'dirty' layers. 
 
-        :param project_revision: the project revision, currently it is
-                str(int(time.time()))
         :param int xres: nominal X resolution for the doc
         :param int yres: nominal Y resolution for the doc
         :param frame_active: True if the frame is enabled
@@ -2055,10 +1974,6 @@ class Document (object):
         x0, y0, w0, h0 = bbox
         image.attrib['w'] = str(w0)
         image.attrib['h'] = str(h0)
-        assert project_revision != None
-        image.attrib[lib.projectsave.PROJECT_REVISION_ATTR] = project_revision
-        kwargs['project_revision'] = project_revision
-        print project_revision
         root_stack_path = ()
         root_stack_elem = root_stack.save_to_project(
             dirname, backupdir, root_stack_path,

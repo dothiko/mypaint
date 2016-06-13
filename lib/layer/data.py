@@ -529,10 +529,6 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         elem = self._get_stackxml_element("layer", x, y)
         elem.attrib["src"] = png_relpath
 
-        self._process_old_file(elem, projdir, backupdir,
-                kwargs['project_revision'],
-                pngname, force_write)
-
         if (not only_element and is_dirty):
             # Write PNG data via a tempfile
             logger.debug('layer %s of surface %r is marked as dirty or forced write!', self.name , pngname)
