@@ -1354,7 +1354,7 @@ class FileHandler (object):
         if self.doc.model.is_project == False:
             self.save_as_project_cb(action)
         else:
-            self.save_file(self.filename, project=True,version_save=self.filename)
+            self.save_file(self.filename, project=True, backup_dir=self.filename)
 
     def revert_project_cb(self, action):
         if self.doc.model.is_project == True:

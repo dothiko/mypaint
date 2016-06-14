@@ -161,16 +161,25 @@ class Projectsaveable(lib.autosave.Autosaveable):
                     ext=None,
                     formatstr=u"%s-strokemap.dat")
 
-    def backup(self, dirname):
+    def backup(self, backupdir, sourcedir, move_file=False):
         """ Backup layer entity into the directory.
+
+        :param backupdir: The distination directory of backup
+        :param sourcedir: The source directory, it is project directory.
+        :param move_file: Flag to indicate to move file.
         """
         paths = (self.get_filename_for_project(),
                  self.get_additional_filename_for_project())
 
         for cpath in paths:
             if cpath:
+                cpath = os.path.join(sourcedir, 'data', cpath)
                 if os.path.exists(cpath):
-                    shutil.copy(cpath, backupdir)
+                    if move_file:
+                        logger.info('moving file %s.' % cpath)
+                        shutil.move(cpath, backupdir)
+                    else:
+                        shutil.copy(cpath, backupdir)
                 else:
                     logger.warning('file %s does not exist in lib.projectsave.do_backup()' % cpath)
 
@@ -178,11 +187,11 @@ class Projectsaveable(lib.autosave.Autosaveable):
 
 ## Functions
 
-def do_backup(targets, backupdir):
+def do_backup(targets, backupdir, sourcedir):
     """ copy layer files to backup directory.
     """
     for cl in targets:
-        cl.backup(backupdir)
+        cl.backup(backupdir, sourcedir)
 
 if __name__ == '__main__':
 

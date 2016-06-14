@@ -1779,14 +1779,15 @@ class Document (object):
 
                     for path, cl in self.layer_stack.walk():
                         if cl.project_dirty or force_write:
-                            cl.backup(backupdir) # backup it NOW.
+                            cl.backup(backupdir, dirname, move_file=True) # backup it NOW.
                         else:
                             backup_layers.append(cl) # backup it later, asynchronously. 
 
                     self._projectsave_processor.add_work(
                         lib.projectsave.do_backup,
                         backup_layers,
-                        backupdir
+                        backupdir,
+                        dirname
                     )
      
                     # fallthrough.
@@ -1944,10 +1945,10 @@ class Document (object):
             os.mkdir(dirname)
             force_write = True
 
-        mimepath = os.path.join(dirname, 'mimetype')
-        if not os.path.exists(mimepath):
-            with open(mimepath, 'w') as fp:
-                fp.write(lib.xml.OPENRASTER_MEDIA_TYPE)
+       #mimepath = os.path.join(dirname, 'mimetype')
+       #if not os.path.exists(mimepath):
+       #    with open(mimepath, 'w') as fp:
+       #        fp.write(lib.xml.OPENRASTER_MEDIA_TYPE)
 
         # Creating sub directories
         for subdir in ('Thumbnails', 'data', 'backup'): 
