@@ -7,9 +7,14 @@ import shutil
 import logging
 logger = logging.getLogger(__name__)
 import glob
+import sys
 
 import lib.autosave
 
+if sys.platform.startswith('linux'):
+    HARDLINK_USEABLE = True
+else:
+    HARDLINK_USEABLE = False
 
 class Projectsaveable(lib.autosave.Autosaveable):
     """Mixin and abstract base for projectsaveable structures"""
@@ -35,7 +40,7 @@ class Projectsaveable(lib.autosave.Autosaveable):
         if value == True:
             self.__project_dirty = True
         
-    def save_to_project(self, projdir, path,
+    def save_to_project(self, projdir, backupdir, path,
                            canvas_bbox, frame_bbox, force_write, **kwargs):
         """Saves the layer(or stack) data into an project directory
 
@@ -50,7 +55,8 @@ class Projectsaveable(lib.autosave.Autosaveable):
         because there is no read and write I/O to pack the 
         container file.
 
-        :param unicode projdir: the project root directory.
+        :param projdir: the project root directory.
+        :param backupdir : the backup directory.
         :param path: the filepath.
         :param canvas_bbox: the boundary box of canvas.
         :param frame_bbox: the boundary box of frame. this can be None.
@@ -157,7 +163,7 @@ class Projectsaveable(lib.autosave.Autosaveable):
 
         :param backupdir: The distination directory of backup
         :param sourcedir: The source directory, it is project directory.
-        :param move_file: Flag to indicate to move file.
+        :param move_file: Flag to indicate to move file, not copy.
         """
         paths = (self.get_filename_for_project(),
                  self.get_additional_filename_for_project())
@@ -170,19 +176,62 @@ class Projectsaveable(lib.autosave.Autosaveable):
                         logger.info('moving file %s.' % cpath)
                         shutil.move(cpath, backupdir)
                     else:
-                        shutil.copy(cpath, backupdir)
+                        link_backup(cpath, backupdir)
                 else:
                     logger.warning('file %s does not exist in lib.projectsave.do_backup()' % cpath)
+
 
 
 
 ## Functions
 
 def do_backup(targets, backupdir, sourcedir):
-    """ copy layer files to backup directory.
+    """ Copy layer files to backup directory.
     """
     for cl in targets:
         cl.backup(backupdir, sourcedir)
+
+def init_backup(filepath, backupdir):
+    """ Called prior to project-dirty (or forced) write.
+    This function cuts hard-link between current file and backup one,
+    to avoid overwrite hard-linked backups.
+
+    When this function called on some environment which does not
+    support hard link, this function do nothing.
+
+    :param filepath: The absolute path of file.
+    :param backupdir: The backup destination, currently unused.
+    """
+    if HARDLINK_USEABLE:
+        if (os.path.exists(filepath) and
+                os.stat(filepath).st_nlink > 1):
+            os.unlink(filepath)
+            # Checking link count is for safety.
+
+def link_backup(src, dst):
+    """ Link file from src to dst.
+    If the platform does not support hard-link,
+    this function copy it instead of link.
+
+    :param src: Path of the original file.
+    :param dst: Destination directory.NOT INCLUDING FILENAME.
+    """
+
+    if HARDLINK_USEABLE:
+        logger.info('linking file %s to %s.' % (src, dst))
+        try:
+            os.link(src, 
+                    os.path.join(dst, 
+                        os.path.basename(src))
+                   )
+            return
+
+        except OSError:
+            logger.warning('It is cross-device link.No hard link executed.')
+            # Fallthrough.
+
+    # Otherwise, copy the file.
+    shutil.copy(src, dst)
 
 if __name__ == '__main__':
 

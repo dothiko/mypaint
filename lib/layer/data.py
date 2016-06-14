@@ -531,7 +531,8 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
 
         if (not only_element and is_dirty):
             # Write PNG data via a tempfile
-            logger.debug('layer %s of surface %r is marked as dirty or forced write!', self.name , pngname)
+            logger.debug('layer %s of surface %r is marked as dirty or forced to write!', self.name , pngname)
+            lib.projectsave.init_backup(png_path, backupdir)
             t0 = time.time()
             self._surface.save_as_png(png_path, *rect, **kwargs)
             t1 = time.time()
@@ -826,6 +827,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
         if (self.project_dirty or not os.path.exists(final_path) or
                 force_write):
+            lib.projectsave.init_backup(src_path, backupdir)
             shutil.copy(src_path, final_path)
             logger.debug("filebacked layer copied from %s", final_relpath)
             self.clear_project_dirty()
@@ -1171,6 +1173,7 @@ class BackgroundLayer (SurfaceBackedLayer):
         storename = os.path.join(projdir, store_relpath)
 
         if is_dirty:
+            lib.projectsave.init_backup(storename, backupdir)
             t0 = time.time()
             self._surface.save_as_png(storename, *rect, **kwargs)
             t1 = time.time()
@@ -1674,6 +1677,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         dat_path = os.path.join(projdir, dat_relpath)
 
         if dirty_flag:
+            lib.projectsave.init_backup(dat_path, backupdir)
             x, y, w, h = self.get_bbox()
             t0 = time.time()
             with open(dat_path , 'w') as fp:
