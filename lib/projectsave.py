@@ -113,15 +113,6 @@ class Projectsaveable(lib.autosave.Autosaveable):
         except AttributeError:
             return None
 
-    @property
-    def revision(self):
-        """ The revision of source file.
-        """
-        try:
-            return self.__revision
-        except AttributeError:
-            return None
-
     def get_filename_for_project(self, ext=u".png", formatstr=None, 
             path_prefix=None):
         """
