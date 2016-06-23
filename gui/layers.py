@@ -326,6 +326,12 @@ class RootStackTreeView (Gtk.TreeView):
 
         self.connect("button-press-event", self._button_press_cb)
 
+        # Hover preview initializing
+        self._hover_activated = False
+        self._hover_preview_timer_id = None
+        self.connect("motion-notify-event", self._motion_cb)
+        self.connect("leave-notify-event", self._leave_cb)
+
         # Motion and modifier keys during drag
         self.connect("drag-begin", self._drag_begin_cb)
         self.connect("drag-motion", self._drag_motion_cb)
@@ -791,6 +797,50 @@ class RootStackTreeView (Gtk.TreeView):
     def drag_ended(self):
         """Event: a drag has just ended"""
 
+    ## Hover preview related.
+    @event
+    def hover_over_layer(self, layer):
+        """Event: mouse pointer just hovers over a layer, 
+        with no dragging or pressing buttons."""
+
+    @event
+    def hover_leave(self):
+        """Event: mouse pointer exitting the treeview, 
+        after valid hover event activated."""
+
+    def _stop_hover_preview_timer(self):
+        if self._hover_preview_timer_id:
+            GLib.source_remove(self._hover_preview_timer_id)
+            self._hover_preview_timer_id = None
+
+
+    def _leave_cb(self, widget, event):
+        self._stop_hover_preview_timer()
+        if self._hover_activated:
+            self.hover_leave()
+        self._hover_activated = False
+
+    def _hover_preview_timer_cb(self, layer):
+        self._hover_activated = True
+        self.hover_over_layer(layer)
+        self._hover_preview_timer_id = None
+
+    def _motion_cb(self, widget, event):
+        if event.state == 0:
+            self._stop_hover_preview_timer()
+            dest_info = self.get_dest_row_at_pos(event.x, event.y)
+            if dest_info:
+                root = self._docmodel.layer_stack
+                assert len(root) > 0, "Unexpected row drag within an empty tree!"
+                dest_treepath, junk = dest_info
+                dest_path = tuple(dest_treepath)
+                dest_layer = root.deepget(dest_path)
+                self._hover_preview_timer_id = GLib.timeout_add(
+                    int(self.DRAG_HOVER_EXPAND_TIME * 1000),
+                    self._hover_preview_timer_cb,
+                    dest_layer
+                )
+
     ## utility methods
 
     def cancel_multiple_selection(self):
@@ -804,6 +854,8 @@ class RootStackTreeView (Gtk.TreeView):
         sel.unselect_all()
         root.current_path = root.deepindex(oldcurrent)
         self._processing_model_updates = False
+
+
         
 
 
@@ -953,6 +1005,15 @@ def _test():
     view_scroll.add(view)
     view_scroll.set_size_request(-1, 100)
     view.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE)
+
+    # test for hovering
+    def test_hover_cb(view, layer):
+        print 'hover!'
+        print layer
+    def test_hover_leave_cb(view):
+        print 'hover leave!'
+    view.hover_over_layer += test_hover_cb
+    view.hover_leave += test_hover_leave_cb
 
     win = Gtk.Window()
     win.set_title(unicode(__package__))

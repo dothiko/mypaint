@@ -28,6 +28,7 @@ import widgets
 from widgets import inline_toolbar
 from workspace import SizedVBoxToolWidget
 import layers
+import layerpreviewpopup
 
 
 ## Module constants
@@ -133,6 +134,10 @@ class LayersTool (SizedVBoxToolWidget):
         self._menu = menu
         self._layer_specific_ui_mergeids = []
         self._layer_specific_ui_class = None
+        # Hover preview
+        view.hover_over_layer += self._hover_over_layer_cb
+        view.hover_leave += self._hover_leave_cb
+        self._hover_popup = None
 
         # Main layout grid
         grid = Gtk.Grid()
@@ -388,4 +393,16 @@ class LayersTool (SizedVBoxToolWidget):
             time = event.time
             button = event.button
         self._menu.popup(None,None, None, None, button, time)
+
+    ## Hover-preview callbacks
+    def _hover_over_layer_cb(self, widget, layer):
+        if self._hover_popup == None:
+            self._hover_popup = layerpreviewpopup.PreviewPopup(self.app)
+        self._hover_popup.enter(layer)
+
+    def _hover_leave_cb(self, widget):
+        if self._hover_popup and self._hover_popup.active:
+            pass
+           #self._hover_popup.leave('leave_tree')
+            pass
 
