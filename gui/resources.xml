@@ -292,6 +292,14 @@ Vocabulary
         </object>
         <accelerator key="d"/>
       </child>
+      <child>
+        <object class="GtkAction" id="SizeChangePopup">
+          <property name="label" translatable="yes" context="Menu→Color (labels), Accel Editor (labels)">BrushSize Change Popup</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Change the working brush size with GUI.</property>
+          <signal name="activate" handler="popup_cb"/>
+        </object>
+        <accelerator key="m"/>
+      </child>
       <!-- Brush opacity -->
       <child>
         <object class="GtkAction" id="MoreOpaque">

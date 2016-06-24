@@ -117,6 +117,7 @@
       <menuitem action='Smaller'/>
       <menuitem action='MoreOpaque'/>
       <menuitem action='LessOpaque'/>
+      <menuitem action='SizeChangePopup'/>
       <!-- Detailed brush settings -->
       <separator/>
       <menuitem action='BrushEditorWindow'/>
