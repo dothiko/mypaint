@@ -120,6 +120,9 @@ class DrawWindow (Gtk.Window):
         "ColorChooserPopupFastSubset": (
             quickchoice.ColorChooserPopup, ["fast_subset", True],
         ),
+        "SizeChangePopup": (
+            sizechangepopup.SizePopup, [],
+        ),
     }
 
     ## Initialization and lifecycle
@@ -241,17 +244,13 @@ class DrawWindow (Gtk.Window):
         sg = stategroup.StateGroup()
         p2s = sg.create_popup_state
         hist = p2s(historypopup.HistoryPopup(self.app, self.app.doc.model))
-        size = p2s(sizechangepopup.SizePopup(self.app))
 
         self.popup_states = {
             'ColorHistoryPopup': hist,
-            'SizeChangePopup' : size
             }
 
         hist.autoleave_timeout = 0.600
         self.history_popup_state = hist
-        size.autoleave_timeout = 2.0
-        self.size_popup_state = size
 
         for action_name, popup_state in self.popup_states.iteritems():
             label = self.app.find_action(action_name).get_label()

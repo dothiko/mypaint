@@ -8,15 +8,17 @@
 
 from gi.repository import Gtk
 from gi.repository import Gdk
+from gi.repository import GLib
 import cairo
 import math
 
 from lib import helpers
 import windowing
 import drawutils
+import quickchoice
 
 
-"""Layer preview popup."""
+"""Brush Size change popup."""
 
 
 ## Module constants
@@ -27,6 +29,7 @@ SIZE_SPACE = 20
 CANVAS_SIZE = 80
 POPUP_HEIGHT = CANVAS_SIZE + MARGIN * 2
 POPUP_WIDTH = CANVAS_SIZE + SIZE_SPACE + (MARGIN * 3)
+TIMEOUT_LEAVE = int(0.7 * 1000) # Auto timeout, when once change size.
 
 ## Class definitions
 
@@ -39,7 +42,7 @@ class SizePopup (windowing.PopupWindow):
 
     outside_popup_timeout = 0
 
-    def __init__(self, app):
+    def __init__(self, app, prefs_id=quickchoice._DEFAULT_PREFS_ID):
         super(SizePopup, self).__init__(app)
         # FIXME: This duplicates stuff from the PopupWindow
         self.set_position(Gtk.WindowPosition.MOUSE)
@@ -62,6 +65,10 @@ class SizePopup (windowing.PopupWindow):
 
         self._user_size = None
         self._button = None
+        self._close_timer_id = None
+
+    def popup(self):
+        self.enter()
 
 
     def enter(self):
@@ -89,6 +96,7 @@ class SizePopup (windowing.PopupWindow):
             cur_val = self._user_size * range
             adj.set_value(cur_val + adj.get_lower())
         self._user_size = None
+        self._close_timer_id = None
         self._button = None
         self.hide()
 
@@ -96,6 +104,10 @@ class SizePopup (windowing.PopupWindow):
     def button_press_cb(self, widget, event):
         self._button = event.button
         if event.button == 1:
+
+            if self._close_timer_id:
+                GLib.source_remove(self._close_timer_id)
+
             if not self._direct_setting_cb(event.x, event.y):
                 # Otherwise, if pressed position is 
                 # 'predefined shortcut samples', 
@@ -107,19 +119,33 @@ class SizePopup (windowing.PopupWindow):
                     segment = float(CANVAS_SIZE) / MAX_SAMPLES
                     step = math.floor((y - MARGIN) / segment) + 1
                     self._user_size = step / float(MAX_SAMPLES)  
+                    self._button = -1 
+                    # -1 is Dummy value, to indicate invoke timer, 
+                    # but not respond motion event.
+                else:
+                    self._button = None
 
         self.redraw(widget)
 
     def button_release_cb(self, widget, event):
+        if self._button != None:
+            if self._close_timer_id:
+                GLib.source_remove(self._close_timer_id)
+            self._close_timer_id = GLib.timeout_add(
+                    TIMEOUT_LEAVE,
+                    self.leave,
+                    'timer')
         self._button = None
 
     def leave_cb(self, widget, event):
+        self.leave('outside')
         pass
 
     def motion_cb(self, widget, event):
         if self._button == 1:
             self._direct_setting_cb(event.x, event.y)
             self.redraw(widget)
+
 
     def redraw(self, widget):
         a = widget.get_allocation()
