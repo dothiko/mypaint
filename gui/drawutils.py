@@ -601,6 +601,18 @@ def draw_rectangle_follow_canvas(cr, tdw, sx, sy, ex, ey):
         cr.line_to(sx, ey)
     cr.close_path()
 
+def create_rounded_rectangle_path(cr, x, y, w, h, radius):
+    """ create a rounded rectangle path.
+    YOU'LL NEED TO CLOSE IT AND FILL(or do something).
+
+    :param radius: the radius of corner
+    """
+    right_angle = math.pi / 2.0
+    cr.arc (x + w - radius, y + radius, radius, -right_angle, 0)
+    cr.arc (x + w - radius, y + h - radius, radius, 0, right_angle)
+    cr.arc (x + radius, y + h - radius, radius, right_angle, right_angle * 2.0)
+    cr.arc (x + radius, y + radius, radius, right_angle * 2.0, right_angle * 3.0)
+
 ## Bezier curve
 def get_bezier(p0, p1, p2, t):
     dt = 1-t

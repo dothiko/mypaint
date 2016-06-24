@@ -21,12 +21,12 @@ import drawutils
 
 ## Module constants
 
-MARGIN = 5
+MARGIN = 8
 MAX_SAMPLES = 5
 SIZE_SPACE = 20
-CANVAS_SIZE = 64
+CANVAS_SIZE = 80
 POPUP_HEIGHT = CANVAS_SIZE + MARGIN * 2
-POPUP_WIDTH = POPUP_HEIGHT + SIZE_SPACE + (MARGIN * 3)
+POPUP_WIDTH = CANVAS_SIZE + SIZE_SPACE + (MARGIN * 3)
 
 ## Class definitions
 
@@ -61,6 +61,7 @@ class SizePopup (windowing.PopupWindow):
         self.set_size_request(POPUP_WIDTH, POPUP_HEIGHT)
 
         self._user_size = None
+        self._button = None
 
 
     def enter(self):
@@ -68,14 +69,14 @@ class SizePopup (windowing.PopupWindow):
         x, y = self.get_position()
         self.move(x, y)
         self.show_all()
-        print 'enter!!'
 
         window = self.get_window()
        #cursor = Gdk.Cursor.new_for_display(
        #    window.get_display(), Gdk.CursorType.CROSSHAIR)
        #window.set_cursor(cursor)
-        adj = self.app.brush_adjustment['radius_logarithmic']
+
         # Normalize brush size into 0.0 - 1.0
+        adj = self.app.brush_adjustment['radius_logarithmic']
         cur_val = adj.get_value() - adj.get_lower()
         range = adj.get_upper() - adj.get_lower()
         self._user_size = cur_val / range
@@ -83,18 +84,56 @@ class SizePopup (windowing.PopupWindow):
     def leave(self, reason):
         if self._user_size:
             adj = self.app.brush_adjustment['radius_logarithmic']
-            # Normalize brush size into 0.0 - 1.0
             cur_val = adj.get_value() - adj.get_lower()
             range = adj.get_upper() - adj.get_lower()
             cur_val = self._user_size * range
             adj.set_value(cur_val + adj.get_lower())
         self._user_size = None
+        self._button = None
         self.hide()
 
-    def button_press_cb(self, widget, event):
-        x = event.x
-        y = event.y
 
+    def button_press_cb(self, widget, event):
+        self._button = event.button
+        if event.button == 1:
+            if not self._direct_setting_cb(event.x, event.y):
+                # Otherwise, if pressed position is 
+                # 'predefined shortcut samples', 
+                # change size from it.
+                y = event.y
+                left = MARGIN * 2 + CANVAS_SIZE
+                if (left <= event.x <= left + SIZE_SPACE and
+                        MARGIN < y < MARGIN + CANVAS_SIZE):
+                    segment = float(CANVAS_SIZE) / MAX_SAMPLES
+                    step = math.floor((y - MARGIN) / segment) + 1
+                    self._user_size = step / float(MAX_SAMPLES)  
+
+        self.redraw(widget)
+
+    def button_release_cb(self, widget, event):
+        self._button = None
+
+    def leave_cb(self, widget, event):
+        pass
+
+    def motion_cb(self, widget, event):
+        if self._button == 1:
+            self._direct_setting_cb(event.x, event.y)
+            self.redraw(widget)
+
+    def redraw(self, widget):
+        a = widget.get_allocation()
+        t = widget.queue_draw_area(a.x, a.y, a.width, a.height)       
+
+    def _direct_setting_cb(self, x, y):
+        """ Direct setting callback for pointer action.
+        if pointer is off from size circle,this callback
+        returns False.
+        Otherwise this updates internal size value and returns True.
+
+        :param x: the x coordinate of pointer
+        :param y: the y coordinate of pointer
+        """ 
         radius = CANVAS_SIZE / 2
         cx = MARGIN + radius
         cy = MARGIN + radius
@@ -104,45 +143,23 @@ class SizePopup (windowing.PopupWindow):
         # user change it directly
         if length <= radius:
             self._user_size = length / radius
-        else:
-            self._user_size = None
-
-        # Otherwise, if pressed position is 
-        # 'predefined shortcut samples', 
-        # change size from it.
-        left = MARGIN * 2 + CANVAS_SIZE
-        if (left <= x <= left + SIZE_SPACE and
-                MARGIN < y < MARGIN + CANVAS_SIZE):
-            segment = CANVAS_SIZE / MAX_SAMPLES
-            step = int(y - MARGIN) / int(segment) + 1
-            self._user_size = step / float(MAX_SAMPLES)  
-
-        self.redraw(widget)
-
-
-
-        if (MARGIN < x < MARGIN + CANVAS_SIZE and
-                MARGIN < y < MARGIN + CANVAS_SIZE):
-            pass
-        pass
-
-    def button_release_cb(self, widget, event):
-        pass
-
-    def leave_cb(self, widget, event):
-        #elf.leave('outside')
-        pass
-
-    def motion_cb(self, widget, event):
-        pass
-
-    def redraw(self, widget):
-        a = widget.get_allocation()
-        t = widget.queue_draw_area(a.x, a.y, a.width, a.height)       
+            return True
+        return False
 
     def draw_cb(self, widget, cr):
         cr.set_source_rgb(0.9, 0.9, 0.9)
         cr.paint()
+
+        # Drawing background of presets
+        cr.save()
+        rad = min(4, MARGIN / 2)
+        drawutils.create_rounded_rectangle_path(cr, 
+                MARGIN * 2 + CANVAS_SIZE - rad, MARGIN - rad,
+                SIZE_SPACE + rad*2, CANVAS_SIZE + rad*2, 
+                rad)
+        cr.set_source_rgb(0.4, 0.4, 0.4)
+        cr.fill()
+        cr.restore()
 
         cr.save()
         cr.translate(MARGIN + CANVAS_SIZE / 2, MARGIN + CANVAS_SIZE / 2)
