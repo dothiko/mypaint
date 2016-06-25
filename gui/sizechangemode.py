@@ -116,9 +116,9 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         b = tdw.doc.brush.brushinfo
         base_radius = math.exp(b.get_base_value('radius_logarithmic'))
         r = base_radius
-        r += 2 * base_radius * b.get_base_value('offset_by_random')
-        r *= tdw.scale
-        r += 0.5
+       #r += 2 * base_radius * b.get_base_value('offset_by_random')
+       #r *= tdw.scale
+       #r += 0.5
         return r
 
 

@@ -24,12 +24,13 @@ import quickchoice
 ## Module constants
 
 MARGIN = 8
-MAX_SAMPLES = 5
 SIZE_SPACE = 20
-CANVAS_SIZE = 80
+CANVAS_SIZE = 96
 POPUP_HEIGHT = CANVAS_SIZE + MARGIN * 2
 POPUP_WIDTH = CANVAS_SIZE + SIZE_SPACE + (MARGIN * 3)
 TIMEOUT_LEAVE = int(0.7 * 1000) # Auto timeout, when once change size.
+
+PRESETS = (1.0, 2.0, 6.0, 10.0, 32.0, 50.0)
 
 ## Class definitions
 
@@ -67,6 +68,11 @@ class SizePopup (windowing.PopupWindow):
         self._button = None
         self._close_timer_id = None
 
+    def get_normalized_brush_size(self, pixel_size):
+        brush_range = self._adj.get_upper() - self._adj.get_lower()
+        return (math.log(pixel_size) - self._adj.get_lower()) / brush_range
+
+
     def popup(self):
         self.enter()
 
@@ -78,27 +84,36 @@ class SizePopup (windowing.PopupWindow):
         self.show_all()
 
         window = self.get_window()
-       #cursor = Gdk.Cursor.new_for_display(
-       #    window.get_display(), Gdk.CursorType.CROSSHAIR)
-       #window.set_cursor(cursor)
+        cursor = Gdk.Cursor.new_for_display(
+            window.get_display(), Gdk.CursorType.CROSSHAIR)
+        window.set_cursor(cursor)
 
         # Normalize brush size into 0.0 - 1.0
         adj = self.app.brush_adjustment['radius_logarithmic']
+        self._adj = adj
+       #cur_val = math.exp(adj.get_value())
+       #range = math.exp(adj.get_upper()) - math.exp(adj.get_lower())
+       #self._user_size = cur_val / range
+        brush_range = adj.get_upper() - adj.get_lower()
         cur_val = adj.get_value() - adj.get_lower()
-        range = adj.get_upper() - adj.get_lower()
-        self._user_size = cur_val / range
+        self._user_size = cur_val / brush_range
+        self._initial_size = self._user_size
+       #self._gauge_1 = (math.log(1) - adj.get_lower()) / range
+       #self._gauge_10 = (math.log(10) - adj.get_lower()) / range
+       #self._gauge_100 = (math.log(100) - adj.get_lower()) / range
 
     def leave(self, reason):
         if self._user_size:
-            adj = self.app.brush_adjustment['radius_logarithmic']
-            cur_val = adj.get_value() - adj.get_lower()
-            range = adj.get_upper() - adj.get_lower()
-            cur_val = self._user_size * range
-            adj.set_value(cur_val + adj.get_lower())
+            adj = self._adj
+            brush_range = adj.get_upper() - adj.get_lower()
+            cur_val = (self._user_size * brush_range) + adj.get_lower()
+            adj.set_value(cur_val)
         self._user_size = None
         self._close_timer_id = None
         self._button = None
         self.hide()
+
+    
 
 
     def button_press_cb(self, widget, event):
@@ -109,18 +124,18 @@ class SizePopup (windowing.PopupWindow):
                 GLib.source_remove(self._close_timer_id)
 
             if not self._direct_setting_cb(event.x, event.y):
-                # Otherwise, if pressed position is 
-                # 'predefined shortcut samples', 
-                # change size from it.
+                # User might press 
+                # 'predefined shortcut samples' 
                 y = event.y
                 left = MARGIN * 2 + CANVAS_SIZE
                 if (left <= event.x <= left + SIZE_SPACE and
                         MARGIN < y < MARGIN + CANVAS_SIZE):
-                    segment = float(CANVAS_SIZE) / MAX_SAMPLES
-                    step = math.floor((y - MARGIN) / segment) + 1
-                    self._user_size = step / float(MAX_SAMPLES)  
+                    segment = float(CANVAS_SIZE) / len(PRESETS)
+                    idx = int(math.floor((y - MARGIN) / segment))
+                    self._user_size = self.get_normalized_brush_size(PRESETS[idx])
                     self._button = -1 
-                    # -1 is Dummy value, to indicate invoke timer, 
+                    # -1 is Dummy value, to invoke timer at 
+                    # button release callback, 
                     # but not respond motion event.
                 else:
                     self._button = None
@@ -165,11 +180,10 @@ class SizePopup (windowing.PopupWindow):
         cy = MARGIN + radius
 
         length = math.hypot(x - cx, y - cy)
-        # If pressed position is inside 'size circle',
-        # user change it directly
         if length <= radius:
             self._user_size = length / radius
             return True
+        # Otherwise, the position is outside 'brush size circle'.
         return False
 
     def draw_cb(self, widget, cr):
@@ -193,26 +207,44 @@ class SizePopup (windowing.PopupWindow):
         cr.arc(0, 0, CANVAS_SIZE / 2, 0, math.pi * 2)
         cr.fill()
 
-        if self._user_size:
-            cr.set_source_rgb(0, 0, 0)
-            cr.arc(0, 0, (self._user_size * CANVAS_SIZE) / 2, 0, math.pi * 2)
-            cr.fill()
+        assert self._user_size != None
+        # Drawing current brush size
+        cr.set_source_rgb(0, 0, 0)
+        cr.arc(0, 0, (self._user_size * CANVAS_SIZE) / 2, 0, math.pi * 2)
+        cr.fill()
+
+        # Drawing initial brush size
+        cr.set_source_rgb(0, 0.3, 0.7)
+        cr.arc(0, 0, (self._initial_size * CANVAS_SIZE) / 2, 0, math.pi * 2)
+        cr.stroke()
+
+        # Drawing gauge
+        cr.set_source_rgb(0.6, 0.6, 0.6)
+        cr.set_line_width(1)
+        for i in (1, 10, 100):
+            rad = self.get_normalized_brush_size(i)
+            cr.arc(0, 0, (rad * CANVAS_SIZE) / 2, 0, math.pi * 2)
+            cr.stroke()
 
         cr.restore()
 
         cr.save()
         cr.set_source_rgb(1.0, 1.0, 1.0)
         center = CANVAS_SIZE + (MARGIN * 2) + (SIZE_SPACE / 2)
-        max_size = MAX_SAMPLES
-        size_step = 1.0 / max_size
-        segment_size = CANVAS_SIZE / float(max_size)
+        cnt = float(len(PRESETS))
+        segment_size = CANVAS_SIZE / cnt
+        max_radius = min(SIZE_SPACE, segment_size)
         cr.translate(center, MARGIN + segment_size / 2)
-        for i in xrange(max_size):
-            cursize = ((i+1) * size_step) * min(SIZE_SPACE, segment_size)
-            cr.set_source_rgb(1.0, 1.0, 1.0)
+        cr.set_source_rgb(1.0, 1.0, 1.0)
+        for i, size in enumerate(PRESETS):
+            cursize = ((i+1) / cnt) * max_radius
             cr.arc(0, 0, cursize / 2.0, 0, math.pi * 2)
             cr.fill()
             cr.translate(0, segment_size)
         cr.restore()
 
         return True
+
+    def advance(self):
+        """ Dummy. currently nothing to do"""
+        pass
