@@ -73,9 +73,11 @@ class Stabilizer(Assistbase):
     gtk.event x/y position as a sample,and return 
     the avearage of recent samples.
     """
+    STABILIZE_START_MAX = 24
 
     def __init__(self):
         super(Stabilizer, self).__init__()
+        self._stabilize_cnt = None
 
     def enum_current(self, button, time):
         if self._sample_count < self._sampling_max:
@@ -89,12 +91,10 @@ class Stabilizer(Assistbase):
         while idx < self._sampling_max:
             rx += self._get_stabilized_x(idx)
             ry += self._get_stabilized_y(idx)
-           #rp += self._get_stabilized_pressure(idx)
             idx += 1
 
         rx /= self._sampling_max 
         ry /= self._sampling_max
-       #rp /= self._sampling_max
 
         _prev_button = self._prev_button
         self._prev_button = button
@@ -105,11 +105,12 @@ class Stabilizer(Assistbase):
         # Heading / Trailing glitch workaround
         if button == 1:
             if (_prev_button == None):
-                if self._prev_rx != None:
-                    yield (self._prev_rx, self._prev_ry, 0.0)
-                    self._prev_rx = self._prev_ry = None
-                yield (rx, ry, rp)
+                self._stabilize_cnt = 0
+                yield (rx, ry, 0.0)
+                yield (rx, ry, self._get_initial_pressure(rp))
                 raise StopIteration
+            elif self._stabilize_cnt < self.STABILIZE_START_MAX:
+                rp = self._get_initial_pressure(rp)
         elif button == None:
             if (_prev_button != None):
                 rp = self._get_stabilized_pressure(idx)
@@ -120,10 +121,15 @@ class Stabilizer(Assistbase):
                 else:
                     yield (rx, ry, 0.0)
                     raise StopIteration
+
             rp = 0.0
 
         yield (rx, ry, rp)
         raise StopIteration
+
+    def _get_initial_pressure(self, rp):
+        self._stabilize_cnt += 1
+        return rp * float(self._stabilize_cnt) / self.STABILIZE_START_MAX
 
     def reset(self):
         super(Stabilizer, self).reset()
