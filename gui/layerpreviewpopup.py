@@ -106,15 +106,15 @@ class PreviewPopup (windowing.PopupWindow):
         canvas_w = POPUP_WIDTH
         canvas_h = POPUP_WIDTH
 
-        if self._pixbuf:
+        # Drawing background check
+        check_size = canvas_w / 5
+        cr.save()
+        cr.translate(0.0, TITLE_SPACE)
+        drawutils.render_checks(cr, check_size, 
+                int(canvas_w / check_size))
+        cr.restore()
 
-            # Drawing background check
-            check_size = canvas_w / 5
-            cr.save()
-            cr.translate(0.0, TITLE_SPACE)
-            drawutils.render_checks(cr, check_size, 
-                    int(canvas_w / check_size))
-            cr.restore()
+        if self._pixbuf:
 
             # Drawing the layer into the center of canvas
             cr.save()
@@ -139,15 +139,19 @@ class PreviewPopup (windowing.PopupWindow):
 
             cr.restore()
 
-            # Drawing layer name
-            cr.set_font_size(FONT_SIZE)
-            cr.set_source_rgb(0.0, 0.0, 0.0)
-            cr.rectangle(0, 0, canvas_w, TITLE_SPACE)
-            cr.fill()
-            cr.set_source_rgb(1.0, 1.0, 1.0)
-            cr.move_to(MARGIN, FONT_SIZE + MARGIN);
-            cr.show_text(self._layer_name)
-        else:
-            cr.set_source_rgb(0.9, 0.9, 0.9)
-            cr.paint()
+        # Drawing layer name
+        cr.set_font_size(FONT_SIZE)
+        cr.set_source_rgb(0.0, 0.0, 0.0)
+        cr.rectangle(0, 0, canvas_w, TITLE_SPACE)
+        cr.fill()
+
+        cr.rectangle(MARGIN, MARGIN, 
+                canvas_w - MARGIN*2, 
+                TITLE_SPACE - MARGIN*2)
+        cr.clip()
+
+        cr.new_path()
+        cr.set_source_rgb(1.0, 1.0, 1.0)
+        cr.move_to(MARGIN, FONT_SIZE + MARGIN);
+        cr.show_text(self._layer_name)
         return True
