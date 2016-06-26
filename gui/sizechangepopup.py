@@ -154,7 +154,6 @@ class SizePopup (windowing.PopupWindow):
 
     def leave_cb(self, widget, event):
         self.leave('outside')
-        pass
 
     def motion_cb(self, widget, event):
         if self._button == 1:
@@ -246,5 +245,10 @@ class SizePopup (windowing.PopupWindow):
         return True
 
     def advance(self):
-        """ Dummy. currently nothing to do"""
+        """Currently,nothing to do."""
         pass
+
+    def backward(self):
+        """Currently,nothing to do."""
+        pass
+

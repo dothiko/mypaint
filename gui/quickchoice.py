@@ -141,6 +141,10 @@ class QuickBrushChooser (Gtk.VBox):
         """Advances to the next page of brushes."""
         self.groups_sb.next()
 
+    def backward(self):
+        """Go back to the prev page of brushes."""
+        self.groups_sb.previous()
+
 
 class BrushChooserPopup (windowing.ChooserPopup):
     """Speedy brush chooser popup"""
@@ -194,6 +198,10 @@ class BrushChooserPopup (windowing.ChooserPopup):
     def advance(self):
         """Advances to the next page of brushes."""
         self._chooser.advance()
+
+    def backward(self):
+        """Go back to the prev page of brushes."""
+        self._chooser.backward()
 
 
 class QuickColorChooser (Gtk.VBox):
@@ -281,6 +289,10 @@ class QuickColorChooser (Gtk.VBox):
         """Advances to the next color selector."""
         self._spinbox.next()
 
+    def backward(self):
+        """Advances to the previous color selector."""
+        self._spinbox.previous()
+
 
 class ColorChooserPopup (windowing.ChooserPopup):
     """Speedy color chooser dialog"""
@@ -327,6 +339,9 @@ class ColorChooserPopup (windowing.ChooserPopup):
         """Advances to the next color selector."""
         self._chooser.advance()
 
+    def backward(self):
+        """Advances to the previous color selector."""
+        self._chooser.backward()
 
 ## Classes: interface registration
 
