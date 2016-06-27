@@ -9,6 +9,7 @@
 from gi.repository import Gtk
 from gi.repository import Gdk
 import cairo
+import weakref
 
 from lib import helpers
 import windowing
@@ -66,12 +67,14 @@ class PreviewPopup (windowing.PopupWindow):
 
 
     def enter(self, layer):
-        self._target_layer = layer
+        self._target_layer_ref = weakref.ref(layer)
+        self._layer_name = layer.name
         assert layer != None
         # popup placement
         x, y = self.get_position()
         self.move(x, y)
         self.show_all()
+        # Important : self.show_all() must placed prior to self.get_window()
 
         window = self.get_window()
         cursor = Gdk.Cursor.new_for_display(
@@ -80,7 +83,7 @@ class PreviewPopup (windowing.PopupWindow):
         bbox = layer.get_bbox()
         if bbox.w > 0 and bbox.h > 0:
             self._pixbuf = layer.render_as_pixbuf(*bbox, alpha=True)
-            self._layer_name = layer.name
+
 
     def leave(self, reason):
         if self.active:
@@ -90,7 +93,14 @@ class PreviewPopup (windowing.PopupWindow):
         self.hide()
 
     def button_press_cb(self, widget, event):
-        pass
+        if event.button == Gdk.BUTTON_SECONDARY: 
+            model = self.app.doc.model
+            target_layer = self._target_layer_ref()
+            if target_layer:
+                model.select_layer(layer = target_layer)
+            else:
+                logger.warning('layer %s weakref cannot solved!' % self._layer_name)
+            self.hide()
 
     def button_release_cb(self, widget, event):
         pass
@@ -125,7 +135,7 @@ class PreviewPopup (windowing.PopupWindow):
             cr.translate(hw, hh + TITLE_SPACE)
 
             aspect = pw / ph
-            if aspect > 1.0:
+            if aspect >= 1.0:
                 ratio = float(canvas_w) / pw
             elif aspect < 1.0:
                 ratio = float(canvas_h) / ph
