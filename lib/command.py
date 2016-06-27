@@ -852,9 +852,7 @@ class RemoveLayer (Command):
         assert self._before_current_path != None
 
         self._unwanted_paths = rootstack.get_selected_layers()
-        # we cannot use 'in' operator with gtk.TreePath
         assert self._before_current_path in self._unwanted_paths
-
 
         self._removed_rootstack = None
         self._before_remove_paths = None
@@ -893,10 +891,9 @@ class RemoveLayer (Command):
                 rootstack.set_current_path((0,))
         else:
             if not rootstack.deepget(self._unwanted_paths[0]):
-                first_path = self._unwanted_paths[0]
-                path_above = first_path.copy().prev()
-                if rootstack.deepget(path_above):
-                    rootstack.set_current_path(path_above)
+                first_path = self._unwanted_paths[0].copy()
+                if first_path.prev():
+                    rootstack.set_current_path(first_path)
                 else:
                     rootstack.set_current_path((0,))
 
