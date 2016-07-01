@@ -813,7 +813,7 @@ class AddLayer (Command):
             filename = kwds['import-filename']
             pixbuf = lib.pixbuf.load_from_file(filename)
             arr = helpers.gdkpixbuf2numpy(pixbuf)
-            s = tiledsurface.Surface()
+            s = lib.tiledsurface.Surface()
             bbox = s.load_from_numpy(arr, 0, 0)
             self._layer.load_from_surface(s)
 
