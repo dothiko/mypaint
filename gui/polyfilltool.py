@@ -58,116 +58,18 @@ POLYFILLMODES = (
 
 ## Module funcs
 
-#def _draw_node_polygon(cr, tdw, nodes, selected_nodes=None, 
-#        color=None, gradient=None,
-#        dx=0, dy=0, ox=0, oy=0, stroke=False, fill=True):
-#    """ draw cairo polygon
-#    :param color: color object of mypaint
-#    :param gradient: Gradient object. cairo.LinearGradient or something
-#
-#    if both of color and gradient are null,polygon is not filled.
-#
-#    :param selected_nodes: list of INDEX of selected nodes 
-#    :param dx,dy: offset position of selected nodes
-#    :param ox,oy: polygon origin position
-#    """
-#    if len(nodes) > 1:
-#        cr.save()
-#        cr.set_line_width(1)
-#        if color:
-#            cr.set_source_rgb(*color.get_rgb())
-#        elif gradient:
-#            cr.set_source(gradient)
-#
-#        for i, node in enumerate(nodes):#self._get_onscreen_nodes():
-#
-#            if i==len(nodes)-1 and len(nodes) < 3:
-#                break
-#
-#            if tdw:
-#                x, y = tdw.model_to_display(node.x, node.y)
-#            else:
-#                x, y = node
-#
-#            x-=ox
-#            y-=oy
-#
-#            n = (i+1) % len(nodes)
-#
-#            if tdw:
-#                x1, y1 = tdw.model_to_display(*node.get_control_handle(1))
-#                x2, y2 = tdw.model_to_display(*nodes[n].get_control_handle(0))
-#                x3, y3 = tdw.model_to_display(nodes[n].x, nodes[n].y)
-#            else:
-#                x1, y1 = node.get_control_handle(1)
-#                x2, y2 = nodes[n].get_control_handle(0)
-#                x3, y3 = nodes[n].x, nodes[n].y
-#
-#            x1-=ox
-#            x2-=ox
-#            x3-=ox
-#            y1-=oy
-#            y2-=oy
-#            y3-=oy
-#
-#            if selected_nodes:
-#
-#                if i in selected_nodes:
-#                    x += dx
-#                    y += dy
-#                    x1 += dx
-#                    y1 += dy
-#
-#                if n in selected_nodes:
-#                    x2 += dx
-#                    y2 += dy
-#                    x3 += dx
-#                    y3 += dy
-#
-#            if fill or i < len(nodes)-1:
-#                if i==0:
-#                    cr.move_to(x,y)
-#
-#                cr.curve_to(x1, y1, x2, y2, x3, y3) 
-#
-#
-#
-#        if fill and len(nodes) > 2 and (gradient or color):
-#            cr.close_path()
-#            cr.fill_preserve()
-#
-#        if stroke:
-#
-#            def draw_dash(dot):
-#                cr.set_dash((), 0)
-#                cr.set_source_rgb(1,1,1)
-#                cr.stroke_preserve()
-#                cr.set_source_rgb(0,0,0)
-#                cr.set_dash((dot, ) )
-#                cr.stroke()
-#
-#            draw_dash(4)
-#
-#            if len(nodes) > 2:
-#                cr.move_to(x,y)
-#                cr.curve_to(x1, y1, x2, y2, x3, y3) 
-#                draw_dash(10)
-#
-#
-#        cr.restore()
-
 def _render_polygon_to_layer(model, target_layer, shape, nodes, 
         color, gradient, bbox, mode=lib.mypaintlib.CombineNormal):
     """
-    :param bbox: boundary box, in model coordinate
+    :param bbox: boundary box rectangle, in model coordinate
     :param mode: polygon drawing mode(enum _POLYDRAWMODE). 
                  * NOT layer composite mode*
     """
-    sx, sy, ex, ey = bbox
+    sx, sy, w, h = bbox
     sx = int(sx)
     sy = int(sy)
-    w = int(abs(ex-sx)+1)
-    h = int(abs(ey-sy)+1)
+    w = int(w)
+    h = int(h)
     surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
     cr = cairo.Context(surf)
 
@@ -383,8 +285,8 @@ class _Shape(object):
                 xtilt=0.0, ytilt=0.0,
                 dtime=1.0
                 )
-    def get_maximum_area(self, tdw, mode, dx=0, dy=0):
-        return (0, 0, 0, 0) # dummy
+    def get_maximum_rect(self, tdw, mode, dx=0, dy=0):
+        raise NotImplementedError
 
     def update_event(self, event):
         self.shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
@@ -507,11 +409,12 @@ class _Shape_Bezier(_Shape):
             cr.restore()
 
 
-    def get_maximum_area(self, tdw, mode, dx=0, dy=0):
+    def get_maximum_rect(self, tdw, mode, dx=0, dy=0):
         """ get possible maximum rectangle 
         :param tdw: the target tileddrawwidget.if this is None,
                     all values(includeing dx,dy) recognized as 
                     model coordinate value.
+        :rtype tuple: a tuple of (x, y, width, height)
         """
         if len(mode.nodes) < 2:
             return (0,0,0,0)
@@ -525,8 +428,10 @@ class _Shape_Bezier(_Shape):
                 cx, cy = cn.get_control_handle(h_index)
 
             if n_index in mode.selected_nodes:
-                cx += dx
-                cy += dy
+                if (mode.current_handle_index == None or
+                        mode.current_handle_index == h_index):
+                    cx += dx
+                    cy += dy
 
             return (min(sx, cx - margin), min(sy, cy - margin),
                     max(ex, cx + margin), max(ey, cy + margin))
@@ -534,8 +439,9 @@ class _Shape_Bezier(_Shape):
 
 
 
+        # Get boundary rectangle of each segment
+        # and return the maximum 
         for i,cn in enumerate(mode.nodes):
-            # Get boundary rectangle,to reduce processing segment
             if tdw:
                 cnx, cny = tdw.model_to_display(cn.x, cn.y)
             else:
@@ -562,7 +468,7 @@ class _Shape_Bezier(_Shape):
             sx, sy, ex, ey = adjust_from_control_handle(tdw, cn, i, 1,
                 sx, sy, ex, ey, dx, dy, margin)
 
-        return (sx, sy, ex, ey)
+        return (sx, sy, abs(ex - sx) + 1, abs(ey - sy) + 1)
         
 
     def button_press_cb(self, mode, tdw, event):
@@ -950,7 +856,7 @@ class _Shape_Rectangle(_Shape):
                     radius=radius)
 
 
-    def get_maximum_area(self, tdw, mode, dx=0, dy=0):
+    def get_maximum_rect(self, tdw, mode, dx=0, dy=0):
         """
         Get maximum rectangle area:
 
@@ -972,7 +878,7 @@ class _Shape_Rectangle(_Shape):
             ex += margin
             ey += margin
 
-        return (sx, sy, ex, ey)
+        return (sx, sy, abs(ex-sx)+1, abs(ey-sy)+1)
 
     def set_area(self, mode, sx, sy, ex, ey):
         if ex < sx:
@@ -1455,7 +1361,7 @@ class PolyfillMode (BezierMode):
 
     def redraw_curve_cb(self, erase=False):
         """ Frontend method,to redraw curve from outside this class"""
-        pass # do nothing
+        pass # do nothing for now
 
     def _queue_redraw_curve(self, tdw=None):
 
@@ -1466,7 +1372,7 @@ class PolyfillMode (BezierMode):
 
             sdx, sdy = self.drag_offset.get_display_offset(tdw)
             tdw.queue_draw_area(
-                    *self._shape.get_maximum_area(tdw, self, sdx, sdy))
+                    *self._shape.get_maximum_rect(tdw, self, sdx, sdy))
 
 
     def _queue_draw_buttons(self):
@@ -1702,7 +1608,7 @@ class PolyfillMode (BezierMode):
                         composite_mode = lib.mypaintlib.CombineDestinationOut
 
                     
-            bbox = self._shape.get_maximum_area(None, self)
+            bbox = self._shape.get_maximum_rect(None, self)
             cmd = PolyFill(self.doc.model,
                     self.shape,
                     self.nodes,
