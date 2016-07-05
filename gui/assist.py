@@ -66,6 +66,10 @@ class Assistbase(object):
 
     def get_current_index(self, offset):
         return (self._current_index + offset) % self._sampling_max
+
+    def set_active_cb(self, flag):
+        """ activated from Gtk.Action """
+        pass
             
 
 class Stabilizer(Assistbase):
@@ -75,9 +79,10 @@ class Stabilizer(Assistbase):
     """
     STABILIZE_START_MAX = 24
 
-    def __init__(self):
+    def __init__(self, app):
         super(Stabilizer, self).__init__()
         self._stabilize_cnt = None
+        self.app = app
 
     def enum_current(self, button, time):
         if self._sample_count < self._sampling_max:
@@ -162,4 +167,4 @@ class Stabilizer(Assistbase):
             if math.hypot(x - px, y - py) > 4:
                 super(self.__class__, self).fetch(x, y, pressure, time)
             self._prev_time = time
-        
+

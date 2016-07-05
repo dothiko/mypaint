@@ -90,7 +90,7 @@ import gui.factoryaction  # registration only
 import gui.autorecover
 import lib.xml
 import gui.profiling
-import assist
+import assistmanager
 import sizechangemode
 import beziertool
 import polyfilltool
@@ -385,7 +385,9 @@ class Application (object):
         GLib.idle_add(self._at_application_start, filenames, fullscreen)
 
         # Create application unique assist object
-        self._assist = assist.Stabilizer()
+        # This should be placed at least after the 
+        # gui.blendmodifier.BlendModifier has generated.
+        self.assistmanager = assistmanager.AssistManager(self) #assist.Stabilizer(self)
 
 
     def _at_application_start(self, filenames, fullscreen):
@@ -843,7 +845,7 @@ class Application (object):
     ## Assistant
     def get_assistant(self):
         """ Get current assistant.if it disabled,'None' returned."""
-        return self._assist
+        return self.assistmanager.get_current_assistant()
 
     ## Menu callbacks
     def mylocal_resetdocksizes_cb(self,action):

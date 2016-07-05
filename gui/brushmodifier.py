@@ -9,7 +9,7 @@
 
 from gettext import gettext as _
 from lib.helpers import rgb_to_hsv, hsv_to_rgb
-
+from lib.observable import event
 
 class BrushModifier (object):
     """Applies changed brush settings to the active brush, with overrides.
@@ -65,9 +65,13 @@ class BrushModifier (object):
         self._hist = []
 
     def _push_hist(self, justentered):
+        # Call observer event for setting blend mode
+        self.blend_mode_changed(justentered)
+
         if justentered in self._hist:
             self._hist.remove(justentered)
         self._hist.append(justentered)
+
 
     def _pop_hist(self, justleft):
         for mode in self._toggle_actions:
@@ -104,6 +108,7 @@ class BrushModifier (object):
                 if unmod_b.has_small_base_value(setting_name):
                     settings = unmod_b.get_setting(setting_name)
                 modif_b.set_setting(setting_name, settings)
+
 
     def _cancel_other_modes(self, action):
         for other_action in self._toggle_actions:
@@ -264,3 +269,13 @@ class BrushModifier (object):
 
             if not self._in_brush_selected_cb:
                 self._last_selected_color = self.app.brush.get_color_hsv()
+
+    ## Blend mode event
+    @event
+    def blend_mode_changed(self, new_blend_mode):
+        """ Notify the blend mode has changed.
+        mode arguments might be None, but None means 'BlendModeNormal'
+        :param old_mode: old mode. 
+        :param new_mode: newly entered mode. 
+        """
+

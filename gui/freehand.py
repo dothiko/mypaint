@@ -596,13 +596,9 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                 for hx, hy, ht in drawstate.evhack_positions:
                     if assistant:
                         assistant.fetch(hx, hy, pressure, time)
-                        if self.doc.stabilizer_mode:
-                            for hx, hy, hp in assistant.enum_current(drawstate.button_down, time):
-                                queue_motion(ht, hx, hy, hp, None, None)
-                            continue
-                       #else:
-                       #    info=((hx, hy, pressure), )
-
+                        for hx, hy, hp in assistant.enum_current(drawstate.button_down, time):
+                            queue_motion(ht, hx, hy, hp, None, None)
+                        continue
                     queue_motion(ht, hx, hy, pressure, None, None)
 
             else:
@@ -619,12 +615,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         # Assitant event position fetch and/or queue motion
         if assistant:
             assistant.fetch(x, y, pressure, time)
-            if self.doc.stabilizer_mode:
-                for x, y, p in assistant.enum_current(drawstate.button_down, time):
-                    queue_motion(time, x, y, p, xtilt, ytilt)
-            else:
-                queue_motion(time, x, y, pressure, xtilt, ytilt)
-
+            for x, y, p in assistant.enum_current(drawstate.button_down, time):
+                queue_motion(time, x, y, p, xtilt, ytilt)
         else:
             queue_motion(time, x, y, pressure, xtilt, ytilt)
 
