@@ -48,11 +48,11 @@ class Assistbase(object):
         Assistbase._sample_count = 0
 
     def enum_current(self, button, time):
-        """
-        Only stub.
+        """ Enum current assisted position, from fetched samples.
+        This is the most important method of assistant class.
         This method should return a value with yield.
         """
-        pass
+        pass # By the way, this is melely stub.
 
     def fetch(self, x, y, pressure, time):
         """Fetch samples"""
@@ -69,6 +69,16 @@ class Assistbase(object):
 
     def set_active_cb(self, flag):
         """ activated from Gtk.Action """
+        pass
+
+    ## Overlay drawing related
+
+    def queue_draw_area(self, tdw):
+        """ Queue draw area for overlay """
+        pass
+
+    def draw_overlay(self, cr):
+        """ Drawing overlay """
         pass
             
 
@@ -167,4 +177,104 @@ class Stabilizer(Assistbase):
             if math.hypot(x - px, y - py) > 4:
                 super(self.__class__, self).fetch(x, y, pressure, time)
             self._prev_time = time
+
+
+class Stabilizer_Krita(Assistbase):
+    """ Stabilizer class, like Krita's one. 
+
+    This stablizer actually average angle.
+    """
+    STABILIZE_RADIUS = 40 # Stabilizer radius, in DISPLAY pixel.
+
+    def __init__(self, app):
+        super(Stabilizer_Krita, self).__init__()
+        self._stabilize_cnt = None
+        self.app = app
+
+    def enum_current(self, button, time):
+
+        px = self._prev_rx
+        py = self._prev_ry
+
+        if px == None or py == None:
+            self._prev_rx = self._cx
+            self._prev_ry = self._cy
+            yield (self._prev_rx , self._prev_ry , 0)
+            raise StopIteration
+
+        dx = self._cx - px
+        dy = self._cy - py
+        cur_length = math.hypot(dx, dy)
+
+        if cur_length <= self.STABILIZE_RADIUS:
+            raise StopIteration
+
+        move_length = cur_length - self.STABILIZE_RADIUS
+        mx = (dx / cur_length) * move_length
+        my = (dy / cur_length) * move_length
+        self._prev_rx += mx
+        self._prev_ry += my
+        
+        yield (self._prev_rx , self._prev_ry , self._latest_pressure)
+        raise StopIteration
+
+
+    def _get_initial_pressure(self, rp):
+        self._stabilize_cnt += 1
+        return rp * float(self._stabilize_cnt) / self.STABILIZE_START_MAX
+
+    def reset(self):
+        super(Stabilizer_Krita, self).reset()
+        self._prev_rx = None
+        self._prev_ry = None
+        self._cx = None
+        self._cy = None
+        self._prev_button = None
+        self._prev_time = None
+        self._prev_rp = None
+        self._release_time = None
+        self._latest_pressure = None
+        
+
+    def _get_stabilized_x(self, idx):
+        return self._samples_x[self.get_current_index(idx)]
+    
+    def _get_stabilized_y(self, idx):
+        return self._samples_y[self.get_current_index(idx)]
+
+    def _get_stabilized_pressure(self, idx):
+        return self._samples_p[self.get_current_index(idx)]
+
+    def fetch(self, x, y, pressure, time):
+        """Fetch samples"""
+        self._latest_pressure = pressure
+        self._cx = x
+        self._cy = y
+        
+
+    ## Overlay drawing related
+
+    def queue_draw_area(self, tdw):
+        """ Queue draw area for overlay """
+        if self._prev_rx != None:
+            full_rad = (self.STABILIZE_RADIUS + 2) * 2
+            half_rad = full_rad / 2
+            tdw.queue_draw_area(self._prev_rx - half_rad, self._prev_ry - half_rad,
+                    full_rad, full_rad)
+
+    def draw_overlay(self, cr):
+        """ Drawing overlay """
+        if self._prev_rx != None:
+            cr.save()
+            cr.set_line_width(1)
+            cr.arc( self._prev_rx,
+                    self._prev_ry,
+                    self.STABILIZE_RADIUS,
+                    0.0,
+                    2*math.pi)
+            cr.stroke_preserve()
+            cr.set_dash( (10,) )
+            cr.set_source_rgb(1, 1, 1)
+            cr.stroke()
+            cr.restore()
 

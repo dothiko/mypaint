@@ -17,6 +17,7 @@ from lib.helpers import clamp
 import logging
 from collections import deque
 logger = logging.getLogger(__name__)
+import weakref
 
 from gettext import gettext as _
 from gi.repository import Gtk
@@ -47,7 +48,8 @@ EVCOMPRESSION_WORKAROUND_NONE = 999
 
 class FreehandMode (gui.mode.BrushworkModeMixin,
                     gui.mode.ScrollableModeMixin,
-                    gui.mode.InteractionMode):
+                    gui.mode.InteractionMode,
+                    gui.mode.OverlayMixin):
     """Freehand drawing mode
 
     To improve application responsiveness, this mode uses an internal
@@ -111,7 +113,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         super(FreehandMode, self).__init__(**args)
         self._cursor_hidden_tdws = set()
         self._cursor_hidden = None
-
 
     ## Metadata
 
@@ -263,13 +264,14 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         self._drawing_state = {}
         self._reset_drawing_state()
         self._debug = (logger.getEffectiveLevel() == logging.DEBUG)
+        self._discard_overlays()
                
     def leave(self, **kwds):
         """Leave freehand mode"""
         self._reset_drawing_state()
         self._reinstate_drawing_cursor(tdw=None)
         super(FreehandMode, self).leave(**kwds)
-
+        self._discard_overlays()
     
 
     ## Special cursor state while there's pressure
@@ -419,6 +421,11 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         result = False
         current_layer = tdw.doc.layer_stack.current
         if current_layer.get_paintable() and event.button == 1:
+            self._ensure_overlay_for_tdw(tdw)
+            assistant = tdw.app.get_assistant()
+            if assistant:
+                assistant.queue_draw_area(tdw) 
+
             # See comment above in button_press_cb.
             drawstate = self._get_drawing_state(tdw)
             if not drawstate.last_event_had_pressure:
@@ -466,6 +473,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
 
+        self._ensure_overlay_for_tdw(tdw)
 
 
         # Disable or work around GDK's motion event compression
@@ -490,6 +498,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         state = event.state
 
         assistant = tdw.app.get_assistant()
+        if assistant:
+            assistant.queue_draw_area(tdw)
 
         # Workaround for buggy evdev behaviour.
         # Events sometimes get a zero raw pressure reading when the
@@ -617,6 +627,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             assistant.fetch(x, y, pressure, time)
             for x, y, p in assistant.enum_current(drawstate.button_down, time):
                 queue_motion(time, x, y, p, xtilt, ytilt)
+            assistant.queue_draw_area(tdw)
         else:
             queue_motion(time, x, y, pressure, xtilt, ytilt)
 
@@ -715,6 +726,10 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             cls._OPTIONS_WIDGET = widget
         return cls._OPTIONS_WIDGET
 
+    ## Overlay related
+
+    def _generate_overlay(self, tdw):
+        return _Overlay_Freehand(self, tdw)
 
 
 class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
@@ -858,6 +873,20 @@ class PressureAndTiltInterpolator (object):
             for t, x, y, p, xt, yt in self._interpolate_and_step():
                 yield (t, x, y, p, xt, yt)
 
+
+class _Overlay_Freehand (gui.overlays.Overlay):
+    """Overlay for freehand mode """
+
+    def __init__(self, freehandmode, tdw):
+        super(_Overlay_Freehand, self).__init__()
+        self._freehandmode = weakref.proxy(freehandmode)
+        self._tdw = weakref.proxy(tdw)
+
+    def paint(self, cr):
+        """Draw brush size to the screen"""
+        assistant = self._tdw.app.get_assistant()
+        if assistant:
+            assistant.draw_overlay(cr)
 
 ## Module tests
 
