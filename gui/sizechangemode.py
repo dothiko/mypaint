@@ -35,7 +35,8 @@ import gui.ui_utils
 
 class SizechangeMode(gui.mode.ScrollableModeMixin,
                     gui.mode.BrushworkModeMixin,
-                    gui.mode.OneshotDragMode):
+                    gui.mode.OneshotDragMode,
+                    gui.mode.OverlayMixin):
     """Oncanvas brush Size change mode"""
 
     ## Class constants
@@ -83,7 +84,6 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         super(SizechangeMode, self).__init__(**kwds)
         self.app = None
         self._cursor = Gdk.Cursor(Gdk.CursorType.BLANK_CURSOR)
-        self._overlays = {}  # keyed by tdw
         self._enable_warp = False
 
     ## InteractionMode/DragMode implementation
@@ -187,24 +187,10 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
 
 
     ## Overlays
-    #  FIXME: mostly copied from gui/inktool.py
-    #  Would it be better there is something mixin?
-    #  (OverlayedMixin??)
+
+    def _generate_overlay(self, tdw):
+        return _Overlay(self, tdw)
     
-    def _ensure_overlay_for_tdw(self, tdw):
-        overlay = self._overlays.get(tdw)
-        if not overlay:
-            overlay = _Overlay(self, tdw)
-            tdw.display_overlays.append(overlay)
-            self._overlays[tdw] = overlay
-        return overlay
-
-    def _discard_overlays(self):
-        for tdw, overlay in self._overlays.items():
-            tdw.display_overlays.remove(overlay)
-            tdw.queue_draw()
-        self._overlays.clear()
-
     def _queue_draw_brush(self):
         space = 2 # I'm unsure why this number brought good result.
                   # might be line width * 2?
