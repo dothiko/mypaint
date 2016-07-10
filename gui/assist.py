@@ -250,16 +250,24 @@ class Stabilizer_Krita(Assistbase):
         self._latest_pressure = pressure
         self._cx = x
         self._cy = y
+
         
 
     ## Overlay drawing related
+
+    def _get_guide_center(self):
+        if self._latest_pressure != 0.0:
+            return (self._prev_rx, self._prev_ry)
+        else:
+            return (self._cx, self._cy)
 
     def queue_draw_area(self, tdw):
         """ Queue draw area for overlay """
         if self._prev_rx != None:
             full_rad = (self.STABILIZE_RADIUS + 2) * 2
             half_rad = full_rad / 2
-            tdw.queue_draw_area(self._prev_rx - half_rad, self._prev_ry - half_rad,
+            cx, cy = self._get_guide_center()
+            tdw.queue_draw_area(cx - half_rad, cy - half_rad,
                     full_rad, full_rad)
 
     def draw_overlay(self, cr):
@@ -267,8 +275,8 @@ class Stabilizer_Krita(Assistbase):
         if self._prev_rx != None:
             cr.save()
             cr.set_line_width(1)
-            cr.arc( self._prev_rx,
-                    self._prev_ry,
+            cx, cy = self._get_guide_center()
+            cr.arc( cx, cy,
                     self.STABILIZE_RADIUS,
                     0.0,
                     2*math.pi)
