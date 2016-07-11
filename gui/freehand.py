@@ -604,8 +604,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             if (hx0, hy0, ht0) == (x, y, time):
                 for hx, hy, ht in drawstate.evhack_positions:
                     if assistant:
-                        assistant.fetch(hx, hy, pressure, time)
-                        for hx, hy, hp in assistant.enum_current(drawstate.button_down):
+                        assistant.fetch(hx, hy, pressure, time, drawstate.button_down)
+                        for hx, hy, hp in assistant.enum_current():
                             print 'processing evhack'
                             queue_motion(ht, hx, hy, hp, None, None)
                         continue
@@ -628,14 +628,12 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             if fakepressure is not None:
                 button_down = None
 
-            assistant.fetch(x, y, pressure, time)
-            for x, y, p in assistant.enum_current(button_down):
+            assistant.fetch(x, y, pressure, time, button_down)
+            for x, y, p in assistant.enum_current():
                 queue_motion(time, x, y, p, xtilt, ytilt)
 
             # New positioned assistant overlay should be drawn here.
             if button_down is not None:
-                if fakepressure is not None:
-                    print 'released eraseing!'
                 assistant.queue_draw_area(tdw)
         else:
             # Ordinary event queuing

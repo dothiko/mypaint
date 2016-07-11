@@ -47,14 +47,14 @@ class Assistbase(object):
         Assistbase._sample_index = 0
         Assistbase._sample_count = 0
 
-    def enum_current(self, button):
+    def enum_current(self):
         """ Enum current assisted position, from fetched samples.
         This is the most important method of assistant class.
         This method should return a value with yield.
         """
         pass # By the way, this is melely stub.
 
-    def fetch(self, x, y, pressure, time):
+    def fetch(self, x, y, pressure, time, button):
         """Fetch samples"""
         Assistbase._samples_x[Assistbase._sample_index] = x 
         Assistbase._samples_y[Assistbase._sample_index] = y 
@@ -94,7 +94,7 @@ class Stabilizer(Assistbase):
         self._stabilize_cnt = None
         self.app = app
 
-    def enum_current(self, button):
+    def enum_current(self):
         if self._sample_count < self._sampling_max:
             raise StopIteration
 
@@ -111,23 +111,21 @@ class Stabilizer(Assistbase):
         rx /= self._sampling_max 
         ry /= self._sampling_max
 
-        _prev_button = self._prev_button
-        self._prev_button = button
         self._prev_rx = rx
         self._prev_ry = ry
         self._prev_rp = rp
 
         # Heading / Trailing glitch workaround
-        if button == 1:
-            if (_prev_button == None):
+        if self._last_button == 1:
+            if (self._prev_button == None):
                 self._stabilize_cnt = 0
                 yield (rx, ry, 0.0)
                 yield (rx, ry, self._get_initial_pressure(rp))
                 raise StopIteration
             elif self._stabilize_cnt < self.STABILIZE_START_MAX:
                 rp = self._get_initial_pressure(rp)
-        elif button == None:
-            if (_prev_button != None):
+        elif self._last_button == None:
+            if (self._prev_button != None):
                 rp = self._get_stabilized_pressure(idx)
                 if rp > 0.0:
                     self._prev_button = 1
@@ -150,6 +148,7 @@ class Stabilizer(Assistbase):
         super(Stabilizer, self).reset()
         self._prev_rx = None
         self._prev_ry = None
+        self._last_button = None
         self._prev_button = None
         self._prev_time = None
         self._prev_rp = None
@@ -166,9 +165,11 @@ class Stabilizer(Assistbase):
     def _get_stabilized_pressure(self, idx):
         return self._samples_p[self.get_current_index(idx)]
 
-    def fetch(self, x, y, pressure, time):
+    def fetch(self, x, y, pressure, time, button):
         """Fetch samples"""
         self._latest_pressure = pressure
+        self._prev_button = self._last_button
+        self._last_button = button
         
         # To reject extreamly slow and near samples
         if self._prev_time == None or time - self._prev_time > 8:
@@ -192,21 +193,19 @@ class Stabilizer_Krita(Assistbase):
         self.app = app
         self._raw_x = None
         self._raw_y = None
+        self._last_button = None
         self._prev_button = None
        #self._enabled = False
         self._initial = False
 
     @property
     def _enabled(self):
-        return self._prev_button != None
+        return self._last_button != None
 
-    def enum_current(self, button):
+    def enum_current(self):
 
-        _prev_button = self._prev_button
-        self._prev_button = button
-
-        if button == 1:
-            if (_prev_button == None):
+        if self._last_button == 1:
+            if (self._prev_button == None):
                 self._cx = self._px = self._raw_x
                 self._cy = self._py = self._raw_y
                 self._initial = True
@@ -241,8 +240,8 @@ class Stabilizer_Krita(Assistbase):
            #self._prev_pressure = self._latest_pressure
             yield (self._cx , self._cy , self._latest_pressure)
 
-        elif button == None:
-            if (_prev_button != None):
+        elif self._last_button == None:
+            if (self._prev_button != None):
                 if self._latest_pressure > 0.0:
                     # button is released but
                     # still remained some pressure...
@@ -264,8 +263,11 @@ class Stabilizer_Krita(Assistbase):
         self._cy = None
         self._latest_pressure = None
 
-    def fetch(self, x, y, pressure, time):
+    def fetch(self, x, y, pressure, time, button):
         """Fetch samples"""
+
+        self._prev_button = self._last_button
+        self._last_button = button
 
         self._latest_pressure = pressure
         self._raw_x = x
