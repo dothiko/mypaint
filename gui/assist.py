@@ -47,7 +47,7 @@ class Assistbase(object):
         Assistbase._sample_index = 0
         Assistbase._sample_count = 0
 
-    def enum_current(self, button, time):
+    def enum_current(self, button):
         """ Enum current assisted position, from fetched samples.
         This is the most important method of assistant class.
         This method should return a value with yield.
@@ -94,7 +94,7 @@ class Stabilizer(Assistbase):
         self._stabilize_cnt = None
         self.app = app
 
-    def enum_current(self, button, time):
+    def enum_current(self, button):
         if self._sample_count < self._sampling_max:
             raise StopIteration
 
@@ -184,99 +184,110 @@ class Stabilizer_Krita(Assistbase):
 
     This stablizer actually average angle.
     """
-    STABILIZE_RADIUS = 40 # Stabilizer radius, in DISPLAY pixel.
+    STABILIZE_RADIUS = 48 # Stabilizer radius, in DISPLAY pixel.
 
     def __init__(self, app):
         super(Stabilizer_Krita, self).__init__()
         self._stabilize_cnt = None
         self.app = app
+        self._raw_x = None
+        self._raw_y = None
+        self._prev_button = None
+       #self._enabled = False
+        self._initial = False
 
-    def enum_current(self, button, time):
+    @property
+    def _enabled(self):
+        return self._prev_button != None
 
-        px = self._prev_rx
-        py = self._prev_ry
+    def enum_current(self, button):
 
-        if px == None or py == None:
-            self._prev_rx = self._cx
-            self._prev_ry = self._cy
-            yield (self._prev_rx , self._prev_ry , 0)
-            raise StopIteration
+        _prev_button = self._prev_button
+        self._prev_button = button
 
-        dx = self._cx - px
-        dy = self._cy - py
-        cur_length = math.hypot(dx, dy)
+        if button == 1:
+            if (_prev_button == None):
+                self._cx = self._px = self._raw_x
+                self._cy = self._py = self._raw_y
+                self._initial = True
+               #self._prev_pressure = 0.0
+                yield (self._cx , self._cy , 0.0)
+                raise StopIteration
 
-        if cur_length <= self.STABILIZE_RADIUS:
-            raise StopIteration
+            cx = self._cx
+            cy = self._cy
 
-        move_length = cur_length - self.STABILIZE_RADIUS
-        mx = (dx / cur_length) * move_length
-        my = (dy / cur_length) * move_length
-        self._prev_rx += mx
-        self._prev_ry += my
+            dx = self._raw_x - cx
+            dy = self._raw_y - cy
+            cur_length = math.hypot(dx, dy)
+
+            if cur_length <= self.STABILIZE_RADIUS:
+                raise StopIteration
+
+            move_length = cur_length - self.STABILIZE_RADIUS
+            mx = (dx / cur_length) * move_length
+            my = (dy / cur_length) * move_length
+            self._px = cx
+            self._py = cy
+            self._cx = cx + mx
+            self._cy = cy + my
+
+            
+            if self._initial:
+                yield (self._cx , self._cy , 0.0) # To avoid heading glitch
+                self._initial = False
         
-        yield (self._prev_rx , self._prev_ry , self._latest_pressure)
+           #yield (cx , cy , self._prev_pressure) # To avoid initial glitch
+           #self._prev_pressure = self._latest_pressure
+            yield (self._cx , self._cy , self._latest_pressure)
+
+        elif button == None:
+            if (_prev_button != None):
+                if self._latest_pressure > 0.0:
+                    # button is released but
+                    # still remained some pressure...
+                    # rare case,but possible.
+                    yield (self._cx, self._cy, self._latest_pressure)
+                yield (self._cx, self._cy, 0.0)
+            yield (self._raw_x, self._raw_y, 0.0) # We need this for avoid trailing glitch
+
+
         raise StopIteration
 
 
-    def _get_initial_pressure(self, rp):
-        self._stabilize_cnt += 1
-        return rp * float(self._stabilize_cnt) / self.STABILIZE_START_MAX
 
     def reset(self):
         super(Stabilizer_Krita, self).reset()
-        self._prev_rx = None
-        self._prev_ry = None
+        self._px = None
+        self._py = None
         self._cx = None
         self._cy = None
-        self._prev_button = None
-        self._prev_time = None
-        self._prev_rp = None
-        self._release_time = None
         self._latest_pressure = None
-        
-
-    def _get_stabilized_x(self, idx):
-        return self._samples_x[self.get_current_index(idx)]
-    
-    def _get_stabilized_y(self, idx):
-        return self._samples_y[self.get_current_index(idx)]
-
-    def _get_stabilized_pressure(self, idx):
-        return self._samples_p[self.get_current_index(idx)]
 
     def fetch(self, x, y, pressure, time):
         """Fetch samples"""
-        self._latest_pressure = pressure
-        self._cx = x
-        self._cy = y
 
+        self._latest_pressure = pressure
+        self._raw_x = x
+        self._raw_y = y
         
 
     ## Overlay drawing related
 
-    def _get_guide_center(self):
-        if self._latest_pressure != 0.0:
-            return (self._prev_rx, self._prev_ry)
-        else:
-            return (self._cx, self._cy)
-
     def queue_draw_area(self, tdw):
         """ Queue draw area for overlay """
-        if self._prev_rx != None:
+        if self._enabled:
             full_rad = (self.STABILIZE_RADIUS + 2) * 2
             half_rad = full_rad / 2
-            cx, cy = self._get_guide_center()
-            tdw.queue_draw_area(cx - half_rad, cy - half_rad,
+            tdw.queue_draw_area(self._cx - half_rad, self._cy - half_rad,
                     full_rad, full_rad)
 
     def draw_overlay(self, cr):
         """ Drawing overlay """
-        if self._prev_rx != None:
+        if self._enabled:
             cr.save()
             cr.set_line_width(1)
-            cx, cy = self._get_guide_center()
-            cr.arc( cx, cy,
+            cr.arc( self._cx, self._cy,
                     self.STABILIZE_RADIUS,
                     0.0,
                     2*math.pi)

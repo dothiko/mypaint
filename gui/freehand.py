@@ -421,15 +421,12 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         result = False
         current_layer = tdw.doc.layer_stack.current
         if current_layer.get_paintable() and event.button == 1:
-            self._ensure_overlay_for_tdw(tdw)
-            assistant = tdw.app.get_assistant()
-            if assistant:
-                assistant.queue_draw_area(tdw) 
-
             # See comment above in button_press_cb.
+            assistant = tdw.app.get_assistant()
             drawstate = self._get_drawing_state(tdw)
-            if not drawstate.last_event_had_pressure:
+            if not drawstate.last_event_had_pressure or assistant:
                 self.motion_notify_cb(tdw, event, fakepressure=0.0)
+
             # Notify observers after processing the event
             self.doc.input_stroke_ended(event)
 
@@ -499,7 +496,9 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
         assistant = tdw.app.get_assistant()
         if assistant:
-            assistant.queue_draw_area(tdw)
+            if drawstate.button_down != None:
+                # To erase old overlay drawings of assistant.
+                assistant.queue_draw_area(tdw)
 
         # Workaround for buggy evdev behaviour.
         # Events sometimes get a zero raw pressure reading when the
@@ -606,7 +605,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                 for hx, hy, ht in drawstate.evhack_positions:
                     if assistant:
                         assistant.fetch(hx, hy, pressure, time)
-                        for hx, hy, hp in assistant.enum_current(drawstate.button_down, time):
+                        for hx, hy, hp in assistant.enum_current(drawstate.button_down):
+                            print 'processing evhack'
                             queue_motion(ht, hx, hy, hp, None, None)
                         continue
                     queue_motion(ht, hx, hy, pressure, None, None)
@@ -622,13 +622,23 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         if len(drawstate.evhack_positions) > 0:
             drawstate.evhack_positions = []
 
-        # Assitant event position fetch and/or queue motion
         if assistant:
+            # Assitant event position fetch and queue motion
+            button_down = drawstate.button_down
+            if fakepressure is not None:
+                button_down = None
+
             assistant.fetch(x, y, pressure, time)
-            for x, y, p in assistant.enum_current(drawstate.button_down, time):
+            for x, y, p in assistant.enum_current(button_down):
                 queue_motion(time, x, y, p, xtilt, ytilt)
-            assistant.queue_draw_area(tdw)
+
+            # New positioned assistant overlay should be drawn here.
+            if button_down is not None:
+                if fakepressure is not None:
+                    print 'released eraseing!'
+                assistant.queue_draw_area(tdw)
         else:
+            # Ordinary event queuing
             queue_motion(time, x, y, pressure, xtilt, ytilt)
 
         # Start the motion event processor, if it isn't already running
@@ -640,8 +650,9 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             )
             drawstate.motion_processing_cbid = cbid
 
-        # Is there any reasons baseclass callback isn't called in
-        # original code...?
+        # XXX In original code, motion_notify_cb() end without 
+        # calling superclass one.
+        # Is there any reasons to do so...?
         # Anyway,we need to detect device change in this version,so call this.
         return super(FreehandMode, self).motion_notify_cb(tdw, event)
 
