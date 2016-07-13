@@ -13,10 +13,12 @@ from lib.helpers import clamp
 import logging
 from collections import deque
 logger = logging.getLogger(__name__)
+from gettext import gettext as _
 
 from gi.repository import Gtk, Gdk
 
 import gui.drawutils
+import gui.tileddrawwidget
 
 ## Module settings
 
@@ -83,14 +85,15 @@ class Assistbase(object):
 
     ## Options presentor for assistant
     #  Return Gtk.Box type widget ,to fill freehand option presenter.
-    def get_option_presenter(self):
+    def get_presenter(self):
         pass
 
-class Avarager(Assistbase):
-    """ Avarager Stabilizer class, which fetches 
+class Averager(Assistbase):
+    """ Averager Stabilizer class, which fetches 
     gtk.event x/y position as a sample,and return 
-    the avearage of recent samples.
+    the average of recent samples.
     """
+    name = _("Averager")
     STABILIZE_START_MAX = 24
 
     def __init__(self, app):
@@ -189,6 +192,7 @@ class Stabilizer(Assistbase):
 
     This stablizer actually 'average angle'.
     """
+    name = _("Stabilizer")
     STABILIZE_RADIUS = 48 # Stabilizer radius, in DISPLAY pixel.
 
     def __init__(self, app):
@@ -317,8 +321,53 @@ class Stabilizer(Assistbase):
 
 
     ## Options presenter for assistant
-    def get_option_presenter(self):
+    def get_presenter(self):
         if self._presenter == None:
-            pass
-        return self._presenter
+            self._presenter = Optionpresenter_Stabilizer(self)
+        return self._presenter.get_box_widget()
+
+## Option presenters for assistants
+
+class _Presenter_Mixin(object):
+    """ Base Mixin of assistants option presenter"""
+
+    def force_redraw_overlay(self, area=None):
+        for tdw in gui.tileddrawwidget.TiledDrawWidget.get_visible_tdws():
+            if area:
+                tdw.queue_draw_area(*area)
+            else:
+                tdw.queue_draw()
+
+class Optionpresenter_Stabilizer(_Presenter_Mixin):
+    """ Optionpresenter for Stabilizer assistant.
+    """
+
+    def __init__(self, assistant):
+        self.assistant = assistant
+        grid = Gtk.Grid(column_spacing=6, row_spacing=4)
+        grid.set_hexpand_set(True)
+
+        checkbox = Gtk.CheckButton(_("Average direction:"),
+            hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
+        checkbox.haligh = Gtk.Align.FILL
+        grid.attach(checkbox,0,0,2,1)
+        
+        label = Gtk.Label(halign=Gtk.Align.START)
+        label.set_text(_("Range:"))
+        grid.attach(label,0,1,1,1)
+
+        scale = Gtk.HScale(hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
+        scale.set_range(32,64)
+        scale.set_increments(1,1)
+        scale.set_value(48)
+        scale.set_value_pos(Gtk.PositionType.RIGHT)
+        scale.set_hexpand_set(True)
+        grid.attach(scale,1,1,1,1)
+
+        grid.show_all()
+        self._grid = grid
+
+    def get_box_widget(self):
+        return self._grid
+
 

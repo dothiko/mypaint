@@ -408,7 +408,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             # Hide the cursor if configured to
             self._hide_drawing_cursor(tdw)
 
-            assistant = tdw.app.get_assistant()
+            assistant = tdw.app.assistmanager.current
             if assistant:
                 assistant.reset()
 
@@ -422,7 +422,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         current_layer = tdw.doc.layer_stack.current
         if current_layer.get_paintable() and event.button == 1:
             # See comment above in button_press_cb.
-            assistant = tdw.app.get_assistant()
+            assistant = tdw.app.assistmanager.current
             drawstate = self._get_drawing_state(tdw)
             if not drawstate.last_event_had_pressure or assistant:
                 self.motion_notify_cb(tdw, event, fakepressure=0.0)
@@ -494,7 +494,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         ytilt = event.get_axis(Gdk.AxisUse.YTILT)
         state = event.state
 
-        assistant = tdw.app.get_assistant()
+        assistant = tdw.app.assistmanager.current
         if assistant:
             if drawstate.button_down != None:
                 # To erase old overlay drawings of assistant.
@@ -744,6 +744,12 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
     """Configuration widget for freehand mode"""
 
+   #def __init__(self, mode):
+   #    """ To signal redraw from """
+   #    super(FreehandOptionsWidget, self).__init__()
+   #    self._mode = mode
+
+
     def init_specialized_widgets(self, row):
         cname = "slow_tracking"
         label = Gtk.Label()
@@ -760,6 +766,12 @@ class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
         self.attach(label, 0, row, 1, 1)
         self.attach(scale, 1, row, 1, 1)
         row += 1
+
+        # Add VBox for Assistant area
+        box = self.app.assistmanager.init_options_presenter_box()
+        self.attach(box, 0, row, 2, 1)
+        row += 1
+
         return row
 
 
@@ -893,7 +905,7 @@ class _Overlay_Freehand (gui.overlays.Overlay):
 
     def paint(self, cr):
         """Draw brush size to the screen"""
-        assistant = self._tdw.app.get_assistant()
+        assistant = self._tdw.app.assistmanager.current
         if assistant:
             assistant.draw_overlay(cr)
 

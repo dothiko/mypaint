@@ -384,10 +384,10 @@ class Application (object):
         self.drawWindow.show_all()
         GLib.idle_add(self._at_application_start, filenames, fullscreen)
 
-        # Create application unique assist object
-        # This should be placed at least after the 
-        # gui.blendmodifier.BlendModifier has generated.
-        self.assistmanager = assistmanager.AssistManager(self) #assist.Stabilizer(self)
+       ## Create application unique assist object
+       ## This should be placed at least after the 
+       ## gui.blendmodifier.BlendModifier has generated.
+       #self.assistmanager = assistmanager.AssistManager(self) #assist.Stabilizer(self)
 
 
     def _at_application_start(self, filenames, fullscreen):
@@ -843,9 +843,14 @@ class Application (object):
     ### My local addtion
 
     ## Assistant
-    def get_assistant(self):
-        """ Get current assistant.if it disabled,'None' returned."""
-        return self.assistmanager.get_current_assistant()
+    @property
+    def assistmanager(self):
+        try:
+            return self._assistmanager
+        except AttributeError:
+            self._assistmanager = assistmanager.AssistManager(self)
+            return self._assistmanager
+
 
     ## Menu callbacks
     def mylocal_resetdocksizes_cb(self,action):

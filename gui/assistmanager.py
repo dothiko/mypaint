@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
+from gettext import gettext as _
+from gi.repository import Gtk
+
 from gui.assist import *
 
 class AssistManager(object):
@@ -11,6 +14,8 @@ class AssistManager(object):
     when you switching to another mode(such as Eraser mode)
     manager remember an assistant which is applied when that blend mode
     enabled, and switch assistants automatically.
+
+    This class is singleton, can be accessed as app.assistmanager
     """
 
     def __init__(self, app):
@@ -30,8 +35,11 @@ class AssistManager(object):
         app.brushmanager.brush_selected += self.brush_selected_cb
         self._current_blend = None
         self._internal_update = False
+        self._presenter_box = None
+        self._empty_box = Gtk.VBox()
 
-    def get_current_assistant(self):
+    @property
+    def current(self):
         return self._current
 
     def _do_action(self, name, flag):
@@ -61,8 +69,21 @@ class AssistManager(object):
         if not self._internal_update:
             self._blend_modes_action[self._current_blend] = action_name
 
+        combo = self._assistant_combo
+
         if self._current:
             self._current.reset()
+
+            combo_model = combo.get_model()
+            for row in combo_model:
+                if combo_model.get(row.iter,0)[0] == self._current.name:
+                   combo.set_active_iter(row.iter)
+
+            self._activate_presenter(self._current.get_presenter()) 
+        else:
+            combo.set_active(0)
+            self._activate_presenter(None)
+
         return self._current
 
     def blend_mode_changed_cb(self, modifier, new_blend):
@@ -83,6 +104,67 @@ class AssistManager(object):
         """ Anyway, reset current assistant.
         """
         self._do_action(self._current_action_name, False)
+
+    # Options presenter
+    def init_options_presenter_box(self):
+        """ Option presenter initialize method.
+        This is called from FreehandOptionsWidget.init_specialized_widgets
+        of gui/freehand.py 
+        """ 
+        grid = Gtk.Grid(column_spacing=8, row_spacing=6, 
+                hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
+        grid.margin = 4
+        grid.hide()
+
+        label = Gtk.Label()
+        label.set_text(_("Assistant:"))
+        label.halign = Gtk.Align.START
+        grid.attach(label,0,0,1,1)
+
+        combo = Gtk.ComboBoxText(hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
+        combo.append_text(_("No Assistant")) 
+        for cl in self._assistants:
+            if cl is not None:
+                assistant = self._assistants[cl]
+                combo.append_text(assistant.name)
+        combo.set_active(0)
+        combo.popup_fixed_width = False
+        self._assistant_combo = combo
+        grid.attach(combo,1,0,1,1)
+
+
+        # Creating per-assistants option presenter space.
+        align = Gtk.Alignment.new(0.5, 0.5, 1.0, 1.0)
+        align.set_padding(0, 0, 0, 0)
+        align.set_border_width(3)
+        align.hexpand = True
+        align.halign = Gtk.Align.FILL
+        self._assistant_options_bin = align
+        grid.attach(align,0,1,2,1)
+
+        self._presenter_grid = grid                             
+        grid.show_all()
+        return grid
+
+    @property
+    def presenter_box(self):
+        return self._presenter_grid
+
+    def _activate_presenter(self, widget):
+        assert self._presenter_grid != None
+        if widget == None:
+            widget = self._empty_box
+
+        bin = self._assistant_options_bin
+        old_option = bin.get_child()
+        if old_option:
+            old_option.hide()
+            bin.remove(old_option)
+
+        if widget:
+            bin.add(widget)
+            widget.show()
+            bin.show_all()
 
 
 if __name__ == '__main__':
