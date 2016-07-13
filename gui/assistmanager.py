@@ -18,7 +18,7 @@ class AssistManager(object):
         # for each Gtk.Action/ToggleAction name.
 
         self. app = app
-        self._assistants = { "AssistModeStabilizer" : Stabilizer_Krita(app),
+        self._assistants = { "AssistModeStabilizer" : Stabilizer(app),
                              None : None # the default, no assistant enabled.
                 }
 

@@ -80,10 +80,14 @@ class Assistbase(object):
     def draw_overlay(self, cr):
         """ Drawing overlay """
         pass
-            
 
-class Stabilizer(Assistbase):
-    """ Stabilizer class, which fetches 
+    ## Options presentor for assistant
+    #  Return Gtk.Box type widget ,to fill freehand option presenter.
+    def get_option_presenter(self):
+        pass
+
+class Avarager(Assistbase):
+    """ Avarager Stabilizer class, which fetches 
     gtk.event x/y position as a sample,and return 
     the avearage of recent samples.
     """
@@ -180,23 +184,25 @@ class Stabilizer(Assistbase):
             self._prev_time = time
 
 
-class Stabilizer_Krita(Assistbase):
+class Stabilizer(Assistbase):
     """ Stabilizer class, like Krita's one. 
 
-    This stablizer actually average angle.
+    This stablizer actually 'average angle'.
     """
     STABILIZE_RADIUS = 48 # Stabilizer radius, in DISPLAY pixel.
 
     def __init__(self, app):
-        super(Stabilizer_Krita, self).__init__()
+        super(Stabilizer, self).__init__()
         self._stabilize_cnt = None
         self.app = app
         self._raw_x = None
         self._raw_y = None
         self._last_button = None
         self._prev_button = None
-       #self._enabled = False
         self._initial = False
+        self._average_previous = True
+        self._prev_dx = self._prev_dy = None
+        self._presenter = None
 
     @property
     def _enabled(self):
@@ -223,9 +229,18 @@ class Stabilizer_Krita(Assistbase):
             if cur_length <= self.STABILIZE_RADIUS:
                 raise StopIteration
 
+            if self._average_previous:
+                if self._prev_dx != None:
+                    dx = (dx + self._prev_dx) / 2.0
+                    dy = (dy + self._prev_dy) / 2.0
+                self._prev_dx = dx
+                self._prev_dy = dy
+
             move_length = cur_length - self.STABILIZE_RADIUS
             mx = (dx / cur_length) * move_length
             my = (dy / cur_length) * move_length
+
+
             self._px = cx
             self._py = cy
             self._cx = cx + mx
@@ -256,12 +271,13 @@ class Stabilizer_Krita(Assistbase):
 
 
     def reset(self):
-        super(Stabilizer_Krita, self).reset()
+        super(Stabilizer, self).reset()
         self._px = None
         self._py = None
         self._cx = None
         self._cy = None
         self._latest_pressure = None
+        self._prev_dx = None
 
     def fetch(self, x, y, pressure, time, button):
         """Fetch samples"""
@@ -298,4 +314,11 @@ class Stabilizer_Krita(Assistbase):
             cr.set_source_rgb(1, 1, 1)
             cr.stroke()
             cr.restore()
+
+
+    ## Options presenter for assistant
+    def get_option_presenter(self):
+        if self._presenter == None:
+            pass
+        return self._presenter
 
