@@ -193,7 +193,6 @@ class Stabilizer(Assistbase):
     This stablizer actually 'average angle'.
     """
     name = _("Stabilizer")
-    STABILIZE_RADIUS = 48 # Stabilizer radius, in DISPLAY pixel.
 
     def __init__(self, app):
         super(Stabilizer, self).__init__()
@@ -207,6 +206,7 @@ class Stabilizer(Assistbase):
         self._average_previous = True
         self._prev_dx = self._prev_dy = None
         self._presenter = None
+        self._stabilize_range = 48
 
     @property
     def _enabled(self):
@@ -230,7 +230,7 @@ class Stabilizer(Assistbase):
             dy = self._raw_y - cy
             cur_length = math.hypot(dx, dy)
 
-            if cur_length <= self.STABILIZE_RADIUS:
+            if cur_length <= self._stabilize_range:
                 raise StopIteration
 
             if self._average_previous:
@@ -240,7 +240,7 @@ class Stabilizer(Assistbase):
                 self._prev_dx = dx
                 self._prev_dy = dy
 
-            move_length = cur_length - self.STABILIZE_RADIUS
+            move_length = cur_length - self._stabilize_range
             mx = (dx / cur_length) * move_length
             my = (dy / cur_length) * move_length
 
@@ -299,7 +299,7 @@ class Stabilizer(Assistbase):
     def queue_draw_area(self, tdw):
         """ Queue draw area for overlay """
         if self._enabled:
-            full_rad = (self.STABILIZE_RADIUS + 2) * 2
+            full_rad = (self._stabilize_range + 3) * 2
             half_rad = full_rad / 2
             tdw.queue_draw_area(self._cx - half_rad, self._cy - half_rad,
                     full_rad, full_rad)
@@ -310,7 +310,7 @@ class Stabilizer(Assistbase):
             cr.save()
             cr.set_line_width(1)
             cr.arc( self._cx, self._cy,
-                    self.STABILIZE_RADIUS,
+                    self._stabilize_range,
                     0.0,
                     2*math.pi)
             cr.stroke_preserve()
@@ -344,30 +344,47 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
 
     def __init__(self, assistant):
         self.assistant = assistant
+        self._updating_ui = True
         grid = Gtk.Grid(column_spacing=6, row_spacing=4)
         grid.set_hexpand_set(True)
 
         checkbox = Gtk.CheckButton(_("Average direction:"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
         checkbox.haligh = Gtk.Align.FILL
+        checkbox.active = assistant._average_previous
+        checkbox.connect('toggled', self._average_toggled_cb)
         grid.attach(checkbox,0,0,2,1)
         
         label = Gtk.Label(halign=Gtk.Align.START)
         label.set_text(_("Range:"))
         grid.attach(label,0,1,1,1)
 
-        scale = Gtk.HScale(hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
-        scale.set_range(32,64)
-        scale.set_increments(1,1)
-        scale.set_value(48)
+        adj = Gtk.Adjustment(assistant._stabilize_range, 32, 64)
+        adj.connect('value-changed', self._range_changed_cb)
+
+        scale = Gtk.HScale(hexpand_set=True, hexpand=True, 
+                halign=Gtk.Align.FILL, adjustment=adj)
+       #scale.set_range(32,64)
+       #scale.set_increments(1,1)
+       #scale.set_value(48)
         scale.set_value_pos(Gtk.PositionType.RIGHT)
         scale.set_hexpand_set(True)
+
         grid.attach(scale,1,1,1,1)
 
         grid.show_all()
         self._grid = grid
+        self._updating_ui = False
 
     def get_box_widget(self):
         return self._grid
 
+    # Handlers
+    def _average_toggled_cb(self, checkbox):
+        if not self._updating_ui:
+            self.assistant._average_previous = checkbox.active
+
+    def _range_changed_cb(self, adj):
+        if not self._updating_ui:
+            self.assistant._stabilize_range = adj.get_value()
 
