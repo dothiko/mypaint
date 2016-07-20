@@ -202,77 +202,80 @@ class Stabilizer(Assistbase):
         self._raw_y = None
         self._last_button = None
         self._prev_button = None
-        self._initial = False
         self._average_previous = True
         self._prev_dx = self._prev_dy = None
         self._presenter = None
         self._stabilize_range = 48
+        self._last_time = None
+        self._prev_time = None
+        self._auto_disable = True # Auto stabilizer disable flag
+        self._disable_threshold = 32 # Auto stabilizer disable threshold, in millisecond
+        self._cycle = 0L
 
     @property
     def _enabled(self):
-        return self._last_button != None
+        return (self._last_button != None and 
+                self._disabled == False and
+                self._cycle > 1)
 
     def enum_current(self):
 
-        if self._last_button == 1:
-            if (self._prev_button == None):
-                self._cx = self._px = self._raw_x
-                self._cy = self._py = self._raw_y
-                self._initial = True
-               #self._prev_pressure = 0.0
-                yield (self._cx , self._cy , 0.0)
-                raise StopIteration
+        if self._disabled:
+            # Temporary disabled, until button is released.
+            yield (self._raw_x , self._raw_y , self._latest_pressure)
+        elif self._cycle == 1:
+            self._cycle = 2L
+            yield (self._cx , self._cy , 0.0)
+        else:
 
-            cx = self._cx
-            cy = self._cy
+            if self._last_button == 1:
 
-            dx = self._raw_x - cx
-            dy = self._raw_y - cy
-            cur_length = math.hypot(dx, dy)
+                cx = self._cx
+                cy = self._cy
 
-            if cur_length <= self._stabilize_range:
-                raise StopIteration
+                dx = self._raw_x - cx
+                dy = self._raw_y - cy
+                cur_length = math.hypot(dx, dy)
 
-            if self._average_previous:
-                if self._prev_dx != None:
-                    dx = (dx + self._prev_dx) / 2.0
-                    dy = (dy + self._prev_dy) / 2.0
-                self._prev_dx = dx
-                self._prev_dy = dy
+                if cur_length <= self._stabilize_range:
+                    raise StopIteration
 
-            move_length = cur_length - self._stabilize_range
-            mx = (dx / cur_length) * move_length
-            my = (dy / cur_length) * move_length
+                if self._average_previous:
+                    if self._prev_dx != None:
+                        dx = (dx + self._prev_dx) / 2.0
+                        dy = (dy + self._prev_dy) / 2.0
+                    self._prev_dx = dx
+                    self._prev_dy = dy
+
+                move_length = cur_length - self._stabilize_range
+                mx = (dx / cur_length) * move_length
+                my = (dy / cur_length) * move_length
 
 
-            self._px = cx
-            self._py = cy
-            self._cx = cx + mx
-            self._cy = cy + my
+                self._px = cx
+                self._py = cy
+                self._cx = cx + mx
+                self._cy = cy + my
 
+                
+                if self._cycle <= 3:
+                    yield (self._cx , self._cy , 0.0) # To avoid heading glitch
+
+                yield (self._cx , self._cy , self._latest_pressure)
+                self._cycle += 1L
             
-            if self._initial:
-                yield (self._cx , self._cy , 0.0) # To avoid heading glitch
-                self._initial = False
-        
-           #yield (cx , cy , self._prev_pressure) # To avoid initial glitch
-           #self._prev_pressure = self._latest_pressure
-            yield (self._cx , self._cy , self._latest_pressure)
-
-        elif self._last_button == None:
-            if (self._prev_button != None):
-                if self._latest_pressure > 0.0:
-                    # button is released but
-                    # still remained some pressure...
-                    # rare case,but possible.
-                    yield (self._cx, self._cy, self._latest_pressure)
-                yield (self._cx, self._cy, 0.0)
-            yield (self._raw_x, self._raw_y, 0.0) # We need this for avoid trailing glitch
+            elif self._last_button == None:
+                if (self._prev_button != None):
+                    if self._latest_pressure > 0.0:
+                        # button is released but
+                        # still remained some pressure...
+                        # rare case,but possible.
+                        yield (self._cx, self._cy, self._latest_pressure)
+                    yield (self._cx, self._cy, 0.0)
+                yield (self._raw_x, self._raw_y, 0.0) # We need this for avoid trailing glitch
 
 
         raise StopIteration
-
-
 
     def reset(self):
         super(Stabilizer, self).reset()
@@ -282,12 +285,41 @@ class Stabilizer(Assistbase):
         self._cy = None
         self._latest_pressure = None
         self._prev_dx = None
+        self._disabled = False
+        self._decided = False
+        self._last_button = None
+        self._start_time = None
+        self._cycle = 0L
 
     def fetch(self, x, y, pressure, time, button):
         """Fetch samples"""
 
         self._prev_button = self._last_button
         self._last_button = button
+        self._prev_time = self._last_time
+        self._last_time = time
+
+        if self._last_button == 1:
+            if (self._prev_button == None):
+                self._cx = self._px = x
+                self._cy = self._py = y
+                self._cycle = 1L
+                self._prev_time = time
+                self._start_time = time
+                if self._auto_disable:
+                    self._draw_length = 0
+                    self._disabled = True
+            elif self._auto_disable and self._disabled and self._start_time:
+                if time - self._start_time < 100:
+                    self._draw_length += math.hypot(x - self._px, y - self._py)
+                    self._px = x
+                    self._py = y
+                elif self._draw_length < self._disable_threshold:
+                    self._cx = x
+                    self._cy = y
+                    self._disabled = False
+                    self._start_time = None
+                
 
         self._latest_pressure = pressure
         self._raw_x = x
@@ -347,30 +379,51 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
         self._updating_ui = True
         grid = Gtk.Grid(column_spacing=6, row_spacing=4)
         grid.set_hexpand_set(True)
+        row = 0
 
-        checkbox = Gtk.CheckButton(_("Average direction:"),
+        def create_slider(row, label, handler, min_adj, max_adj, value):
+            labelobj = Gtk.Label(halign=Gtk.Align.START)
+            labelobj.set_text(label)
+            grid.attach(labelobj, 0, row, 1, 1)
+
+            adj = Gtk.Adjustment(value, min_adj, max_adj)
+            adj.connect('value-changed', handler)
+
+            scale = Gtk.HScale(hexpand_set=True, hexpand=True, 
+                    halign=Gtk.Align.FILL, adjustment=adj)
+            scale.set_value_pos(Gtk.PositionType.RIGHT)
+            grid.attach(scale, 1, row, 1, 1)
+            return scale
+
+
+        # Scale slider for range circle setting.
+        create_slider(row, _("Range:"), self._range_changed_cb,
+                32, 64, assistant._stabilize_range)
+        row+=1
+
+        # Checkbox for average direction.
+        checkbox = Gtk.CheckButton(_("Average direction"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
-        checkbox.haligh = Gtk.Align.FILL
-        checkbox.active = assistant._average_previous
+        checkbox.set_active(assistant._average_previous)
         checkbox.connect('toggled', self._average_toggled_cb)
-        grid.attach(checkbox,0,0,2,1)
-        
-        label = Gtk.Label(halign=Gtk.Align.START)
-        label.set_text(_("Range:"))
-        grid.attach(label,0,1,1,1)
+        grid.attach(checkbox, 0, row, 2, 1)
+        row+=1
 
-        adj = Gtk.Adjustment(assistant._stabilize_range, 32, 64)
-        adj.connect('value-changed', self._range_changed_cb)
+        # Checkbox for use auto-disable feature.
+        checkbox = Gtk.CheckButton(_("Auto disable"),
+            hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
+        checkbox.set_active(assistant._auto_disable) 
+        checkbox.connect('toggled', self._auto_disable_toggled_cb)
+        grid.attach(checkbox,0,row,2,1)
+        row+=1
 
-        scale = Gtk.HScale(hexpand_set=True, hexpand=True, 
-                halign=Gtk.Align.FILL, adjustment=adj)
-       #scale.set_range(32,64)
-       #scale.set_increments(1,1)
-       #scale.set_value(48)
-        scale.set_value_pos(Gtk.PositionType.RIGHT)
-        scale.set_hexpand_set(True)
-
-        grid.attach(scale,1,1,1,1)
+        # Scale slider for auto-disable threshold.
+        scale = create_slider(row, _("Threshold(in pixel):"), 
+                self._threshold_changed_cb,
+                16, 64, assistant._disable_threshold)
+        scale.set_sensitive(checkbox.get_active())
+        self._threshold_scale = scale
+        row+=1
 
         grid.show_all()
         self._grid = grid
@@ -382,9 +435,19 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
     # Handlers
     def _average_toggled_cb(self, checkbox):
         if not self._updating_ui:
-            self.assistant._average_previous = checkbox.active
+            self.assistant._average_previous = checkbox.get_active()
 
     def _range_changed_cb(self, adj):
         if not self._updating_ui:
             self.assistant._stabilize_range = adj.get_value()
+
+    def _auto_disable_toggled_cb(self, checkbox):
+        if not self._updating_ui:
+            flag = checkbox.get_active()
+            self.assistant._auto_disable = flag
+            self._threshold_scale.set_sensitive(flag)
+
+    def _threshold_changed_cb(self, adj):
+        if not self._updating_ui:
+            self.assistant._disable_threshold = adj.get_value()
 

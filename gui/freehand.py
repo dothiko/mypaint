@@ -411,6 +411,9 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             assistant = tdw.app.assistmanager.current
             if assistant:
                 assistant.reset()
+                assistant.fetch(event.x, event.y, 
+                        event.get_axis(Gdk.AxisUse.PRESSURE),
+                        event.time, drawstate.button_down)
 
 
             result = True
@@ -606,7 +609,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                     if assistant:
                         assistant.fetch(hx, hy, pressure, time, drawstate.button_down)
                         for hx, hy, hp in assistant.enum_current():
-                            print 'processing evhack'
                             queue_motion(ht, hx, hy, hp, None, None)
                         continue
                     queue_motion(ht, hx, hy, pressure, None, None)
