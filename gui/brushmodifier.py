@@ -274,7 +274,7 @@ class BrushModifier (object):
     @event
     def blend_mode_changed(self, new_blend_mode):
         """ Notify the blend mode has changed.
-        mode arguments might be None, but None means 'BlendModeNormal'
+        mode arguments might be None, it means 'BlendModeNormal'
         :param old_mode: old mode. 
         :param new_mode: newly entered mode. 
         """

@@ -209,8 +209,9 @@ class Stabilizer(Assistbase):
         self._last_time = None
         self._prev_time = None
         self._auto_disable = True # Auto stabilizer disable flag
-        self._disable_threshold = 32 # Auto stabilizer disable threshold, in millisecond
+        self._disable_threshold = 32 # Auto stabilizer disable threshold length, in pixel
         self._cycle = 0L
+        self.reset()
 
     @property
     def _enabled(self):
@@ -225,7 +226,7 @@ class Stabilizer(Assistbase):
             yield (self._raw_x , self._raw_y , self._latest_pressure)
         elif self._cycle == 1:
             self._cycle = 2L
-            yield (self._cx , self._cy , 0.0)
+            yield (self._cx , self._cy , self._initial_pressure)
         else:
 
             if self._last_button == 1:
@@ -259,7 +260,7 @@ class Stabilizer(Assistbase):
 
                 
                 if self._cycle <= 3:
-                    yield (self._cx , self._cy , 0.0) # To avoid heading glitch
+                    yield (self._cx , self._cy , self._initial_pressure) # To avoid heading glitch
 
                 yield (self._cx , self._cy , self._latest_pressure)
                 self._cycle += 1L
@@ -290,6 +291,7 @@ class Stabilizer(Assistbase):
         self._last_button = None
         self._start_time = None
         self._cycle = 0L
+        self._initial_pressure = 0.0
 
     def fetch(self, x, y, pressure, time, button):
         """Fetch samples"""
@@ -306,7 +308,9 @@ class Stabilizer(Assistbase):
                 self._cycle = 1L
                 self._prev_time = time
                 self._start_time = time
+                self._initial_pressure = 0.0
                 if self._auto_disable:
+                    # In auto disable mode, stabilizer disabled by default.
                     self._draw_length = 0
                     self._disabled = True
             elif self._auto_disable and self._disabled and self._start_time:
@@ -314,12 +318,17 @@ class Stabilizer(Assistbase):
                     self._draw_length += math.hypot(x - self._px, y - self._py)
                     self._px = x
                     self._py = y
-                elif self._draw_length < self._disable_threshold:
-                    self._cx = x
-                    self._cy = y
-                    self._disabled = False
+                else:
+                    if self._draw_length < self._disable_threshold:
+                        # When the drawn length exceeds threshold in certain time period,
+                        # then stabilizer enabled i.e. self._disabled == False
+                        self._cx = x
+                        self._cy = y
+                        self._disabled = False
+                        self._initial_pressure = pressure
+                    
+                    # Anyway, 'auto disable' check ended.
                     self._start_time = None
-                
 
         self._latest_pressure = pressure
         self._raw_x = x

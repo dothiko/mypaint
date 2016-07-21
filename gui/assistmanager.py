@@ -10,12 +10,13 @@ class AssistManager(object):
     """ AssistManager, To manage multiple assistants
     such as Stabilizer, Ruler, etc.
 
-    and, with this manager, assistants are blend-mode dependent,
-    when you switching to another mode(such as Eraser mode)
-    manager remember an assistant which is applied when that blend mode
-    enabled, and switch assistants automatically.
+    With this manager, assistants become brush dependent.
+    When you switching to another brush,
+    the manager remember whether the assistant is enabled for the brush or not
+    and enable/disable assistant automatically.
 
-    This class is singleton, can be accessed as app.assistmanager
+    This class is singleton, can be accessed as a property of app, 
+    i.e. app.assistmanager.
     """
 
     def __init__(self, app):
@@ -31,12 +32,13 @@ class AssistManager(object):
         self._current_action_name = None
 
         self._blend_modes_action={}
-        app.brushmodifier.blend_mode_changed += self.blend_mode_changed_cb
+       #app.brushmodifier.blend_mode_changed += self.blend_mode_changed_cb
         app.brushmanager.brush_selected += self.brush_selected_cb
         self._current_blend = None
         self._internal_update = False
         self._presenter_box = None
         self._empty_box = Gtk.VBox()
+        self._brushlookup = {}
 
     @property
     def current(self):
@@ -47,7 +49,7 @@ class AssistManager(object):
             action = self.app.find_action(name)
             if action:
                 self._internal_update = True
-                if hasattr(action, "set_active"):
+                if hasattr(action, "set_active"): # action is Gtk.ToggleAction
                     action.set_active(flag)
                 elif flag:
                     action.activate()
@@ -60,6 +62,11 @@ class AssistManager(object):
 
 
     def enable_assistant(self, action_name):
+        """ Enable assistant.
+        
+        :param action_name: the Gtk.Action name of assistant. 
+        if this is None, assistant disabled.
+        """
         old = self._current
 
         assert action_name in self._assistants.keys()
@@ -67,7 +74,10 @@ class AssistManager(object):
         self._current_action_name = action_name
 
         if not self._internal_update:
-            self._blend_modes_action[self._current_blend] = action_name
+           #self._blend_modes_action[self._current_blend] = action_name
+            binfo = self.app.doc.model.brush.brushinfo
+            name = binfo.get_string_property("parent_brush_name")
+            self._brushlookup[name] = action_name
 
         combo = self._assistant_combo
 
@@ -86,29 +96,40 @@ class AssistManager(object):
 
         return self._current
 
-    def blend_mode_changed_cb(self, modifier, new_blend):
-
-        if self._current_blend != None:
-            old_action_name = self._blend_modes_action.get(self._current_blend, None)
-            self._do_action(old_action_name, False)
-
-        new_action_name = self._blend_modes_action.get(new_blend, None)
-        self._do_action(new_action_name, True) 
-        # From this self._do_action(), Gtk.ToggleAction signalled
-        # and self.enable_assistant() would be called from outside this class.
-
-        self._blend_modes_action[new_blend] = new_action_name
-        self._current_blend = new_blend
+   #def blend_mode_changed_cb(self, modifier, new_blend):
+   #
+   #    if self._current_blend != None:
+   #        old_action_name = self._blend_modes_action.get(self._current_blend, None)
+   #        self._do_action(old_action_name, False)
+   #
+   #    new_action_name = self._blend_modes_action.get(new_blend, None)
+   #    self._do_action(new_action_name, True) 
+   #    # From this self._do_action(), Gtk.ToggleAction signalled
+   #    # and self.enable_assistant() would be called from outside this class.
+   #
+   #    self._blend_modes_action[new_blend] = new_action_name
+   #    self._current_blend = new_blend
 
     def brush_selected_cb(self, bm, managed_brush, brushinfo):
         """ Anyway, reset current assistant.
         """
-        self._do_action(self._current_action_name, False)
+        if managed_brush.name in self._brushlookup:
+            action_name = self._brushlookup[managed_brush.name]
+        else:
+            action_name = None
+        self.enable_assistant(action_name)
+
+
 
     # Options presenter
+
     def init_options_presenter_box(self):
         """ Option presenter initialize method.
-        This is called from FreehandOptionsWidget.init_specialized_widgets
+        With this method, Gtk.Alignment(self._assistant_options_bin) has been 
+        created, and Options-presenter of each assistant classes are shown
+        inside that Gtk.Alignment.
+
+        This should be called from FreehandOptionsWidget.init_specialized_widgets
         of gui/freehand.py 
         """ 
         grid = Gtk.Grid(column_spacing=8, row_spacing=6, 
