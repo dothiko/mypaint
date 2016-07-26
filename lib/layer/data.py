@@ -513,7 +513,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
                  So you'll need to reserve the flag before call this method. 
         """
 
-        pngname = self.get_filename_for_project()
+        pngname = self._get_source_filename()
         png_relpath = os.path.join('data', pngname)
         png_path = os.path.join(projdir, png_relpath)
         is_dirty = (self.project_dirty or force_write)
@@ -820,7 +820,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
         # generate filepaths and copy it like queue_autosave, 
         # but a bit differently.
-        final_basename = self.get_filename_for_project(ext=src_ext)
+        final_basename = self._get_source_filename(ext=src_ext)
 
         final_relpath = os.path.join("data", final_basename)
         final_path = os.path.join(projdir, final_relpath)
@@ -1668,9 +1668,9 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
             canvas_bbox, frame_bbox, force_write, **kwargs
         )
         # Store stroke shape data too
-        # TODO we'll need unified version of get_filename_for_project()
+        # TODO we'll need unified version of _get_source_filename()
         # for here...
-        dat_basename = self.get_filename_for_project(
+        dat_basename = self._get_source_filename(
                 ext=None,
                 formatstr=u"%s-strokemap.dat")
         dat_relpath = os.path.join('data', dat_basename)

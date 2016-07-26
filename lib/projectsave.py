@@ -14,6 +14,7 @@ import lib.autosave
 if sys.platform.startswith('linux'):
     HARDLINK_USEABLE = True
 else:
+    logger.warning('Projectsave cannot utilize hard link in this system.File-copy used instead of hard link.')
     HARDLINK_USEABLE = False
 
 class Projectsaveable(lib.autosave.Autosaveable):
@@ -119,12 +120,30 @@ class Projectsaveable(lib.autosave.Autosaveable):
         except AttributeError:
             return None
 
-    def get_filename_for_project(self, ext=u".png", formatstr=None, 
+    def get_filenames_for_project(self):
+        """
+        Get a list of filenames which consists this layer as a
+        generator function.
+        """
+        yield self._get_source_filename()
+
+        if hasattr(self,'workfilename'):
+            yield self.workfilename
+        elif hasattr(self,'_ORA_STROKEMAP_ATTR'):
+            yield self._get_source_filename(
+                    ext=None,
+                    formatstr=u"%s-strokemap.dat")
+
+        raise StopIteration
+
+    def _get_source_filename(self, ext=u".png", formatstr=None, 
             path_prefix=None):
         """
-        Get a unique filename in a project.
+        Get a source filename of this layer.
         :param ext: default file extension, used when uuid exists.
-        :param formatstr: format strings, in unicode.
+        :param formatstr: format strings, in unicode. 
+                          when this argument is used,
+                          ext argument should be ignored.
         :param path_prefix: a tuple of path components, 
                     to be added the filename with os.path.join().
         """
@@ -147,28 +166,18 @@ class Projectsaveable(lib.autosave.Autosaveable):
         else:
             return retfname
 
-    def get_additional_filename_for_project(self):
-        """ Get additional filename,which is
-        workfile or strokemap or etc.
-        """
-        if hasattr(self,'workfilename'):
-            return self.workfilename
-        elif hasattr(self,'_ORA_STROKEMAP_ATTR'):
-            return self.get_filename_for_project(
-                    ext=None,
-                    formatstr=u"%s-strokemap.dat")
-
     def backup(self, backupdir, sourcedir, move_file=False):
-        """ Backup layer entity into the directory.
+        """ Link or Copy layer entity(i.e. png file and strokemap or something) 
+        into the backup directory.
 
-        :param backupdir: The distination directory of backup
+        :param backupdir: The destination directory of backup
         :param sourcedir: The source directory, it is project directory.
-        :param move_file: Flag to indicate to move file, not copy.
+        :param move_file: Flag to indicate to move file, not copy. 
+                            This flag is used when the layer is dirty,
+                            and old layer contents should be moved as 
+                            a backup.
         """
-        paths = (self.get_filename_for_project(),
-                 self.get_additional_filename_for_project())
-
-        for cpath in paths:
+        for cpath in self.get_filenames_for_project():
             if cpath:
                 cpath = os.path.join(sourcedir, 'data', cpath)
                 if os.path.exists(cpath):
@@ -206,7 +215,10 @@ def init_backup(filepath, backupdir):
         if (os.path.exists(filepath) and
                 os.stat(filepath).st_nlink > 1):
             os.unlink(filepath)
-            # Checking link count is for safety.
+            # Checking link count ,for safety.
+
+    # Otherwise(the system does not support hard-link in python), 
+    # do nothing.
 
 def link_backup(src, dst):
     """ Link file from src to dst.

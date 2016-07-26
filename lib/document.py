@@ -1703,12 +1703,21 @@ class Document (object):
 
     def save_project(self, dirname, **kwargs):
         """ save current document as a project
+
+        POSSIBLE OPTIONAL kwargs:
+        :keyword force_write: boolean. when this is true, 
+            all files are forced to write.
+            This keyword is used when 'save_as_project' action is executed.
         """
         t0 = time.time()
         logger.debug("projectsave started")
         backupdir = None # Disabled backup for new project
         project_revision = str(int(t0))
-        force_write = not os.path.exists(dirname) 
+        force_write = (not os.path.exists(dirname) or 
+                        ('init_project' in kwargs and kwargs['init_project'] == True))
+
+        if force_write:
+            logger.info('the entire project forced to write.')
         
         if self._projectsave_processor.has_work():
             logger.info('project copy processor still have pending works. it is forced to finish.')
@@ -1778,6 +1787,8 @@ class Document (object):
                     backup_layers = []
 
                     for path, cl in self.layer_stack.walk():
+                        print cl.name
+                        print path
                         if cl.project_dirty or force_write:
                             cl.backup(backupdir, dirname, move_file=True) # backup it NOW.
                         else:
@@ -1944,11 +1955,6 @@ class Document (object):
         if not os.path.exists(dirname):
             os.mkdir(dirname)
             force_write = True
-
-       #mimepath = os.path.join(dirname, 'mimetype')
-       #if not os.path.exists(mimepath):
-       #    with open(mimepath, 'w') as fp:
-       #        fp.write(lib.xml.OPENRASTER_MEDIA_TYPE)
 
         # Creating sub directories
         for subdir in ('Thumbnails', 'data', 'backup'): 

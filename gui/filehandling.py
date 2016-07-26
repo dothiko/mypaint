@@ -1339,7 +1339,8 @@ class FileHandler (object):
             self.save_as_dialog(
                 self.save_file, 
                 start_in_folder=current_dirname,
-                project=True)
+                project=True,
+                init_project=True)
             # export flag is for exporting other filetype.
             # exporting as directory is not for this flag.
         else:
@@ -1347,7 +1348,7 @@ class FileHandler (object):
             self.save_as_dialog(
                 self.save_file, 
                 start_in_folder=current_dirname,
-                project=True,source_dir=self.filename)
+                project=True, source_dir=self.filename)
 
     def save_project_as_new_version_cb(self, action):
 
