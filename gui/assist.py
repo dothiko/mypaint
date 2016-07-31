@@ -184,15 +184,14 @@ class Averager(Assistbase):
             py = self._get_stabilized_x(0)
             if math.hypot(x - px, y - py) > 4:
                 super(self.__class__, self).fetch(x, y, pressure, time)
-            self._prev_time = time
-
-
-class Stabilizer(Assistbase):
-    """ Stabilizer class, like Krita's one. 
-
-    This stablizer actually 'average angle'.
-    """
+            self._prev_time = time 
+            
+class Stabilizer(Assistbase): 
+    """ Stabilizer class, like Krita's one.  This stablizer actually 'average angle'.  
+    """ 
     name = _("Stabilizer")
+    SPEED_THRESHOLD = 0.15 # The threshold for auto-enable speed, pixel per millisecond.
+    DRAW_THRESHOLD = 16 # The minimum length of strokes to check auto-enable.
 
     def __init__(self, app):
         super(Stabilizer, self).__init__()
@@ -208,8 +207,7 @@ class Stabilizer(Assistbase):
         self._stabilize_range = 48
         self._last_time = None
         self._prev_time = None
-        self._auto_disable = True # Auto stabilizer disable flag
-        self._disable_threshold = 32 # Auto stabilizer disable threshold length, in pixel
+        self._auto_enable = True # Auto stabilizer disable flag
         self._cycle = 0L
         self.reset()
 
@@ -309,25 +307,34 @@ class Stabilizer(Assistbase):
                 self._prev_time = time
                 self._start_time = time
                 self._initial_pressure = 0.0
-                if self._auto_disable:
+                if self._auto_enable:
                     # In auto disable mode, stabilizer disabled by default.
-                    self._draw_length = 0
                     self._disabled = True
-            elif self._auto_disable and self._disabled and self._start_time:
-                if time - self._start_time < 100:
-                    self._draw_length += math.hypot(x - self._px, y - self._py)
-                    self._px = x
-                    self._py = y
-                else:
-                    if self._draw_length < self._disable_threshold:
-                        # When the drawn length exceeds threshold in certain time period,
+                    self._draw_length = 0
+            elif (self._auto_enable and self._disabled and
+                    self._start_time != None):
+                self._draw_length += math.hypot(x - self._px, y - self._py) 
+                if self._draw_length > self.DRAW_THRESHOLD:
+                    ctime = time - self._start_time
+                    speed = self._draw_length / ctime
+
+                    if speed < self.SPEED_THRESHOLD:
+                        # When the drawn length(speed) below threshold,
                         # then stabilizer enabled i.e. self._disabled == False
                         self._cx = x
                         self._cy = y
                         self._disabled = False
                         self._initial_pressure = pressure
-                    
-                    # Anyway, 'auto disable' check ended.
+                    else:
+                        self._start_time = time
+                        self._draw_length = 0
+
+
+        elif self._last_button == None:
+            if self._prev_button != None:
+                if self._auto_enable:
+                    self._disabled = True
+                    self._draw_length = 0
                     self._start_time = None
 
         self._latest_pressure = pressure
@@ -390,7 +397,7 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
         grid.set_hexpand_set(True)
         row = 0
 
-        def create_slider(row, label, handler, min_adj, max_adj, value):
+        def create_slider(row, label, handler, min_adj, max_adj, value, digits=1):
             labelobj = Gtk.Label(halign=Gtk.Align.START)
             labelobj.set_text(label)
             grid.attach(labelobj, 0, row, 1, 1)
@@ -399,7 +406,7 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
             adj.connect('value-changed', handler)
 
             scale = Gtk.HScale(hexpand_set=True, hexpand=True, 
-                    halign=Gtk.Align.FILL, adjustment=adj)
+                    halign=Gtk.Align.FILL, adjustment=adj, digits=digits)
             scale.set_value_pos(Gtk.PositionType.RIGHT)
             grid.attach(scale, 1, row, 1, 1)
             return scale
@@ -419,17 +426,18 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
         row+=1
 
         # Checkbox for use auto-disable feature.
-        checkbox = Gtk.CheckButton(_("Auto disable"),
+        checkbox = Gtk.CheckButton(_("Auto enable"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
-        checkbox.set_active(assistant._auto_disable) 
-        checkbox.connect('toggled', self._auto_disable_toggled_cb)
+        checkbox.set_active(assistant._auto_enable) 
+        checkbox.connect('toggled', self._auto_enable_toggled_cb)
         grid.attach(checkbox,0,row,2,1)
         row+=1
 
         # Scale slider for auto-disable threshold.
-        scale = create_slider(row, _("Threshold(in pixel):"), 
+        scale = create_slider(row, _("Threshold speed:"), 
                 self._threshold_changed_cb,
-                16, 64, assistant._disable_threshold)
+                0.1, 0.3, assistant.SPEED_THRESHOLD,
+                digits=2)
         scale.set_sensitive(checkbox.get_active())
         self._threshold_scale = scale
         row+=1
@@ -450,13 +458,13 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
         if not self._updating_ui:
             self.assistant._stabilize_range = adj.get_value()
 
-    def _auto_disable_toggled_cb(self, checkbox):
+    def _auto_enable_toggled_cb(self, checkbox):
         if not self._updating_ui:
             flag = checkbox.get_active()
-            self.assistant._auto_disable = flag
+            self.assistant._auto_enable = flag
             self._threshold_scale.set_sensitive(flag)
 
     def _threshold_changed_cb(self, adj):
         if not self._updating_ui:
-            self.assistant._disable_threshold = adj.get_value()
+            self.assistant.SPEED_THRESHOLD = adj.get_value()
 
