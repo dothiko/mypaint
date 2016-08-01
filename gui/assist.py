@@ -190,7 +190,7 @@ class Stabilizer(Assistbase):
     """ Stabilizer class, like Krita's one.  This stablizer actually 'average angle'.  
     """ 
     name = _("Stabilizer")
-    SPEED_THRESHOLD = 0.15 # The threshold for auto-enable speed, pixel per millisecond.
+    SPEED_THRESHOLD = 0.2 # The threshold for auto-enable speed, pixel per millisecond.
     DRAW_THRESHOLD = 16 # The minimum length of strokes to check auto-enable.
 
     def __init__(self, app):
@@ -321,13 +321,15 @@ class Stabilizer(Assistbase):
                     if speed < self.SPEED_THRESHOLD:
                         # When the drawn length(speed) below threshold,
                         # then stabilizer enabled i.e. self._disabled == False
-                        self._cx = x
-                        self._cy = y
                         self._disabled = False
                         self._initial_pressure = pressure
                     else:
                         self._start_time = time
                         self._draw_length = 0
+
+                    # Update current/previous position in any case.
+                    self._cx = self._px = x
+                    self._cy = self._py = y
 
 
         elif self._last_button == None:
