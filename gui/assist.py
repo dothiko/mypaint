@@ -49,7 +49,7 @@ class Assistbase(object):
         Assistbase._sample_index = 0
         Assistbase._sample_count = 0
 
-    def enum_current(self):
+    def enum_samples(self):
         """ Enum current assisted position, from fetched samples.
         This is the most important method of assistant class.
         This method should return a value with yield.
@@ -101,7 +101,7 @@ class Averager(Assistbase):
         self._stabilize_cnt = None
         self.app = app
 
-    def enum_current(self):
+    def enum_samples(self):
         if self._sample_count < self._sampling_max:
             raise StopIteration
 
@@ -217,7 +217,7 @@ class Stabilizer(Assistbase):
                 self._disabled == False and
                 self._cycle > 1)
 
-    def enum_current(self):
+    def enum_samples(self):
 
         if self._disabled:
             # Temporary disabled, until button is released.

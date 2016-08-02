@@ -608,7 +608,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                 for hx, hy, ht in drawstate.evhack_positions:
                     if assistant:
                         assistant.fetch(hx, hy, pressure, time, drawstate.button_down)
-                        for hx, hy, hp in assistant.enum_current():
+                        for hx, hy, hp in assistant.enum_samples():
                             queue_motion(ht, hx, hy, hp, None, None)
                         continue
                     queue_motion(ht, hx, hy, pressure, None, None)
@@ -631,7 +631,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                 button_down = None
 
             assistant.fetch(x, y, pressure, time, button_down)
-            for x, y, p in assistant.enum_current():
+            for x, y, p in assistant.enum_samples():
                 queue_motion(time, x, y, p, xtilt, ytilt)
 
             # New positioned assistant overlay should be drawn here.
