@@ -188,7 +188,14 @@ class Averager(Assistbase):
             
 class Stabilizer(Assistbase): 
     """ Stabilizer class, like Krita's one.  This stablizer actually 'average angle'.  
+    Actually stroke stopped at (self._cx, self._cy), and when 'real' pointer
+    move to outside the stabilize-range circle, a stroke is drawn.
+    The drawn stroke have the direction from (self._cx, self._cy) 
+    to (self._rx, self._ry) and length from the ridge of stabilize-range circle to 
+    (self._rx, self._ry).
+    Thus, the stroke is 'pulled' by motion of pointer.
     """ 
+
     name = _("Stabilizer")
     SPEED_THRESHOLD = 0.2 # The threshold for auto-enable speed, pixel per millisecond.
     DRAW_THRESHOLD = 16 # The minimum length of strokes to check auto-enable.
@@ -197,8 +204,8 @@ class Stabilizer(Assistbase):
         super(Stabilizer, self).__init__()
         self._stabilize_cnt = None
         self.app = app
-        self._raw_x = None
-        self._raw_y = None
+        self._rx = None
+        self._ry = None
         self._last_button = None
         self._prev_button = None
         self._average_previous = True
@@ -220,20 +227,25 @@ class Stabilizer(Assistbase):
     def enum_samples(self):
 
         if self._disabled:
-            # Temporary disabled, until button is released.
-            yield (self._raw_x , self._raw_y , self._latest_pressure)
+            # Temporary disabled stage, until button is released.
+            yield (self._rx , self._ry , self._latest_pressure)
         elif self._cycle == 1:
-            self._cycle = 2L
+            # Drawing initial pressure - it would be 0.0 in normal,
+            # and when auto-enabled , it would be the pressure of 
+            # current stylus input.
+            # and after this, proceed normal stabilized stage.
+            self._cycle = 2L 
             yield (self._cx , self._cy , self._initial_pressure)
         else:
-
+            # Normal stabilize stage.
+            
             if self._last_button == 1:
 
                 cx = self._cx
                 cy = self._cy
 
-                dx = self._raw_x - cx
-                dy = self._raw_y - cy
+                dx = self._rx - cx
+                dy = self._ry - cy
                 cur_length = math.hypot(dx, dy)
 
                 if cur_length <= self._stabilize_range:
@@ -250,14 +262,10 @@ class Stabilizer(Assistbase):
                 mx = (dx / cur_length) * move_length
                 my = (dy / cur_length) * move_length
 
-
-                self._px = cx
-                self._py = cy
                 self._cx = cx + mx
                 self._cy = cy + my
-
                 
-                if self._cycle <= 3:
+                if self._cycle < 3:
                     yield (self._cx , self._cy , self._initial_pressure) # To avoid heading glitch
 
                 yield (self._cx , self._cy , self._latest_pressure)
@@ -271,15 +279,13 @@ class Stabilizer(Assistbase):
                         # rare case,but possible.
                         yield (self._cx, self._cy, self._latest_pressure)
                     yield (self._cx, self._cy, 0.0)
-                yield (self._raw_x, self._raw_y, 0.0) # We need this for avoid trailing glitch
+                yield (self._rx, self._ry, 0.0) # We need this for avoid trailing glitch
 
 
         raise StopIteration
 
     def reset(self):
         super(Stabilizer, self).reset()
-        self._px = None
-        self._py = None
         self._cx = None
         self._cy = None
         self._latest_pressure = None
@@ -292,7 +298,17 @@ class Stabilizer(Assistbase):
         self._initial_pressure = 0.0
 
     def fetch(self, x, y, pressure, time, button):
-        """Fetch samples"""
+        """ Fetch samples(i.e. current stylus input datas) 
+        into attributes
+
+        Explanation of attributes which are used at here:
+        
+        _rx,_ry == Raw input of pointer, 
+                         very 'current' position of input,
+                         stroke should be drawn this point.
+        _cx, _cy == Current center of drawing stroke radius.
+                    They also represents previous end point of stroke.
+        """
 
         self._prev_button = self._last_button
         self._last_button = button
@@ -301,8 +317,8 @@ class Stabilizer(Assistbase):
 
         if self._last_button == 1:
             if (self._prev_button == None):
-                self._cx = self._px = x
-                self._cy = self._py = y
+                self._cx = x
+                self._cy = y
                 self._cycle = 1L
                 self._prev_time = time
                 self._start_time = time
@@ -310,13 +326,13 @@ class Stabilizer(Assistbase):
                 if self._auto_enable:
                     # In auto disable mode, stabilizer disabled by default.
                     self._disabled = True
-                    self._draw_length = 0
+                    self._drawlength = 0
             elif (self._auto_enable and self._disabled and
                     self._start_time != None):
-                self._draw_length += math.hypot(x - self._px, y - self._py) 
-                if self._draw_length > self.DRAW_THRESHOLD:
+                self._drawlength += math.hypot(x - self._cx, y - self._cy) 
+                if self._drawlength > self.DRAW_THRESHOLD:
                     ctime = time - self._start_time
-                    speed = self._draw_length / ctime
+                    speed = self._drawlength / ctime
 
                     if speed < self.SPEED_THRESHOLD:
                         # When the drawn length(speed) below threshold,
@@ -325,23 +341,23 @@ class Stabilizer(Assistbase):
                         self._initial_pressure = pressure
                     else:
                         self._start_time = time
-                        self._draw_length = 0
+                        self._drawlength = 0
 
-                    # Update current/previous position in any case.
-                    self._cx = self._px = x
-                    self._cy = self._py = y
+                    # Update current/previous position in every case.
+                    self._cx = x
+                    self._cy = y
 
 
         elif self._last_button == None:
             if self._prev_button != None:
                 if self._auto_enable:
                     self._disabled = True
-                    self._draw_length = 0
+                    self._drawlength = 0
                     self._start_time = None
 
         self._latest_pressure = pressure
-        self._raw_x = x
-        self._raw_y = y
+        self._rx = x
+        self._ry = y
         
 
     ## Overlay drawing related
