@@ -11,16 +11,18 @@
 
 
 ## Imports
+from __future__ import print_function
 
 from gi.repository import GdkPixbuf
 
 import re
-import numpy
 import logging
 logger = logging.getLogger(__name__)
 from warnings import warn
 from copy import deepcopy
 import os.path
+
+import numpy as np
 
 from lib.gettext import C_
 import lib.mypaintlib
@@ -321,6 +323,8 @@ class RootLayerStack (group.LayerStack):
                max(w, h) >= 512):
             mipmap_level += 1
             x, y, w, h = x/2, y/2, w/2, h/2
+        w = max(1, w)
+        h = max(1, h)
         pixbuf = self.render_as_pixbuf(x, y, w, h,
                                        mipmap_level=mipmap_level,
                                        **options)
@@ -392,7 +396,7 @@ class RootLayerStack (group.LayerStack):
                              render_background, id(opaque_base_tile))
                 dst = self._render_cache.get(cache_key)
             if dst is None:
-                dst = numpy.empty((N, N, 4), dtype='uint16')
+                dst = np.empty((N, N, 4), dtype='uint16')
             else:
                 cache_hit = True
         else:
@@ -406,7 +410,7 @@ class RootLayerStack (group.LayerStack):
                     opaque_base_tile,
                     dst_over_opaque_base,
                 )
-                dst = numpy.empty((N, N, 4), dtype='uint16')
+                dst = np.empty((N, N, 4), dtype='uint16')
 
             background_surface.blit_tile_into(dst, dst_has_alpha, tx, ty,
                                               mipmap_level)
@@ -1594,14 +1598,16 @@ class RootLayerStack (group.LayerStack):
             if not path_startswith(p, path):
                 continue
             tiles.update(layer.get_tile_coords())
-            if isinstance(layer, data.PaintingLayer) and not layer.locked:
+            if (isinstance(layer, data.PaintingLayer)
+                    and not layer.locked
+                    and not layer.branch_locked):
                 dstlayer.strokes[:0] = layer.strokes
         # Render loop
         logger.debug("Normalize: render using backdrop %r", backdrop_layers)
         dstsurf = dstlayer._surface
         N = tiledsurface.N
         for tx, ty in tiles:
-            bd = numpy.zeros((N, N, 4), dtype='uint16')
+            bd = np.zeros((N, N, 4), dtype='uint16')
             for layer in backdrop_layers:
                 if layer is self._background_layer:
                     surf = self._background_layer._surface
@@ -1626,18 +1632,23 @@ class RootLayerStack (group.LayerStack):
         """
         if not path:
             return None
+
         source = self.deepget(path)
-        if not source:
+        if (source is None
+                or source.locked
+                or source.branch_locked
+                or not source.get_mode_normalizable()):
             return None
+
         target_path = path[:-1] + (path[-1] + 1,)
+
         target = self.deepget(target_path)
-        if not target:
+        if (target is None
+                or target.locked
+                or target.branch_locked
+                or not target.get_mode_normalizable()):
             return None
-        if not (source.get_mode_normalizable() and
-                target.get_mode_normalizable()):
-            return None
-        if target.locked or source.locked:
-            return None
+
         return target_path
 
     def layer_new_merge_down(self, path):
@@ -1691,7 +1702,9 @@ class RootLayerStack (group.LayerStack):
         tiles = set()
         for layer in merge_layers:
             tiles.update(layer.get_tile_coords())
-            assert isinstance(layer, data.PaintingLayer) and not layer.locked
+            assert isinstance(layer, data.PaintingLayer)
+            assert not layer.locked
+            assert not layer.branch_locked
             dstlayer.strokes[:0] = layer.strokes
         # Build a (hopefully sensible) combined name too
         names = [l.name for l in reversed(merge_layers)
@@ -1744,7 +1757,9 @@ class RootLayerStack (group.LayerStack):
         names = []
         for path, layer in self.walk(visible=True):
             tiles.update(layer.get_tile_coords())
-            if isinstance(layer, data.PaintingLayer) and not layer.locked:
+            if (isinstance(layer, data.PaintingLayer)
+                    and not layer.locked
+                    and not layer.branch_locked):
                 strokes[:0] = layer.strokes
             if layer.has_interesting_name():
                 names.append(layer.name)
@@ -1784,15 +1799,15 @@ class RootLayerStack (group.LayerStack):
         >>> import shutil
         >>> tmpdir = tempfile.mkdtemp()
         >>> assert os.path.exists(tmpdir)
-        >>> orazip = zipfile.ZipFile("tests/bigimage.ora")
-        >>> image_elem = ET.fromstring(orazip.read("stack.xml"))
-        >>> stack_elem = image_elem.find("stack")
-        >>> root.load_from_openraster(
-        ...    orazip=orazip,
-        ...    elem=stack_elem,
-        ...    cache_dir=tmpdir,
-        ...    feedback_cb=None,
-        ... )
+        >>> with zipfile.ZipFile("tests/bigimage.ora") as orazip:
+        ...     image_elem = ET.fromstring(orazip.read("stack.xml"))
+        ...     stack_elem = image_elem.find("stack")
+        ...     root.load_from_openraster(
+        ...         orazip=orazip,
+        ...         elem=stack_elem,
+        ...         cache_dir=tmpdir,
+        ...         feedback_cb=None,
+        ...     )
         >>> len(list(root.walk())) > 0
         True
         >>> shutil.rmtree(tmpdir)
@@ -1874,7 +1889,7 @@ class RootLayerStack (group.LayerStack):
                 self.set_background(bg_pixbuf)
                 self._no_background = False
                 return
-            except tiledsurface.BackgroundError, e:
+            except tiledsurface.BackgroundError as e:
                 logger.warning('ORA background tile not usable: %r', e)
         super(RootLayerStack, self)._load_child_layer_from_orazip(
             orazip,
@@ -1929,7 +1944,7 @@ class RootLayerStack (group.LayerStack):
                 self.set_background(bg_pixbuf)
                 self._no_background = False
                 return
-            except tiledsurface.BackgroundError, e:
+            except tiledsurface.BackgroundError as e:
                 logger.warning('ORA background tile not usable: %r', e)
         super(RootLayerStack, self)._load_child_layer_from_oradir(
             oradir,

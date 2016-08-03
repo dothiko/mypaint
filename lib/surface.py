@@ -10,14 +10,16 @@
 
 """Common interfaces & routines for surface and surface-like objects"""
 
+from __future__ import print_function
 
 import abc
 import contextlib
-import numpy
 import sys
 import os
 import logging
 logger = logging.getLogger(__name__)
+
+import numpy as np
 
 import mypaintlib
 import lib.helpers
@@ -155,7 +157,7 @@ class TileRequestWrapper (TileAccessible):
             raise ValueError("Only readonly tile requests are supported")
         tile = self._cache.get((tx, ty), None)
         if tile is None:
-            tile = numpy.zeros((N, N, 4), 'uint16')
+            tile = np.zeros((N, N, 4), 'uint16')
             self._cache[(tx, ty)] = tile
             self._obj.composite_tile(tile, True, tx, ty, **self._opts)
         yield tile
@@ -209,7 +211,7 @@ def scanline_strips_iter(surface, rect, alpha=False,
     render_th = (y+h-1)/N - render_ty + 1
 
     # buffer for rendering one tile row at a time
-    arr = numpy.empty((1*N, render_tw*N, 4), 'uint8')  # rgba or rgbu
+    arr = np.empty((N, render_tw * N, 4), 'uint8')  # rgba or rgbu
     # view into arr without the horizontal padding
     arr_xcrop = arr[:, x-render_tx*N:x-render_tx*N+w, :]
 
@@ -284,9 +286,7 @@ def save_as_png(surface, filename, *rect, **kwargs):
         x, y, w, h = (0, 0, 1, 1)
         rect = (x, y, w, h)
 
-    writer_fp = None
     try:
-        writer_fp = open(filename, "wb")
         logger.debug(
             "Writing %r (%dx%d) alpha=%r srgb=%r",
             filename,
@@ -294,25 +294,26 @@ def save_as_png(surface, filename, *rect, **kwargs):
             alpha,
             save_srgb_chunks,
         )
-        pngsave = mypaintlib.ProgressivePNGWriter(
-            writer_fp,
-            w, h,
-            alpha,
-            save_srgb_chunks,
-        )
-        feedback_counter = 0
-        scanline_strips = scanline_strips_iter(
-            surface, rect,
-            alpha=alpha,
-            single_tile_pattern=single_tile_pattern,
-            **kwargs
-        )
-        for scanline_strip in scanline_strips:
-            pngsave.write(scanline_strip)
-            if feedback_cb and feedback_counter % TILES_PER_CALLBACK == 0:
-                feedback_cb()
-            feedback_counter += 1
-        pngsave.close()
+        with open(filename, "wb") as writer_fp:
+            pngsave = mypaintlib.ProgressivePNGWriter(
+                writer_fp,
+                w, h,
+                alpha,
+                save_srgb_chunks,
+            )
+            feedback_counter = 0
+            scanline_strips = scanline_strips_iter(
+                surface, rect,
+                alpha=alpha,
+                single_tile_pattern=single_tile_pattern,
+                **kwargs
+            )
+            for scanline_strip in scanline_strips:
+                pngsave.write(scanline_strip)
+                if feedback_cb and feedback_counter % TILES_PER_CALLBACK == 0:
+                    feedback_cb()
+                feedback_counter += 1
+            pngsave.close()
         logger.debug("Finished writing %r", filename)
     except (IOError, OSError, RuntimeError) as err:
         logger.exception(

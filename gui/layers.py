@@ -10,12 +10,12 @@
 
 
 ## Imports
+from __future__ import print_function
 
 import lib.layer
 import lib.xml
 from lib.observable import event
 
-import gi
 from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GObject
@@ -31,12 +31,8 @@ logger = logging.getLogger(__name__)
 ## Module vars
 
 
-#TRANSLATORS: Display name template for otherwise anonymous layers
+# TRANSLATORS: Display name template for otherwise anonymous layers
 UNNAMED_LAYER_DISPLAY_NAME_TEMPLATE = _(u"{default_name} at {path}")
-
-
-#: Should the layers within hidden groups be shown specially?
-DISTINGUISH_DESCENDENTS_OF_INVISIBLE_PARENTS = True
 
 
 ## Class defs
@@ -128,7 +124,7 @@ class RootStackTreeModelWrapper (GObject.GObject, Gtk.TreeModel):
         """Invalidates all iters produced by this model"""
         # No need to zap the lookup tables: tree paths have a tightly
         # controlled vocabulary.
-        if self._iter_stamp == sys.maxint:
+        if self._iter_stamp == sys.maxsize:
             self._iter_stamp = self.MIN_VALID_STAMP
         else:
             self._iter_stamp += 1
@@ -295,7 +291,6 @@ class RootStackTreeModelWrapper (GObject.GObject, Gtk.TreeModel):
         return self._create_iter(parent_path)
 
 
-
 class RootStackTreeView (Gtk.TreeView):
     """GtkTreeView tailored for a doc's root layer stack"""
 
@@ -421,6 +416,7 @@ class RootStackTreeView (Gtk.TreeView):
         single_click = (event.type == Gdk.EventType.BUTTON_PRESS)
         double_click = (event.type == Gdk.EventType._2BUTTON_PRESS)
         is_menu = event.triggers_context_menu()
+
         # Determine which row & column was clicked
         x, y = int(event.x), int(event.y)
         bw_x, bw_y = view.convert_widget_to_bin_window_coords(x, y)
@@ -429,89 +425,133 @@ class RootStackTreeView (Gtk.TreeView):
             return True
         treemodel = self.get_model()
         click_treepath, click_col, cell_x, cell_y = click_info
+        click_layer = treemodel.get_layer(treepath=click_treepath)
+        click_layerpath = tuple(click_treepath.get_indices())
 
-        # To ease referring with rootstack.current_path
-        # make tuple version of click_treepath(Gtk.TreePath)
-        click_treepath_tuple = tuple(click_treepath.get_indices())
+        # Defer certain kinds of click to separate handlers. These
+        # handlers can return True to stop processing and indicate that
+        # the current layer should not be changed.
+        col_handlers = [
+            # (Column, single, double, handler)
+            (self._visible_col, True, False, self._handle_visible_col_click),
+            (self._locked_col, True, False, self._handle_lock_col_click),
+            (self._name_col, False, True, self._handle_name_col_2click),
+            (self._name_col, True, False, self._handle_name_col_1click),
+            (self._type_col, True, False, self._handle_type_col_click),
+        ]
+        if not is_menu:
+            for col, when_single, when_double, handler in col_handlers:
+                if when_single and not single_click:
+                    continue
+                if when_double and not double_click:
+                    continue
+                ca = view.get_cell_area(click_treepath, col)
+                if not (ca.x <= bw_x < ca.x + ca.width):
+                    continue
+                if handler(event, click_layer, click_layerpath):
+                    return True
+ 
+        # Clicks that fall thru the above cause a layer change.
+        if click_layerpath != self._docmodel.layer_stack.current_path:
+            self._docmodel.select_layer(path=click_layerpath)
+            self.current_layer_changed()
 
-        layer = treemodel.get_layer(treepath=click_treepath)
-        docmodel = self._docmodel
-        rootstack = docmodel.layer_stack
+        # Context menu for the layer just (right) clicked.
+        if is_menu and single_click:
+            self.current_layer_menu_requested(event)
+            return True
+
+        # Default behaviours: allow expanders & drag-and-drop to work
+        return False
+
+    def _handle_name_col_2click(self, event, layer, path):
+        """Rename the current layer."""
+        # At this point, a layer will have already been selected by
+        # a single-click event.
+
+        if event.state & Gdk.ModifierType.CONTROL_MASK:
+            # For Multiple layer selection feature,
+            # this action should be cancel multiple selection,
+            # only this layer should be selected.
+            self.cancel_multiple_selection()
+        else:
+            self.current_layer_rename_requested()
+        return True
+
+    def _handle_name_col_1click(self, event, layer, path):
+        """Rename the current layer."""
+        # At this point, a layer will have already been selected by
+        # a single-click event.
+        # But with holding control or shift key, some multiple
+        # selection related activity might done.
+
         selection = self.get_selection()
-        selected = None
         current = selection.get_selected_rows()
         if current:
             selected = current[1]
+        else:
+            seleted = None
+        rootstack = self._docmodel.layer_stack
 
-        # If multiple selection undergo,
-        # It might for drag-dropping.
-        if (event.button == 1 and selected and len(selected) > 1 and 
-                click_treepath in selected and click_col is self._name_col):
-            if not double_click:
-                if not event.state & (Gdk.ModifierType.CONTROL_MASK or
-                        Gdk.ModifierType.SHIFT_MASK):
-                    click_layerpath = tuple(click_treepath.get_indices())
-                    if click_layerpath != rootstack.current_path:
-                        docmodel.select_layer(path=click_layerpath)
-                        self.current_layer_changed()
-                    return True
-            else:
-                if event.state & Gdk.ModifierType.CONTROL_MASK:
-                    self.cancel_multiple_selection()
-                    return True
-            
-        # Eye/visibility column toggles kinds of visibility
-        if (click_col is self._visible_col) and not is_menu and single_click:
+        if ((event.state & (Gdk.ModifierType.CONTROL_MASK |
+                       Gdk.ModifierType.SHIFT_MASK)) != 0):
+            # It might be Multiple selection management.
+            tpath = Gtk.TreePath(path)
             if event.state & Gdk.ModifierType.CONTROL_MASK:
-                current_solo = rootstack.current_layer_solo
-                rootstack.current_layer_solo = not current_solo
-            elif rootstack.current_layer_solo:
-                rootstack.current_layer_solo = False
-            else:
-                new_visible = not layer.visible
-                docmodel.set_layer_visibility(new_visible, layer)
-            return True
-        # Multiple layer selection  
-        elif event.state & Gdk.ModifierType.CONTROL_MASK:
-            if click_treepath in selected:
-                if rootstack.current_path != click_treepath_tuple:
-                    selection.unselect_path(click_treepath)
+                if tpath in selected:
+                    if rootstack.current_path != path:
+                        selection.unselect_path(tpath)
+                    return True
+                selection.select_path(tpath)
                 return True
-            selection.select_path(click_treepath)
-            return True
-        elif event.state & Gdk.ModifierType.SHIFT_MASK:
-            if selected:
-                selection.select_range(selected[0],click_treepath)
-            else:
-                selection.select_path(click_treepath)
-            return True
-        # Layer lock column
-        elif (click_col is self._locked_col) and not is_menu and single_click:
-            new_locked = not layer.locked
-            docmodel.set_layer_locked(new_locked, layer)
-            return True
-        # Double-clicking the name column is a request to rename
-        elif (click_col is self._name_col) and not is_menu:
-            if double_click:
-                self.current_layer_rename_requested()
+            elif event.state & Gdk.ModifierType.SHIFT_MASK:
+                if selected:
+                    selection.select_range(selected[0], tpath)
+                else:
+                    selection.select_path(tpath)
                 return True
-        # Click an un-selected layer row to select it
-        if (selected == None or  not click_treepath in selected):
-            click_layerpath = tuple(click_treepath.get_indices())
-            if click_layerpath != rootstack.current_path:
-                docmodel.select_layer(path=click_layerpath)
-                self.current_layer_changed()
-        # The type icon column acts as an extra expander.
-        # Some themes' expander arrows are very small.
-        if (click_col is self._type_col) and not is_menu:
-            self.expand_to_path(click_treepath)
-            return True
-        # Context menu
-        if is_menu and event.type == Gdk.EventType.BUTTON_PRESS:
-            self.current_layer_menu_requested(event)
-            return True
-        # Default behaviours: allow expanders & drag-and-drop to work
+
+        elif len(selected) > 1:
+            tpath = Gtk.TreePath(path)
+            if tpath in selected:
+                if path != rootstack.current_path:
+                    # It is change of 'active layer' inside selected layers
+                    # but not cancel selection.
+                    self._docmodel.select_layer(path=path)
+                    self.current_layer_changed()
+                return True # so Ignore this action for later processing
+
+        # Otherwise, handler does nothing, so return False
         return False
+
+    def _handle_visible_col_click(self, event, layer, path):
+        """Toggle visibility or Layer Solo (with Ctrl held)."""
+        rootstack = self._docmodel.layer_stack
+        if event.state & Gdk.ModifierType.CONTROL_MASK:
+            current_solo = rootstack.current_layer_solo
+            rootstack.current_layer_solo = not current_solo
+        elif rootstack.current_layer_solo:
+            rootstack.current_layer_solo = False
+        else:
+            new_visible = not layer.visible
+            self._docmodel.set_layer_visibility(new_visible, layer)
+        return True
+
+    def _handle_lock_col_click(self, event, layer, path):
+        """Toggle the clicked layer's visibility."""
+        new_locked = not layer.locked
+        self._docmodel.set_layer_locked(new_locked, layer)
+        return True
+
+    def _handle_type_col_click(self, event, layer, path):
+        """Expand the clicked layer."""
+        # The idea here is that the type icon column acts as an extra
+        # expander. Some themes' expander arrows are very small.
+        # Other possibilities: invoke a default type-specific action,
+        # pop up a type-specific menu.
+        treepath = Gtk.TreePath(path)
+        self.expand_to_path(treepath)
+        return False  # fallthru: allow the layer to be selected
 
     def _drag_begin_cb(self, view, context):
         self.drag_began()
@@ -638,7 +678,7 @@ class RootStackTreeView (Gtk.TreeView):
         dest_path = tuple(dest_treepath)
         assert len(dest_path) > 0
         dest_layer = root.deepget(dest_path)
-        GTVDP = Gtk.TreeViewDropPosition
+        gtvdp = Gtk.TreeViewDropPosition
 
         is_expanded_group = (
             isinstance(dest_layer, lib.layer.LayerStack) and
@@ -648,11 +688,11 @@ class RootStackTreeView (Gtk.TreeView):
         if isinstance(dest_layer, lib.layer.LayerStack):
             # Interpret Gtk's "into or before" as "into AND at the
             # start". Similar for "into or after".
-            if drop_pos in (GTVDP.INTO_OR_BEFORE,
-                    GTVDP.BEFORE):
+            if drop_pos in (gtvdp.INTO_OR_BEFORE,
+                    gtvdp.BEFORE):
                 n = 0
-            elif drop_pos in (GTVDP.INTO_OR_AFTER,
-                    GTVDP.AFTER):
+            elif drop_pos in (gtvdp.INTO_OR_AFTER,
+                    gtvdp.AFTER):
                 n = len(dest_layer)
 
             if is_expanded_group and len(dest_layer) > 0:
@@ -660,9 +700,9 @@ class RootStackTreeView (Gtk.TreeView):
             else:
                 return tuple(dest_path)
 
-        if drop_pos == GTVDP.BEFORE:
+        if drop_pos == gtvdp.BEFORE:
             return dest_path
-        elif drop_pos == GTVDP.AFTER:
+        elif drop_pos == gtvdp.AFTER:
             if is_expanded_group:
                 # This highlights like an insert before its first item
                 return tuple(list(dest_path) + [0])
@@ -712,6 +752,16 @@ class RootStackTreeView (Gtk.TreeView):
         if current:
             selected_list+=current[1]
         return False
+
+    ## Model compat
+
+    def do_drag_data_delete(self, context):
+        """Suppress the default GtkWidgetClass.drag_data_delete handler.
+
+        Suppress warning(s?) about missing default handlers, since our
+        model no longer implements GtkTreeDragSource.
+
+        """
 
     ## Model change tracking
 
@@ -900,41 +950,38 @@ def layer_visible_pixbuf_datafunc(column, cell, model, it, data):
     layer = model.get_layer(it=it)
     rootstack = model._root
     visible = True
-    greyed_out = True
+    sensitive = True
     if layer:
         # Layer visibility is based on the layer's natural hidden/
         # visible flag, but the layer stack can override that.
-        visible = layer.visible
-        greyed_out = False
         if rootstack.current_layer_solo:
-            visible = (layer is rootstack.current)
-            greyed_out = True
-        elif DISTINGUISH_DESCENDENTS_OF_INVISIBLE_PARENTS:
-            path = model.get_path(it).get_indices()
-            path.pop()
-            while len(path) > 0:
-                ancestor = model.get_layer(treepath=path)
-                if not ancestor.visible:
-                    greyed_out = True
-                    break
-                path.pop()
-    # Pick icon
-    icon_name_template = "mypaint-object{vis}{sens}-symbolic"
-    icon_name = icon_name_template.format(
-        vis=("-visible" if visible else "-hidden"),
-        sens=("-insensitive" if greyed_out else ""),
+            visible = layer is rootstack.current
+            sensitive = False
+        else:
+            visible = layer.visible
+            sensitive = layer.branch_visible
+
+    icon_name = "mypaint-object-{}-symbolic".format(
+        "visible" if visible else "hidden",
     )
     cell.set_property("icon-name", icon_name)
+    cell.set_property("sensitive", sensitive)
 
 
 def layer_locked_pixbuf_datafunc(column, cell, model, it, data):
     """Use a padlock icon to show layer immutability statuses"""
     layer = model.get_layer(it=it)
-    if layer and layer.locked:
-        icon_name = "mypaint-object-locked-symbolic"
-    else:
-        icon_name = "mypaint-object-unlocked-symbolic"
+    locked = False
+    sensitive = True
+    if layer:
+        locked = layer.locked
+        sensitive = not layer.branch_locked
+
+    icon_name = "mypaint-object-{}-symbolic".format(
+        "locked" if locked else "unlocked",
+    )
     cell.set_property("icon-name", icon_name)
+    cell.set_property("sensitive", sensitive)
 
 
 def layer_type_pixbuf_datafunc(column, cell, model, it, data):
@@ -988,8 +1035,7 @@ def _test():
         ((6, 4), PaintingLayer(name="Layer 6:4")),
         ((6, 5), PaintingLayer(name="Layer 6:5")),
         ((7,), PaintingLayer(name="Layer 7")),
-        ((8,), LayerStack(name="Group 8")),
-        ]
+    ]
     for path, layer in layer_info:
         root.deepinsert(path, layer)
     root.set_current_path([4])
@@ -1008,10 +1054,10 @@ def _test():
 
     # test for hovering
     def test_hover_cb(view, layer):
-        print 'hover!'
-        print layer
+        print('hover!')
+        print(layer)
     def test_hover_leave_cb(view):
-        print 'hover leave!'
+        print('hover leave!')
     view.hover_over_layer += test_hover_cb
     view.hover_leave += test_hover_leave_cb
 

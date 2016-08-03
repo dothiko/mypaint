@@ -12,6 +12,7 @@
 
 
 ## Imports
+from __future__ import print_function
 
 import os
 import re
@@ -1464,8 +1465,8 @@ class FileHandler (object):
                     ifp.write(cdir) 
                     ifp.write('\n') 
             except Exception,e:
-                print "********** [CHANCE TO DEBUG!!] ***************"
-                print str(e)
-                print type(cdir)
-                print i
+                print("********** [CHANCE TO DEBUG!!] ***************")
+                print(str(e))
+                print(type(cdir))
+                print(i)
 

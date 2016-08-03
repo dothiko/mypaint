@@ -9,6 +9,7 @@
 """Background tile chooser dialog"""
 
 ## Imports
+from __future__ import print_function
 
 import os
 import sys
@@ -142,7 +143,7 @@ class BackgroundWindow (windowing.Dialog):
     def _add_color_to_patterns_cb(self, widget):
         pixbuf = self._get_selected_color_pixbuf()
         i = 1
-        while 1:
+        while True:
             filename = os.path.join(self.app.user_datapath,
                                     BACKGROUNDS_SUBDIR,
                                     'color%02d.png' % i)
@@ -275,7 +276,7 @@ class BackgroundList (pixbuflist.PixbufList):
             return pixbuf
         assert w >= N
         assert h >= N
-        scale = max(0.25, N / min(w, h))
+        scale = max(0.25, float(N) / min(w, h))
         scaled = new_blank_pixbuf((0, 0, 0), N, N)
         pixbuf.composite(
             dest=scaled,

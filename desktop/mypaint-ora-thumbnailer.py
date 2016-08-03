@@ -24,6 +24,8 @@
 # the shared-mime-info package, or see
 # http://standards.freedesktop.org/shared-mime-info-spec/
 
+from __future__ import print_function
+
 import zipfile
 from gi.repository import GdkPixbuf
 
@@ -32,7 +34,8 @@ def ora_thumbnail(infile, outfile, size):
     """Extracts an OpenRaster file's thumbnail to PNG, with scaling."""
 
     # Extract a GdkPixbuf from the OpenRaster file
-    png_data = zipfile.ZipFile(infile).read('Thumbnails/thumbnail.png')
+    with zipfile.ZipFile(infile) as zf:
+        png_data = zf.read('Thumbnails/thumbnail.png')
     loader = GdkPixbuf.PixbufLoader()
     loader.write(png_data)
     loader.close()

@@ -10,6 +10,7 @@
 # usage: python symbolic-icons-extract.py [GROUP_ID(s)]
 
 ## Imports
+from __future__ import print_function
 
 import os
 import sys
@@ -116,7 +117,7 @@ def show_icon_groups(svg):
                 continue
             if (group_id.startswith("mypaint-") and
                     not group_id.endswith(SUFFIX24)):
-                print group_id
+                print(group_id)
 
 
 def main():
@@ -129,9 +130,8 @@ def main():
         logger.error("No dir named %r", basedir)
         sys.exit(1)
     logger.info("Reading %r", CONTACT_SHEET)
-    svg_fp = gzip.open(CONTACT_SHEET, mode='rb')
-    svg = ET.parse(svg_fp)
-    svg_fp.close()
+    with gzip.open(CONTACT_SHEET, mode='rb') as svg_fp:
+        svg = ET.parse(svg_fp)
     group_ids = sys.argv[1:]
     if group_ids:
         logger.info("Attempting to extract %d icon(s)", len(group_ids))

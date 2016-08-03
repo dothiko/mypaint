@@ -16,6 +16,7 @@
 
 
 ## Imports
+from __future__ import print_function
 
 import math
 import os
@@ -1338,10 +1339,9 @@ def palette_save_via_dialog(palette, title, parent=None, preview=None):
         # FIXME: this can overwrite files without prompting the user, if
         # the name hacking above changed the filename.  Should do the name
         # tweak within the dialog somehow and get that to confirm.
-        fp = open(filename, 'w')
-        palette.save(fp)
-        fp.flush()
-        fp.close()
+        with open(filename, 'w') as fp:
+            palette.save(fp)
+            fp.flush()
         result = True
     dialog.destroy()
     return result

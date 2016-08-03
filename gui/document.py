@@ -17,6 +17,7 @@ i.e. they convert user input into updates to the document model.
 
 
 ## Imports
+from __future__ import print_function
 
 import os
 import os.path
@@ -488,7 +489,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         k('<control>z', 'Undo')
         k('<control>y', 'Redo')
         k('<control><shift>z', 'Redo')
-        k('<control>w', lambda(action): self.app.drawWindow.quit_cb())
+        k('<control>w', lambda action: self.app.drawWindow.quit_cb())
         k('KP_Add', 'ZoomIn')
         k('KP_Subtract', 'ZoomOut')
         k('KP_4', 'RotateLeft')  # Blender
@@ -500,10 +501,10 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         k('<control>minus', 'ZoomOut')  # Krita
         k('bar', 'SymmetryActive')
 
-        k('Left', lambda(action): self.pan(self.PAN_LEFT))
-        k('Right', lambda(action): self.pan(self.PAN_RIGHT))
-        k('Down', lambda(action): self.pan(self.PAN_DOWN))
-        k('Up', lambda(action): self.pan(self.PAN_UP))
+        k('Left', lambda action: self.pan(self.PAN_LEFT))
+        k('Right', lambda action: self.pan(self.PAN_RIGHT))
+        k('Down', lambda action: self.pan(self.PAN_DOWN))
+        k('Up', lambda action: self.pan(self.PAN_UP))
 
         k('<control>Left', 'RotateLeft')
         k('<control>Right', 'RotateRight')
@@ -1734,6 +1735,17 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         if action.get_name() == 'ZoomOut':
             direction = self.ZOOM_OUTWARDS
         self.zoom(direction)
+
+    def pan_cb(self, action):
+        """Callback for Pan{Left,Right,Up,Down} GtkActions"""
+        direction = self.PAN_LEFT
+        if action.get_name() == 'PanRight':
+            direction = self.PAN_RIGHT
+        elif action.get_name() == 'PanUp':
+            direction = self.PAN_UP
+        elif action.get_name() == 'PanDown':
+            direction = self.PAN_DOWN
+        self.pan(direction)
 
     def rotate_cb(self, action):
         """Callback for Rotate{Left,Right} GtkActions"""

@@ -9,6 +9,8 @@
 """Button press mapping.
 """
 
+from __future__ import print_function
+
 from gettext import gettext as _
 
 from gi.repository import Gtk
@@ -331,8 +333,7 @@ class ButtonMappingEditor (Gtk.EventBox):
         """
         self.default_action = actions[0]
         self.actions = set(actions)
-        labels_list = [(self._get_action_label(a), a) for a in actions]
-        labels_list.sort()
+        labels_list = sorted((self._get_action_label(a), a) for a in actions)
         self.action_liststore.clear()
         for label, act in labels_list:
             self.action_labels[act] = label

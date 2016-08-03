@@ -13,6 +13,7 @@
 
 
 ## Imports
+from __future__ import print_function
 
 import re
 import os
@@ -96,9 +97,8 @@ class Palette (object):
         elif filehandle:
             self.load(filehandle, silent=True)
         elif filename:
-            fp = open(filename, "r")
-            self.load(fp, silent=True)
-            fp.close()
+            with open(filename, "r") as fp:
+                self.load(fp, silent=True)
 
     def clear(self, silent=False):
         """Resets the palette to its initial state.
@@ -133,7 +133,8 @@ class Palette (object):
         :param bool silent: If true, don't emit any events.
 
         >>> pal = Palette()
-        >>> pal.load(open("palettes/MyPaint_Default.gpl", "r"))
+        >>> with open("palettes/MyPaint_Default.gpl", "r") as fp:
+        ...     pal.load(fp)
         >>> len(pal) > 1
         True
 

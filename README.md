@@ -1,6 +1,10 @@
 ## my_build branch : my custom build of MyPaint
 
 This is heavily customized version of the program "MyPaint".
+[![Translation Status](https://hosted.weblate.org/widgets/mypaint/mypaint/svg-badge.svg)](https://hosted.weblate.org/engage/mypaint/?utm_source=widget)
+[![Travis Build Status](https://travis-ci.org/mypaint/mypaint.png?branch=master)](https://travis-ci.org/mypaint/mypaint)
+[![Tea-CI Build Status](https://tea-ci.org/api/badges/mypaint/mypaint/status.svg)](https://tea-ci.org/mypaint/mypaint)
+>>>>>>> upstream/master
 
 Most customized codes are adhoc, still in testing stage by myself.
 I also use this branch as my personal backup. 
@@ -223,6 +227,54 @@ MyPaint is written in Python, C++, and C.
 It makes use of the GTK toolkit, version 3.x.
 The source is maintained using [git](http://www.git-scm.com),
 primarily on Github.
+
+### Getting started
+
+MyPaint has an associated library,
+[libmypaint](https://github.com/mypaint/libmypaint),
+which is distributed as a sister project on Github.
+
+- libmypaint (>= 1.3.0-alpha.0)
+
+There are several third-party dependencies too:
+
+- scons (>= 2.1.0)
+- pygobject
+- gtk3 (>= 3.12)
+- python (= 2.7) (OSX: python >= 2.7.4)
+- swig
+- numpy
+- pycairo (>= 1.4)
+- libpng
+- lcms2
+- libjson-c (>= 0.11, but the older "libjson" name at ~0.10 will work too)
+- librsvg
+
+Recommended: a pressure sensitive input device (graphic tablet)
+
+### Build and Install
+
+All systems differ.
+The basic build documentation is divided by
+broad class of operating system and software distribution.
+
+* [README\_LINUX.md (chiefly Debian-based systems)](README_LINUX.md)
+* [README\_WINDOWS.md (native WIN32/WIN64 using MSYS2)](README_WINDOWS.md)
+* [README\_OSX.md (macports - needs review)](README_OSX.md)
+
+### Contributing
+
+The MyPaint project welcomes and encourages participation by everyone.
+We want our community to be skilled and diverse,
+and we want it to be a community that anybody can feel good about joining.
+No matter who you are or what your background is, we welcome you.
+
+Please note that MyPaint is released with a
+[Contributor Code of Conduct](CODE_OF_CONDUCT.md).
+By participating in this project you agree to abide by its terms.
+
+Please see the file [CONTRIBUTING.md](CONTRIBUTING.md)
+for details of how you can begin contributing.
 
 ### Legal info
 

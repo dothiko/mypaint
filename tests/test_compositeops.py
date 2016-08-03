@@ -2,10 +2,13 @@
 # Tests the layer compositing/blending code for correctness of its
 # advertized optimization flags.
 
-import numpy
+from __future__ import print_function
+
 import os
 import sys
 from random import random
+
+import numpy as np
 
 os.chdir(os.path.dirname(sys.argv[0]))
 sys.path.insert(0, '..')
@@ -43,8 +46,8 @@ assert mypaintlib.heavy_debug, \
 
 # Prepare striped test data in a tile array
 FIX15_ONE = 1 << 15
-src = numpy.empty((N, N, 4), dtype='uint16')
-dst_orig = numpy.empty((N, N, 4), dtype='uint16')
+src = np.empty((N, N, 4), dtype='uint16')
+dst_orig = np.empty((N, N, 4), dtype='uint16')
 for i, rgba1 in enumerate(SAMPLE_DATA):
     r1 = int(FIX15_ONE * rgba1[0] * rgba1[3])
     g1 = int(FIX15_ONE * rgba1[1] * rgba1[3])
@@ -71,9 +74,9 @@ for i, rgba1 in enumerate(SAMPLE_DATA):
 for mode in xrange(mypaintlib.NumCombineModes):
     mode_info = mypaintlib.combine_mode_get_info(mode)
     mode_name = mode_info["name"]
-    print mode_name,
+    print(mode_name, end=' ')
 
-    dst = numpy.empty((N, N, 4), dtype='uint16')
+    dst = np.empty((N, N, 4), dtype='uint16')
     dst[...] = dst_orig[...]
 
     # Combine using the current mode
@@ -98,14 +101,14 @@ for mode in xrange(mypaintlib.NumCombineModes):
             if all_ok:
                 if new[0] > new[3] or new[1] > new[3] or new[2] > new[3]:
                     if all_ok:
-                        print "**FAILED**"
+                        print("**FAILED**")
                         all_ok = False
                     print ("  %s isn't writing premultiplied data properly"
                            % (mode_name,))
                 if (new[0] > FIX15_ONE or new[1] > FIX15_ONE or
                         new[2] > FIX15_ONE or new[3] > FIX15_ONE):
                     if all_ok:
-                        print "**FAILED**"
+                        print("**FAILED**")
                         all_ok = False
                     print ("  %s isn't writing fix15 data properly"
                            % (mode_name,))
@@ -119,14 +122,14 @@ for mode in xrange(mypaintlib.NumCombineModes):
         current_value = bool(mode_info[info_str])
         if current_value != tested_value:
             if all_ok:
-                print "**FAILED**"
+                print("**FAILED**")
                 all_ok = False
             print ("  %s's %r is wrong: should be %r, not %r"
                    % (mode_name, info_str, tested_value, current_value))
     if mode not in MODE_STRINGS:
         if all_ok:
-            print "**FAILED**"
+            print("**FAILED**")
             all_ok = False
-        print "  %s needs localizable UI strings" % (mode_name,)
+        print("  %s needs localizable UI strings" % (mode_name,))
     if all_ok:
-        print "ok"
+        print("ok")

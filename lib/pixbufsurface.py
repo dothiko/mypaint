@@ -7,10 +7,10 @@
 # (at your option) any later version.
 
 ## Imports
+from __future__ import print_function
 
 import sys
 import contextlib
-import numpy
 from logging import getLogger
 logger = getLogger(__name__)
 

@@ -8,6 +8,7 @@
 # (at your option) any later version.
 
 ## Imports
+from __future__ import print_function
 
 from gi.repository import Gtk
 
@@ -1516,7 +1517,6 @@ class RestackMultipleLayers (Command):
         path must exist too.
         """
         super(RestackMultipleLayers, self).__init__(doc, **kwds)
-        print targ_path
         targ_path = tuple(targ_path)
         rootstack = self.doc.layer_stack
         self._src_path_list = []

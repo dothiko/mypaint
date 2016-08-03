@@ -1,9 +1,13 @@
 #!/usr/bin/env python
-import numpy
+
+from __future__ import print_function
+
 from time import time
 import sys
 import os
 import gc
+
+import numpy as np
 
 os.chdir(os.path.dirname(sys.argv[0]))
 sys.path.insert(0, '..')
@@ -13,14 +17,15 @@ import guicontrol
 
 # loadtxt is known to leak memory, thus we run it only once
 # http://projects.scipy.org/numpy/ticket/1356
-painting30sec_events = numpy.loadtxt('painting30sec.dat')
+painting30sec_events = np.loadtxt('painting30sec.dat')
 
 LEAK_EXIT_CODE = 33
 
 
 def mem():
     gc.collect()
-    return int(open('/proc/self/statm').read().split()[0])
+    with open('/proc/self/statm') as statm:
+        return int(statm.read().split()[0])
 
 
 def check_garbage(msg='uncollectable garbage left over from previous tests'):
@@ -51,30 +56,35 @@ def iterations():
             if i == 4 or i == 5:
                 helpers.record_memory_leak_status(print_diff=True)
         m2 = mem()
-        print 'iteration %02d/%02d: %d pages used (%+d)' % (i+1, options.max_iterations, m2, m2-m1)
+        print('iteration %02d/%02d: %d pages used (%+d)' % (
+            i + 1,
+            options.max_iterations,
+            m2,
+            m2 - m1))
         m1 = m2
         if m2 > max_mem:
             max_mem = m2
             max_mem_stable = 0
             max_mem_increasing += 1
             if max_mem_increasing == options.required:
-                print 'maximum was always increasing for', max_mem_increasing, 'iterations'
+                print('maximum was always increasing for', max_mem_increasing,
+                      'iterations')
                 break
         else:
             max_mem_stable += 1
             max_mem_increasing = 0
             if max_mem_stable == options.required:
-                print 'maximum was stable for', max_mem_stable, 'iterations'
+                print('maximum was stable for', max_mem_stable, 'iterations')
                 leak = False
                 break
 
     check_garbage()
 
     if leak:
-        print 'memory leak found'
+        print('memory leak found')
         sys.exit(LEAK_EXIT_CODE)
     else:
-        print 'no leak found'
+        print('no leak found')
 
 all_tests = {}
 
@@ -90,13 +100,13 @@ def provoke_leak():
     for i in iterations():
         # note: interestingly this leaky only shows in the later iterations
         #       (and very small leaks might not be detected)
-        setattr(gc, 'my_test_leak_%d' % i, numpy.zeros(50000))
+        setattr(gc, 'my_test_leak_%d' % i, np.zeros(50000))
 
 
 @leaktest
 def noleak():
     for i in iterations():
-        setattr(gc, 'my_test_leak', numpy.zeros(50000))
+        setattr(gc, 'my_test_leak', np.zeros(50000))
 
 
 @leaktest
@@ -246,11 +256,12 @@ if __name__ == '__main__':
 
     if options.list:
         for name in sorted(all_tests.keys()):
-            print name
+            print(name)
         sys.exit(0)
 
     if options.required >= options.max_iterations:
-        print 'requiring more good iterations than the iteration limit makes no sense'
+        print('requiring more good iterations than the iteration limit makes '
+              'no sense')
         sys.exit(1)
 
     if not tests:
@@ -262,16 +273,16 @@ if __name__ == '__main__':
 
     for t in tests:
         if t not in all_tests:
-            print 'Unknown test:', t
+            print('Unknown test:', t)
             sys.exit(1)
 
     results = []
     for t in tests:
         child_pid = os.fork()
         if not child_pid:
-            print '---'
-            print 'running test "%s"' % t
-            print '---'
+            print('---')
+            print('running test "%s"' % t)
+            print('---')
             all_tests[t]()
             sys.exit(0)
 
@@ -282,16 +293,16 @@ if __name__ == '__main__':
         results.append(exitcode)
 
     everything_okay = True
-    print
-    print '=== SUMMARY ==='
+    print()
+    print('=== SUMMARY ===')
     for t, exitcode in zip(tests, results):
         if exitcode == 0:
-            print t, 'OK'
+            print(t, 'OK')
         else:
             everything_okay = False
             if exitcode == LEAK_EXIT_CODE:
-                print t, 'LEAKING'
+                print(t, 'LEAKING')
             else:
-                print t, 'EXCEPTION'
+                print(t, 'EXCEPTION')
     if not everything_okay:
         sys.exit(1)

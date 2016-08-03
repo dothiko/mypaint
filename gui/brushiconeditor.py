@@ -8,6 +8,8 @@
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 
+from __future__ import print_function
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -274,7 +276,7 @@ class BrushIconEditor (Gtk.Grid):
         b.preview = pixbuf
         try:
             b.save()
-        except IOError, err:
+        except IOError as err:
             logger.warning("Failed to save brush: %r (recoverable!)", err)
         else:
             for brushes in self._bm.groups.itervalues():

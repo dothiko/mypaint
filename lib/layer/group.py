@@ -11,10 +11,12 @@
 
 
 ## Imports
+from __future__ import print_function
 
-import numpy
 import logging
 logger = logging.getLogger(__name__)
+
+import numpy as np
 
 from lib.gettext import C_
 import lib.mypaintlib
@@ -71,7 +73,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
         super(LayerStack, self).__init__(**kwargs)
         # Blank background, for use in rendering
         N = tiledsurface.N
-        blank_arr = numpy.zeros((N, N, 4), dtype='uint16')
+        blank_arr = np.zeros((N, N, 4), dtype='uint16')
         self._blank_bg_surface = tiledsurface.Background(blank_arr)
 
     def load_from_openraster(self, orazip, elem, cache_dir, feedback_cb,
@@ -216,6 +218,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
     def _notify_disown(self, orphan, oldindex):
         """Recursively process a removed child (root reset, notify)"""
         # Reset root and notify. No actual tree permutations.
+        orphan.group = None
         root = self.root
         orphan.root = None
         # Recursively disown all descendents of the orphan first
@@ -229,6 +232,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
     def _notify_adopt(self, adoptee, newindex):
         """Recursively process an added child (set root, notify)"""
         # Set root and notify. No actual tree permutations.
+        adoptee.group = self
         root = self.root
         adoptee.root = root
         # Notify for the newly adopted layer first
@@ -372,7 +376,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
                        **kwargs):
         """Unconditionally copy one tile's data into an array"""
         N = tiledsurface.N
-        tmp = numpy.zeros((N, N, 4), dtype='uint16')
+        tmp = np.zeros((N, N, 4), dtype='uint16')
         for layer in reversed(self._layers):
             layer.composite_tile(tmp, True, tx, ty, mipmap_level,
                                  layers=None, **kwargs)
@@ -411,7 +415,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
             isolate = False
         if isolate:
             N = tiledsurface.N
-            tmp = numpy.zeros((N, N, 4), dtype='uint16')
+            tmp = np.zeros((N, N, 4), dtype='uint16')
             for layer in reversed(self._layers):
                 p = (self is previewing) and layer or previewing
                 s = (self is solo) and layer or solo

@@ -20,7 +20,7 @@ import random
 import json
 
 from gettext import gettext as _
-from libmypaint import brushsettings
+from lib import brushsettings
 from gi.repository import GLib
 from gi.repository import GdkPixbuf
 import cairo

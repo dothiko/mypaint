@@ -13,12 +13,14 @@ See also: gui.style
 """
 
 ## Imports
+from __future__ import print_function
 
 import logging
 logger = logging.getLogger(__name__)
 
 import math
-from numpy import array
+
+import numpy as np
 import cairo
 
 from lib.helpers import clamp
@@ -97,15 +99,15 @@ def spline_iter(tuples, double_first=True, double_last=True):
     cint = [None, None, None, None]
     if double_first:
         cint[0:3] = cint[1:4]
-        cint[3] = array(tuples[0])
+        cint[3] = np.array(tuples[0])
     for ctrlpt in tuples:
         cint[0:3] = cint[1:4]
-        cint[3] = array(ctrlpt)
+        cint[3] = np.array(ctrlpt)
         if not any((a is None) for a in cint):
             yield cint
     if double_last:
         cint[0:3] = cint[1:4]
-        cint[3] = array(tuples[-1])
+        cint[3] = np.array(tuples[-1])
         yield cint
 
 def spline_iter_2(tuples,selected,offset,double_first=True, double_last=True):
@@ -677,9 +679,8 @@ if __name__ == '__main__':
         if not myb_file.lower().endswith(".myb"):
             logger.warning("Ignored %r: not a .myb file", myb_file)
             continue
-        myb_fp = open(myb_file, 'r')
-        myb_json = myb_fp.read()
-        myb_fp.close()
+        with open(myb_file, 'r') as myb_fp:
+            myb_json = myb_fp.read()
         myb_brushinfo = BrushInfo(myb_json)
         myb_pixbuf = render_brush_preview_pixbuf(myb_brushinfo)
         if myb_pixbuf is not None:

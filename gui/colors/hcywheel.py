@@ -11,6 +11,8 @@
 """Hue/Relative chroma/Luma adjuster widgets, with an editable gamut mask.
 """
 
+from __future__ import print_function
+
 import math
 from copy import deepcopy
 from random import random
@@ -155,8 +157,7 @@ class MaskableWheelMixin(object):
                 mask_shapes[shape_id] = []
             mask_shapes[shape_id].append(color)
         mask_list = []
-        shape_ids = mask_shapes.keys()
-        shape_ids.sort()
+        shape_ids = sorted(mask_shapes.keys())
         for shape_id in shape_ids:
             mask_list.append(mask_shapes[shape_id])
         self.set_mask(mask_list)
@@ -688,9 +689,9 @@ class HCYMaskEditorWheel (HCYHueChromaWheel):
         for hull in self.get_mask_voids():
             # cx, cy = geom.poly_centroid(hull)
             for p1, p2 in geom.pairwise(hull):
-                np = geom.nearest_point_in_segment(p1, p2, (x, y))
-                if np is not None:
-                    nx, ny = np
+                nearest_point = geom.nearest_point_in_segment(p1, p2, (x, y))
+                if nearest_point is not None:
+                    nx, ny = nearest_point
                     d = math.sqrt((x-nx)**2 + (y-ny)**2)
                     dists.append(d)
             # Segment end too

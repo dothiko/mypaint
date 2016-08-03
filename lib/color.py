@@ -21,6 +21,7 @@ with an adjuster does its type change to match the control's color space.
 """
 
 ## Imports
+from __future__ import print_function
 
 import re
 import colorsys
@@ -173,8 +174,8 @@ class UIColor (object):
             return False
         return rgb1 == rgb2
         # colorhistory.py uses
-        #a_ = numpy.array(helpers.hsv_to_rgb(*a))
-        #b_ = numpy.array(helpers.hsv_to_rgb(*b))
+        #a_ = np.array(helpers.hsv_to_rgb(*a))
+        #b_ = np.array(helpers.hsv_to_rgb(*b))
         #return ((a_ - b_)**2).sum() < (3*1.0/256)**2
 
     def __copy__(self):

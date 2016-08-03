@@ -10,6 +10,7 @@
 
 
 ## Imports
+from __future__ import print_function
 
 # Know now that these are the rules of import.
 # That we live by, by which we abide.
@@ -49,7 +50,7 @@ import lib.document
 from lib import brush
 from lib import helpers
 from lib import mypaintlib
-from libmypaint import brushsettings
+from lib import brushsettings
 import gui.device
 import filehandling
 import keyboard
@@ -444,9 +445,8 @@ class Application (object):
         self.stroke_pressure_settings.finalize()
         settingspath = join(self.user_confpath, 'settings.json')
         jsonstr = helpers.json_dumps(self.preferences)
-        f = open(settingspath, 'w')
-        f.write(jsonstr)
-        f.close()
+        with open(settingspath, 'w') as f:
+            f.write(jsonstr)
 
 
     def apply_settings(self):
@@ -467,10 +467,11 @@ class Application (object):
         """
         def get_json_config():
             settingspath = join(self.user_confpath, 'settings.json')
-            jsonstr = open(settingspath).read()
+            with open(settingspath) as fp:
+                jsonstr = fp.read()
             try:
                 return helpers.json_loads(jsonstr)
-            except Exception, e:
+            except Exception as e:
                 logger.warning("settings.json: %s", str(e))
                 logger.warning("Failed to load settings: using defaults")
                 return {}
@@ -726,7 +727,7 @@ class Application (object):
     @property
     def brush_settings_window(self):
         """The brush settings editor subwindow."""
-        return self.get_subwindow("BrushSettingsWindow")
+        return self.get_subwindow("BrushEditorWindow")
 
     @property
     def brush_icon_editor_window(self):
@@ -868,7 +869,7 @@ class PixbufDirectory (object):
         if name not in self.cache:
             try:
                 pixbuf = GdkPixbuf.Pixbuf.new_from_file(join(self.dirname, name + '.png'))
-            except GObject.GError, e:
+            except GObject.GError as e:
                 raise AttributeError(str(e))
             self.cache[name] = pixbuf
         return self.cache[name]

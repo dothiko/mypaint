@@ -12,6 +12,7 @@
 
 
 ## Imports
+from __future__ import print_function
 
 from math import floor, ceil, isnan
 import os
@@ -23,7 +24,6 @@ import colorsys
 import urllib
 import gc
 import functools
-import numpy
 import logging
 logger = logging.getLogger(__name__)
 import shutil
