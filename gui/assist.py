@@ -226,10 +226,11 @@ class Stabilizer(Assistbase):
 
     def enum_samples(self):
 
-        if self._disabled:
+        if self._cycle == 1L and self._disabled:
             # Temporary disabled stage, until button is released.
-            yield (self._rx , self._ry , self._latest_pressure)
-        elif self._cycle == 1:
+            if self._last_button == 1:
+                yield (self._rx , self._ry , self._latest_pressure)
+        elif self._cycle == 1L:
             # Drawing initial pressure - it would be 0.0 in normal,
             # and when auto-enabled , it would be the pressure of 
             # current stylus input.
@@ -240,7 +241,6 @@ class Stabilizer(Assistbase):
             # Normal stabilize stage.
             
             if self._last_button == 1:
-
                 cx = self._cx
                 cy = self._cy
 
@@ -264,22 +264,23 @@ class Stabilizer(Assistbase):
 
                 self._cx = cx + mx
                 self._cy = cy + my
-                
-                if self._cycle < 3:
-                    yield (self._cx , self._cy , self._initial_pressure) # To avoid heading glitch
 
                 yield (self._cx , self._cy , self._latest_pressure)
                 self._cycle += 1L
             
             elif self._last_button == None:
-                if (self._prev_button != None):
+                if self._prev_button != None:
                     if self._latest_pressure > 0.0:
                         # button is released but
                         # still remained some pressure...
                         # rare case,but possible.
                         yield (self._cx, self._cy, self._latest_pressure)
+
+                    # We need this for avoid trailing glitch
                     yield (self._cx, self._cy, 0.0)
-                yield (self._rx, self._ry, 0.0) # We need this for avoid trailing glitch
+                # Always output 0.0 pressure,
+                # as normal freehand tool.
+                yield (self._rx, self._ry, 0.0) 
 
 
         raise StopIteration
@@ -354,6 +355,8 @@ class Stabilizer(Assistbase):
                     self._disabled = True
                     self._drawlength = 0
                     self._start_time = None
+                    self._cycle = 0L
+
 
         self._latest_pressure = pressure
         self._rx = x
