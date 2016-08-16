@@ -333,7 +333,12 @@ class Stabilizer(Assistbase):
                 self._drawlength += math.hypot(x - self._cx, y - self._cy) 
                 if self._drawlength > self.DRAW_THRESHOLD:
                     ctime = time - self._start_time
-                    speed = self._drawlength / ctime
+                    if ctime == 0:
+                        # It is extremely super-fast stroke.
+                        # Ensure it is enough (too) fast and avoiding divide by zero 
+                        speed = self.SPEED_THRESHOLD 
+                    else:
+                        speed = self._drawlength / ctime
 
                     if speed < self.SPEED_THRESHOLD:
                         # When the drawn length(speed) below threshold,
@@ -368,8 +373,8 @@ class Stabilizer(Assistbase):
     def queue_draw_area(self, tdw):
         """ Queue draw area for overlay """
         if self._enabled:
-            full_rad = (self._stabilize_range + 3) * 2
-            half_rad = full_rad / 2
+            half_rad = (self._stabilize_range + 2)
+            full_rad = half_rad * 2
             tdw.queue_draw_area(self._cx - half_rad, self._cy - half_rad,
                     full_rad, full_rad)
 
