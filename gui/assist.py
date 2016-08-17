@@ -212,6 +212,7 @@ class Stabilizer(Assistbase):
         self._prev_dx = self._prev_dy = None
         self._presenter = None
         self._stabilize_range = 48
+        self._current_range = self._stabilize_range
         self._last_time = None
         self._prev_time = None
         self._auto_enable = True # Auto stabilizer disable flag
@@ -248,7 +249,7 @@ class Stabilizer(Assistbase):
                 dy = self._ry - cy
                 cur_length = math.hypot(dx, dy)
 
-                if cur_length <= self._stabilize_range:
+                if cur_length <= self._current_range:
                     raise StopIteration
 
                 if self._average_previous:
@@ -258,7 +259,7 @@ class Stabilizer(Assistbase):
                     self._prev_dx = dx
                     self._prev_dy = dy
 
-                move_length = cur_length - self._stabilize_range
+                move_length = cur_length - self._current_range
                 mx = (dx / cur_length) * move_length
                 my = (dy / cur_length) * move_length
 
@@ -326,38 +327,40 @@ class Stabilizer(Assistbase):
                 self._initial_pressure = 0.0
                 if self._auto_enable:
                     # In auto disable mode, stabilizer disabled by default.
-                    self._disabled = True
                     self._drawlength = 0
-            elif (self._auto_enable and self._disabled and
-                    self._start_time != None):
-                self._drawlength += math.hypot(x - self._cx, y - self._cy) 
+                    self._current_range = 1
+                    self._ox = x
+                    self._oy = y
+                else:
+                    self._current_range = self._stabilize_range
+            elif (self._auto_enable and self._start_time != None):
+                self._drawlength += math.hypot(x - self._ox, y - self._oy) 
                 if self._drawlength > self.DRAW_THRESHOLD:
                     ctime = time - self._start_time
                     if ctime == 0:
                         # It is extremely super-fast stroke.
                         # Ensure it is enough (too) fast and avoiding divide by zero 
-                        speed = self.SPEED_THRESHOLD 
+                        speed = 0.001
                     else:
-                        speed = self._drawlength / ctime
+                        speed = (self._drawlength / ctime) 
 
-                    if speed < self.SPEED_THRESHOLD:
-                        # When the drawn length(speed) below threshold,
-                        # then stabilizer enabled i.e. self._disabled == False
-                        self._disabled = False
-                        self._initial_pressure = pressure
-                    else:
-                        self._start_time = time
-                        self._drawlength = 0
+                    self._current_range = int(self._stabilize_range * speed)
+                    print(self._current_range)
+                    if self._current_range > self._stabilize_range:
+                        self._current_range = self._stabilize_range
+                    self._current_range = self._stabilize_range - self._current_range
 
                     # Update current/previous position in every case.
-                    self._cx = x
-                    self._cy = y
+                    self._ox = x
+                    self._oy = y
+                    self._drawlength = 0
+                    self._start_time = time
 
 
         elif self._last_button == None:
             if self._prev_button != None:
                 if self._auto_enable:
-                    self._disabled = True
+                   #self._disabled = True
                     self._drawlength = 0
                     self._start_time = None
                     self._cycle = 0L
@@ -373,18 +376,18 @@ class Stabilizer(Assistbase):
     def queue_draw_area(self, tdw):
         """ Queue draw area for overlay """
         if self._enabled:
-            half_rad = (self._stabilize_range + 2)
+            half_rad = (self._current_range+ 2)
             full_rad = half_rad * 2
             tdw.queue_draw_area(self._cx - half_rad, self._cy - half_rad,
                     full_rad, full_rad)
 
     def draw_overlay(self, cr):
         """ Drawing overlay """
-        if self._enabled:
+        if self._enabled and self._current_range > 0:
             cr.save()
             cr.set_line_width(1)
             cr.arc( self._cx, self._cy,
-                    self._stabilize_range,
+                    self._current_range,
                     0.0,
                     2*math.pi)
             cr.stroke_preserve()
