@@ -197,45 +197,40 @@ class Stabilizer(Assistbase):
     """ 
 
     name = _("Stabilizer")
-    SPEED_THRESHOLD = 0.2 # The threshold for auto-enable speed, pixel per millisecond.
     DRAW_THRESHOLD = 16 # The minimum length of strokes to check auto-enable.
 
     def __init__(self, app):
         super(Stabilizer, self).__init__()
-        self._stabilize_cnt = None
         self.app = app
         self._rx = None
         self._ry = None
         self._last_button = None
         self._prev_button = None
         self._average_previous = True
-        self._prev_dx = self._prev_dy = None
         self._presenter = None
         self._stabilize_range = 48
         self._current_range = self._stabilize_range
         self._last_time = None
-        self._prev_time = None
-        self._auto_enable = True # Auto stabilizer disable flag
+        self._auto_adjust_range = True # Auto stabilizer range adjust flag
+        self._prev_range = 0.0
         self._cycle = 0L
         self.reset()
 
     @property
     def _enabled(self):
         return (self._last_button != None and 
-                self._disabled == False and
-                self._cycle > 1)
+                self._prev_range > 0)
 
     def enum_samples(self):
 
-        if self._cycle == 1L and self._disabled:
-            # Temporary disabled stage, until button is released.
-            if self._last_button == 1:
-                yield (self._rx , self._ry , self._latest_pressure)
-        elif self._cycle == 1L:
-            # Drawing initial pressure - it would be 0.0 in normal,
-            # and when auto-enabled , it would be the pressure of 
-            # current stylus input.
-            # and after this, proceed normal stabilized stage.
+        if self._cycle == 1L:
+            # Drawing initial pressure, to avoid heading glitch.
+            # That value would be 0.0 in normal.
+            # However, When auto-range adjust is enabled,
+            # drawing stroke is already undergo, so
+            # 'initial pressure' would be the pressure of current stylus input,
+            # not 0.0.
+            # And,after this cycle, proceed normal stabilized stage.
             self._cycle = 2L 
             yield (self._cx , self._cy , self._initial_pressure)
         else:
@@ -291,9 +286,6 @@ class Stabilizer(Assistbase):
         self._cx = None
         self._cy = None
         self._latest_pressure = None
-        self._prev_dx = None
-        self._disabled = False
-        self._decided = False
         self._last_button = None
         self._start_time = None
         self._cycle = 0L
@@ -314,18 +306,18 @@ class Stabilizer(Assistbase):
 
         self._prev_button = self._last_button
         self._last_button = button
-        self._prev_time = self._last_time
         self._last_time = time
 
         if self._last_button == 1:
+            self._prev_range = self._current_range
             if (self._prev_button == None):
                 self._cx = x
                 self._cy = y
                 self._cycle = 1L
-                self._prev_time = time
                 self._start_time = time
                 self._initial_pressure = 0.0
-                if self._auto_enable:
+                self._prev_dx = None
+                if self._auto_adjust_range:
                     # In auto disable mode, stabilizer disabled by default.
                     self._drawlength = 0
                     self._current_range = 1
@@ -333,7 +325,8 @@ class Stabilizer(Assistbase):
                     self._oy = y
                 else:
                     self._current_range = self._stabilize_range
-            elif (self._auto_enable and self._start_time != None):
+                self._prev_range = 0.0
+            elif (self._auto_adjust_range and self._start_time != None):
                 self._drawlength += math.hypot(x - self._ox, y - self._oy) 
                 if self._drawlength > self.DRAW_THRESHOLD:
                     ctime = time - self._start_time
@@ -344,11 +337,10 @@ class Stabilizer(Assistbase):
                     else:
                         speed = (self._drawlength / ctime) 
 
-                    print(speed)
                     if speed > 0.5:
                         self._current_range -= speed
                     elif speed < 0.3:
-                        self._current_range += speed * 2
+                        self._current_range += 0.3 / speed 
 
                     if self._current_range > self._stabilize_range:
                         self._current_range = self._stabilize_range
@@ -364,8 +356,7 @@ class Stabilizer(Assistbase):
 
         elif self._last_button == None:
             if self._prev_button != None:
-                if self._auto_enable:
-                   #self._disabled = True
+                if self._auto_adjust_range:
                     self._drawlength = 0
                     self._start_time = None
                     self._cycle = 0L
@@ -386,20 +377,33 @@ class Stabilizer(Assistbase):
             tdw.queue_draw_area(self._cx - half_rad, self._cy - half_rad,
                     full_rad, full_rad)
 
+    def _draw_dashed_circle(self, cr, x, y, radius):
+        cr.save()
+        cr.set_line_width(1)
+        cr.arc( x, y,
+                int(radius),
+                0.0,
+                2*math.pi)
+        cr.stroke_preserve()
+        cr.set_dash( (10,) )
+        cr.set_source_rgb(1, 1, 1)
+        cr.stroke()
+        cr.restore()
+
     def draw_overlay(self, cr):
         """ Drawing overlay """
         if self._enabled and self._current_range > 0:
-            cr.save()
-            cr.set_line_width(1)
-            cr.arc( self._cx, self._cy,
-                    int(self._current_range),
-                    0.0,
-                    2*math.pi)
-            cr.stroke_preserve()
-            cr.set_dash( (10,) )
-            cr.set_source_rgb(1, 1, 1)
-            cr.stroke()
-            cr.restore()
+            self._draw_dashed_circle(cr, self._cx, self._cy,
+                    self._current_range)
+
+            # XXX Drawing actual stroke point.
+            # This should be same size as current brush radius,
+            # but it would be a huge workload when the brush is 
+            # extremely large.
+            # so, currently this is fixed size, only shows the center
+            # point of stroke.
+            self._draw_dashed_circle(cr, self._cx, self._cy,
+                    2)
 
 
     ## Options presenter for assistant
@@ -460,21 +464,21 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
         row+=1
 
         # Checkbox for use auto-disable feature.
-        checkbox = Gtk.CheckButton(_("Auto enable"),
+        checkbox = Gtk.CheckButton(_("Auto range adjust"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
-        checkbox.set_active(assistant._auto_enable) 
-        checkbox.connect('toggled', self._auto_enable_toggled_cb)
+        checkbox.set_active(assistant._auto_adjust_range) 
+        checkbox.connect('toggled', self._auto_adjust_range_toggled_cb)
         grid.attach(checkbox,0,row,2,1)
         row+=1
 
-        # Scale slider for auto-disable threshold.
-        scale = create_slider(row, _("Threshold speed:"), 
-                self._threshold_changed_cb,
-                0.1, 0.3, assistant.SPEED_THRESHOLD,
-                digits=2)
-        scale.set_sensitive(checkbox.get_active())
-        self._threshold_scale = scale
-        row+=1
+       ## Scale slider for auto-disable threshold.
+       #scale = create_slider(row, _("Threshold speed:"), 
+       #        self._threshold_changed_cb,
+       #        0.1, 0.3, assistant.SPEED_THRESHOLD,
+       #        digits=2)
+       #scale.set_sensitive(checkbox.get_active())
+       #self._threshold_scale = scale
+       #row+=1
 
         grid.show_all()
         self._grid = grid
@@ -492,13 +496,13 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
         if not self._updating_ui:
             self.assistant._stabilize_range = adj.get_value()
 
-    def _auto_enable_toggled_cb(self, checkbox):
+    def _auto_adjust_range_toggled_cb(self, checkbox):
         if not self._updating_ui:
             flag = checkbox.get_active()
-            self.assistant._auto_enable = flag
+            self.assistant._auto_adjust_range = flag
             self._threshold_scale.set_sensitive(flag)
 
-    def _threshold_changed_cb(self, adj):
-        if not self._updating_ui:
-            self.assistant.SPEED_THRESHOLD = adj.get_value()
+   #def _threshold_changed_cb(self, adj):
+   #    if not self._updating_ui:
+   #        self.assistant.SPEED_THRESHOLD = adj.get_value()
 
