@@ -344,11 +344,16 @@ class Stabilizer(Assistbase):
                     else:
                         speed = (self._drawlength / ctime) 
 
-                    self._current_range = int(self._stabilize_range * speed)
-                    print(self._current_range)
+                    print(speed)
+                    if speed > 0.5:
+                        self._current_range -= speed
+                    elif speed < 0.3:
+                        self._current_range += speed * 2
+
                     if self._current_range > self._stabilize_range:
                         self._current_range = self._stabilize_range
-                    self._current_range = self._stabilize_range - self._current_range
+                    elif self._current_range < 0:
+                        self._current_range = 0
 
                     # Update current/previous position in every case.
                     self._ox = x
@@ -376,7 +381,7 @@ class Stabilizer(Assistbase):
     def queue_draw_area(self, tdw):
         """ Queue draw area for overlay """
         if self._enabled:
-            half_rad = (self._current_range+ 2)
+            half_rad = int(self._current_range+ 2)
             full_rad = half_rad * 2
             tdw.queue_draw_area(self._cx - half_rad, self._cy - half_rad,
                     full_rad, full_rad)
@@ -387,7 +392,7 @@ class Stabilizer(Assistbase):
             cr.save()
             cr.set_line_width(1)
             cr.arc( self._cx, self._cy,
-                    self._current_range,
+                    int(self._current_range),
                     0.0,
                     2*math.pi)
             cr.stroke_preserve()
