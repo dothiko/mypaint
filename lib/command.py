@@ -1568,9 +1568,14 @@ class RestackMultipleLayers (Command):
             elif isinstance(target, lib.layer.LayerStack):
                 target.append(src)
             elif isinstance(targ_parent, lib.layer.LayerStack):
-                targ_path = rootstack.deepindex(target)
-                targ_index = targ_path[-1]
-                targ_parent.insert(targ_index, src)
+                if target == None:
+                    # The target position is the end(tail) of layergroup,
+                    # so simply append it.
+                    targ_parent.append(src)
+                else:
+                    targ_path = rootstack.deepindex(target)
+                    targ_index = targ_path[-1]
+                    targ_parent.insert(targ_index, src)
             else:
                 # TODO could this case happens...?
                 assert len(targ_path) > 1
