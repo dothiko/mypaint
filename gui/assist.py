@@ -471,15 +471,6 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
         grid.attach(checkbox,0,row,2,1)
         row+=1
 
-       ## Scale slider for auto-disable threshold.
-       #scale = create_slider(row, _("Threshold speed:"), 
-       #        self._threshold_changed_cb,
-       #        0.1, 0.3, assistant.SPEED_THRESHOLD,
-       #        digits=2)
-       #scale.set_sensitive(checkbox.get_active())
-       #self._threshold_scale = scale
-       #row+=1
-
         grid.show_all()
         self._grid = grid
         self._updating_ui = False
@@ -500,9 +491,3 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
         if not self._updating_ui:
             flag = checkbox.get_active()
             self.assistant._auto_adjust_range = flag
-            self._threshold_scale.set_sensitive(flag)
-
-   #def _threshold_changed_cb(self, adj):
-   #    if not self._updating_ui:
-   #        self.assistant.SPEED_THRESHOLD = adj.get_value()
-
