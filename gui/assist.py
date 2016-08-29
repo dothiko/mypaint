@@ -198,6 +198,7 @@ class Stabilizer(Assistbase):
 
     name = _("Stabilizer")
     DRAW_THRESHOLD = 16 # The minimum length of strokes to check auto-enable.
+    FRAME_PERIOD = 16.6666 # one frame is 1/60 = 16.6666...ms, for stabilizer.
 
     def __init__(self, app):
         super(Stabilizer, self).__init__()
@@ -327,20 +328,32 @@ class Stabilizer(Assistbase):
                     self._current_range = self._stabilize_range
                 self._prev_range = 0.0
             elif (self._auto_adjust_range and self._start_time != None):
+                ctime = time - self._start_time
                 self._drawlength += math.hypot(x - self._ox, y - self._oy) 
-                if self._drawlength > self.DRAW_THRESHOLD:
-                    ctime = time - self._start_time
-                    if ctime == 0:
-                        # It is extremely super-fast stroke.
-                        # Ensure it is enough (too) fast and avoiding divide by zero 
-                        speed = 0.001
-                    else:
-                        speed = (self._drawlength / ctime) 
 
-                    if speed > 0.5:
-                        self._current_range -= speed
-                    elif speed < 0.3:
-                        self._current_range += 0.3 / speed 
+                if ctime > self.FRAME_PERIOD:
+                    speed = self._drawlength / (ctime / self.FRAME_PERIOD)
+                    # When drawing time exceeds the threshold timeperiod, 
+                    # then calculate the speed of storke per 'time unit'
+                    # (16.6666..ms = one frame in 60fps), in pixel.
+                    #
+                    # And depend on that speed of stroke,
+                    # inflate/deflate current stabilize range.
+                    # If speed is within 10.0pixel/frame to
+                    # 6.0pixel/frame, current stabilize range is sustained.
+                    #
+                    # The adjusting and threshold values are not theorical,
+                    # it is from my feeling and experience at testing.
+                    # so, these values might be user-configurable...
+
+                    if speed > 30.0:
+                        self._current_range -= 3.0
+                    elif speed >= 10.0:
+                        self._current_range -= speed / 10.0
+                    elif speed < 1.0:
+                        self._current_range += 1.0
+                    elif speed <= 6.0:
+                        self._current_range += 1.0 / speed
 
                     if self._current_range > self._stabilize_range:
                         self._current_range = self._stabilize_range
