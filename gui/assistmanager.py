@@ -26,6 +26,9 @@ class AssistManager(object):
         self. app = app
 
         # Register the assistants.
+        # Key is Gtk.Action name , not the assistants name attribute.
+        # The reason to use Gtk.Action name is that
+        # assistant name might be translated for i13n. 
         self._assistants = { "AssistModeStabilizer" : Stabilizer(app),
                              "AssistModeParallelRuler" : ParallelRuler(app),
                              None : None # the default, no assistant enabled.
@@ -47,21 +50,22 @@ class AssistManager(object):
         return self._current
 
     @current.setter
-    def current(self, action):
-        self._current = action
+    def current(self, assistant):
+        self._current = assistant
         combo = self._assistant_combo
 
-        if action == None:
+        if assistant == None:
             combo.set_active(0)
             self._activate_presenter(None)
         else:
             self._current.reset()
 
             if not self._internal_update:
-               #self._blend_modes_action[self._current_blend] = action_name
+               #self._blend_modes_assistant[self._current_blend] = assistant_name
                 binfo = self.app.doc.model.brush.brushinfo
                 name = binfo.get_string_property("parent_brush_name")
-                self._brushlookup[name] = action.name
+                 
+                self._brushlookup[name] = assistant
 
             combo_model = combo.get_model()
             for row in combo_model:
@@ -74,10 +78,14 @@ class AssistManager(object):
     def get_assistant_from_label(self, label):
         """ Get assistant from label, i.e. 'combobox' text == assistant.name
         not 'Gtk.Action' name.
+        :rtype tuple: the tuple of (action name, assistant)
         """
-        for ca in self._assistants.values():
-            if ca and ca.name == label:
-                return ca
+        for item in self._assistants.items():
+            action_name, assistant = item
+            if assistant and assistant.name == label:
+                return item
+
+        return (None, None)
 
     def _do_action(self, name, flag):
         if name:
@@ -102,34 +110,8 @@ class AssistManager(object):
         :param action_name: the Gtk.Action name of assistant. 
         if this is None, assistant disabled.
         """
-       #old = self._current
-
         assert action_name in self._assistants.keys()
         self.current = self._assistants[action_name]
-       #self._current = self._assistants[action_name]
-       #self._current_action_name = action_name
-       #
-       #if not self._internal_update:
-       #   #self._blend_modes_action[self._current_blend] = action_name
-       #    binfo = self.app.doc.model.brush.brushinfo
-       #    name = binfo.get_string_property("parent_brush_name")
-       #    self._brushlookup[name] = action_name
-       #
-       #combo = self._assistant_combo
-       #
-       #if self._current:
-       #    self._current.reset()
-       #
-       #    combo_model = combo.get_model()
-       #    for row in combo_model:
-       #        if combo_model.get(row.iter,0)[0] == self._current.name:
-       #           combo.set_active_iter(row.iter)
-       #
-       #    self._activate_presenter(self._current.get_presenter()) 
-       #else:
-       #    combo.set_active(0)
-       #    self._activate_presenter(None)
-       #
         return self._current
 
 
@@ -151,10 +133,10 @@ class AssistManager(object):
         """ Anyway, reset current assistant.
         """
         if managed_brush.name in self._brushlookup:
-            action_name = self._brushlookup[managed_brush.name]
+            assistant = self._brushlookup[managed_brush.name]
         else:
-            action_name = None
-        self.enable_assistant(action_name)
+            assistant = None
+        self.current = assistant
 
 
 
@@ -187,7 +169,7 @@ class AssistManager(object):
                 combo.append_text(assistant.name)
         combo.set_active(0)
         combo.popup_fixed_width = False
-        combo.connect("changed",self.assistant_combo_changed_cb)
+        combo.connect("changed", self.assistant_combo_changed_cb)
         self._assistant_combo = combo
         grid.attach(combo,1,0,1,1)
 
@@ -229,7 +211,9 @@ class AssistManager(object):
 
     ## Presenter widget handlers
     def assistant_combo_changed_cb(self, widget):
-        self.current = self.get_assistant_from_label(widget.get_active_text())
+        action_name, assistant = \
+                self.get_assistant_from_label(widget.get_active_text())
+        self.current = assistant
 
 if __name__ == '__main__':
 

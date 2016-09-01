@@ -208,13 +208,6 @@ class Averager(Assistbase):
                 super(self.__class__, self).fetch(x, y, pressure, time)
             self._prev_time = time 
 
-       #Assistbase._samples_x[Assistbase._sample_index] = x 
-       #Assistbase._samples_y[Assistbase._sample_index] = y 
-       #Assistbase._samples_p[Assistbase._sample_index] = pressure 
-       #Assistbase._current_index = Assistbase._sample_index
-       #Assistbase._sample_index+=1
-       #Assistbase._sample_index%=Assistbase._sampling_max
-       #Assistbase._sample_count+=1
             
 class Stabilizer(Assistbase): 
     """ Stabilizer class, like Krita's one.  This stablizer actually 'average angle'.  
@@ -230,6 +223,21 @@ class Stabilizer(Assistbase):
     DRAW_THRESHOLD = 16 # The minimum length of strokes to check auto-enable.
     FRAME_PERIOD = 16.6666 # one frame is 1/60 = 16.6666...ms, for stabilizer.
 
+    # Mode constants.
+    #
+    # In Stabilizer, self._mode decides how enum_samples()
+    # work. 
+    # Usually, it enumerate nothing (MODE_INVALID)
+    # so no any strokes drawn.
+    # When the device is pressed, self._mode is set as 
+    # MODE_INIT to initialize stroke at enum_samples().
+    # After that, self._mode is set as MODE_DRAW.
+    # and enum_samples() yields some modified device positions,
+    # to draw strokes.
+    # Finally, when the device is released,self._mode is set
+    # as MODE_FINALIZE, to avoid trailing stroke glitches.
+    # And self._mode returns its own normal state, i.e. MODE_INVALID.
+    
     MODE_INVALID = -1
     MODE_INIT = 0
     MODE_DRAW = 1
@@ -237,7 +245,6 @@ class Stabilizer(Assistbase):
 
 
     def __init__(self, app):
-       #super(Stabilizer, self).__init__()
         self.app = app
         self._rx = None
         self._ry = None
@@ -337,11 +344,6 @@ class Stabilizer(Assistbase):
             yield (self._cx, self._cy, 0.0)
 
             self._mode = self.MODE_INVALID
-            
-           ## Always output 0.0 pressure,
-           ## as normal freehand tool.
-           #yield (self._rx, self._ry, 0.0) 
-
 
         raise StopIteration
 
@@ -369,31 +371,12 @@ class Stabilizer(Assistbase):
                     They also represents previous end point of stroke.
         """
 
-       #self._prev_button = self._last_button
-       #self._last_button = button
         self._last_time = time
         self._latest_pressure = pressure
         self._rx = x
         self._ry = y
 
         if self._mode == self.MODE_DRAW:
-           #self._prev_range = self._current_range
-           #if (self._prev_button == None):
-           #    self._cx = x
-           #    self._cy = y
-           #    self._cycle = 1L
-           #    self._start_time = time
-           #    self._initial_pressure = 0.0
-           #    self._prev_dx = None
-           #    if self._auto_adjust_range:
-           #        # In auto disable mode, stabilizer disabled by default.
-           #        self._drawlength = 0
-           #        self._current_range = 1
-           #        self._ox = x
-           #        self._oy = y
-           #    else:
-           #        self._current_range = self._stabilize_range
-           #    self._prev_range = 0.0
             if (self._auto_adjust_range and self._start_time != None):
                 ctime = time - self._start_time
                 self._drawlength += math.hypot(x - self._ox, y - self._oy) 
@@ -433,16 +416,6 @@ class Stabilizer(Assistbase):
                     self._drawlength = 0
                     self._start_time = time
 
-
-       #elif self._last_button == None:
-       #    if self._prev_button != None:
-       #        if self._auto_adjust_range:
-       #            self._drawlength = 0
-       #            self._start_time = None
-       #            self._cycle = 0L
-
-
-        
 
     ## Overlay drawing related
 
@@ -491,13 +464,13 @@ class ParallelRuler(Assistbase):
 
     name = _("Parallel Ruler")
 
+    MODE_INVALID = -1
     MODE_DRAW = 0
     MODE_SET_BASE = 1
     MODE_SET_DEST = 2
     MODE_FINALIZE = 3
 
     def __init__(self, app):
-       #super(ParallelRuler, self).__init__()
         self.app = app
         self.reset(True) # Attributes inited in reset(), with hard reset
         self.cnt=0
@@ -550,9 +523,16 @@ class ParallelRuler(Assistbase):
                         cx, cy = tdw.model_to_display(self._sx, self._sy)
                         yield (cx , cy , 0.0)
 
-                    length = distance(self._cx , self._cy, self._px, self._py)
+                    length, nx, ny = length_and_normal(self._cx , self._cy, 
+                            self._px, self._py)
+                    direction = cross_product(self._vy, self. _vx,
+                            nx, ny)
 
                     if length > 0:
+
+                        if direction < 0.0:
+                            length *= -1.0
+
                         cx = (length * self._vx) + self._sx
                         cy = (length * self._vy) + self._sy
                         self._sx = cx
@@ -583,7 +563,7 @@ class ParallelRuler(Assistbase):
             self._dy = None
 
             # _vx, _vy stores the identity vector of ruler, which is
-            # (_dx, _dy) to (_bx, _by) 
+            # from (_bx, _by) to (_dx, _dy) 
             # Each strokes should be parallel against this vector.
             self._vx = None
             self._vy = None
