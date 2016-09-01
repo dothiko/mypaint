@@ -230,6 +230,12 @@ class Stabilizer(Assistbase):
     DRAW_THRESHOLD = 16 # The minimum length of strokes to check auto-enable.
     FRAME_PERIOD = 16.6666 # one frame is 1/60 = 16.6666...ms, for stabilizer.
 
+    MODE_INVALID = -1
+    MODE_INIT = 0
+    MODE_DRAW = 1
+    MODE_FINALIZE = 2
+
+
     def __init__(self, app):
        #super(Stabilizer, self).__init__()
         self.app = app
@@ -241,18 +247,46 @@ class Stabilizer(Assistbase):
         self._current_range = self._stabilize_range
         self._last_time = None
         self._auto_adjust_range = True # Auto stabilizer range adjust flag
-        self._prev_range = 0.0
         self._cycle = 0L
         self.reset()
 
     @property
-    def _enabled(self):
-        return (self._last_button != None and 
-                self._prev_range > 0)
+    def _ready(self):
+        return (self._mode == self.MODE_DRAW and
+                self._current_range > 0)
+
+    def button_press_cb(self, tdw, x, y, pressure, time, button):
+        self._last_button = button
+        self._latest_pressure = pressure
+        self._cx = x
+        self._cy = y
+        self._cycle = 1L
+        self._start_time = time
+        self._initial_pressure = 0.0
+        self._prev_dx = None
+        self._mode = self.MODE_INIT
+        if self._auto_adjust_range:
+            # In auto disable mode, stabilizer disabled by default.
+            self._drawlength = 0
+            self._current_range = 1
+            self._ox = x
+            self._oy = y
+        else:
+            self._current_range = self._stabilize_range
+        self._prev_range = 0.0
+
+    def button_release_cb(self, tdw, x, y, pressure, time, button):
+        self._last_button = None
+        self._mode = self.MODE_FINALIZE
+        if self._auto_adjust_range:
+            self._drawlength = 0
+            self._start_time = None
+            self._cycle = 0L
+
 
     def enum_samples(self, tdw):
 
-        if self._cycle == 1L:
+        if self._mode == self.MODE_INIT:
             # Drawing initial pressure, to avoid heading glitch.
             # That value would be 0.0 in normal.
             # However, When auto-range adjust is enabled,
@@ -260,52 +294,53 @@ class Stabilizer(Assistbase):
             # 'initial pressure' would be the pressure of current stylus input,
             # not 0.0.
             # And,after this cycle, proceed normal stabilized stage.
-            self._cycle = 2L 
+            self._mode = self.MODE_DRAW
             yield (self._cx , self._cy , self._initial_pressure)
-        else:
+        elif self._mode == self.MODE_DRAW:
             # Normal stabilize stage.
+            cx = self._cx
+            cy = self._cy
+
+            dx = self._rx - cx
+            dy = self._ry - cy
+            cur_length = math.hypot(dx, dy)
+
+            if cur_length <= self._current_range:
+                raise StopIteration
+
+            if self._average_previous:
+                if self._prev_dx != None:
+                    dx = (dx + self._prev_dx) / 2.0
+                    dy = (dy + self._prev_dy) / 2.0
+                self._prev_dx = dx
+                self._prev_dy = dy
+
+            move_length = cur_length - self._current_range
+            mx = (dx / cur_length) * move_length
+            my = (dy / cur_length) * move_length
+
+            self._cx = cx + mx
+            self._cy = cy + my
+
+            yield (self._cx , self._cy , self._latest_pressure)
+            self._cycle += 1L
+
+        elif self._mode == self.MODE_FINALIZE:
+
+            if self._latest_pressure > 0.0:
+                # button is released but
+                # still remained some pressure...
+                # rare case,but possible.
+                yield (self._cx, self._cy, self._latest_pressure)
+
+            # We need this for avoid trailing glitch
+            yield (self._cx, self._cy, 0.0)
+
+            self._mode = self.MODE_INVALID
             
-            if self._last_button == 1:
-                cx = self._cx
-                cy = self._cy
-
-                dx = self._rx - cx
-                dy = self._ry - cy
-                cur_length = math.hypot(dx, dy)
-
-                if cur_length <= self._current_range:
-                    raise StopIteration
-
-                if self._average_previous:
-                    if self._prev_dx != None:
-                        dx = (dx + self._prev_dx) / 2.0
-                        dy = (dy + self._prev_dy) / 2.0
-                    self._prev_dx = dx
-                    self._prev_dy = dy
-
-                move_length = cur_length - self._current_range
-                mx = (dx / cur_length) * move_length
-                my = (dy / cur_length) * move_length
-
-                self._cx = cx + mx
-                self._cy = cy + my
-
-                yield (self._cx , self._cy , self._latest_pressure)
-                self._cycle += 1L
-            
-            elif self._last_button == None:
-                if self._prev_button != None:
-                    if self._latest_pressure > 0.0:
-                        # button is released but
-                        # still remained some pressure...
-                        # rare case,but possible.
-                        yield (self._cx, self._cy, self._latest_pressure)
-
-                    # We need this for avoid trailing glitch
-                    yield (self._cx, self._cy, 0.0)
-                # Always output 0.0 pressure,
-                # as normal freehand tool.
-                yield (self._rx, self._ry, 0.0) 
+           ## Always output 0.0 pressure,
+           ## as normal freehand tool.
+           #yield (self._rx, self._ry, 0.0) 
 
 
         raise StopIteration
@@ -319,6 +354,7 @@ class Stabilizer(Assistbase):
         self._start_time = None
         self._cycle = 0L
         self._initial_pressure = 0.0
+        self._mode = self.MODE_INVALID
 
     def fetch(self, tdw, x, y, pressure, time, button):
         """ Fetch samples(i.e. current stylus input datas) 
@@ -333,32 +369,32 @@ class Stabilizer(Assistbase):
                     They also represents previous end point of stroke.
         """
 
-        self._prev_button = self._last_button
-        self._last_button = button
+       #self._prev_button = self._last_button
+       #self._last_button = button
         self._last_time = time
         self._latest_pressure = pressure
         self._rx = x
         self._ry = y
 
-        if self._last_button == 1:
-            self._prev_range = self._current_range
-            if (self._prev_button == None):
-                self._cx = x
-                self._cy = y
-                self._cycle = 1L
-                self._start_time = time
-                self._initial_pressure = 0.0
-                self._prev_dx = None
-                if self._auto_adjust_range:
-                    # In auto disable mode, stabilizer disabled by default.
-                    self._drawlength = 0
-                    self._current_range = 1
-                    self._ox = x
-                    self._oy = y
-                else:
-                    self._current_range = self._stabilize_range
-                self._prev_range = 0.0
-            elif (self._auto_adjust_range and self._start_time != None):
+        if self._mode == self.MODE_DRAW:
+           #self._prev_range = self._current_range
+           #if (self._prev_button == None):
+           #    self._cx = x
+           #    self._cy = y
+           #    self._cycle = 1L
+           #    self._start_time = time
+           #    self._initial_pressure = 0.0
+           #    self._prev_dx = None
+           #    if self._auto_adjust_range:
+           #        # In auto disable mode, stabilizer disabled by default.
+           #        self._drawlength = 0
+           #        self._current_range = 1
+           #        self._ox = x
+           #        self._oy = y
+           #    else:
+           #        self._current_range = self._stabilize_range
+           #    self._prev_range = 0.0
+            if (self._auto_adjust_range and self._start_time != None):
                 ctime = time - self._start_time
                 self._drawlength += math.hypot(x - self._ox, y - self._oy) 
 
@@ -398,12 +434,12 @@ class Stabilizer(Assistbase):
                     self._start_time = time
 
 
-        elif self._last_button == None:
-            if self._prev_button != None:
-                if self._auto_adjust_range:
-                    self._drawlength = 0
-                    self._start_time = None
-                    self._cycle = 0L
+       #elif self._last_button == None:
+       #    if self._prev_button != None:
+       #        if self._auto_adjust_range:
+       #            self._drawlength = 0
+       #            self._start_time = None
+       #            self._cycle = 0L
 
 
         
@@ -412,7 +448,7 @@ class Stabilizer(Assistbase):
 
     def queue_draw_area(self, tdw):
         """ Queue draw area for overlay """
-        if self._enabled:
+        if self._ready:
             half_rad = int(self._current_range+ 2)
             full_rad = half_rad * 2
             tdw.queue_draw_area(self._cx - half_rad, self._cy - half_rad,
@@ -428,7 +464,7 @@ class Stabilizer(Assistbase):
 
     def draw_overlay(self, cr, tdw):
         """ Drawing overlay """
-        if self._enabled and self._current_range > 0:
+        if self._ready:
             self._draw_dashed_circle(cr, 
                     (self._cx, self._cy, self._current_range))
 
@@ -547,7 +583,7 @@ class ParallelRuler(Assistbase):
             self._dy = None
 
             # _vx, _vy stores the identity vector of ruler, which is
-            # (_dx, _dy) - (_bx, _by) 
+            # (_dx, _dy) to (_bx, _by) 
             # Each strokes should be parallel against this vector.
             self._vx = None
             self._vy = None
