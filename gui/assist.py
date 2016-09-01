@@ -469,39 +469,44 @@ class ParallelRuler(Assistbase):
     MODE_SET_BASE = 1
     MODE_SET_DEST = 2
     MODE_FINALIZE = 3
+    MODE_INIT = 4
 
     def __init__(self, app):
         self.app = app
         self.reset(True) # Attributes inited in reset(), with hard reset
-        self.cnt=0
 
     @property
     def _ready(self):
-        return (self._vx != None and self._px != None)
+        return self._vx != None
 
-    def _update_positions(self, tdw, x, y, initial):
+    def _update_positions(self, tdw, x, y):
         if self._last_button == 1:
             mx, my = tdw.display_to_model(x, y)
-            if self._mode == self.MODE_DRAW:
-                if initial:
-                    self.cnt = 0
-                    self._sx, self._sy = mx, my
-                    self._px, self._py = mx, my
+            if self._mode == self.MODE_INIT:
+                self._sx, self._sy = mx, my
+                self._px, self._py = mx, my
             elif self._mode == self.MODE_SET_BASE:
                 self._bx, self._by = mx, my
             elif self._mode == self.MODE_SET_DEST:
                 self._dx, self._dy = mx, my
-                self._vx, self._vy = normal(self._bx, self._by, self._dx, self._dy)
 
             self._cx, self._cy = mx, my
 
     def button_press_cb(self, tdw, x, y, pressure, time, button):
         self._last_button = button
         self._latest_pressure = pressure
-        self._update_positions(tdw, x, y, True)
+
+        if self._ready:
+            print('start!')
+            # This line need to be placed prior to
+            # calling _update_positions(), because
+            # it looks whether the self._mode is 
+            # self.MODE_INIT or not.
+            self._mode = self.MODE_INIT
+
+        self._update_positions(tdw, x, y)
 
     def button_release_cb(self, tdw, x, y, pressure, time, button):
-        print('released')
         self._last_button = None
         self._px = None
         self._py = None
@@ -512,41 +517,48 @@ class ParallelRuler(Assistbase):
             self._mode = self.MODE_SET_DEST
         elif self._mode == self.MODE_SET_DEST:
             print('step draw')
-            self._mode = self.MODE_DRAW
+            self._mode = self.MODE_INVALID
+            self._vx, self._vy = normal(self._bx, self._by, self._dx, self._dy)
+        elif self._mode == self.MODE_INIT:
+            # Initialize mode but nothing done
+            # = simply return to initial state.
+            self._mode = self.MODE_INVALID
 
     def enum_samples(self, tdw):
 
         if self._mode == self.MODE_DRAW:
-            if self._ready: 
-                if self._last_button != None:
-                    if self.cnt == 0:
-                        cx, cy = tdw.model_to_display(self._sx, self._sy)
-                        yield (cx , cy , 0.0)
+            if self._ready and self._last_button != None:
 
-                    length, nx, ny = length_and_normal(self._cx , self._cy, 
-                            self._px, self._py)
-                    direction = cross_product(self._vy, self. _vx,
-                            nx, ny)
+                length, nx, ny = length_and_normal(self._cx , self._cy, 
+                        self._px, self._py)
+                direction = cross_product(self._vy, self. _vx,
+                        nx, ny)
 
-                    if length > 0:
+                if length > 0:
 
-                        if direction < 0.0:
-                            length *= -1.0
+                    if direction < 0.0:
+                        length *= -1.0
 
-                        cx = (length * self._vx) + self._sx
-                        cy = (length * self._vy) + self._sy
-                        self._sx = cx
-                        self._sy = cy
-                        cx, cy = tdw.model_to_display(cx, cy)
-                        yield (cx , cy , self._latest_pressure)
-                        self._px, self._py = self._cx, self._cy
-                        self.cnt += 1
+                    cx = (length * self._vx) + self._sx
+                    cy = (length * self._vy) + self._sy
+                    self._sx = cx
+                    self._sy = cy
+                    cx, cy = tdw.model_to_display(cx, cy)
+                    yield (cx , cy , self._latest_pressure)
+                    self._px, self._py = self._cx, self._cy
+
+        elif self._mode == self.MODE_INIT:
+            if self._ready and self._last_button != None:
+                cx, cy = tdw.model_to_display(self._sx, self._sy)
+                yield (cx , cy , 0.0)
+                self._mode = self.MODE_DRAW
+                self.enum_samples(tdw)
 
         elif self._mode == self.MODE_FINALIZE:
             # Finalizing previous stroke.
             cx, cy = tdw.model_to_display(self._sx, self._sy)
             yield (cx , cy , 0.0)
-            self._mode = self.MODE_DRAW
+            self._mode = self.MODE_INVALID
             raise StopIteration
 
         raise StopIteration
@@ -583,7 +595,7 @@ class ParallelRuler(Assistbase):
         elif self._dx == None:
             self._mode = self.MODE_SET_DEST
         else:
-            self._mode = self.MODE_DRAW
+            self._mode = self.MODE_INVALID
 
     def fetch(self, tdw, x, y, pressure, time, button):
         """ Fetch samples(i.e. current stylus input datas) 
@@ -592,18 +604,28 @@ class ParallelRuler(Assistbase):
 
         self._last_time = time
         self._latest_pressure = pressure
-        self._update_positions(tdw, x, y, False)
+        self._update_positions(tdw, x, y)
         
 
     ## Overlay drawing related
 
     def queue_draw_area(self, tdw):
         """ Queue draw area for overlay """
-        if self._ready:
-            margin = 4
-            bx, by = tdw.model_to_display(self._bx, self._by)
-            dx, dy = tdw.model_to_display(self._dx, self._dy)
+        margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 2
 
+        def _queue_chip_area(x, y):
+            x, y = tdw.model_to_display(x, y)
+            tdw.queue_draw_area(x - margin, y - margin, 
+                    x + margin, y + margin)
+            return (x, y)
+
+        if self._dx != None:
+            dx, dy = _queue_chip_area(self._dx, self._dy)
+
+        if self._bx != None:
+            bx, by = _queue_chip_area(self._bx, self._by)
+
+        if self._ready:
             if bx > dx:
                 bx, dx = dx, bx
             if by > dy:
@@ -612,6 +634,9 @@ class ParallelRuler(Assistbase):
             tdw.queue_draw_area(bx - margin, by - margin, 
                     dx - bx + margin + 1, dy - by + margin + 1)
 
+            print('queued')
+
+    @dashedline_wrapper
     def _draw_dashed_line(self, cr, info):
         sx, sy, ex, ey = info
         cr.move_to(sx, sy)
@@ -619,26 +644,36 @@ class ParallelRuler(Assistbase):
 
     def draw_overlay(self, cr, tdw):
         """ Drawing overlay """
+        def _draw_floating_chip(x, y, flag):
+            x, y = tdw.model_to_display(x, y)
+            if flag:
+                color = gui.style.ACTIVE_ITEM_COLOR
+            else:
+                color = gui.style.EDITABLE_ITEM_COLOR
+            gui.drawutils.render_round_floating_color_chip(cr, x, y, 
+                    color, gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
+            return (x, y)
+
+        cr.save()
+
+        # Draw control chips.
+        if self._dx != None:
+            dx, dy = _draw_floating_chip(self._dx, self._dy,
+                self._mode == self.MODE_SET_DEST)
+
+        if self._bx != None:
+            bx, by = _draw_floating_chip(self._bx, self._by,
+                    self._mode == self.MODE_SET_BASE)
+
+        cr.restore()
+
+        # Draw ruler segment.
         if self._ready:
-            bx, by = tdw.model_to_display(self._bx, self._by)
-            dx, dy = tdw.model_to_display(self._dx, self._dy)
+            assert self._dx != None and self._bx != None
             self._draw_dashed_line(cr, 
                     (bx, by, dx, dy))
+            print('drawn')
 
-            if self._mode == self.MODE_SET_BASE:
-                color = gui.style.ACTIVE_ITEM_COLOR
-            else:
-                color = gui.style.EDITABLE_ITEM_COLOR
-            gui.drawutils.render_round_floating_color_chip(cr, bx, by, 
-                    color, gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
-
-            if self._mode == self.MODE_SET_DEST:
-                color = gui.style.ACTIVE_ITEM_COLOR
-            else:
-                color = gui.style.EDITABLE_ITEM_COLOR
-            gui.drawutils.render_round_floating_color_chip(cr, dx, dy, 
-                    color, gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
-            
 
 
     ## Options presenter for assistant
