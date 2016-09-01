@@ -36,8 +36,9 @@ from gui.ui_utils import *
 class Assistbase(object):
 
 
-    def __init__(self):
-        self.reset()
+    def __init__(self, app):
+        self.app = app
+        self._presenter = None
 
     def reset(self):
         self._prev_button = None
@@ -116,9 +117,8 @@ class Averager(Assistbase):
                 Averager._samples_y.append(0.0) 
                 Averager._samples_p.append(0.0) 
 
-        super(Stabilizer, self).__init__()
+        super(Averager, self).__init__(app)
         self._stabilize_cnt = None
-        self.app = app
 
     def enum_samples(self, tdw):
         if self._sample_count < self._sampling_max:
@@ -245,11 +245,10 @@ class Stabilizer(Assistbase):
 
 
     def __init__(self, app):
-        self.app = app
+        super(Stabilizer, self).__init__(app)
         self._rx = None
         self._ry = None
         self._average_previous = True
-        self._presenter = None
         self._stabilize_range = 48
         self._current_range = self._stabilize_range
         self._last_time = None
@@ -472,7 +471,7 @@ class ParallelRuler(Assistbase):
     MODE_INIT = 4
 
     def __init__(self, app):
-        self.app = app
+        super(ParallelRuler, self).__init__(app)
         self.reset(True) # Attributes inited in reset(), with hard reset
 
     @property
@@ -626,6 +625,8 @@ class ParallelRuler(Assistbase):
             bx, by = _queue_chip_area(self._bx, self._by)
 
         if self._ready:
+            margin = 2
+
             if bx > dx:
                 bx, dx = dx, bx
             if by > dy:
@@ -645,47 +646,67 @@ class ParallelRuler(Assistbase):
     def draw_overlay(self, cr, tdw):
         """ Drawing overlay """
         def _draw_floating_chip(x, y, flag):
-            x, y = tdw.model_to_display(x, y)
             if flag:
                 color = gui.style.ACTIVE_ITEM_COLOR
             else:
                 color = gui.style.EDITABLE_ITEM_COLOR
             gui.drawutils.render_round_floating_color_chip(cr, x, y, 
                     color, gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
-            return (x, y)
 
-        cr.save()
 
         # Draw control chips.
         if self._dx != None:
-            dx, dy = _draw_floating_chip(self._dx, self._dy,
-                self._mode == self.MODE_SET_DEST)
+            dx, dy = tdw.model_to_display(self._dx, self._dy)
 
         if self._bx != None:
-            bx, by = _draw_floating_chip(self._bx, self._by,
-                    self._mode == self.MODE_SET_BASE)
+            bx, by = tdw.model_to_display(self._bx, self._by)
 
-        cr.restore()
 
-        # Draw ruler segment.
+        # As first, Draw ruler segment.
         if self._ready:
             assert self._dx != None and self._bx != None
             self._draw_dashed_line(cr, 
                     (bx, by, dx, dy))
-            print('drawn')
 
+        # Then, draw floating chips to overwrite 
+        # dashed line.
+        cr.save()
+        if self._dx != None:
+            _draw_floating_chip(dx, dy,
+                self._mode == self.MODE_SET_DEST)
 
+        if self._bx != None:
+            _draw_floating_chip(bx, by,
+                self._mode == self.MODE_SET_BASE)
+        cr.restore()
 
     ## Options presenter for assistant
-   #def get_presenter(self):
-   #    if self._presenter == None:
-   #        self._presenter = Optionpresenter_ParallelRuler(self)
-   #    return self._presenter.get_box_widget()
+    def get_presenter(self):
+        if self._presenter == None:
+            self._presenter = Optionpresenter_ParallelRuler(self)
+        return self._presenter.get_box_widget()
 
 ## Option presenters for assistants
 
 class _Presenter_Mixin(object):
     """ Base Mixin of assistants option presenter"""
+
+    def initialize_start(self, colspace=6, rowspace=4):
+        grid = Gtk.Grid(column_spacing=colspace, row_spacing=rowspace)
+        grid.set_hexpand_set(True)
+        self._grid = grid
+        self._updating_ui = True
+        self._row = 0
+        return grid
+
+    def initialize_end(self):
+        self._grid.show_all()
+        self._updating_ui = False
+        del self._row
+
+    def _attach_grid(self, widget, col=0, width=2):
+        self._grid.attach(widget, col, self._row, width, 1)
+        self._row += 1
 
     def force_redraw_overlay(self, area=None):
         for tdw in gui.tileddrawwidget.TiledDrawWidget.get_visible_tdws():
@@ -694,21 +715,25 @@ class _Presenter_Mixin(object):
             else:
                 tdw.queue_draw()
 
+    def get_box_widget(self):
+        return self._grid
+
 class Optionpresenter_Stabilizer(_Presenter_Mixin):
     """ Optionpresenter for Stabilizer assistant.
     """
 
     def __init__(self, assistant):
         self.assistant = assistant
-        self._updating_ui = True
-        grid = Gtk.Grid(column_spacing=6, row_spacing=4)
-        grid.set_hexpand_set(True)
-        row = 0
 
-        def create_slider(row, label, handler, min_adj, max_adj, value, digits=1):
+        # Start of initialize widgets
+        # With this, internal attributes setupped
+        # and some widget setup done automatically.
+        self.initialize_start()
+
+        def create_slider(label, handler, min_adj, max_adj, value, digits=1):
             labelobj = Gtk.Label(halign=Gtk.Align.START)
             labelobj.set_text(label)
-            grid.attach(labelobj, 0, row, 1, 1)
+            self._attach_grid(labelobj, col=0, width=1)
 
             adj = Gtk.Adjustment(value, min_adj, max_adj)
             adj.connect('value-changed', handler)
@@ -716,37 +741,30 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
             scale = Gtk.HScale(hexpand_set=True, hexpand=True, 
                     halign=Gtk.Align.FILL, adjustment=adj, digits=digits)
             scale.set_value_pos(Gtk.PositionType.RIGHT)
-            grid.attach(scale, 1, row, 1, 1)
+            self._attach_grid(scale, col=1, width=1)
             return scale
 
 
         # Scale slider for range circle setting.
-        create_slider(row, _("Range:"), self._range_changed_cb,
+        create_slider(_("Range:"), self._range_changed_cb,
                 32, 64, assistant._stabilize_range)
-        row+=1
 
         # Checkbox for average direction.
         checkbox = Gtk.CheckButton(_("Average direction"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
         checkbox.set_active(assistant._average_previous)
         checkbox.connect('toggled', self._average_toggled_cb)
-        grid.attach(checkbox, 0, row, 2, 1)
-        row+=1
+        self._attach_grid(checkbox)
 
         # Checkbox for use auto-disable feature.
         checkbox = Gtk.CheckButton(_("Auto range adjust"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
         checkbox.set_active(assistant._auto_adjust_range) 
         checkbox.connect('toggled', self._auto_adjust_range_toggled_cb)
-        grid.attach(checkbox,0,row,2,1)
-        row+=1
+        self._attach_grid(checkbox)
 
-        grid.show_all()
-        self._grid = grid
-        self._updating_ui = False
-
-    def get_box_widget(self):
-        return self._grid
+        # End of initialize widgets
+        self.initialize_end()
 
     # Handlers
     def _average_toggled_cb(self, checkbox):
@@ -761,3 +779,24 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
         if not self._updating_ui:
             flag = checkbox.get_active()
             self.assistant._auto_adjust_range = flag
+
+class Optionpresenter_ParallelRuler(_Presenter_Mixin):
+    """ Optionpresenter for ParallelRuler assistant.
+    """
+
+    def __init__(self, assistant):
+        self.assistant = assistant
+        self.initialize_start()
+
+        # button to force reset ruler
+        button = Gtk.Button(label = _("Clear ruler")) 
+        button.connect('clicked', self._reset_clicked_cb)
+        self._attach_grid(button)
+
+        self.initialize_end()
+
+    # Handlers
+    def _reset_clicked_cb(self, button):
+        if not self._updating_ui:
+            self.assistant.reset(hard_reset=True)
+
