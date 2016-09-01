@@ -145,6 +145,39 @@ def get_scroll_delta(event, step=1):
     else:
         raise NotImplementedError("Unknown scroll direction %s" % str(event.direction))
 
+## Decorators
+
+def dashedline_wrapper(callable):
+    """
+    Dashed line decorator.
+    """
+    def decorated(self, cr, info, width = 1, dash_space = 10):
+        """
+        The wrapping decorator, to draw dashed line automatically.
+
+        :param self: The self argument,to wrapping class method. 
+            When to wrapping a function, simply set self as None.
+        :param cr: The cairo context.
+        :param info: to pass some information into the callable.
+            such as a tuple of point, or rectangle, etc.
+        :param width: dashed line width. 
+        :param dash_space: dashed dot spacing.
+
+        The wrapped callable should accept arguments (self, cr, info)
+        Inside the callable, only setting some path(s) and return, without draw it. 
+        """
+        cr.save()
+        cr.set_source_rgb(0, 0, 0)
+        cr.set_line_width(width)
+        callable(self, cr, info)
+        cr.stroke_preserve()
+        cr.set_dash( (dash_space,) )
+        cr.set_source_rgb(1, 1, 1)
+        cr.stroke()
+        cr.restore()
+    return decorated
+
+
 ## Class defs
 
 class DragOffset(object):

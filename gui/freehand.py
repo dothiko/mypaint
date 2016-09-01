@@ -412,7 +412,10 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             assistant = tdw.app.assistmanager.current
             if assistant:
                 assistant.reset()
-                assistant.fetch(event.x, event.y, 
+               #assistant.fetch(tdw, event.x, event.y, 
+               #        event.get_axis(Gdk.AxisUse.PRESSURE),
+               #        event.time, drawstate.button_down)
+                assistant.button_press_cb(tdw, event.x, event.y, 
                         event.get_axis(Gdk.AxisUse.PRESSURE),
                         event.time, drawstate.button_down)
 
@@ -426,10 +429,15 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         current_layer = tdw.doc.layer_stack.current
         if current_layer.get_paintable() and event.button == 1:
             # See comment above in button_press_cb.
-            assistant = tdw.app.assistmanager.current
             drawstate = self._get_drawing_state(tdw)
-            if not drawstate.last_event_had_pressure or assistant:
+            if not drawstate.last_event_had_pressure:
                 self.motion_notify_cb(tdw, event, fakepressure=0.0)
+
+            assistant = tdw.app.assistmanager.current
+            if assistant:
+                assistant.button_release_cb(tdw, event.x, event.y, 
+                        0.0,
+                        event.time, event.button)
 
             # Notify observers after processing the event
             self.doc.input_stroke_ended(event)
@@ -608,8 +616,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             if (hx0, hy0, ht0) == (x, y, time):
                 for hx, hy, ht in drawstate.evhack_positions:
                     if assistant:
-                        assistant.fetch(hx, hy, pressure, time, drawstate.button_down)
-                        for hx, hy, hp in assistant.enum_samples():
+                        assistant.fetch(tdw, hx, hy, pressure, time, drawstate.button_down)
+                        for hx, hy, hp in assistant.enum_samples(tdw):
                             queue_motion(ht, hx, hy, hp, None, None)
                         continue
                     queue_motion(ht, hx, hy, pressure, None, None)
@@ -631,8 +639,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             if fakepressure is not None:
                 button_down = None
 
-            assistant.fetch(x, y, pressure, time, button_down)
-            for x, y, p in assistant.enum_samples():
+            assistant.fetch(tdw, x, y, pressure, time, button_down)
+            for x, y, p in assistant.enum_samples(tdw):
                 queue_motion(time, x, y, p, xtilt, ytilt)
 
             # New positioned assistant overlay should be drawn here.
@@ -974,7 +982,7 @@ class _Overlay_Freehand (gui.overlays.Overlay):
         """Draw brush size to the screen"""
         assistant = self._tdw.app.assistmanager.current
         if assistant:
-            assistant.draw_overlay(cr)
+            assistant.draw_overlay(cr, self._tdw)
 
 ## Module tests
 

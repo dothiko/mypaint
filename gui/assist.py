@@ -19,55 +19,59 @@ from gi.repository import Gtk, Gdk
 
 import gui.drawutils
 import gui.tileddrawwidget
+import gui.style
+from gui.linemode import *
+from gui.ui_utils import *
 
 ## Module settings
 
 
 
 ## Class defs
+#
+# All Assistants should be derived from Assistbase.
+# And it is needed to be registered at the constructor of 
+# Assistmanager class (assistmanager.py).
 
 class Assistbase(object):
 
-    # Stablizer ring buffer
-    _sampling_max = 32
-    _samples_x = array.array('f')
-    _samples_y = array.array('f')
-    _samples_p = array.array('f')
-    _sample_index = 0
-    _sample_count = 0
-    _current_index = 0
 
     def __init__(self):
-        if len(Assistbase._samples_x) < Assistbase._sampling_max:
-            for i in range(Assistbase._sampling_max):
-                Assistbase._samples_x.append(0.0) 
-                Assistbase._samples_y.append(0.0) 
-                Assistbase._samples_p.append(0.0) 
         self.reset()
 
     def reset(self):
-        Assistbase._sample_index = 0
-        Assistbase._sample_count = 0
+        self._prev_button = None
+        self._last_button = None
 
-    def enum_samples(self):
+    def enum_samples(self, tdw):
         """ Enum current assisted position, from fetched samples.
         This is the most important method of assistant class.
         This method should return a value with yield.
         """
         pass # By the way, this is melely stub.
 
-    def fetch(self, x, y, pressure, time, button):
-        """Fetch samples"""
-        Assistbase._samples_x[Assistbase._sample_index] = x 
-        Assistbase._samples_y[Assistbase._sample_index] = y 
-        Assistbase._samples_p[Assistbase._sample_index] = pressure 
-        Assistbase._current_index = Assistbase._sample_index
-        Assistbase._sample_index+=1
-        Assistbase._sample_index%=Assistbase._sampling_max
-        Assistbase._sample_count+=1
+    def button_press_cb(self, tdw, x, y, pressure, time, button):
+        pass
+    def button_release_cb(self, tdw, x, y, pressure, time, button):
+        pass
 
-    def get_current_index(self, offset):
-        return (self._current_index + offset) % self._sampling_max
+    def fetch(self, tdw, x, y, pressure, time, button):
+        """Fetch samples.
+
+        Assistants stores these 'raw' input datas into
+        its own storage, or some calculate to generate
+        new stroke, and freehand tool enumerate 
+
+        :param tdw: Current TiledDrawWidget  
+        :param x,y: current cursor position, in display coordinate.
+        :param pressure: current pressure of input device.
+        :param time: current time of event issued.
+        :param button: currently pressed button, which is same as
+            event.button of button_pressed_cb().
+        
+        """
+        pass
+
 
     def set_active_cb(self, flag):
         """ activated from Gtk.Action """
@@ -79,7 +83,7 @@ class Assistbase(object):
         """ Queue draw area for overlay """
         pass
 
-    def draw_overlay(self, cr):
+    def draw_overlay(self, cr, tdw):
         """ Drawing overlay """
         pass
 
@@ -96,12 +100,27 @@ class Averager(Assistbase):
     name = _("Averager")
     STABILIZE_START_MAX = 24
 
+    # Averager ring buffer
+    _sampling_max = 32
+    _samples_x = array.array('f')
+    _samples_y = array.array('f')
+    _samples_p = array.array('f')
+    _sample_index = 0
+    _sample_count = 0
+    _current_index = 0
+
     def __init__(self, app):
+        if len(Averager._samples_x) < Averager._sampling_max:
+            for i in range(Averager._sampling_max):
+                Averager._samples_x.append(0.0) 
+                Averager._samples_y.append(0.0) 
+                Averager._samples_p.append(0.0) 
+
         super(Stabilizer, self).__init__()
         self._stabilize_cnt = None
         self.app = app
 
-    def enum_samples(self):
+    def enum_samples(self, tdw):
         if self._sample_count < self._sampling_max:
             raise StopIteration
 
@@ -153,10 +172,10 @@ class Averager(Assistbase):
 
     def reset(self):
         super(Stabilizer, self).reset()
+        Averager._sample_index = 0
+        Averager._sample_count = 0
         self._prev_rx = None
         self._prev_ry = None
-        self._last_button = None
-        self._prev_button = None
         self._prev_time = None
         self._prev_rp = None
         self._release_time = None
@@ -172,7 +191,10 @@ class Averager(Assistbase):
     def _get_stabilized_pressure(self, idx):
         return self._samples_p[self.get_current_index(idx)]
 
-    def fetch(self, x, y, pressure, time, button):
+    def get_current_index(self, offset):
+        return (self._current_index + offset) % self._sampling_max
+
+    def fetch(self, tdw, x, y, pressure, time, button):
         """Fetch samples"""
         self._latest_pressure = pressure
         self._prev_button = self._last_button
@@ -185,6 +207,14 @@ class Averager(Assistbase):
             if math.hypot(x - px, y - py) > 4:
                 super(self.__class__, self).fetch(x, y, pressure, time)
             self._prev_time = time 
+
+       #Assistbase._samples_x[Assistbase._sample_index] = x 
+       #Assistbase._samples_y[Assistbase._sample_index] = y 
+       #Assistbase._samples_p[Assistbase._sample_index] = pressure 
+       #Assistbase._current_index = Assistbase._sample_index
+       #Assistbase._sample_index+=1
+       #Assistbase._sample_index%=Assistbase._sampling_max
+       #Assistbase._sample_count+=1
             
 class Stabilizer(Assistbase): 
     """ Stabilizer class, like Krita's one.  This stablizer actually 'average angle'.  
@@ -201,12 +231,10 @@ class Stabilizer(Assistbase):
     FRAME_PERIOD = 16.6666 # one frame is 1/60 = 16.6666...ms, for stabilizer.
 
     def __init__(self, app):
-        super(Stabilizer, self).__init__()
+       #super(Stabilizer, self).__init__()
         self.app = app
         self._rx = None
         self._ry = None
-        self._last_button = None
-        self._prev_button = None
         self._average_previous = True
         self._presenter = None
         self._stabilize_range = 48
@@ -222,7 +250,7 @@ class Stabilizer(Assistbase):
         return (self._last_button != None and 
                 self._prev_range > 0)
 
-    def enum_samples(self):
+    def enum_samples(self, tdw):
 
         if self._cycle == 1L:
             # Drawing initial pressure, to avoid heading glitch.
@@ -292,7 +320,7 @@ class Stabilizer(Assistbase):
         self._cycle = 0L
         self._initial_pressure = 0.0
 
-    def fetch(self, x, y, pressure, time, button):
+    def fetch(self, tdw, x, y, pressure, time, button):
         """ Fetch samples(i.e. current stylus input datas) 
         into attributes
 
@@ -308,6 +336,9 @@ class Stabilizer(Assistbase):
         self._prev_button = self._last_button
         self._last_button = button
         self._last_time = time
+        self._latest_pressure = pressure
+        self._rx = x
+        self._ry = y
 
         if self._last_button == 1:
             self._prev_range = self._current_range
@@ -375,9 +406,6 @@ class Stabilizer(Assistbase):
                     self._cycle = 0L
 
 
-        self._latest_pressure = pressure
-        self._rx = x
-        self._ry = y
         
 
     ## Overlay drawing related
@@ -390,24 +418,19 @@ class Stabilizer(Assistbase):
             tdw.queue_draw_area(self._cx - half_rad, self._cy - half_rad,
                     full_rad, full_rad)
 
-    def _draw_dashed_circle(self, cr, x, y, radius):
-        cr.save()
-        cr.set_line_width(1)
+    @dashedline_wrapper
+    def _draw_dashed_circle(self, cr, info):
+        x, y, radius = info
         cr.arc( x, y,
                 int(radius),
                 0.0,
                 2*math.pi)
-        cr.stroke_preserve()
-        cr.set_dash( (10,) )
-        cr.set_source_rgb(1, 1, 1)
-        cr.stroke()
-        cr.restore()
 
-    def draw_overlay(self, cr):
+    def draw_overlay(self, cr, tdw):
         """ Drawing overlay """
         if self._enabled and self._current_range > 0:
-            self._draw_dashed_circle(cr, self._cx, self._cy,
-                    self._current_range)
+            self._draw_dashed_circle(cr, 
+                    (self._cx, self._cy, self._current_range))
 
             # XXX Drawing actual stroke point.
             # This should be same size as current brush radius,
@@ -415,8 +438,8 @@ class Stabilizer(Assistbase):
             # extremely large.
             # so, currently this is fixed size, only shows the center
             # point of stroke.
-            self._draw_dashed_circle(cr, self._cx, self._cy,
-                    2)
+            self._draw_dashed_circle(cr, 
+                    (self._cx, self._cy, 2))
 
 
     ## Options presenter for assistant
@@ -424,6 +447,189 @@ class Stabilizer(Assistbase):
         if self._presenter == None:
             self._presenter = Optionpresenter_Stabilizer(self)
         return self._presenter.get_box_widget()
+
+
+class ParallelRuler(Assistbase): 
+    """ Parallel Line Ruler.
+    """ 
+
+    name = _("Parallel Ruler")
+
+    MODE_DRAW = 0
+    MODE_SET_BASE = 1
+    MODE_SET_DEST = 2
+    MODE_FINALIZE = 3
+
+    def __init__(self, app):
+       #super(ParallelRuler, self).__init__()
+        self.app = app
+        self.reset(True) # Attributes inited in reset(), with hard reset
+        self.cnt=0
+
+    @property
+    def _ready(self):
+        return (self._vx != None and self._px != None)
+
+    def _update_positions(self, tdw, x, y, initial):
+        if self._last_button == 1:
+            mx, my = tdw.display_to_model(x, y)
+            if self._mode == self.MODE_DRAW:
+                if initial:
+                    self.cnt = 0
+                    self._sx, self._sy = mx, my
+                    self._px, self._py = mx, my
+            elif self._mode == self.MODE_SET_BASE:
+                self._bx, self._by = mx, my
+            elif self._mode == self.MODE_SET_DEST:
+                self._dx, self._dy = mx, my
+                self._vx, self._vy = normal(self._bx, self._by, self._dx, self._dy)
+
+            self._cx, self._cy = mx, my
+
+    def button_press_cb(self, tdw, x, y, pressure, time, button):
+        self._last_button = button
+        self._latest_pressure = pressure
+        self._update_positions(tdw, x, y, True)
+
+    def button_release_cb(self, tdw, x, y, pressure, time, button):
+        print('released')
+        self._last_button = None
+        self._px = None
+        self._py = None
+        if self._mode == self.MODE_DRAW:
+            self._mode = self.MODE_FINALIZE
+        elif self._mode == self.MODE_SET_BASE:
+            print('step dest')
+            self._mode = self.MODE_SET_DEST
+        elif self._mode == self.MODE_SET_DEST:
+            print('step draw')
+            self._mode = self.MODE_DRAW
+
+    def enum_samples(self, tdw):
+
+        if self._mode == self.MODE_DRAW:
+            if self._ready: 
+                if self._last_button != None:
+                    if self.cnt == 0:
+                        cx, cy = tdw.model_to_display(self._sx, self._sy)
+                        yield (cx , cy , 0.0)
+
+                    length = distance(self._cx , self._cy, self._px, self._py)
+
+                    if length > 0:
+                        cx = (length * self._vx) + self._sx
+                        cy = (length * self._vy) + self._sy
+                        self._sx = cx
+                        self._sy = cy
+                        cx, cy = tdw.model_to_display(cx, cy)
+                        yield (cx , cy , self._latest_pressure)
+                        self._px, self._py = self._cx, self._cy
+                        self.cnt += 1
+
+        elif self._mode == self.MODE_FINALIZE:
+            # Finalizing previous stroke.
+            cx, cy = tdw.model_to_display(self._sx, self._sy)
+            yield (cx , cy , 0.0)
+            self._mode = self.MODE_DRAW
+            raise StopIteration
+
+        raise StopIteration
+
+
+    def reset(self, hard_reset = False):
+        super(ParallelRuler, self).reset()
+        if hard_reset:
+            # _bx, _by stores the base point of ruler.
+            self._bx = None
+            self._by = None
+            # _dx, _dy stores the destination point of ruler.
+            self._dx = None
+            self._dy = None
+
+            # _vx, _vy stores the identity vector of ruler, which is
+            # (_dx, _dy) - (_bx, _by) 
+            # Each strokes should be parallel against this vector.
+            self._vx = None
+            self._vy = None
+
+        # Above values should not be soft-reset().
+
+        # However, these attributes used for GUI,
+        # actually the ruler uses pre-calculated vector.
+
+
+        # _px, _py is 'initially device pressed(started) point'
+        self._px = None
+        self._py = None
+
+        if self._bx == None:
+            self._mode = self.MODE_SET_BASE
+        elif self._dx == None:
+            self._mode = self.MODE_SET_DEST
+        else:
+            self._mode = self.MODE_DRAW
+
+    def fetch(self, tdw, x, y, pressure, time, button):
+        """ Fetch samples(i.e. current stylus input datas) 
+        into attributes
+        """
+
+        self._last_time = time
+        self._latest_pressure = pressure
+        self._update_positions(tdw, x, y, False)
+        
+
+    ## Overlay drawing related
+
+    def queue_draw_area(self, tdw):
+        """ Queue draw area for overlay """
+        if self._ready:
+            margin = 4
+            bx, by = tdw.model_to_display(self._bx, self._by)
+            dx, dy = tdw.model_to_display(self._dx, self._dy)
+
+            if bx > dx:
+                bx, dx = dx, bx
+            if by > dy:
+                by, dy = dy, by
+
+            tdw.queue_draw_area(bx - margin, by - margin, 
+                    dx - bx + margin + 1, dy - by + margin + 1)
+
+    def _draw_dashed_line(self, cr, info):
+        sx, sy, ex, ey = info
+        cr.move_to(sx, sy)
+        cr.line_to(ex, ey)
+
+    def draw_overlay(self, cr, tdw):
+        """ Drawing overlay """
+        if self._ready:
+            bx, by = tdw.model_to_display(self._bx, self._by)
+            dx, dy = tdw.model_to_display(self._dx, self._dy)
+            self._draw_dashed_line(cr, 
+                    (bx, by, dx, dy))
+
+            if self._mode == self.MODE_SET_BASE:
+                color = gui.style.ACTIVE_ITEM_COLOR
+            else:
+                color = gui.style.EDITABLE_ITEM_COLOR
+            gui.drawutils.render_round_floating_color_chip(cr, bx, by, 
+                    color, gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
+
+            if self._mode == self.MODE_SET_DEST:
+                color = gui.style.ACTIVE_ITEM_COLOR
+            else:
+                color = gui.style.EDITABLE_ITEM_COLOR
+            gui.drawutils.render_round_floating_color_chip(cr, dx, dy, 
+                    color, gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
+            
+
+
+    ## Options presenter for assistant
+   #def get_presenter(self):
+   #    if self._presenter == None:
+   #        self._presenter = Optionpresenter_ParallelRuler(self)
+   #    return self._presenter.get_box_widget()
 
 ## Option presenters for assistants
 
