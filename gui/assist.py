@@ -701,16 +701,6 @@ class _Presenter_Mixin(object):
         self._grid.attach(widget, col, self._row, width, 1)
         self._row += 1
 
-    @staticmethod
-    def force_redraw_overlay(area=None):
-        """ Utility method.
-        force all tdws to redraw.
-        """
-        for tdw in gui.tileddrawwidget.TiledDrawWidget.get_visible_tdws():
-            if area:
-                tdw.queue_draw_area(*area)
-            else:
-                tdw.queue_draw()
 
     def get_box_widget(self):
         return self._grid
@@ -796,7 +786,7 @@ class Optionpresenter_ParallelRuler(_Presenter_Mixin):
     def _reset_clicked_cb(self, button):
         if not self._updating_ui:
             # To discard current(old) overlay.
-            _Presenter_Mixin.force_redraw_overlay() 
+            force_redraw_overlay() 
 
             self.assistant.reset(hard_reset=True)
 

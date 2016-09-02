@@ -14,6 +14,7 @@ import math
 from gi.repository import Gdk
 
 import gui.linemode
+import gui.tileddrawwidget
 
 def get_drag_direction(bx, by, cx, cy, margin=0):
     """ get mouse drag direction,as
@@ -144,6 +145,22 @@ def get_scroll_delta(event, step=1):
         return (step * event.delta_x, step * event.delta_y)
     else:
         raise NotImplementedError("Unknown scroll direction %s" % str(event.direction))
+
+
+def force_redraw_overlay(area=None):
+    """ Force all tdws to redraw. 
+    This function is very useful when you have no any explicit
+    target tdw instances, but need to redraw(clear) current displayed 
+    overlay by any means.
+
+    :param area: a tuple of (x, y, width, height),
+        or None(i.e. entire overlay is redrawn) 
+    """
+    for tdw in gui.tileddrawwidget.TiledDrawWidget.get_visible_tdws():
+        if area:
+            tdw.queue_draw_area(*area)
+        else:
+            tdw.queue_draw()
 
 ## Decorators
 
