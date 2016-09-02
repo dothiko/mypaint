@@ -679,6 +679,182 @@ class ParallelRuler(Assistbase):
             self._presenter = Optionpresenter_ParallelRuler(self)
         return self._presenter.get_box_widget()
 
+
+class FocusRuler(Assistbase): 
+    """ Focus(Convergence) Line Ruler.
+    """ 
+
+    name = _("Focus Ruler")
+
+    MODE_INVALID = -1
+    MODE_DRAW = 0
+    MODE_SET_BASE = 1
+    MODE_FINALIZE = 3
+    MODE_INIT = 4
+
+    def __init__(self, app):
+        super(FocusRuler, self).__init__(app)
+        self.reset(True) # Attributes inited in reset(), with hard reset
+
+    @property
+    def _ready(self):
+        return self._bx != None
+
+    def _update_positions(self, tdw, x, y):
+        if self._last_button == 1:
+            mx, my = tdw.display_to_model(x, y)
+            if self._mode == self.MODE_INIT:
+                self._sx, self._sy = mx, my
+                self._px, self._py = mx, my
+                self._vx, self._vy = normal(self._bx, self._by, 
+                        self._px, self._py)
+            elif self._mode == self.MODE_SET_BASE:
+                self._bx, self._by = mx, my
+
+            self._cx, self._cy = mx, my
+
+    def button_press_cb(self, tdw, x, y, pressure, time, button):
+        self._last_button = button
+        self._latest_pressure = pressure
+
+        if self._ready:
+            # This line need to be placed prior to
+            # calling _update_positions(), because
+            # it looks whether the self._mode is 
+            # self.MODE_INIT or not.
+            self._mode = self.MODE_INIT
+
+        self._update_positions(tdw, x, y)
+
+    def button_release_cb(self, tdw, x, y, pressure, time, button):
+        self._last_button = None
+        self._px = None
+        self._py = None
+        if self._mode == self.MODE_DRAW:
+            self._mode = self.MODE_FINALIZE
+        elif self._mode == self.MODE_SET_BASE:
+            self._mode = self.MODE_INVALID
+            self.queue_draw_area(tdw)
+        elif self._mode == self.MODE_INIT:
+            # Initialize mode but nothing done
+            # = simply return to initial state.
+            self._mode = self.MODE_INVALID
+
+    def enum_samples(self, tdw):
+
+        if self._mode == self.MODE_DRAW:
+            if self._ready and self._last_button != None:
+
+                length, nx, ny = length_and_normal(self._cx , self._cy, 
+                        self._px, self._py)
+                direction = cross_product(self._vy, -self. _vx,
+                        nx, ny)
+
+                if length > 0:
+
+                    if direction > 0.0:
+                        length *= -1.0
+
+                    cx = (length * self._vx) + self._sx
+                    cy = (length * self._vy) + self._sy
+                    self._sx = cx
+                    self._sy = cy
+                    cx, cy = tdw.model_to_display(cx, cy)
+                    yield (cx , cy , self._latest_pressure)
+                    self._px, self._py = self._cx, self._cy
+
+        elif self._mode == self.MODE_INIT:
+            if self._ready and self._last_button != None:
+                cx, cy = tdw.model_to_display(self._sx, self._sy)
+                yield (cx , cy , 0.0)
+                self._mode = self.MODE_DRAW
+                self.enum_samples(tdw) # Re-enter this method with another mode
+
+        elif self._mode == self.MODE_FINALIZE:
+            # Finalizing previous stroke.
+            cx, cy = tdw.model_to_display(self._sx, self._sy)
+            yield (cx , cy , 0.0)
+            self._mode = self.MODE_INVALID
+            raise StopIteration
+
+        raise StopIteration
+
+
+    def reset(self, hard_reset = False):
+        super(FocusRuler, self).reset()
+        if hard_reset:
+
+            # _bx, _by stores the base point of ruler.
+            self._bx = None
+            self._by = None
+
+            # _vx, _vy stores the identity vector of ruler, which is
+            # from (_bx, _by) to (_dx, _dy) 
+            # Each strokes should be parallel against this vector.
+            self._vx = None
+            self._vy = None
+
+        # Above values should not be 'soft' reset().
+        # because reset() called each time device pressed.
+
+        # _px, _py is 'initially device pressed(started) point'
+        self._px = None
+        self._py = None
+
+        if self._bx == None:
+            self._mode = self.MODE_SET_BASE
+        else:
+            self._mode = self.MODE_INVALID
+
+    def fetch(self, tdw, x, y, pressure, time, button):
+        """ Fetch samples(i.e. current stylus input datas) 
+        into attributes
+        """
+        self._last_time = time
+        self._latest_pressure = pressure
+        self._update_positions(tdw, x, y)
+
+    ## Overlay drawing related
+
+    def queue_draw_area(self, tdw):
+        """ Queue draw area for overlay """
+        margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 2
+
+        def _queue_chip_area(x, y):
+            x, y = tdw.model_to_display(x, y)
+            tdw.queue_draw_area(x - margin, y - margin, 
+                    x + margin, y + margin)
+            return (x, y)
+
+        if self._bx != None:
+            bx, by = _queue_chip_area(self._bx, self._by)
+
+
+    def draw_overlay(self, cr, tdw):
+        """ Drawing overlay """
+        def _draw_floating_chip(x, y, flag):
+            if flag:
+                color = gui.style.ACTIVE_ITEM_COLOR
+            else:
+                color = gui.style.EDITABLE_ITEM_COLOR
+            gui.drawutils.render_round_floating_color_chip(cr, x, y, 
+                    color, gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
+
+
+        # Draw control chips.
+        if self._bx != None:
+            bx, by = tdw.model_to_display(self._bx, self._by)
+            _draw_floating_chip(bx, by,
+                self._mode == self.MODE_SET_BASE)
+
+
+    ## Options presenter for assistant
+   #def get_presenter(self):
+   #    if self._presenter == None:
+   #        self._presenter = Optionpresenter_ParallelRuler(self)
+   #    return self._presenter.get_box_widget()
+
+
 ## Option presenters for assistants
 
 class _Presenter_Mixin(object):

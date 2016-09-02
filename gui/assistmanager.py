@@ -32,6 +32,7 @@ class AssistManager(object):
         # assistant name might be translated for i13n. 
         self._assistants = { "AssistModeStabilizer" : Stabilizer(app),
                              "AssistModeParallelRuler" : ParallelRuler(app),
+                             "AssistModeFocusRuler" : FocusRuler(app),
                              None : None # the default, no assistant enabled.
                 }
 
