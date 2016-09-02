@@ -5,6 +5,7 @@ from gettext import gettext as _
 from gi.repository import Gtk
 
 from gui.assist import *
+from gui.ui_utils import *
 
 class AssistManager(object):
     """ AssistManager is a singlton, to manage multiple assistants
@@ -37,7 +38,6 @@ class AssistManager(object):
         self._current = None
 
         self._blend_modes_action={}
-       #app.brushmodifier.blend_mode_changed += self.blend_mode_changed_cb
         app.brushmanager.brush_selected += self.brush_selected_cb
         self._current_blend = None
         self._internal_update = False
@@ -51,6 +51,8 @@ class AssistManager(object):
 
     @current.setter
     def current(self, assistant):
+        force_redraw_overlay() # To clear old overlay contents.
+
         self._current = assistant
         combo = self._assistant_combo
 
@@ -61,7 +63,6 @@ class AssistManager(object):
             self._current.reset()
 
             if not self._internal_update:
-               #self._blend_modes_assistant[self._current_blend] = assistant_name
                 binfo = self.app.doc.model.brush.brushinfo
                 name = binfo.get_string_property("parent_brush_name")
                  
@@ -113,21 +114,6 @@ class AssistManager(object):
         assert action_name in self._assistants.keys()
         self.current = self._assistants[action_name]
         return self._current
-
-
-   #def blend_mode_changed_cb(self, modifier, new_blend):
-   #
-   #    if self._current_blend != None:
-   #        old_action_name = self._blend_modes_action.get(self._current_blend, None)
-   #        self._do_action(old_action_name, False)
-   #
-   #    new_action_name = self._blend_modes_action.get(new_blend, None)
-   #    self._do_action(new_action_name, True) 
-   #    # From this self._do_action(), Gtk.ToggleAction signalled
-   #    # and self.enable_assistant() would be called from outside this class.
-   #
-   #    self._blend_modes_action[new_blend] = new_action_name
-   #    self._current_blend = new_blend
 
     def brush_selected_cb(self, bm, managed_brush, brushinfo):
         """ Anyway, reset current assistant.
