@@ -528,12 +528,12 @@ class ParallelRuler(Assistbase):
 
                 length, nx, ny = length_and_normal(self._cx , self._cy, 
                         self._px, self._py)
-                direction = cross_product(self._vy, self. _vx,
+                direction = cross_product(self._vy, -self. _vx,
                         nx, ny)
 
                 if length > 0:
 
-                    if direction < 0.0:
+                    if direction > 0.0:
                         length *= -1.0
 
                     cx = (length * self._vx) + self._sx
