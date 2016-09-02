@@ -496,7 +496,6 @@ class ParallelRuler(Assistbase):
         self._latest_pressure = pressure
 
         if self._ready:
-            print('start!')
             # This line need to be placed prior to
             # calling _update_positions(), because
             # it looks whether the self._mode is 
@@ -512,12 +511,11 @@ class ParallelRuler(Assistbase):
         if self._mode == self.MODE_DRAW:
             self._mode = self.MODE_FINALIZE
         elif self._mode == self.MODE_SET_BASE:
-            print('step dest')
             self._mode = self.MODE_SET_DEST
         elif self._mode == self.MODE_SET_DEST:
-            print('step draw')
             self._mode = self.MODE_INVALID
             self._vx, self._vy = normal(self._bx, self._by, self._dx, self._dy)
+            self.queue_draw_area(tdw)
         elif self._mode == self.MODE_INIT:
             # Initialize mode but nothing done
             # = simply return to initial state.
@@ -551,7 +549,7 @@ class ParallelRuler(Assistbase):
                 cx, cy = tdw.model_to_display(self._sx, self._sy)
                 yield (cx , cy , 0.0)
                 self._mode = self.MODE_DRAW
-                self.enum_samples(tdw)
+                self.enum_samples(tdw) # Re-enter this method with another mode
 
         elif self._mode == self.MODE_FINALIZE:
             # Finalizing previous stroke.
@@ -566,6 +564,7 @@ class ParallelRuler(Assistbase):
     def reset(self, hard_reset = False):
         super(ParallelRuler, self).reset()
         if hard_reset:
+
             # _bx, _by stores the base point of ruler.
             self._bx = None
             self._by = None
@@ -579,11 +578,8 @@ class ParallelRuler(Assistbase):
             self._vx = None
             self._vy = None
 
-        # Above values should not be soft-reset().
-
-        # However, these attributes used for GUI,
-        # actually the ruler uses pre-calculated vector.
-
+        # Above values should not be 'soft' reset().
+        # because reset() called each time device pressed.
 
         # _px, _py is 'initially device pressed(started) point'
         self._px = None
@@ -600,11 +596,9 @@ class ParallelRuler(Assistbase):
         """ Fetch samples(i.e. current stylus input datas) 
         into attributes
         """
-
         self._last_time = time
         self._latest_pressure = pressure
         self._update_positions(tdw, x, y)
-        
 
     ## Overlay drawing related
 
@@ -635,7 +629,6 @@ class ParallelRuler(Assistbase):
             tdw.queue_draw_area(bx - margin, by - margin, 
                     dx - bx + margin + 1, dy - by + margin + 1)
 
-            print('queued')
 
     @dashedline_wrapper
     def _draw_dashed_line(self, cr, info):
@@ -708,7 +701,11 @@ class _Presenter_Mixin(object):
         self._grid.attach(widget, col, self._row, width, 1)
         self._row += 1
 
-    def force_redraw_overlay(self, area=None):
+    @staticmethod
+    def force_redraw_overlay(area=None):
+        """ Utility method.
+        force all tdws to redraw.
+        """
         for tdw in gui.tileddrawwidget.TiledDrawWidget.get_visible_tdws():
             if area:
                 tdw.queue_draw_area(*area)
@@ -798,5 +795,8 @@ class Optionpresenter_ParallelRuler(_Presenter_Mixin):
     # Handlers
     def _reset_clicked_cb(self, button):
         if not self._updating_ui:
+            # To discard current(old) overlay.
+            _Presenter_Mixin.force_redraw_overlay() 
+
             self.assistant.reset(hard_reset=True)
 
