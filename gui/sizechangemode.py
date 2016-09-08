@@ -117,8 +117,8 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         base_radius = math.exp(b.get_base_value('radius_logarithmic'))
         r = base_radius
        #r += 2 * base_radius * b.get_base_value('offset_by_random')
-       #r *= tdw.scale
-       #r += 0.5
+        r *= tdw.scale
+        #r += 0.5
         return r
 
 
@@ -127,6 +127,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         self._queue_draw_brush() # erase previous brush circle
 
         if self.base_x == None:
+            self._initial_radius = self.get_cursor_radius(tdw)
             self.base_x = self.start_x
             self.base_y = self.start_y
             # getting returning point of cursor,in screen coordinate
@@ -134,39 +135,20 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
             if self._enable_warp:
                 screen, self.start_screen_x , self.start_screen_y ,mod = \
                         disp.get_pointer()
+            self.direction = None
         self._queue_draw_brush()
         super(SizechangeMode, self).drag_start_cb(tdw, event)
 
     def drag_update_cb(self, tdw, event, dx, dy):
 
         self._ensure_overlay_for_tdw(tdw)
-        direction,length = gui.ui_utils.get_drag_direction(
-                self.start_x, self.start_y,
-                event.x, event.y)
-        if direction >= 0:
-
-            # setting differencial of size.
-            # 0.003 is not theorical number,it's my feeling
-            diff = length * 0.004
-
-            if direction == 0:
-                # decrease 
-                diff *= -1.0 
-            elif direction == 3:
-                # large decrease for side-motion
-                diff *= -2.0 
-            elif direction == 1:
-                # large increase for side-motion
-                diff *= 2.0 
-
-            self._queue_draw_brush()
-            adj = self.app.brush_adjustment['radius_logarithmic']
-            adj.set_value(adj.get_value() + diff)
-            self._queue_draw_brush()
-
-            # refresh pressed position
-            self.start_x = event.x
-            self.start_y = event.y
+        r = self._initial_radius   
+        length = abs((self.base_x - r) - event.x)
+        
+        self._queue_draw_brush()
+        adj = self.app.brush_adjustment['radius_logarithmic']
+        adj.set_value(math.log(length))
+        self._queue_draw_brush()
 
         return super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
 
@@ -180,8 +162,10 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         # rather unconfortable than nothing done.
         if self._enable_warp:
             d = Gdk.Display.get_default()
-           #d=tdw.get_display()
             d.warp_pointer(d.get_default_screen(),self.start_screen_x,self.start_screen_y)
+            
+        self.base_x = None
+        self.base_y = None
         return super(SizechangeMode, self).drag_stop_cb(tdw)
 
 
@@ -258,11 +242,12 @@ class _Overlay (gui.overlays.Overlay):
        #color = gui.style.ACTIVE_ITEM_COLOR
         cr.set_source_rgb(0, 0, 0)
         cr.set_line_width(1)
-        cr.arc( self._sizemode.base_x,
-                self._sizemode.base_y,
-                self._sizemode.get_cursor_radius(self._tdw),
-                0.0,
-                2*math.pi)
+        if self._sizemode.base_x != None:
+            cr.arc( self._sizemode.base_x,
+                    self._sizemode.base_y,
+                    self._sizemode.get_cursor_radius(self._tdw),
+                    0.0,
+                    2*math.pi)
         cr.stroke_preserve()
         cr.set_dash( (10,) )
         cr.set_source_rgb(1, 1, 1)
