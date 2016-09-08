@@ -84,7 +84,6 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         super(SizechangeMode, self).__init__(**kwds)
         self.app = None
         self._cursor = Gdk.Cursor(Gdk.CursorType.BLANK_CURSOR)
-        self._enable_warp = False
 
     ## InteractionMode/DragMode implementation
 
@@ -120,22 +119,21 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         r *= tdw.scale
         #r += 0.5
         return r
+        
+    def button_press_cb(self, tdw, event):
+        # getting returning point of cursor,in screen coordinate
+
+        self._queue_draw_brush() # erase previous brush circle (if exists)
+        if self.base_x == None:
+            self._initial_radius = self.get_cursor_radius(tdw)
+            self.base_x = event.x
+            self.base_y = event.y
+
+        super(SizechangeMode, self).button_press_cb(tdw, event)
 
 
     def drag_start_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
-        self._queue_draw_brush() # erase previous brush circle
-
-        if self.base_x == None:
-            self._initial_radius = self.get_cursor_radius(tdw)
-            self.base_x = self.start_x
-            self.base_y = self.start_y
-            # getting returning point of cursor,in screen coordinate
-            disp = Gdk.Display.get_default()
-            if self._enable_warp:
-                screen, self.start_screen_x , self.start_screen_y ,mod = \
-                        disp.get_pointer()
-            self.direction = None
         self._queue_draw_brush()
         super(SizechangeMode, self).drag_start_cb(tdw, event)
 
@@ -143,11 +141,11 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
 
         self._ensure_overlay_for_tdw(tdw)
         r = self._initial_radius   
-        length = abs((self.base_x - r) - event.x)
+        current_radius = abs((self.base_x - r) - event.x) 
         
         self._queue_draw_brush()
         adj = self.app.brush_adjustment['radius_logarithmic']
-        adj.set_value(math.log(length))
+        adj.set_value(math.log(current_radius / tdw.scale))
         self._queue_draw_brush()
 
         return super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
@@ -156,18 +154,10 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         self._ensure_overlay_for_tdw(tdw)
         self._queue_draw_brush()
         self.start_drag = False
-
-        # return cursor to starting point.
-        # but,absolute axis pointer device(like pen-stylus)
-        # rather unconfortable than nothing done.
-        if self._enable_warp:
-            d = Gdk.Display.get_default()
-            d.warp_pointer(d.get_default_screen(),self.start_screen_x,self.start_screen_y)
-            
+         
         self.base_x = None
         self.base_y = None
-        return super(SizechangeMode, self).drag_stop_cb(tdw)
-
+        super(SizechangeMode, self).drag_stop_cb(tdw)
 
 
     ## Overlays
