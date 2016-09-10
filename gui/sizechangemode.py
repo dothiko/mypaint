@@ -140,12 +140,11 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
     def drag_update_cb(self, tdw, event, dx, dy):
 
         self._ensure_overlay_for_tdw(tdw)
-        r = self._initial_radius   
-        current_radius = abs((self.base_x - r) - event.x) 
-        
         self._queue_draw_brush()
+        
         adj = self.app.brush_adjustment['radius_logarithmic']
-        adj.set_value(math.log(current_radius / tdw.scale))
+        cur_value = adj.get_value() + (dx / 120.0)
+        adj.set_value(cur_value)
         self._queue_draw_brush()
 
         return super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
