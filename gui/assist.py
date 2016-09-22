@@ -252,7 +252,7 @@ class Stabilizer(Assistbase):
         self._stabilize_range = 48
         self._current_range = self._stabilize_range
         self._last_time = None
-        self._auto_adjust_range = True # Auto stabilizer range adjust flag
+        self._range_switcher = True # Auto stabilizer range adjust flag
         self._cycle = 0L
         self.reset()
 
@@ -260,7 +260,7 @@ class Stabilizer(Assistbase):
     def _ready(self):
         return (self._mode == self.MODE_DRAW and
                 self._current_range > 0)
-
+                
     def button_press_cb(self, tdw, x, y, pressure, time, button):
         self._last_button = button
         self._latest_pressure = pressure
@@ -271,8 +271,7 @@ class Stabilizer(Assistbase):
         self._initial_pressure = 0.0
         self._prev_dx = None
         self._mode = self.MODE_INIT
-        if self._auto_adjust_range:
-            # In auto disable mode, stabilizer disabled by default.
+        if self._range_switcher:
             self._drawlength = 0
             self._current_range = 1
             self._ox = x
@@ -284,11 +283,10 @@ class Stabilizer(Assistbase):
     def button_release_cb(self, tdw, x, y, pressure, time, button):
         self._last_button = None
         self._mode = self.MODE_FINALIZE
-        if self._auto_adjust_range:
+        if self._range_switcher:
             self._drawlength = 0
             self._start_time = None
             self._cycle = 0L
-
 
     def enum_samples(self, tdw):
 
@@ -300,8 +298,8 @@ class Stabilizer(Assistbase):
             # 'initial pressure' would be the pressure of current stylus input,
             # not 0.0.
             # And,after this cycle, proceed normal stabilized stage.
-            self._mode = self.MODE_DRAW
-            yield (self._cx , self._cy , self._initial_pressure)
+            self._mode = self.MODE_DRAW       
+            yield (self._cx , self._cy , self._initial_pressure)        
         elif self._mode == self.MODE_DRAW:
             # Normal stabilize stage.
             cx = self._cx
@@ -324,7 +322,7 @@ class Stabilizer(Assistbase):
             move_length = cur_length - self._current_range
             mx = (dx / cur_length) * move_length
             my = (dy / cur_length) * move_length
-
+            
             self._cx = cx + mx
             self._cy = cy + my
 
@@ -332,7 +330,6 @@ class Stabilizer(Assistbase):
             self._cycle += 1L
 
         elif self._mode == self.MODE_FINALIZE:
-
             if self._latest_pressure > 0.0:
                 # button is released but
                 # still remained some pressure...
@@ -343,9 +340,12 @@ class Stabilizer(Assistbase):
             yield (self._cx, self._cy, 0.0)
 
             self._mode = self.MODE_INVALID
+        else:
+            # Set empty stroke, as usual.
+            yield (self._rx, self._ry, 0.0)
 
         raise StopIteration
-
+        
     def reset(self):
         super(Stabilizer, self).reset()
         self._cx = None
@@ -356,10 +356,13 @@ class Stabilizer(Assistbase):
         self._cycle = 0L
         self._initial_pressure = 0.0
         self._mode = self.MODE_INVALID
+        self._speed = 0
+        self._stop_cnt = 0
 
     def fetch(self, tdw, x, y, pressure, time, button):
         """ Fetch samples(i.e. current stylus input datas) 
-        into attributes
+        into attributes.
+        This method would be called each time motion_notify_cb is called.
 
         Explanation of attributes which are used at here:
         
@@ -376,7 +379,7 @@ class Stabilizer(Assistbase):
         self._ry = y
 
         if self._mode == self.MODE_DRAW:
-            if (self._auto_adjust_range and self._start_time != None):
+            if (self._range_switcher and self._start_time != None):
                 ctime = time - self._start_time
                 self._drawlength += math.hypot(x - self._ox, y - self._oy) 
 
@@ -395,19 +398,21 @@ class Stabilizer(Assistbase):
                     # it is from my feeling and experience at testing.
                     # so, these values might be user-configurable...
 
-                    if speed > 30.0:
-                        self._current_range -= 3.0
-                    elif speed >= 10.0:
-                        self._current_range -= speed / 10.0
-                    elif speed < 1.0:
-                        self._current_range += 1.0
-                    elif speed <= 6.0:
-                        self._current_range += 1.0 / speed
+                    speed = min(30.0, speed)
 
-                    if self._current_range > self._stabilize_range:
-                        self._current_range = self._stabilize_range
-                    elif self._current_range < 0:
-                        self._current_range = 0
+                    if speed <= 0.00001:
+                        # if the style holded over 16 frames,
+                        # stabilizer range should be maxed out.
+                        self._stop_cnt += 1
+                        if self._stop_cnt > 24:
+                            self._current_range = self._stabilize_range
+                        elif self._stop_cnt > 8:
+                            self._current_range = self._stabilize_range / 2
+
+                    self._current_range = max(0, min(self._current_range, 
+                        self._stabilize_range))
+                        
+                    self._speed = speed
 
                     # Update current/previous position in every case.
                     self._ox = x
@@ -425,7 +430,7 @@ class Stabilizer(Assistbase):
             full_rad = half_rad * 2
             tdw.queue_draw_area(self._cx - half_rad, self._cy - half_rad,
                     full_rad, full_rad)
-
+                    
     @dashedline_wrapper
     def _draw_dashed_circle(self, cr, info):
         x, y, radius = info
@@ -448,8 +453,7 @@ class Stabilizer(Assistbase):
             # point of stroke.
             self._draw_dashed_circle(cr, 
                     (self._cx, self._cy, 2))
-
-
+                    
     ## Options presenter for assistant
     def get_presenter(self):
         if self._presenter == None:
@@ -830,11 +834,11 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
         checkbox.connect('toggled', self._average_toggled_cb)
         self._attach_grid(checkbox)
 
-        # Checkbox for use auto-disable feature.
-        checkbox = Gtk.CheckButton(_("Auto range adjust"),
+        # Checkbox for use 'range switcher' feature.
+        checkbox = Gtk.CheckButton(_("Range switcher"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
-        checkbox.set_active(assistant._auto_adjust_range) 
-        checkbox.connect('toggled', self._auto_adjust_range_toggled_cb)
+        checkbox.set_active(assistant._range_switcher) 
+        checkbox.connect('toggled', self._range_switcher_toggled_cb)
         self._attach_grid(checkbox)
 
         # End of initialize widgets
@@ -849,10 +853,10 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
         if not self._updating_ui:
             self.assistant._stabilize_range = adj.get_value()
 
-    def _auto_adjust_range_toggled_cb(self, checkbox):
+    def _range_switcher_toggled_cb(self, checkbox):
         if not self._updating_ui:
             flag = checkbox.get_active()
-            self.assistant._auto_adjust_range = flag
+            self.assistant._range_switcher = flag
 
 class Optionpresenter_ParallelRuler(_Presenter_Mixin):
     """ Optionpresenter for ParallelRuler assistant.
