@@ -367,10 +367,10 @@ class Stabilizer(Assistbase):
         Explanation of attributes which are used at here:
         
         _rx,_ry == Raw input of pointer, 
-                         very 'current' position of input,
-                         stroke should be drawn this point.
+                         the 'current' position of input,
+                         stroke should be drawn TO (not from) this point.
         _cx, _cy == Current center of drawing stroke radius.
-                    They also represents previous end point of stroke.
+                    These also represent the previous end point of stroke.
         """
 
         self._last_time = time
@@ -386,19 +386,15 @@ class Stabilizer(Assistbase):
                 if ctime > self.FRAME_PERIOD:
                     speed = self._drawlength / (ctime / self.FRAME_PERIOD)
                     # When drawing time exceeds the threshold timeperiod, 
-                    # then calculate the speed of storke per 'time unit'
+                    # then calculate the speed of storke.
+                    # It is stroke length per 'specific time unit = one frame'
                     # (16.6666..ms = one frame in 60fps), in pixel.
                     #
-                    # And depend on that speed of stroke,
-                    # inflate/deflate current stabilize range.
-                    # If speed is within 10.0pixel/frame to
-                    # 6.0pixel/frame, current stabilize range is sustained.
-                    #
-                    # The adjusting and threshold values are not theorical,
-                    # it is from my feeling and experience at testing.
-                    # so, these values might be user-configurable...
-
-                    speed = min(30.0, speed)
+                    # When the speed below the specfic value,
+                    # (currently, it is 0.00001)
+                    # it is recognized as 'Pointer Stopped'
+                    # and the stopping frame count exceeds certain threshold,
+                    # then stabilizer range is expanded.
 
                     if speed <= 0.00001:
                         # if the style holded over 16 frames,
