@@ -874,9 +874,7 @@ class StampMode (InkingMode):
                 self._queue_redraw_curve()
                 self.start_x = event.x
                 self.start_y = event.y
-        elif self.phase in (_PhaseStamp.SCALE_BY_HANDLE,
-                            _PhaseStamp.ROTATE_BY_HANDLE):
-
+        elif self.phase == _PhaseStamp.SCALE_BY_HANDLE:
             assert self.target_node_index is not None
             self._queue_redraw_curve()
             node = self.nodes[self.target_node_index]
@@ -894,78 +892,85 @@ class StampMode (InkingMode):
             bx = mx - node.x 
             by = my - node.y
 
-            if self.phase == _PhaseStamp.SCALE_BY_HANDLE:
-                orig_pos = self._stamp.get_boundary_points(node, 
-                        no_scale=True)
+            orig_pos = self._stamp.get_boundary_points(node, 
+                    no_scale=True)
 
-                ti = self.current_handle_index
-                nlen, nx, ny = length_and_normal(node.x, node.y, mx, my)
+            ti = self.current_handle_index
+            nlen, nx, ny = length_and_normal(node.x, node.y, mx, my)
 
-                # get original side and top ridge length
-                # and its identity vector
-                si,ei = (2, 1) if ti in (0, 1) else (1, 2)
-                side_length, snx, sny = length_and_normal(
-                        orig_pos[si][0], orig_pos[si][1],
-                        orig_pos[ei][0], orig_pos[ei][1])
+            # get original side and top ridge length
+            # and its identity vector
+            si,ei = (2, 1) if ti in (0, 1) else (1, 2)
+            side_length, snx, sny = length_and_normal(
+                    orig_pos[si][0], orig_pos[si][1],
+                    orig_pos[ei][0], orig_pos[ei][1])
 
-                si,ei = (0, 1) if ti in (1, 2) else (1, 0)
-                top_length, tnx, tny = length_and_normal(
-                        orig_pos[si][0], orig_pos[si][1],
-                        orig_pos[ei][0], orig_pos[ei][1])
+            si,ei = (0, 1) if ti in (1, 2) else (1, 0)
+            top_length, tnx, tny = length_and_normal(
+                    orig_pos[si][0], orig_pos[si][1],
+                    orig_pos[ei][0], orig_pos[ei][1])
 
-                # get the 'leg' of new vectors
-                dp = dot_product(snx, sny, bx, by)
-                vx = dp * snx 
-                vy = dp * sny
-                v_length = vector_length(vx, vy) * 2
-                
-                # 4. Then, get another leg of triangle.
-                hx = bx - vx
-                hy = by - vy
-                h_length = vector_length(hx, hy) * 2
+            # get the 'leg' of new vectors
+            dp = dot_product(snx, sny, bx, by)
+            vx = dp * snx 
+            vy = dp * sny
+            v_length = vector_length(vx, vy) * 2
+            
+            # 4. Then, get another leg of triangle.
+            hx = bx - vx
+            hy = by - vy
+            h_length = vector_length(hx, hy) * 2
 
-                scale_x = h_length / top_length 
-                scale_y = v_length / side_length 
+            scale_x = h_length / top_length 
+            scale_y = v_length / side_length 
 
-                # Also, scaling might be inverted(mirrored).
-                # it can detect from 'psuedo' cross product
-                # between side and top vector.
-                cp = cross_product(tnx, tny, nx, ny)
-                if ((ti in (1, 3) and cp > 0.0)
-                        or (ti in (0, 2) and cp < 0.0)):
-                    scale_y = -scale_y
+            # Also, scaling might be inverted(mirrored).
+            # it can detect from 'psuedo' cross product
+            # between side and top vector.
+            cp = cross_product(tnx, tny, nx, ny)
+            if ((ti in (1, 3) and cp > 0.0)
+                    or (ti in (0, 2) and cp < 0.0)):
+                scale_y = -scale_y
 
-                cp = cross_product(snx, sny, nx, ny)
-                if ((ti in (1, 3) and cp < 0.0)
-                        or (ti in (0, 2) and cp > 0.0)):
-                    scale_x = -scale_x
+            cp = cross_product(snx, sny, nx, ny)
+            if ((ti in (1, 3) and cp < 0.0)
+                    or (ti in (0, 2) and cp > 0.0)):
+                scale_x = -scale_x
 
-                self.nodes[self.target_node_index] = node._replace(
-                        scale_x=scale_x,
-                        scale_y=scale_y)
-
-            else:
-                # 2. Get angle between current cursor position
-                # to the 'origin - handle vector'.
-
-                ox, oy = pos[self.current_handle_index]
-                
-                ox, oy = normal(node.x, node.y, ox, oy)
-                cx, cy = normal(node.x, node.y, mx, my)
-
-                rad = get_radian(cx, cy, ox, oy)
-
-                # 3. Get a cross product of them to
-                # identify which direction user want to rotate.
-                if cross_product(cx, cy, ox, oy) >= 0.0:
-                    rad = -rad
-
-                self.nodes[self.target_node_index] = node._replace(
-                        angle = rad)
-                      
+            self.nodes[self.target_node_index] = node._replace(
+                    scale_x=scale_x,
+                    scale_y=scale_y)
 
             self._queue_redraw_curve()
 
+        elif self.phase == _PhaseStamp.ROTATE_BY_HANDLE:
+            assert self.target_node_index is not None
+            self._queue_redraw_curve()
+            node = self.nodes[self.target_node_index]
+            #pos = self._stamp.get_boundary_points(node)
+            #mx, my = tdw.display_to_model(event.x, event.y)
+            ndx, ndy = tdw.model_to_display(node.x, node.y)
+            junk, bx, by = length_and_normal(
+                    self.last_x, self.last_y,
+                    ndx, ndy)                    
+            
+            junk, cx, cy = length_and_normal(
+                    event.x, event.y,
+                    ndx, ndy)
+                    
+
+            rad = get_radian(cx, cy, bx, by)
+
+            # 3. Get a cross product of them to
+            # identify which direction user want to rotate.
+            if cross_product(cx, cy, bx, by) >= 0.0:
+                rad = -rad
+
+            self.nodes[self.target_node_index] = node._replace(
+                    angle = node.angle + rad)
+                      
+            self._queue_redraw_curve()
+            
         elif self.phase in (_PhaseStamp.ADJUST_SOURCE,
                             _PhaseStamp.ADJUST_SOURCE_BY_HANDLE):
 
