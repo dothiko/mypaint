@@ -132,6 +132,22 @@ class _SourceMixin(object):
         else:
             return -1
 
+    def get_valid_tiles(self):
+        return self._surfs.keys()
+
+    def validate_all_tiles(self):
+        """ Validate all tiles.
+        (= load tiles into surface memory) 
+        """
+        pass
+
+
+    def get_desc(self, tile_index):
+        """ Returns a string which is a description of a tile.
+        For example, in Layerstamp, it should be 
+        the name of source layer. """ 
+        pass
+
 
 class _PixbufSourceMixin(_SourceMixin):
     """ Pixbuf source management class.
@@ -141,8 +157,9 @@ class _PixbufSourceMixin(_SourceMixin):
 
 
     def _init_source(self):
-        self._source_files = []
+        self._source_files = {}
         self._surfs = {}
+        self._tile_index_base = 0
 
     ## Information methods
     @property
@@ -156,13 +173,16 @@ class _PixbufSourceMixin(_SourceMixin):
 
     def set_file_sources(self, filenames):
         if type(filenames) == str:
-            self._source_files = [filenames, ]
+            self._source_files[0] = filenames
         else:
-            self._source_files = filenames
+            for i, filename in enumerate(filenames):
+                self._source_files[i] = filename
+            self._tile_index_base = i
 
     @property
     def latest_tile_index(self):
-        return len(self._source_files) - 1
+       #return len(self._source_files) - 1
+        return self._tile_index_base
 
 
     ## Source Pixbuf methods
@@ -209,6 +229,13 @@ class _PixbufSourceMixin(_SourceMixin):
         ox = -(w / 2)
         oy = -(h / 2)
         cr.set_source_surface(stamp_src, ox, oy)
+
+    def get_desc(self, tile_index):
+        return self._source_files[tile_index]
+
+    def validate_all_tiles(self):
+        for ck in self._source_files.keys():
+            self._ensure_current_pixbuf(ck)
 
 class _DynamicSourceMixin(_PixbufSourceMixin):
     """ Dynamic sources, i.e. clipboard or layers 

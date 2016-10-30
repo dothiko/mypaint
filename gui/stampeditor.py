@@ -12,12 +12,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 from lib.gettext import C_
+from gettext import gettext as _
 import gi
 from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import Pango
 from gi.repository import GLib
 from gi.repository import GdkPixbuf
+from gi.repository import GObject
 from lib import brushsettings
 
 import gui.stamps
@@ -25,6 +27,72 @@ from windowing import SubWindow
 
 ## Class definitions
 
+class StampStore(object):
+    """Stamp Store used from stamp listview"""
+
+    def __init__(self, stamp):
+        self._stamp = stamp
+        self._store = Gtk.ListStore(object, str)
+        for idx in stamp.get_valid_tiles():
+            surface = stamp.get_current_src(idx)
+            srcdesc = stamp.get_desc(idx)
+            self._store.append((surface, srcdesc))
+            print(srcdesc)
+
+    @property
+    def liststore(self):
+        return self._store
+
+    def get_surface(self, iter):
+        return self._store[iter]
+
+class StampRenderer(Gtk.CellRenderer):
+    """Stamp renderer used from stamp listview"""
+
+    surface_iter = GObject.property(type=GObject.TYPE_PYOBJECT, default=None)
+   #id = GObject.property(type=int , default=-1)
+    desc = GObject.property(type=str, default="")
+
+    def __init__(self, store):
+        super(StampRenderer, self).__init__()
+        self._store = store
+
+    def do_set_property(self, pspec, value):
+        setattr(self, pspec.name, value)
+
+    def do_get_property(self, pspec):
+        return getattr(self, pspec.name)
+
+    def do_render(self, cr, widget, background_area, cell_area, flags):
+        """
+        :param cell_area: RectangleInt class
+        """
+        cr.translate(cell_area.x, cell_area.y)
+
+        cr.rectangle(0, 0,
+                cell_area.width, cell_area.height)
+       #cr.set_source(self._store.get_surface(self.surface_iter))
+        cr.set_source_surface(self.surface_iter)
+        cr.fill()
+
+   #def do_get_preferred_height(self,view_widget):
+   #    print('preferred!')
+   #    return (80, 80) 
+    def do_get_preferred_width(self,view_widget):
+        return (96, 96) 
+    
+   #def do_get_preferred_height_for_width(self, width):
+   #    print('preferred! w')
+   #    return (80, 80) 
+   #
+   #def do_get_preferred_width_for_height(self, width, height):
+   #    print('preferred! h')
+   #    return (128, 128) 
+
+    def do_get_size(self, view_widget, cell_area):
+        if cell_area != None:
+            print(cell_area)
+        return (0, 0, 128, 80)
 
 class StampEditorWindow (SubWindow):
     """Window containing the stamp editor"""
@@ -34,6 +102,8 @@ class StampEditorWindow (SubWindow):
     _UI_DEFINITION_FILE = "stampeditor.glade"
     _LISTVIEW_THUMBNAIL_COLUMN = 0
     _LISTVIEW_DISPLAYNAME_COLUMN = 1
+
+    _LISTVIEW_COLUMN_HEIGHT = 80
 
     ## Construction
 
@@ -47,12 +117,16 @@ class StampEditorWindow (SubWindow):
             sm.stamp_selected += self.stamp_selected_cb
         else:
             # In test, create dummy stamp.
+            print("### TEST ###")
             _stamp = gui.stamps.Stamp('Dummy')
             dummyfiles = [ 
-                    'pixmap/mypaint_logo.png',
+                    'mypaint_logo.png',
+                    'mypaint_logo.png',
                     'layers.png' ,
+                    'mypaint_logo.png',
                     'plus.png'
                     ]
+            dummyfiles = [ os.path.join("pixmaps", x) for x in dummyfiles ]
             _stamp.set_file_sources(dummyfiles)
             self._stamp = _stamp
 
@@ -85,50 +159,6 @@ class StampEditorWindow (SubWindow):
         self._live_update_idle_cb_id = None
         self._updating_metadata_ui = False
 
-   #def _init_adjustments(self):
-   #    """Initializes adjustments for the scales used internally
-   #
-   #    When running as part of the MyPaint app, the brush setting ones are
-   #    shared with it.
-   #    """
-   #    # Brush setting base values
-   #    if self.app:
-   #        for s in brushsettings.settings_visible:
-   #            adj = self.app.brush_adjustment[s.cname]
-   #            self._base_adj[s.cname] = adj
-   #        # The application instance manages value-changed callbacks itself.
-   #    else:
-   #        for s in brushsettings.settings_visible:
-   #            adj = Gtk.Adjustment(value=s.default,
-   #                                 lower=s.min, upper=s.max,
-   #                                 step_incr=0.01, page_incr=0.1)
-   #            self._base_adj[s.cname] = adj
-   #        changed_cb = self._testmode_base_value_adj_changed_cb
-   #        for cname, adj in self._base_adj.iteritems():
-   #            adj.connect('value-changed', changed_cb, cname)
-   #    # Per-input scale maxima and minima
-   #    for inp in brushsettings.inputs:
-   #        name = inp.name
-   #        adj = Gtk.Adjustment(value=1.0/4.0, lower=-1.0, upper=1.0,
-   #                             step_incr=0.01, page_incr=0.1)
-   #        adj.connect("value-changed", self.input_adj_changed_cb, inp)
-   #        self._input_y_adj[name] = adj
-   #        lower = -20.0
-   #        upper = +20.0
-   #        if inp.hard_min is not None:
-   #            lower = inp.hard_min
-   #        if inp.hard_max is not None:
-   #            upper = inp.hard_max
-   #        adj = Gtk.Adjustment(value=inp.soft_min,
-   #                             lower=lower, upper=upper-0.1,
-   #                             step_incr=0.01, page_incr=0.1)
-   #        adj.connect("value-changed", self.input_adj_changed_cb, inp)
-   #        self._input_xmin_adj[name] = adj
-   #        adj = Gtk.Adjustment(value=inp.soft_max,
-   #                             lower=lower+0.1, upper=upper,
-   #                             step_incr=0.01, page_incr=0.1)
-   #        adj.connect("value-changed", self.input_adj_changed_cb, inp)
-   #        self._input_xmax_adj[name] = adj
 
     def _build_ui(self):
         """Builds the UI from ``brusheditor.glade``"""
@@ -137,107 +167,68 @@ class StampEditorWindow (SubWindow):
         with open(ui_path, 'r') as ui_fp:
             ui_xml = ui_fp.read()
         self._builder.add_from_string(ui_xml)
-        #self._populate_inputs(ui_xml)
-        #self._populate_settings_treestore()
+
+        stamp_grid = self._builder.get_object('stamp_grid')
+        sw = self._builder.get_object('stamp_scrolledwindow')
+
+        # Building stamp list view.
+
+        # Important: Ensure all tiles surface
+        # before calling StampStore constructor.
+        self._stamp.validate_all_tiles() 
+                                         
+        store = StampStore(self._stamp)
+        self._stamp_list_store = store
+
+        view = Gtk.TreeView()
+        view.set_model(store.liststore)
+
+        stamprender = StampRenderer(store)
+       #print(dir(stamprender))
+       #stamprender.set_fixed_size(-1, 80)
+        col = Gtk.TreeViewColumn(_('Stamp'), stamprender, surface_iter=0)
+        col.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
+        col.set_resizable(True)
+        view.append_column(col)
+
+        def generate_text_column(label):
+            textrender = Gtk.CellRendererText()
+            col = Gtk.TreeViewColumn(label, textrender)
+            col.set_resizable(True)
+            view.append_column(col)
+
+        generate_text_column(_('Size'))
+        generate_text_column(_('Source'))
+
+        view.set_hexpand(True)
+        view.set_vexpand(True)
+        view.set_halign(Gtk.Align.FILL)
+        view.set_valign(Gtk.Align.FILL)
+
+        self._stamp_list = view
+       #stamp_grid.attach(view, 0, 2, 2, 1)
+        sw.set_vexpand(True)
+        sw.set_hexpand(True)
+        sw.set_halign(Gtk.Align.FILL)
+        sw.set_valign(Gtk.Align.FILL)
+        sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)            
+        sw.add(view)
+
+        # Connecting signals which written in glade.
         self._builder.connect_signals(self)
-        for inp in brushsettings.inputs:
-            #grid = self._builder.get_object("by%s_curve_grid" % inp.name)
-            #GLib.idle_add(grid.hide)
-            #curve = self._builder.get_object("by%s_curve" % inp.name)
-
-            #def _curve_changed_cb(curve, i=inp):
-            #    self._update_brush_from_input_widgets(i)
-
-            #curve.changed_cb = _curve_changed_cb
-            #btn = self._builder.get_object("by%s_reset_button" % inp.name)
-            #btn.connect("clicked", self.input_adj_reset_button_clicked_cb, inp)
-            pass
             
         # Certain actions must be coordinated via a real app instance
         if not self.app:
             action_buttons = [
                 "load_button",
                 "delete_button",
-                "close_button"
+               #"close_button"
             ]
             for b_name in action_buttons:
                 w = self._builder.get_object(b_name)
                 w.set_sensitive(False)
 
-   #def _populate_inputs(self, ui_xml):
-   #    # Grid repacking magic for the templated stuff
-   #
-   #    # XXX FRAGILE
-   #    # It would be nice to use the template's own left-attach, top-attach,
-   #    # width and height child properties to replicate its layout as
-   #    # specified, but unfortunately the current versions of PyGI are all
-   #    # broken in one way or another with respect to getting container child
-   #    # properties. So we fudge it until upstream fix
-   #    # https://bugzilla.gnome.org/show_bug.cgi?id=685076
-   #    group_start_row = 4
-   #    tmpl_layouts = [
-   #        ("by{name}_label",           0, 0, 1, 1),
-   #        ("by{name}_expander_button", 1, 0, 1, 1),
-   #        ("by{name}_scale",           2, 0, 1, 1),
-   #        ("by{name}_reset_button",    3, 0, 1, 1),
-   #        ("by{name}_curve_grid",      2, 2, 2, 1),
-   #    ]
-   #    grid = self._builder.get_object("setting_editor_grid")
-   #    # Extract the relative layout and pattern of by-input widgets
-   #    group_step = 0
-   #    tmpl_objs = []
-   #    for tmpl_id, x, y, w, h in tmpl_layouts:
-   #        tmpl_obj = self._builder.get_object(tmpl_id)
-   #        group_step = max(group_step, y+h)
-   #        tmpl_objs.append(tmpl_obj)
-   #    # Remove the "originals": they're not useful in themselves
-   #    for tmpl_obj in tmpl_objs:
-   #        grid.remove(tmpl_obj)
-   #    # Generate lots of clones, one group per brush input
-   #    for i in brushsettings.inputs:
-   #        params = dict(dname=i.dname, name=i.name, tooltip=i.tooltip)
-   #        object_ids = [layout[0] for layout in tmpl_layouts]
-   #        widgets = add_objects_from_template_string(self._builder, ui_xml,
-   #                                                   object_ids, params)
-   #        for layout, widget in zip(tmpl_layouts, widgets):
-   #            tmpl_id, x, y, w, h = layout
-   #            y += group_start_row
-   #            grid.attach(widget, x, y, w, h)
-   #            if tmpl_id == "by{name}_curve_grid":
-   #                widget.hide()
-   #        group_start_row += group_step
-   #        label = self._builder.get_object("by%s_label" % i.name)
-   #        label.set_tooltip_text(i.tooltip)
-   #        btn = self._builder.get_object("by%s_expander_button" % i.name)
-   #        btn.__input = i
-   #        # Hook up curve max and min adjustments
-   #        cb = self._update_axis_label
-   #        fmt = "%+.2f"
-   #        # Y axis
-   #        scale = self._builder.get_object("by%s_scale" % i.name)
-   #        scale_adj = self._input_y_adj[i.name]
-   #        scale_lbl = self._builder.get_object("by%s_ymax_label" % i.name)
-   #        scale_adj.connect("value-changed", cb, scale_lbl, fmt, False)
-   #        cb(scale_adj, scale_lbl, fmt, False)
-   #        scale_lbl = self._builder.get_object("by%s_ymin_label" % i.name)
-   #        scale_adj.connect("value-changed", cb, scale_lbl, fmt, True)
-   #        cb(scale_adj, scale_lbl, fmt, True)
-   #        scale.set_adjustment(scale_adj)
-   #        # X axis: min
-   #        sbut = self._builder.get_object("by%s_xmin_scalebutton" % i.name)
-   #        sbut_lbl = self._builder.get_object("by%s_xmin_label" % i.name)
-   #        sbut_adj = self._input_xmin_adj[i.name]
-   #        sbut_adj.connect("value-changed", cb, sbut_lbl, fmt, False)
-   #        cb(sbut_adj, sbut_lbl, fmt, False)
-   #        sbut.set_adjustment(sbut_adj)
-   #        # X axis: max
-   #        sbut = self._builder.get_object("by%s_xmax_scalebutton" % i.name)
-   #        sbut_lbl = self._builder.get_object("by%s_xmax_label" % i.name)
-   #        sbut_adj = self._input_xmax_adj[i.name]
-   #        sbut_adj.connect("value-changed", cb, sbut_lbl, fmt, False)
-   #        cb(sbut_adj, sbut_lbl, fmt, False)
-   #        sbut.set_adjustment(sbut_adj)
-   #
+    
    #def _update_axis_label(self, adj, label, strfmt, negate):
    #    """Updates a label widget with an adjustment value when it changes"""
    #    value = adj.get_value()
@@ -430,6 +421,7 @@ class StampEditorWindow (SubWindow):
    #            v.expand_to_path(Gtk.TreePath(path))
 
     def _post_show_cb(self, widget):
+        return
         self._current_setting_changed()
         self._update_brush_header()
         self._update_setting_ui(expanders=True)
@@ -569,6 +561,10 @@ class StampEditorWindow (SubWindow):
         ws = self.app.workspace
         ws.reveal_tool_widget("MyPaintBrushGroupTool", (group,))
 
+    def close_button_clicked_cb(self, button):
+        print('close button clicked')
+        pass
+
     ## Utility functions for managing curves
 
     def _get_brushpoints_from_curvewidget(self, inp):
@@ -633,54 +629,6 @@ class StampEditorWindow (SubWindow):
                     return False
         return True
 
-    ## Brush event handling
-
-    def brush_selected_cb(self, bm, managed_brush, brushinfo):
-        """Update GUI when a new brush is selected via the brush manager"""
-        self._update_brush_header(modified=False)
-        self._mark_all_settings_unmodified_in_treeview()
-        self._update_setting_ui(expanders=True)
-        self._update_metadata_ui()
-
-    def _update_brush_header(self, modified=False):
-        """Updates the header strip with the current brush's icon and name"""
-        mb = None
-        if self.app:
-            mb = self.app.brushmanager.selected_brush
-        # Brush name label
-        if mb:
-            if mb.name:
-                name = mb.name.replace("_", " ")
-            else:
-                name = C_(
-                    "brush settings editor: header: fallback name",
-                    "(Unnamed brush)",
-                )
-        else:
-            name = "(Not running as part of MyPaint)"
-        if modified:
-            name = C_(
-                "brush settings editor: header: is-modified hint",
-                "{brush_name} [unsaved]",
-            ).format(
-                brush_name = name,
-            )
-        label = self._builder.get_object("brush_name_label")
-        label.set_text(name)
-        # Brush icon
-        image = self._builder.get_object("brush_preview_image")
-        w = image.get_allocated_width()
-        h = image.get_allocated_height()
-        if mb:
-            pixbuf = mb.preview
-        else:
-            pixbuf = None
-        if pixbuf:
-            pixbuf = pixbuf.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
-        if not pixbuf:
-            pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB,
-                                          True, 8, w, h)
-        image.set_from_pixbuf(pixbuf)
 
     ## GUI updating from the brush
 
@@ -893,6 +841,7 @@ class StampEditorWindow (SubWindow):
         """Updates UI after a diffent brush setting is chosen"""
         # Hide or show the relevant widgets in the main area
         # FIXME: use a GtkStack or a GtkNotebook for this.
+        return None
         metadata_grid = self._builder.get_object("metadata_grid")
         setting_editor_grid = self._builder.get_object("setting_editor_grid")
         if self._setting is None:
