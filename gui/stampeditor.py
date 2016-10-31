@@ -49,7 +49,7 @@ class StampStore(object):
 class StampRenderer(Gtk.CellRenderer):
     """Stamp renderer used from stamp listview"""
 
-    surface_iter = GObject.property(type=GObject.TYPE_PYOBJECT, default=None)
+    surface = GObject.property(type=GObject.TYPE_PYOBJECT, default=None)
    #id = GObject.property(type=int , default=-1)
     desc = GObject.property(type=str, default="")
 
@@ -67,13 +67,39 @@ class StampRenderer(Gtk.CellRenderer):
         """
         :param cell_area: RectangleInt class
         """
+        cr.save()
         cr.translate(cell_area.x, cell_area.y)
+        surf = self.surface
 
-        cr.rectangle(0, 0,
-                cell_area.width, cell_area.height)
-       #cr.set_source(self._store.get_surface(self.surface_iter))
-        cr.set_source_surface(self.surface_iter)
+        sw = float(surf.get_width())
+        sh = float(surf.get_height())
+        hw = float(cell_area.height) / 2.0
+        hh = float(cell_area.width) / 2.0
+        cr.translate(hw, hh)
+
+        if hh > hw:
+            base_value = float(cell_area.height)
+        else:
+            base_value = float(cell_area.width)
+
+        aspect = sw / sh
+        if aspect >= 1.0:
+            ratio = base_value / sw
+        elif aspect < 1.0:
+            ratio = base_value / sh
+
+        cr.scale(ratio, ratio)
+        sx = -sw / 2.0
+        sy = -sh / 2.0
+        cr.set_source_surface(surf, sx , sy)
+        cr.rectangle(sx, sy, sw, sh)
+
+       #cr.rectangle(0, 0,
+       #        cell_area.width, cell_area.height)
+       #
+       #cr.set_source_surface(self.surface)
         cr.fill()
+        cr.restore()
 
    #def do_get_preferred_height(self,view_widget):
    #    print('preferred!')
@@ -186,7 +212,7 @@ class StampEditorWindow (SubWindow):
         stamprender = StampRenderer(store)
        #print(dir(stamprender))
        #stamprender.set_fixed_size(-1, 80)
-        col = Gtk.TreeViewColumn(_('Stamp'), stamprender, surface_iter=0)
+        col = Gtk.TreeViewColumn(_('Stamp'), stamprender, surface=0)
         col.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
         col.set_resizable(True)
         view.append_column(col)
