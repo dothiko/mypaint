@@ -144,13 +144,17 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
         self._y[0] = self._y[1] = 0
         self._mx[0] = self._mx[1] = 0
         self._my[0] = self._my[1] = 0
+        
+    #def debug_disp(self):
+        #print("screen: sx,sy:%.2f,%.2f / ex,ey:%.2f,%.2f" % (self._x[0], self._y[0], self._x[1], self._y[1]))
+        #print("model: sx,sy:%.2f,%.2f / ex,ey:%.2f,%.2f" % (self._mx[0], self._my[0], self._mx[1], self._my[1]))
 
-
-    def _modelnized(self, tdw):
+    def _refresh_model_coords(self, tdw):
         for i in xrange(2):
             self._mx[i], self._my[i] = tdw.display_to_model(
                     self._x[i], self._y[i])
-
+        self._justify_coords()
+            
     def _get_min_max_pos(self, tdw, margin=2):
         return gui.ui_utils.get_outmost_area(tdw,
                 self._mx[0], self._my[0], self._mx[1], self._my[1], 
@@ -160,6 +164,12 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
         return gui.ui_utils.get_outmost_area(None,
                 self._mx[0], self._my[0], self._mx[1], self._my[1], 
                 margin=margin)
+                
+    def _justify_coords(self):
+        if self._mx[0] > self._mx[1]:
+            self._mx[0] , self._mx[1] = self._mx[1], self._mx[0]
+        if self._my[0] > self._my[1]:
+            self._my[0] , self._my[1] = self._my[1], self._my[0]
 
 
     ## InteractionMode/DragMode implementation
@@ -257,14 +267,14 @@ class SelectionMode(gui.mode.ScrollableModeMixin,
     def start(self, tdw, x, y):
         self._x[0] = self._x[1] = x
         self._y[0] = self._y[1] = y
-        self._modelnized(tdw)
+        self._refresh_model_coords(tdw)
         
 
     def drag(self, tdw, x, y):
         self._x[1] = x
         self._y[1] = y
 
-        self._modelnized(tdw)
+        self._refresh_model_coords(tdw)
 
     def get_display_point(self, tdw, i):
         xi, yi = self.RECTANGLE_INDEX[i]

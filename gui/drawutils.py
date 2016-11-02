@@ -129,10 +129,10 @@ def spline_iter_2(tuples,selected,offset,double_first=True, double_last=True):
     cint = [None, None, None, None]
     if double_first:
         cint[0:3] = cint[1:4]
-        cint[3] = array(tuples[0])
+        cint[3] = np.array(tuples[0])
     for idx,ctrlpt in enumerate(tuples):
         cint[0:3] = cint[1:4]
-        cint[3] = array(ctrlpt)
+        cint[3] = np.array(ctrlpt)
         if idx in selected:
             cint[3][0] += offset[0]
             cint[3][1] += offset[1]
@@ -140,7 +140,7 @@ def spline_iter_2(tuples,selected,offset,double_first=True, double_last=True):
             yield cint
     if double_last:
         cint[0:3] = cint[1:4]
-        cint[3] = array(tuples[-1])
+        cint[3] = np.array(tuples[-1])
         yield cint
 
 
