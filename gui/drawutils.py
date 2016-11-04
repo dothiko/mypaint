@@ -110,7 +110,7 @@ def spline_iter(tuples, double_first=True, double_last=True):
         cint[3] = np.array(tuples[-1])
         yield cint
 
-def spline_iter_2(tuples,selected,offset,double_first=True, double_last=True):
+def spline_iter_2(tuples, selected, offset, double_first=True, double_last=True):
     """Converts an list of control point tuples to interpolatable arrays
 
     :param list tuples: Sequence of tuples of floats
@@ -143,7 +143,83 @@ def spline_iter_2(tuples,selected,offset,double_first=True, double_last=True):
         cint[3] = np.array(tuples[-1])
         yield cint
 
+def spline_iter_3(tuples, basept, offset, radius, factor, 
+                  double_first=True, double_last=True):
+    """Converts an list of control point tuples to interpolatable arrays
 
+
+    :param list tuples: Sequence of tuples of floats
+    :param object basept: Currently editing node.
+    :param float radius: radius of change affected area, in model coordinate.
+    :param list offset: An Offset for selected points,a tuple of (x,y).
+    :param bool double_first: Repeat 1st point, putting it in the result
+    :param bool double_last: Repeat last point, putting it in the result
+    :returns: Iterator producing (p-1, p0, p1, p2)
+
+    The resulting sequence of 4-tuples is intended to be fed into
+    spline_4p().  The start and end points are therefore normally
+    doubled, producing a curve that passes through them, along a vector
+    aimed at the second or penultimate point respectively.
+
+    """
+    cint = [None, None, None, None]
+    offset_len = math.hypot(offset[0], offset[1])
+    if offset_len > 0.0:
+        offset_vec = (offset_len,
+                        offset[0] / offset_len,
+                        offset[1] / offset_len)
+    else:
+        offset_vec = None
+
+    if double_first:
+        cint[0:3] = cint[1:4]
+        cint[3] = np.array(tuples[0])
+    for ctrlpt in tuples:
+        cint[0:3] = cint[1:4]
+        cint[3] = np.array(ctrlpt)   
+        if basept:
+            new_coord = calc_ranged_offset(basept, ctrlpt,
+                            radius, factor,
+                            offset_vec)
+            if new_coord:
+                cint[3][0] = new_coord[0]
+                cint[3][1] = new_coord[1]
+        if not any((a is None) for a in cint):
+            yield cint
+    if double_last:
+        cint[0:3] = cint[1:4]
+        cint[3] = np.array(tuples[-1])
+        yield cint
+        
+def calc_ranged_offset(basept, curpt, affect_radius, affect_factor, offset_vec):
+    """ Calculate offset value with considering affecting radius and factor.
+    
+    :param tdw: TileDrawWidget, to get screen coordinate.
+    :param basept: base control point
+    :param curpt: current control point
+    :param affect_radius: editing affect range.
+    :param affect_factor: editing factor.
+    :param offset_vec: A tuple of offset vector, 
+        which is (length, normalized_x, normalized_y).
+        
+    :rtype tuple: the new coordinate of curpt, when it is inside affect_radius.
+                  otherwise, return None.
+    """ 
+    
+    if basept and offset_vec:
+        dist = math.hypot(curpt.x - basept.x, curpt.y - basept.y)
+        if affect_radius > 0.0 and dist <= affect_radius:
+            offset_len, nx, ny = offset_vec
+            nd = dist / affect_radius
+            # We need reversed value as length factor, so substruct from 1.0.
+            if affect_factor < 0.0:
+                factor = (1.0 - (nd ** (1.0 / math.gamma(affect_factor+1.000001))))
+            else:
+                factor = (1.0 - (nd ** math.gamma(affect_factor+0.000001)))
+            dist = offset_len * factor
+            return (curpt.x + nx * dist, curpt.y + ny * dist)
+    return None
+                
 def _variable_pressure_scribble(w, h, tmult):
     points = _BRUSH_PREVIEW_POINTS
     px, py, press, xtilt, ytilt = points[0]

@@ -298,6 +298,20 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         #  and Gdk.ScrollDirection.SMOOTH might happen at same time.
         #  to reject such event, this attribute needed.
         self._prev_scroll_time = None
+        
+        #+ affecting range related.
+        self._range_radius = None # Invalid values, set later inside property.
+        self._range_factor = None
+       #self.set_range_radius(self.doc.app.preferences.get(
+       #                            "inktool.adjust_range_radius", 0))
+       #self.set_range_factor(self.doc.app.preferences.get(
+       #                            "inktool.adjust_range_factor", 0))
+    
+    @property
+    def range_factor(self):
+        if self._range_factor == None:
+            self._range_factor = self.doc.app.preferences.get(
+                                    "inktool.adjust_range_factor", 0)
 
 
     def _reset_nodes(self):
@@ -737,10 +751,30 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """Redraws a specific control node on all known view TDWs"""
         node = self.nodes[i]
         dx,dy = self.drag_offset.get_model_offset()
+        if self.current_node_index != None:
+            basept = self.nodes[self.current_node_index]
+        else:
+            basept = None
+        offset_len = math.hypot(dx, dy)
+        if offset_len > 0.0:
+            offset_vec = (offset_len,
+                            dx / offset_len,
+                            dy / offset_len)
+        else:
+            offset_vec = None
+
         for tdw in self._overlays:
-            if i in self.selected_nodes:
-                x, y = tdw.model_to_display(
-                        node.x + dx, node.y + dy)
+           #if i in self.selected_nodes:
+           #    x, y = tdw.model_to_display(
+           #            node.x + dx, node.y + dy)
+           #else:
+           #    x, y = tdw.model_to_display(node.x, node.y)
+            offsets = gui.drawutils.calc_ranged_offset(basept, node,
+                    self.range_radius, self.range_factor,
+                    offset_vec)
+
+            if offsets:
+                x, y = tdw.model_to_display(offsets[0], offsets[1])
             else:
                 x, y = tdw.model_to_display(node.x, node.y)
             x = math.floor(x)
@@ -763,6 +797,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def _queue_redraw_curve(self):
         """Redraws the entire curve on all known view TDWs"""
         self._stop_task_queue_runner(complete=False)
+        if self.current_node_index != None:
+            base_node = self.nodes[self.current_node_index]
+        else:
+            base_node = None
+        model_offset = self.drag_offset.get_model_offset()
+        
         for tdw in self._overlays:
             model = tdw.doc
             if len(self.nodes) < 2:
@@ -774,11 +814,26 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 abrupt=True,
             )
             interp_state = {"t_abs": self.nodes[0].time}
-            dx, dy = self.drag_offset.get_model_offset()
-            for p_1, p0, p1, p2 in gui.drawutils.spline_iter_2(
-                        self.nodes,
-                        self.selected_nodes,
-                        (dx,dy)):
+            
+            #for p_1, p0, p1, p2 in gui.drawutils.spline_iter_2(
+                        #self.nodes,
+                        #self.selected_nodes,
+                        #(dx,dy)):
+                        
+            if base_node:
+                bsx, bsy = tdw.model_to_display(base_node.x, base_node.y)
+                tx, ty = tdw.display_to_model(bsx + self._range_radius, bsy)
+                model_radius = tx - base_node.x 
+            else:
+                model_radius = 0.0
+            
+            for p_1, p0, p1, p2 in gui.drawutils.spline_iter_3(
+                                    self.nodes,
+                                    base_node,
+                                    model_offset,
+                                    model_radius,
+                                    self._range_factor):
+                        
                 self._queue_task(
                     self._draw_curve_segment,
                     model,
@@ -952,8 +1007,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 return super(InkingMode, self).drag_stop_cb(tdw)
 
             node = self._last_event_node
-            # TODO: maybe rewrite the last node here so it's the right
-            # TODO: distance from the end?
             if self.nodes[-1] is not node:
                 # When too close against last captured node,
                 # delete it.
@@ -987,12 +1040,16 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
                 self._queue_draw_selected_nodes() # to ensure erase them
 
-                dx, dy = self.drag_offset.get_model_offset()
+               #dx, dy = self.drag_offset.get_model_offset()
+               #
+               #for idx in self.selected_nodes:
+               #    cn = self.nodes[idx]
+               #    self.nodes[idx] = cn._replace(x=cn.x + dx,
+               #            y=cn.y + dy)
 
-                for idx in self.selected_nodes:
-                    cn = self.nodes[idx]
-                    self.nodes[idx] = cn._replace(x=cn.x + dx,
-                            y=cn.y + dy)
+                for i, cn, x, y in self.enum_nodes_coord(tdw, convert_to_display=False):
+                    if cn.x != x or cn.y != y:
+                        self.nodes[i] = cn._replace(x=x, y=y)
 
                 self.drag_offset.reset()
 
@@ -1663,6 +1720,69 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         if (self.phase in (_Phase.ADJUST ,_Phase.ADJUST_PRESSURE)):
             self._start_new_capture_phase(rollback=False)
             assert self.phase == _Phase.CAPTURE
+            
+    ## Editing range related
+    def set_range_radius(self, radius):
+        self._range_radius = radius
+    
+    def set_range_factor(self, factor):
+        self._range_factor = factor
+        
+    @property
+    def range_radius(self):
+        if self._range_radius == None:
+            self._range_radius = self.doc.app.preferences.get(
+                                    "inktool.adjust_range_radius", 0)
+        return self._range_radius
+    
+    @property
+    def range_factor(self):
+        if self._range_factor == None:
+            self._range_factor = self.doc.app.preferences.get(
+                                    "inktool.adjust_range_factor", 0)
+        return self._range_factor
+
+    def enum_nodes_coord(self, tdw, convert_to_display=True):
+        """ Enumerate nodes screen coordinate with offsets.
+        """
+        dx,dy = self.drag_offset.get_model_offset()
+        if self.current_node_index != None:
+            basept = self.nodes[self.current_node_index]
+            bsx, bsy = tdw.model_to_display(basept.x, basept.y)
+            tx, ty = tdw.display_to_model(bsx + self.range_radius, bsy)
+            model_radius = tx - basept.x 
+        else:
+            basept = None
+            model_radius = 0
+
+        offset_len = math.hypot(dx, dy)
+        if offset_len > 0.0:
+            offset_vec = (offset_len,
+                            dx / offset_len,
+                            dy / offset_len)
+        else:
+            offset_vec = None
+
+        for i in xrange(len(self.nodes)):
+            node = self.nodes[i]
+
+            offsets = gui.drawutils.calc_ranged_offset(basept, node,
+                    model_radius, self.range_factor,
+                    offset_vec)
+
+            if convert_to_display:
+                if offsets:
+                    x, y = tdw.model_to_display(offsets[0], offsets[1])
+                else:
+                    x, y = tdw.model_to_display(node.x, node.y)
+            else:
+                if offsets:
+                    x, y = offsets
+                else:
+                    x, y = node.x, node.y
+
+            yield (i, node, x, y)
+
 
 
 class Overlay (gui.overlays.Overlay):
@@ -1786,8 +1906,18 @@ class Overlay (gui.overlays.Overlay):
         mode = self._inkmode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
-        for i, node in enumerate(mode.nodes):
-            x, y = self._tdw.model_to_display(node.x, node.y)
+       #for i, node in enumerate(mode.nodes):
+       #    x, y = self._tdw.model_to_display(node.x, node.y)
+       #    node_on_screen = (
+       #        x > alloc.x - radius*2 and
+       #        y > alloc.y - radius*2 and
+       #        x < alloc.x + alloc.width + radius*2 and
+       #        y < alloc.y + alloc.height + radius*2
+       #    )
+       #    if node_on_screen:
+       #        yield (i, node, x, y)
+        for i, node, x, y in mode.enum_nodes_coord(self._tdw):
+           #x, y = self._tdw.model_to_display(node.x, node.y)
             node_on_screen = (
                 x > alloc.x - radius*2 and
                 y > alloc.y - radius*2 and
@@ -1826,10 +1956,10 @@ class Overlay (gui.overlays.Overlay):
                         show_node = True
                         color = gui.style.PRELIT_ITEM_COLOR
 
-                if (color != gui.style.EDITABLE_ITEM_COLOR and
-                        mode.phase == _Phase.ADJUST):
-                    x += dx
-                    y += dy
+               #if (color != gui.style.EDITABLE_ITEM_COLOR and
+               #        mode.phase == _Phase.ADJUST):
+               #    x += dx
+               #    y += dy
 
             if show_node:
                 gui.drawutils.render_round_floating_color_chip(
@@ -2260,10 +2390,20 @@ class OptionsPresenter (object):
         self._insert_button.set_sensitive(False)
         self._delete_button = builder.get_object("delete_point_button")
         self._delete_button.set_sensitive(False)
-        self._period_adj = builder.get_object("period_adj")
-        self._period_scale = builder.get_object("period_scale")
-        self._period_adj.set_value(self._app.preferences.get(
-            "inktool.capture_period_factor", 1))
+        #self._period_adj = builder.get_object("period_adj")
+        #self._period_scale = builder.get_object("period_scale")
+        #self._period_adj.set_value(self._app.preferences.get(
+            #"inktool.capture_period_factor", 1))
+        self._range_radius_adj = builder.get_object("range_radius_adj")
+        self._range_radius_scale = builder.get_object("range_radius_scale")
+        self._range_radius_adj.set_value(self._app.preferences.get(
+            "inktool.adjust_range_radius", 0))
+            
+        self._range_factor_adj = builder.get_object("range_factor_adj")
+        self._range_factor_scale = builder.get_object("range_factor_scale")
+        self._range_factor_adj.set_value(self._app.preferences.get(
+            "inktool.adjust_range_factor", 0))
+            
         self._hide_nodes_check = builder.get_object("hide_nodes_checkbutton")
 
         apply_btn = builder.get_object("apply_variation_button")
@@ -2397,9 +2537,12 @@ class OptionsPresenter (object):
                 self._point_values_grid.set_sensitive(False)
             self._insert_button.set_sensitive(inkmode.can_insert_node(cn_idx))
             self._delete_button.set_sensitive(inkmode.can_delete_node(cn_idx))
-            self._period_adj.set_value(self._app.preferences.get(
-                "inktool.capture_period_factor", 1))
-
+            #self._period_adj.set_value(self._app.preferences.get(
+                #"inktool.capture_period_factor", 1))
+            self._range_radius_adj.set_value(self._app.preferences.get(
+                "inktool.adjust_range_radius", 0))
+            self._range_factor_adj.set_value(self._app.preferences.get(
+                "inktool.adjust_range_factor", 0))            
             self._apply_variation_button.set_sensitive(len(inkmode.nodes) > 2)
         finally:
             self._updating_ui = False
@@ -2454,15 +2597,28 @@ class OptionsPresenter (object):
         if len(inkmode.nodes) > 2:
             inkmode.cull_nodes()
 
-    def _period_adj_value_changed_cb(self, adj):
+    def _range_radius_value_changed_cb(self, adj):
         if self._updating_ui:
             return
-        self._app.preferences['inktool.capture_period_factor'] = adj.get_value()
-        InkingMode.CAPTURE_SETTING.set_factor(adj.get_value())
+        self._app.preferences['inktool.adjust_range_radius'] = adj.get_value()
+        inkmode, node_idx = self.target
+        if inkmode:
+            inkmode.set_range_radius(adj.get_value())
+        
+    def _range_factor_value_changed_cb(self, adj):
+        if self._updating_ui:
+            return
+        self._app.preferences['inktool.adjust_range_factor'] = adj.get_value()
+        inkmode, node_idx = self.target
+        if inkmode:
+            inkmode.set_range_factor(adj.get_value())
 
-    def _period_scale_format_value_cb(self, scale, value):
+    def _range_radius_scale_format_value_cb(self, scale, value):
         return "%.1fx" % value
 
+    def _range_factor_scale_format_value_cb(self, scale, value):
+        return "%.1fx" % value
+        
     def _average_angle_clicked_cb(self,button):
         inkmode, node_idx = self.target
         if inkmode:
