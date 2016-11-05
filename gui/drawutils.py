@@ -212,13 +212,12 @@ def calc_ranged_offset(basept, curpt, affect_radius, affect_factor, offset_vec):
             offset_len, nx, ny = offset_vec
             nd = dist / affect_radius
             # We need reversed value as length factor, so substruct from 1.0.
-            if affect_factor < 0.0:
-                factor = (1.0 - (nd ** (1.0 / math.gamma(affect_factor+1.000001))))
-            else:
-                factor = (1.0 - (nd ** math.gamma(affect_factor+0.000001)))
+            factor = (1.0 - (nd ** affect_factor))
             dist = offset_len * factor
             return (curpt.x + nx * dist, curpt.y + ny * dist)
-    return None
+
+    # Fallthrough:
+    return (curpt.x,  curpt.y)
                 
 def _variable_pressure_scribble(w, h, tmult):
     points = _BRUSH_PREVIEW_POINTS
