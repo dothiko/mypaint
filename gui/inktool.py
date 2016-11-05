@@ -2614,7 +2614,7 @@ class OptionsPresenter (object):
             inkmode.set_range_factor(adj.get_value())
 
     def _range_radius_scale_format_value_cb(self, scale, value):
-        return "%.1fx" % value
+        return "%dpx" % value
 
     def _range_factor_scale_format_value_cb(self, scale, value):
         return "%.1fx" % value
