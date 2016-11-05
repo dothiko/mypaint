@@ -418,7 +418,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         # standardizes looped layer data, that code should be moved
         # here.
         
-        png_basename = self.filename_for_project
+        png_basename = self.autosave_uuid + ".png"
         png_relpath = os.path.join("data", png_basename)
         png_path = os.path.join(oradir, png_relpath)
         png_bbox = self._surface.looped and bbox or tuple(self.get_bbox())

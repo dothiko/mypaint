@@ -24,7 +24,8 @@ class Projectsaveable(lib.autosave.Autosaveable):
 
     @property
     def autosave_dirty(self):
-        return super(Projectsaveable, self).autosave_dirty()
+        # To call superclass property
+        return lib.autosave.Autosaveable.autosave_dirty.fget(self)
 
     @autosave_dirty.setter
     def autosave_dirty(self, value):
