@@ -767,8 +767,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
            #    else:
            #        offsets = (node.x, node.y)
            #else:
+            model_radius = gui.ui_utils.display_to_model_length(tdw, 
+                    self.range_radius)
             offsets = gui.drawutils.calc_ranged_offset(basept, node,
-                    self.range_radius, self.range_factor,
+                    model_radius, self.range_factor,
                     offset_vec)
 
             x, y = tdw.model_to_display(*offsets)
@@ -828,9 +830,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                         #self.selected_nodes,
                         #(dx,dy)):
                         
-            if model_radius is None:
-                model_radius, junk = tdw.display_to_model(self.range_radius, 0)
-                model_radius = abs(model_radius)
+            model_radius = gui.ui_utils.display_to_model_length(tdw, self.range_radius)
             
             for p_1, p0, p1, p2 in gui.drawutils.spline_iter_3(
                                     self.nodes,
@@ -1762,8 +1762,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """
         if self.current_node_index != None:
             basept = self.nodes[self.current_node_index]
-            model_radius, junk = tdw.display_to_model(self.range_radius, 0)
-            model_radius = abs(model_radius)
+            model_radius = gui.ui_utils.display_to_model_length(tdw, self.range_radius)
         else:
             basept = None
             model_radius = 0

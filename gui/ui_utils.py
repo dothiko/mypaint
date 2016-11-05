@@ -162,6 +162,13 @@ def force_redraw_overlay(area=None):
         else:
             tdw.queue_draw()
 
+
+def display_to_model_length(tdw, disp_length):
+    """ Convert length in display to model coordinate. """
+    bx, by = tdw.display_to_model(0, 0)
+    lx, junk = tdw.display_to_model(disp_length, 0)
+    return abs(lx) - abs(bx)
+
 ## Decorators
 
 def dashedline_wrapper(callable):
