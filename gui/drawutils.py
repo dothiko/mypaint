@@ -143,7 +143,7 @@ def spline_iter_2(tuples, selected, offset, double_first=True, double_last=True)
         cint[3] = np.array(tuples[-1])
         yield cint
 
-def spline_iter_3(tuples, basept, offset, radius, factor, 
+def spline_iter_3(tuples, basept, radius, factor, offset_vec,
                   double_first=True, double_last=True):
     """Converts an list of control point tuples to interpolatable arrays
 
@@ -163,13 +163,6 @@ def spline_iter_3(tuples, basept, offset, radius, factor,
 
     """
     cint = [None, None, None, None]
-    offset_len = math.hypot(offset[0], offset[1])
-    if offset_len > 0.0:
-        offset_vec = (offset_len,
-                        offset[0] / offset_len,
-                        offset[1] / offset_len)
-    else:
-        offset_vec = None
 
     if double_first:
         cint[0:3] = cint[1:4]
@@ -202,18 +195,21 @@ def calc_ranged_offset(basept, curpt, affect_radius, affect_factor, offset_vec):
     :param offset_vec: A tuple of offset vector, 
         which is (length, normalized_x, normalized_y).
         
-    :rtype tuple: the new coordinate of curpt, when it is inside affect_radius.
-                  otherwise, return None.
+    :returns: The editing affected coordinate of curpt, when it is inside affect_radius.
+    :rtype tuple: 
     """ 
     
     if basept and offset_vec:
         dist = math.hypot(curpt.x - basept.x, curpt.y - basept.y)
-        if affect_radius > 0.0 and dist <= affect_radius:
+        if dist <= affect_radius:
             offset_len, nx, ny = offset_vec
-            nd = dist / affect_radius
-            # We need reversed value as length factor, so substruct from 1.0.
-            factor = (1.0 - (nd ** affect_factor))
-            dist = offset_len * factor
+            if affect_radius > 0.0:
+                nd = dist / affect_radius
+                # We need reversed value as length factor, so substruct from 1.0.
+                factor = (1.0 - (nd ** affect_factor))
+                dist = offset_len * factor
+            else:
+                dist = offset_len
             return (curpt.x + nx * dist, curpt.y + ny * dist)
 
     # Fallthrough:

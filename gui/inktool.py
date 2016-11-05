@@ -759,11 +759,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             offset_vec = self._generate_offset_vector()
 
         for tdw in self._overlays:
-           #if i in self.selected_nodes:
-           #    x, y = tdw.model_to_display(
-           #            node.x + dx, node.y + dy)
+           #if len(self.selected_nodes) > 1:
+           #    if i in self.selected_nodes:
+           #        offsets = gui.drawutils.calc_ranged_offset(basept, node,
+           #                self.range_radius, self.range_factor,
+           #                offset_vec)
+           #    else:
+           #        offsets = (node.x, node.y)
            #else:
-           #    x, y = tdw.model_to_display(node.x, node.y)
             offsets = gui.drawutils.calc_ranged_offset(basept, node,
                     self.range_radius, self.range_factor,
                     offset_vec)
@@ -805,7 +808,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             base_node = self.nodes[self.current_node_index]
         else:
             base_node = None
-        model_offset = self.drag_offset.get_model_offset()
+        offset_vec = self._generate_offset_vector()
+        model_radius = None # Initial value, to be rewritten at first loop.
         
         for tdw in self._overlays:
             model = tdw.doc
@@ -824,20 +828,16 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                         #self.selected_nodes,
                         #(dx,dy)):
                         
-            if base_node:
-                bsx, bsy = tdw.model_to_display(base_node.x, base_node.y)
-                tx, ty = tdw.display_to_model(bsx + self._range_radius, bsy)
-                model_radius = tx - base_node.x 
-            else:
-                model_radius = 0.0
+            if model_radius is None:
+                model_radius, junk = tdw.display_to_model(self.range_radius, 0)
+                model_radius = abs(model_radius)
             
             for p_1, p0, p1, p2 in gui.drawutils.spline_iter_3(
                                     self.nodes,
                                     base_node,
-                                    model_offset,
                                     model_radius,
-                                    self.range_factor):
-                        
+                                    self.range_factor,
+                                    offset_vec):
                 self._queue_task(
                     self._draw_curve_segment,
                     model,
@@ -1010,20 +1010,20 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if not self.nodes or self._last_event_node == None:
                 return super(InkingMode, self).drag_stop_cb(tdw)
 
-           #node = self._last_event_node
-           #if self.nodes[-1] is not node:
-           #    # When too close against last captured node,
-           #    # delete it.
-           #    d = math.hypot(self.nodes[-1].x - node.x,
-           #            self.nodes[-1].y - node.y)
-           #    mid_d = tdw.display_to_model(
-           #            self.CAPTURE_SETTING.internode_distance_middle, 0)[0]
-           #    # 'too close' means less than internode_distance_middle / 5
-           #    if d < mid_d / 5.0:
-           #        self._queue_draw_node(len(self.nodes)-1) # To avoid glitch
-           #        del self.nodes[-1]
-           #
-           #    self.nodes.append(node)
+            node = self._last_event_node
+            if self.nodes[-1] is not node:
+                # When too close against last captured node,
+                # delete it.
+                d = math.hypot(self.nodes[-1].x - node.x,
+                        self.nodes[-1].y - node.y)
+                mid_d = tdw.display_to_model(
+                        self.CAPTURE_SETTING.internode_distance_middle, 0)[0]
+                # 'too close' means less than internode_distance_middle / 5
+                if d < mid_d / 5.0:
+                    self._queue_draw_node(len(self.nodes)-1) # To avoid glitch
+                    del self.nodes[-1]
+            
+                self.nodes.append(node)
 
 
             self._reset_capture_data()
@@ -1084,10 +1084,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 and self.target_node_index != None):
 
             if self._prev_scroll_time != event.time:
-                if len(self.selected_nodes) == 0:
-                    targets = (self.target_node_index,)
-                else:
-                    targets = self.selected_nodes
+               #if len(self.selected_nodes) == 0:
+               #    targets = (self.target_node_index,)
+               #else:
+               #    targets = self.selected_nodes
+                targets = (self.target_node_index,)
 
                 for idx in targets:
                     node = self.nodes[idx]
@@ -1100,7 +1101,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                         self.nodes[idx]=node._replace(pressure=new_pressure)
 
                     if idx == self.target_node_index:
-                        self.options_presenter.target = (self, self.target_node_index)
+                        self.options_presenter.target = (self, idx)
 
                 self._queue_redraw_curve()
 
@@ -1296,18 +1297,24 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             # by user...?
             # Also it might be change at HiDPI system
                 
-            if (self.target_node_index != None and 
-                    not self.target_node_index in self.selected_nodes):
+           #if (self.target_node_index != None and 
+           #        not self.target_node_index in self.selected_nodes):
+           #    cn = self.nodes[self.target_node_index]
+           #    self.nodes[self.target_node_index] = \
+           #            cn._replace(pressure = lib.helpers.clamp(
+           #                cn.pressure + diff,0.0, 1.0))
+           #else:
+           #    for idx in self.selected_nodes:
+           #        cn = self.nodes[idx]
+           #        self.nodes[idx] = \
+           #                cn._replace(pressure = lib.helpers.clamp(
+           #                    cn.pressure + diff,0.0, 1.0))
+
+            if (self.target_node_index != None):
                 cn = self.nodes[self.target_node_index]
                 self.nodes[self.target_node_index] = \
                         cn._replace(pressure = lib.helpers.clamp(
                             cn.pressure + diff,0.0, 1.0))
-            else:
-                for idx in self.selected_nodes:
-                    cn = self.nodes[idx]
-                    self.nodes[idx] = \
-                            cn._replace(pressure = lib.helpers.clamp(
-                                cn.pressure + diff,0.0, 1.0))
 
         self._queue_redraw_curve()
 
@@ -1753,23 +1760,15 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def enum_nodes_coord(self, tdw, convert_to_display=True):
         """ Enumerate nodes screen coordinate with offsets.
         """
-        dx,dy = self.drag_offset.get_model_offset()
         if self.current_node_index != None:
             basept = self.nodes[self.current_node_index]
-            bsx, bsy = tdw.model_to_display(basept.x, basept.y)
-            tx, ty = tdw.display_to_model(bsx + self.range_radius, bsy)
-            model_radius = tx - basept.x 
+            model_radius, junk = tdw.display_to_model(self.range_radius, 0)
+            model_radius = abs(model_radius)
         else:
             basept = None
             model_radius = 0
 
-        offset_len = math.hypot(dx, dy)
-        if offset_len > 0.0:
-            offset_vec = (offset_len,
-                            dx / offset_len,
-                            dy / offset_len)
-        else:
-            offset_vec = None
+        offset_vec = self._generate_offset_vector()
 
         for i in xrange(len(self.nodes)):
             node = self.nodes[i]
@@ -1784,7 +1783,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 x, y = offsets
 
             yield (i, node, x, y)
-
 
 
 class Overlay (gui.overlays.Overlay):
