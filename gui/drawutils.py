@@ -143,13 +143,14 @@ def spline_iter_2(tuples, selected, offset, double_first=True, double_last=True)
         cint[3] = np.array(tuples[-1])
         yield cint
 
-def spline_iter_3(tuples, basept, radius, factor, offset_vec,
+def spline_iter_3(tuples, basept, selected, radius, factor, offset_vec,
                   double_first=True, double_last=True):
     """Converts an list of control point tuples to interpolatable arrays
 
 
     :param list tuples: Sequence of tuples of floats
     :param object basept: Currently editing node.
+    :param list selected: Indexes of selected nodes.
     :param float radius: radius of change affected area, in model coordinate.
     :param list offset: An Offset for selected points,a tuple of (x,y).
     :param bool double_first: Repeat 1st point, putting it in the result
@@ -167,16 +168,17 @@ def spline_iter_3(tuples, basept, radius, factor, offset_vec,
     if double_first:
         cint[0:3] = cint[1:4]
         cint[3] = np.array(tuples[0])
-    for ctrlpt in tuples:
+    for idx, ctrlpt in enumerate(tuples):
         cint[0:3] = cint[1:4]
         cint[3] = np.array(ctrlpt)   
         if basept:
-            new_coord = calc_ranged_offset(basept, ctrlpt,
-                            radius, factor,
-                            offset_vec)
-            if new_coord:
-                cint[3][0] = new_coord[0]
-                cint[3][1] = new_coord[1]
+            if (len(selected) <= 1 or idx in selected):
+                new_coord = calc_ranged_offset(basept, ctrlpt,
+                                radius, factor,
+                                offset_vec)
+                if new_coord:
+                    cint[3][0] = new_coord[0]
+                    cint[3][1] = new_coord[1]
         if not any((a is None) for a in cint):
             yield cint
     if double_last:

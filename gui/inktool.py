@@ -749,58 +749,78 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
 
 
-    def _queue_draw_ink_node(self, i, offset_vec):
+    def _queue_draw_ink_node(self, tdw, i, base_node, model_radius, offset_vec):
         """Redraws a specific control node on all known view TDWs
         :param node_ctx: node queuing context information.
         """
-        node = self.nodes[i]
+       #node = self.nodes[i]
+
+
+           #if len(self.selected_nodes) > 1:
+           #    if i in self.selected_nodes:
+           #        pos = gui.drawutils.calc_ranged_offset(basept, node,
+           #                self.range_radius, self.range_factor,
+           #                offset_vec)
+           #    else:
+           #        pos = (node.x, node.y)
+           #else:
+       #pos = gui.drawutils.calc_ranged_offset(base_node, node,
+       #        model_radius, self.range_factor,
+       #        offset_vec)
+
+        pos = self._get_node_position(i, base_node, model_radius, offset_vec)
+
+        x, y = tdw.model_to_display(*pos)
+        x = math.floor(x)
+        y = math.floor(y)
+        size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
+        tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
+
+    def _queue_draw_node(self, idx):
+        """ For compatibility """
         if self.current_node_index != None:
             basept = self.nodes[self.current_node_index]
         else:
             basept = None
 
-
         for tdw in self._overlays:
-           #if len(self.selected_nodes) > 1:
-           #    if i in self.selected_nodes:
-           #        offsets = gui.drawutils.calc_ranged_offset(basept, node,
-           #                self.range_radius, self.range_factor,
-           #                offset_vec)
-           #    else:
-           #        offsets = (node.x, node.y)
-           #else:
             model_radius = gui.ui_utils.display_to_model_distance(tdw, 
                     self.range_radius)
-            offsets = gui.drawutils.calc_ranged_offset(basept, node,
-                    model_radius, self.range_factor,
-                    offset_vec)
-
-            x, y = tdw.model_to_display(*offsets)
-            x = math.floor(x)
-            y = math.floor(y)
-            size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
-            tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
-
-    def _queue_draw_node(self, idx):
-        """ For compatibility """
-        self._queue_draw_ink_node(idx, 
-                self._generate_offset_vector())
+            self._queue_draw_ink_node(tdw, idx, basept,
+                    model_radius,
+                    self._generate_offset_vector())
 
     def _queue_draw_selected_nodes(self):
         """ Override mixin """
+        if self.current_node_index != None:
+            basept = self.nodes[self.current_node_index]
+        else:
+            basept = None
         offset_vec = self._generate_offset_vector()
-        for i in self.selected_nodes:
-            self._queue_draw_ink_node(i, offset_vec)
+
+        for tdw in self._overlays:
+            model_radius = gui.ui_utils.display_to_model_distance(tdw, 
+                    self.range_radius)
+            for i in self.selected_nodes:
+                self._queue_draw_ink_node(tdw, i, basept, model_radius, offset_vec)
 
     def _queue_redraw_all_nodes(self):
         """ Override mixin :
         Redraws all nodes on all known view TDWs"""
+        if self.current_node_index != None:
+            basept = self.nodes[self.current_node_index]
+        else:
+            basept = None
         offset_vec = self._generate_offset_vector()
-        for i in xrange(len(self.nodes)):
-            self._queue_draw_ink_node(i, offset_vec)
+
+        for tdw in self._overlays:
+            model_radius = gui.ui_utils.display_to_model_distance(tdw, 
+                    self.range_radius)
+            for i in xrange(len(self.nodes)):
+                self._queue_draw_ink_node(tdw, i, basept, model_radius, offset_vec)
 
     def _generate_offset_vector(self):
-        """ Generates node-moving offset vector.
+        """ Utility method, Generates node-moving offset vector.
         """ 
         dx,dy = self.drag_offset.get_model_offset()
         offset_len = math.hypot(dx, dy)
@@ -808,6 +828,23 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             return (offset_len,
                     dx / offset_len,
                     dy / offset_len)
+
+    def _get_node_position(self, idx, base_node, model_radius, offset_vec):
+        """ Utility method, For unifying all node-editing codes. 
+        """
+        node = self.nodes[idx]
+        if len(self.selected_nodes) > 1:
+            if idx in self.selected_nodes:
+                pos = gui.drawutils.calc_ranged_offset(base_node, node,
+                        model_radius, self.range_factor,
+                        offset_vec)
+            else:
+                pos = (node.x, node.y)
+        else:
+            pos = gui.drawutils.calc_ranged_offset(base_node, node,
+                    model_radius, self.range_factor,
+                    offset_vec)
+        return pos
 
 
 
@@ -834,16 +871,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             )
             interp_state = {"t_abs": self.nodes[0].time}
             
-            #for p_1, p0, p1, p2 in gui.drawutils.spline_iter_2(
-                        #self.nodes,
-                        #self.selected_nodes,
-                        #(dx,dy)):
-                        
             model_radius = gui.ui_utils.display_to_model_distance(tdw, self.range_radius)
             
             for p_1, p0, p1, p2 in gui.drawutils.spline_iter_3(
                                     self.nodes,
                                     base_node,
+                                    self.selected_nodes,
                                     model_radius,
                                     self.range_factor,
                                     offset_vec):
@@ -1060,7 +1093,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                #    self.nodes[idx] = cn._replace(x=cn.x + dx,
                #            y=cn.y + dy)
 
-                for i, cn, x, y in self.nodes_coord_iter(tdw, convert_to_display=False):
+                for i, cn, x, y in self.nodes_position_iter(tdw, convert_to_display=False):
                     if cn.x != x or cn.y != y:
                         self.nodes[i] = cn._replace(x=x, y=y)
 
@@ -1766,30 +1799,27 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                                     "inktool.adjust_range_factor", 0))
         return self._range_factor
 
-    def nodes_coord_iter(self, tdw, convert_to_display=True):
+    def nodes_position_iter(self, tdw, convert_to_display=True):
         """ Enumerate nodes screen coordinate with offsets.
         """
         if self.current_node_index != None:
-            basept = self.nodes[self.current_node_index]
+            base_node = self.nodes[self.current_node_index]
             model_radius = gui.ui_utils.display_to_model_distance(tdw, 
                     self.range_radius)
         else:
-            basept = None
+            base_node = None
             model_radius = 0
 
         offset_vec = self._generate_offset_vector()
 
-        for i in xrange(len(self.nodes)):
-            node = self.nodes[i]
-
-            offsets = gui.drawutils.calc_ranged_offset(basept, node,
-                    model_radius, self.range_factor,
-                    offset_vec)
-
+        for i, node  in enumerate(self.nodes):
+            pos = self._get_node_position(i, base_node, 
+                    model_radius, offset_vec)
+                                                        
             if convert_to_display:
-                x, y = tdw.model_to_display(*offsets)
+                x, y = tdw.model_to_display(*pos)
             else:
-                x, y = offsets
+                x, y = pos
 
             yield (i, node, x, y)
 
@@ -1926,7 +1956,7 @@ class Overlay (gui.overlays.Overlay):
        #    )
        #    if node_on_screen:
        #        yield (i, node, x, y)
-        for i, node, x, y in mode.nodes_coord_iter(self._tdw):
+        for i, node, x, y in mode.nodes_position_iter(self._tdw):
            #x, y = self._tdw.model_to_display(node.x, node.y)
             node_on_screen = (
                 x > alloc.x - radius*2 and
