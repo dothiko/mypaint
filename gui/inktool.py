@@ -35,6 +35,7 @@ import gui.curve
 import gui.widgets
 from gui.linemode import *
 import gui.ui_utils
+import gui.oncanvas
 
 ## Module constants
 
@@ -165,7 +166,8 @@ class _CapturePeriodSetting(object):
 
 class InkingMode (gui.mode.ScrollableModeMixin,
                   gui.mode.BrushworkModeMixin,
-                  gui.mode.DragMode):
+                  gui.mode.DragMode,
+                  gui.oncanvas.OncanvasEditMixin):
 
     ## Metadata properties
 
@@ -747,16 +749,16 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
 
 
-    def _queue_draw_node(self, i, offset_vec=None):
-        """Redraws a specific control node on all known view TDWs"""
+    def _queue_draw_ink_node(self, i, offset_vec):
+        """Redraws a specific control node on all known view TDWs
+        :param node_ctx: node queuing context information.
+        """
         node = self.nodes[i]
         if self.current_node_index != None:
             basept = self.nodes[self.current_node_index]
         else:
             basept = None
 
-        if offset_vec == None:
-            offset_vec = self._generate_offset_vector()
 
         for tdw in self._overlays:
            #if len(self.selected_nodes) > 1:
@@ -767,7 +769,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
            #    else:
            #        offsets = (node.x, node.y)
            #else:
-            model_radius = gui.ui_utils.display_to_model_length(tdw, 
+            model_radius = gui.ui_utils.display_to_model_distance(tdw, 
                     self.range_radius)
             offsets = gui.drawutils.calc_ranged_offset(basept, node,
                     model_radius, self.range_factor,
@@ -779,16 +781,23 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
             tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
 
+    def _queue_draw_node(self, idx):
+        """ For compatibility """
+        self._queue_draw_ink_node(idx, 
+                self._generate_offset_vector())
+
     def _queue_draw_selected_nodes(self):
+        """ Override mixin """
         offset_vec = self._generate_offset_vector()
         for i in self.selected_nodes:
-            self._queue_draw_node(i, offset_vec = offset_vec)
+            self._queue_draw_ink_node(i, offset_vec)
 
     def _queue_redraw_all_nodes(self):
-        """Redraws all nodes on all known view TDWs"""
+        """ Override mixin :
+        Redraws all nodes on all known view TDWs"""
         offset_vec = self._generate_offset_vector()
         for i in xrange(len(self.nodes)):
-            self._queue_draw_node(i, offset_vec = offset_vec)
+            self._queue_draw_ink_node(i, offset_vec)
 
     def _generate_offset_vector(self):
         """ Generates node-moving offset vector.
@@ -830,7 +839,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                         #self.selected_nodes,
                         #(dx,dy)):
                         
-            model_radius = gui.ui_utils.display_to_model_length(tdw, self.range_radius)
+            model_radius = gui.ui_utils.display_to_model_distance(tdw, self.range_radius)
             
             for p_1, p0, p1, p2 in gui.drawutils.spline_iter_3(
                                     self.nodes,
@@ -1051,7 +1060,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                #    self.nodes[idx] = cn._replace(x=cn.x + dx,
                #            y=cn.y + dy)
 
-                for i, cn, x, y in self.enum_nodes_coord(tdw, convert_to_display=False):
+                for i, cn, x, y in self.nodes_coord_iter(tdw, convert_to_display=False):
                     if cn.x != x or cn.y != y:
                         self.nodes[i] = cn._replace(x=x, y=y)
 
@@ -1734,7 +1743,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             
     ## Editing range related
     def set_range_radius(self, radius):
-        self._range_radius = radius
+        self._range_radius = math.floor(radius)
     
     def set_range_factor(self, factor):
         self._range_factor_source = factor
@@ -1757,12 +1766,13 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                                     "inktool.adjust_range_factor", 0))
         return self._range_factor
 
-    def enum_nodes_coord(self, tdw, convert_to_display=True):
+    def nodes_coord_iter(self, tdw, convert_to_display=True):
         """ Enumerate nodes screen coordinate with offsets.
         """
         if self.current_node_index != None:
             basept = self.nodes[self.current_node_index]
-            model_radius = gui.ui_utils.display_to_model_length(tdw, self.range_radius)
+            model_radius = gui.ui_utils.display_to_model_distance(tdw, 
+                    self.range_radius)
         else:
             basept = None
             model_radius = 0
@@ -1782,6 +1792,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 x, y = offsets
 
             yield (i, node, x, y)
+
 
 
 class Overlay (gui.overlays.Overlay):
@@ -1915,7 +1926,7 @@ class Overlay (gui.overlays.Overlay):
        #    )
        #    if node_on_screen:
        #        yield (i, node, x, y)
-        for i, node, x, y in mode.enum_nodes_coord(self._tdw):
+        for i, node, x, y in mode.nodes_coord_iter(self._tdw):
            #x, y = self._tdw.model_to_display(node.x, node.y)
             node_on_screen = (
                 x > alloc.x - radius*2 and
@@ -2613,7 +2624,11 @@ class OptionsPresenter (object):
             inkmode.set_range_factor(adj.get_value())
 
     def _range_radius_scale_format_value_cb(self, scale, value):
-        return "%dpx" % value
+        value = math.floor(value)
+        if value == 0:
+            return "off"
+        else:
+            return "%dpx" % value
 
     def _range_factor_scale_format_value_cb(self, scale, value):
         return "%.1fx" % value

@@ -36,6 +36,7 @@ import lib.observable
 from gui.inktool import *
 from gui.inktool import _LayoutNode, _Phase, _EditZone
 from gui.linemode import *
+import gui.oncanvas
 
 ## Class defs
 
@@ -298,7 +299,8 @@ class StrokeHistory(object):
 
 
 
-class BezierMode (InkingMode):
+class BezierMode (InkingMode,
+                  gui.oncanvas.OncanvasEditMixin):
 
     ## Metadata properties
     ACTION_NAME = "BezierCurveMode"
@@ -638,9 +640,8 @@ class BezierMode (InkingMode):
 
     ## Redraws
     
-    def _queue_draw_node(self, i, offset_vec=None):
+    def _queue_draw_node(self, i):
         """Redraws a specific control node on all known view TDWs
-        :param offset_vec: dummy, for compatibility with inktool.
         """
         node = self.nodes[i]
         dx,dy = self.drag_offset.get_model_offset()
