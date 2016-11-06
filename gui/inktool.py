@@ -946,6 +946,15 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             callback(*args, **kwargs)
             return True
 
+    def _queue_range_radius(self):
+        """ Queue an area to draw affecting-range indicator,
+        when range-editing activated.
+        """
+        size = self.range_radius + 1
+        for tdw in self._overlays:
+            tdw.queue_draw_area(self.last_x - size, self.last_y - size, 
+                    size*2+2, size*2+2)
+
     ## Drag handling (both capture and adjust phases)
 
     def drag_start_cb(self, tdw, event):
@@ -1036,6 +1045,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     self.drag_offset.end(mx, my)
                     self._queue_draw_selected_nodes()
 
+                if self.range_radius > 0:
+                    self._queue_range_radius()
+
                 self._queue_redraw_curve()
 
         elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
@@ -1098,6 +1110,9 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                         self.nodes[i] = cn._replace(x=x, y=y)
 
                 self.drag_offset.reset()
+
+            if self.range_radius > 0:
+                self._queue_range_radius()
 
             self._dragged_node_start_pos = None
             self._queue_redraw_curve()
@@ -1946,18 +1961,7 @@ class Overlay (gui.overlays.Overlay):
         mode = self._inkmode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
-       #for i, node in enumerate(mode.nodes):
-       #    x, y = self._tdw.model_to_display(node.x, node.y)
-       #    node_on_screen = (
-       #        x > alloc.x - radius*2 and
-       #        y > alloc.y - radius*2 and
-       #        x < alloc.x + alloc.width + radius*2 and
-       #        y < alloc.y + alloc.height + radius*2
-       #    )
-       #    if node_on_screen:
-       #        yield (i, node, x, y)
         for i, node, x, y in mode.nodes_position_iter(self._tdw):
-           #x, y = self._tdw.model_to_display(node.x, node.y)
             node_on_screen = (
                 x > alloc.x - radius*2 and
                 y > alloc.y - radius*2 and
@@ -1966,6 +1970,14 @@ class Overlay (gui.overlays.Overlay):
             )
             if node_on_screen:
                 yield (i, node, x, y)
+
+    @gui.ui_utils.dashedline_wrapper
+    def _draw_range_circle(self, cr, info):
+        x, y, radius = info
+        cr.arc( x, y,
+                int(radius),
+                0.0,
+                2*math.pi)
 
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
@@ -2043,6 +2055,12 @@ class Overlay (gui.overlays.Overlay):
                     pixbuf=icon_pixbuf,
                     radius=radius,
                 )
+
+        if mode.phase == _Phase.ADJUST:
+            if mode.in_drag and mode.range_radius > 0:
+                self._draw_range_circle(cr, (mode.last_x, mode.last_y,
+                                            mode.range_radius))
+                
 
 
 class _LayoutNode (object):
