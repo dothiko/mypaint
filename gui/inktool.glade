@@ -272,7 +272,7 @@ Negative values mean leftwards tilts.</property>
             <property name="can_focus">False</property>
             <property name="tooltip_text" translatable="yes">Define the adjusting weight factor as gamma correction. With this scale, you can change how the node adjustment effects directly against far nodes.</property>
             <property name="halign">start</property>
-            <property name="label" translatable="yes">Range factor:</property>
+            <property name="label" translatable="yes">Editing factor:</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
@@ -286,7 +286,7 @@ Negative values mean leftwards tilts.</property>
             <property name="tooltip_text" translatable="yes">Define the effective range radius of node adjustment, in screen pixel. 
 Zero means only one node should be adjusted.</property>
             <property name="halign">start</property>
-            <property name="label" translatable="yes">Range radius :</property>
+            <property name="label" translatable="yes">Editing range :</property>
           </object>
           <packing>
             <property name="left_attach">0</property>

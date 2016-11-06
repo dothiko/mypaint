@@ -133,6 +133,13 @@ also 'Average points' / 'Delete points' / oncanvas node pressure editing , now w
 コントロールキーを押しながらノードをクリックすることで、制御点を複数選択できます。
 平均化・削除・キャンバス状での筆圧修正の機能が、この複数選択状態に対応しています。
 
+#### inktool - multiple node editing within defined range:
+You can move multiple nodes within defined range ('Editing range' scale of options presenter), without selecting them.
+
+Also, you can change how the editing affects against far nodes.('Editing factor' scale)
+When 'affected factor' come near to 1.0, editing affects much more directly to far nodes.
+When the factor come near to -1.0, editing affects almost near nodes, much less to far nodes.
+
 #### Beziertool - Draw Cubic Bezier-sprine curve like inktool : 三次ベジェ曲線を描くためのベジェツール
 The Cubic bezier-sprine tool,like 'inkscape' tool.
 
