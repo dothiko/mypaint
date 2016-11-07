@@ -111,58 +111,6 @@ class _EditZone:
     REJECT_BUTTON = 2  #: On-canvas button that abandons the current line
     ACCEPT_BUTTON = 3  #: On-canvas button that commits the current line
 
-class _CapturePeriodSetting(object):
-    """Capture Period Setting class,to ease for user to customize it"""
-   #BASE_INTERNODE_DISTANCE_MIDDLE = 30   # display pixels
-   #BASE_INTERNODE_DISTANCE_ENDS = 10   # display pixels
-
-   #INTERPOLATION_MAX_SLICE_TIME = 1/200.0   # seconds
-   #INTERPOLATION_MAX_SLICE_DISTANCE = 20   # model pixels
-   #INTERPOLATION_MAX_SLICES = MAX_INTERNODE_DISTANCE_MIDDLE * 5
-
-    @property
-    def internode_distance_middle(self):
-        return 30 * self.factor # display pixels
-
-    @property
-    def internode_distance_ends(self):
-        return 10 * self.factor # display pixels
-
-    @property
-    def max_internode_time(self):
-        return 1/100.0 #1/(100.0 / self.factor) # default MAX TIME is 1/100.0
-
-    @property
-    def min_internode_time(self):
-        return 1/200.0 #1/(200.0 / self.factor) # default MIN TIME is 1/200.0
-
-    # Captured input nodes are then interpolated with a spline.
-    # The code tries to make nice smooth input for the brush engine,
-    # but avoids generating too much work.
-
-    @property
-    def interpolation_max_slices(self):
-        return self.internode_distance_middle * 5
-
-    @property
-    def interpolation_max_slice_distance(self):
-        return 20# * self.factor # model pixels
-
-    @property
-    def interpolation_max_slice_time(self):
-        return 1/200.0 #1/(200.0 / self.factor)
-
-        # In other words, limit to a set number of interpolation slices
-        # per display pixel at the time of stroke capture.
-
-    def __init__(self):
-        self.factor=1.0
-
-    def set_factor(self, value):
-        self.factor = value
-
-
-
 
 class InkingMode (gui.mode.ScrollableModeMixin,
                   gui.mode.BrushworkModeMixin,
@@ -223,23 +171,21 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     ## Class config vars
 
     # Input node capture settings:
-   #MAX_INTERNODE_DISTANCE_MIDDLE = 30   # display pixels
-   #MAX_INTERNODE_DISTANCE_ENDS = 10   # display pixels
-   #MAX_INTERNODE_TIME = 1/100.0   # seconds
-
+    MAX_INTERNODE_DISTANCE_MIDDLE = 30   # display pixels
+    MAX_INTERNODE_DISTANCE_ENDS = 10   # display pixels
+    MAX_INTERNODE_TIME = 1/100.0   # seconds
+    
     # Captured input nodes are then interpolated with a spline.
     # The code tries to make nice smooth input for the brush engine,
     # but avoids generating too much work.
-   #INTERPOLATION_MAX_SLICE_TIME = 1/200.0   # seconds
-   #INTERPOLATION_MAX_SLICE_DISTANCE = 20   # model pixels
-   #INTERPOLATION_MAX_SLICES = MAX_INTERNODE_DISTANCE_MIDDLE * 5
-        # In other words, limit to a set number of interpolation slices
-        # per display pixel at the time of stroke capture.
+    INTERPOLATION_MAX_SLICE_TIME = 1/200.0   # seconds
+    INTERPOLATION_MAX_SLICE_DISTANCE = 20   # model pixels
+    INTERPOLATION_MAX_SLICES = MAX_INTERNODE_DISTANCE_MIDDLE * 5
+    # In other words, limit to a set number of interpolation slices
+    # per display pixel at the time of stroke capture.
 
     # Node value adjustment settings
-   #MIN_INTERNODE_TIME = 1/200.0   # seconds (used to manage adjusting)
-
-    CAPTURE_SETTING = _CapturePeriodSetting()
+    MIN_INTERNODE_TIME = 1/200.0   # seconds (used to manage adjusting)
 
     ## Other class vars
 
@@ -892,10 +838,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """Draw the curve segment between the middle two points"""
         last_t_abs = state["t_abs"]
         dtime_p0_p1_real = p1[-1] - p0[-1]
-        steps_t = dtime_p0_p1_real / self.CAPTURE_SETTING.interpolation_max_slice_time#self.INTERPOLATION_MAX_SLICE_TIME
+        steps_t = dtime_p0_p1_real / self.INTERPOLATION_MAX_SLICE_TIME
         dist_p1_p2 = math.hypot(p1[0]-p2[0], p1[1]-p2[1])
-        steps_d = dist_p1_p2 / self.CAPTURE_SETTING.interpolation_max_slice_distance #self.INTERPOLATION_MAX_SLICE_DISTANCE
-        steps_max = float(self.CAPTURE_SETTING.interpolation_max_slices)#self.INTERPOLATION_MAX_SLICES)
+        steps_d = dist_p1_p2 / self.INTERPOLATION_MAX_SLICE_DISTANCE
+        steps_max = float(self.INTERPOLATION_MAX_SLICES)
         steps = math.ceil(min(steps_max, max([2, steps_t, steps_d])))
         for i in xrange(int(steps) + 1):
             t = i / steps
@@ -1013,12 +959,12 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                     dy = event.y - self._last_node_evdata[1]
                     dist = math.hypot(dy, dx)
                     dt = event.time - self._last_node_evdata[2]
-                    max_dist = self.CAPTURE_SETTING.internode_distance_middle #MAX_INTERNODE_DISTANCE_MIDDLE
+                    max_dist = self.MAX_INTERNODE_DISTANCE_MIDDLE
                     if len(self.nodes) < 2:
-                        max_dist = self.CAPTURE_SETTING.internode_distance_ends #MAX_INTERNODE_DISTANCE_ENDS
+                        max_dist = self.MAX_INTERNODE_DISTANCE_ENDS
                     append_node = (
                         dist > max_dist and
-                        dt > self.CAPTURE_SETTING.max_internode_time #MAX_INTERNODE_TIME
+                        dt > self.MAX_INTERNODE_TIME
                     )
                 if append_node:
                     self.nodes.append(node)
@@ -1070,9 +1016,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 # delete it.
                 d = math.hypot(self.nodes[-1].x - node.x,
                         self.nodes[-1].y - node.y)
-                mid_d = tdw.display_to_model(
-                        self.CAPTURE_SETTING.internode_distance_middle, 0)[0]
-                # 'too close' means less than internode_distance_middle / 5
+                mid_d = gui.ui_utils.display_to_model_distance(tdw, 
+                        self.MAX_INTERNODE_DISTANCE_MIDDLE)
+                # For now, I define nodes are 'too close' 
+                # when their distance is less than MAX_INTERNODE_DISTANCE_MIDDLE / 5
                 if d < mid_d / 5.0:
                     self._queue_draw_node(len(self.nodes)-1) # To avoid glitch
                     del self.nodes[-1]
@@ -1097,13 +1044,6 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if self._node_dragged:
 
                 self._queue_draw_selected_nodes() # to ensure erase them
-
-               #dx, dy = self.drag_offset.get_model_offset()
-               #
-               #for idx in self.selected_nodes:
-               #    cn = self.nodes[idx]
-               #    self.nodes[idx] = cn._replace(x=cn.x + dx,
-               #            y=cn.y + dy)
 
                 for i, cn, x, y in self.nodes_position_iter(tdw, convert_to_display=False):
                     if cn.x != x or cn.y != y:
@@ -1280,11 +1220,11 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         n0 = self.nodes[i-1]
         n1 = self.nodes[i]
         dtime = n1.time - n0.time
-        dtime = max(dtime, self.CAPTURE_SETTING.min_internode_time)
+        dtime = max(dtime, self.MIN_INTERNODE_TIME)
         return dtime
 
     def set_node_dtime(self, i, dtime):
-        dtime = max(dtime, self.CAPTURE_SETTING.min_internode_time)
+        dtime = max(dtime, self.MIN_INTERNODE_TIME)
         nodes = self.nodes
         if not (0 < i < len(nodes)):
             return
