@@ -309,6 +309,8 @@
       <menuitem action="ResetDockSizes"/>
       <!-- my local menu end. -->
     </menu>
+    <menu action="PluginMenu">
+    </menu>
     <menu action='HelpMenu'>
       <menuitem action='OnlineHelpIndex'/>
       <separator/>

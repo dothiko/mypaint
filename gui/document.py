@@ -26,6 +26,8 @@ from warnings import warn
 import weakref
 import logging
 logger = logging.getLogger(__name__)
+import glob
+import sys
 
 from gi.repository import Gtk
 from gi.repository import Gdk
@@ -2281,5 +2283,112 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
 
     def assist_mode_normal_cb(self, action):
         pass
+
+    ##+ Plugin related
+
+    #HOW TO USE PLUGIN:
+    #    WHERE TO PLACE:
+    #        make a 'plugins' directory at app.state_dirs.app_data,
+    #        or app.state_dirs.user_data (i.e. $XDG_DATA_HOME/mypaint)
+    #        or app.state_dirs.user_config(i.e. $XDG_CONFIG_HOME/mypaint)
+    #        and place a plugin(python file) into that directory.
+    #
+    #    WHAT SHOULD BE WRITTEN:
+    #        We need a 'register' function to register plugin,
+    #        and the plugin instance class, which is singleton
+    #        and generated at register method.
+    #        and register method should returns a tuple of
+    #        (label text, icon pixbuf or None, plugin singleton instance)
+    #
+    #        For example,
+    #
+    #        class Helloplugin:
+    #
+    #            def activate_cb(self, app, model):
+    #                app.message_dialog("Hello, world")
+    #
+    #        def register(app):
+    #            return ("Hellp plugin", None, Helloplugin())
+    #
+    #
+    #        the plugin class should have some method,
+    #
+    #         * def activate_cb(app, model)
+    #         This method called when plugin menu item clicked.
+    #
+    #         When activate_cb returned True, the mypaint mode
+    #         changed into oneshot-plugin mode,and accepts
+    #         dragging for plugin.
+    #         But the mode is activated only once.
+    #         When dragging end, the mypaint mode returned 
+    #         immidiately.
+    #
+    #         Usually,most type of plugin will use only this
+    #         activate callback.so simply leave no value returned.
+    #
+    #         * def drag_start_cb(app, model, x, y, button)
+    #         * def drag_update_cb(app, model, x, y, button)
+    #         * def drag_stop_cb(app, model, x, y, button)
+    #
+    #         These method called when mouse dragged after
+    #         the activate_cb callback returned True.
+    #
+    #         So plugins which use dragging would have
+    #         simple activate_cb method (only return True)
+    #         and actual plugin codes would executed at drag_stop_cb.
+
+
+    def init_plugins(self, app):
+        """ Initialize plugin from app instance information.
+        For now, this method called from app._at_application_start()
+        """
+        self._plugin_menu = {}
+        menu_plug = app.ui_manager.get_widget('/Menubar/PluginMenu')
+        menu_plug_sub = None
+        for base_path in (app.state_dirs.app_data,
+                            app.state_dirs.user_data,
+                            app.state_dirs.user_config):
+            cur_path = os.path.join(base_path, 'plugins')
+            if os.path.exists(cur_path):
+                file_list = glob.glob(os.path.join(cur_path, "*.py"))
+                if len(file_list) > 0:
+                    sys.path.append(cur_path)
+                    for cur_file in file_list:
+                        modname = os.path.splitext(os.path.basename(cur_file))[0]
+                        module = __import__(modname, globals(), locals(), [], -1)
+                        try:
+                            reg_method = getattr(module, "register")
+                            info = reg_method(self)
+                            if info:
+                                label, icon, plugin = info
+                                if menu_plug_sub == None:
+                                    menu_plug.set_visible(True)
+                                    menu_plug_sub = Gtk.Menu()
+                                    menu_plug_sub.set_visible(True)
+                                cm = Gtk.MenuItem()
+                                cm.set_label(label)
+                                cm.connect('activate', self.plugin_activate_cb)
+                                cm.set_visible(True)
+                                self._plugin_menu[cm] = plugin
+                                menu_plug_sub.append(cm)
+                            else:
+                                logger.warning("plugin %s does not return plugin information correctly." % fname)
+                        except AttributeError as e:
+                            logger.info('file %s has no register function.(might be library,not plugin)' % fname)
+                        except Exception as e:
+                            logger.error('A exception raised while reading plugin %s' % fname)
+                            print(str(e))
+        if menu_plug_sub:
+            menu_plug_sub.set_visible(True)
+            menu_plug.set_submenu(menu_plug_sub)
+
+    def plugin_activate_cb(self, widget):
+        if widget in self._plugin_menu:
+            ret = self._plugin_menu[widget].activate_cb(self.app, self.model)
+            if ret == True:
+                logger.warning('sorry, draggable plugin feature still under development.')
+
+        else:
+            logger.error('menu %s has no valid plugin instance. ' % widget.get_label())
 
 

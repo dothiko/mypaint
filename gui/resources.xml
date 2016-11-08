@@ -1348,6 +1348,14 @@ Vocabulary
         </object>
       </child>
       <!--}}} /brush menu actions -->
+      <!--{{{ Plugin menu -->
+      <child>
+        <object class="GtkAction" id="PluginMenu">
+          <property name="label" translatable="yes" context="Menu (labels)">Plugin</property>
+          <!-- NO TOOLTIP! This is a menu. -->
+        </object>
+      </child>
+      <!--}}} / Plugin menu -->
       <!--{{{ Help/documentation menu -->
       <child>
         <object class="GtkAction" id="HelpMenu">

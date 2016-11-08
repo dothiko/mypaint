@@ -1,6 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
+# To implementing Projectsave functionality, files below are rewritten.
+# 
+# gui/filehandling.py (for save dialog, menu GUI handling) 
+# gui/application.py (to initilize project-save MRU menu.)
+# lib/document.py  (to invoke load/save project functionality)
+# lib/layer/data.py (to add actual project load/save functinality
+#                   for each layers)
+# lib/layer/tree.py (to add actual project load/save functinality
+#                   for each layer trees)
+
 import abc
 import os
 import shutil

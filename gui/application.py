@@ -435,7 +435,11 @@ class Application (object):
         menu_orp = self.ui_manager.get_widget('/Menubar/FileMenu/ProjectMenu/OpenRecentProject')
         self.filehandler.init_project_related(menu_orp)
 
+        # Stamp manager
         self.stamp_manager = stamptool.StampPresetManager(self)
+
+        # Plugin initialize
+        self.doc.init_plugins(self)
 
     def save_settings(self):
         """Saves the current settings to persistent storage."""

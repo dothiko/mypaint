@@ -4,7 +4,6 @@ This is heavily customized version of the program "MyPaint".
 [![Translation Status](https://hosted.weblate.org/widgets/mypaint/mypaint/svg-badge.svg)](https://hosted.weblate.org/engage/mypaint/?utm_source=widget)
 [![Travis Build Status](https://travis-ci.org/mypaint/mypaint.png?branch=master)](https://travis-ci.org/mypaint/mypaint)
 [![Tea-CI Build Status](https://tea-ci.org/api/badges/mypaint/mypaint/status.svg)](https://tea-ci.org/mypaint/mypaint)
->>>>>>> upstream/master
 
 Most customized codes are adhoc, still in testing stage by myself.
 I also use this branch as my personal backup. 
@@ -209,8 +208,45 @@ This feature may less useful who changes mode with keyboard toggle action,but at
 
 キーボードでトグルしている人にはあまり使わない機能かもですが、私には便利です。
 
-About original Mypaint : オリジナルのMypaintについて
+#### Plugin feature
+
+##### HOW TO USE PLUGIN:
+###### WHERE TO PLACE:
+make a 'plugins' directory at app.state_dirs.app_data,
+or app.state_dirs.user_data (i.e. $XDG_DATA_HOME/mypaint)
+or app.state_dirs.user_config(i.e. $XDG_CONFIG_HOME/mypaint)
+
+and, place a plugin(python file) into that directory.
+
+###### WHAT SHOULD BE WRITTEN:
+We need a 'register' function to register plugin,
+and the plugin instance class, which is singleton
+and generated at register method.
+and register method should returns a tuple of
+(label text, icon pixbuf or None, plugin singleton instance)
+
+For example,
+```python
+class Helloplugin:
+
+  def activate_cb(self, app, model):
+      app.message_dialog("Hello, world")
+
+def register(app):
+  return ("Hellp plugin", None, Helloplugin())
+```
+
+the plugin class should have some method,
+
+ * def activate_cb(self, app, model)
+
+This method is *REQUIRED*. Called when plugin menu item clicked.
+Parameter app is Application class instance of gui/Application.py, and model is Document class instance of lib/document.py.
 ----
+
+
+### About original Mypaint : オリジナルのMypaintについて
+
 Original MyPaint is a simple drawing and painting program
 that works well with Wacom-style graphics tablets.
 Its main features are a highly configurable brush engine, speed,
