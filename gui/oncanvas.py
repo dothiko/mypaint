@@ -90,21 +90,14 @@ import gui.ui_utils
 ##    """
 #
 #
-#class _EditZone:
-#    """Enumeration of what the pointer is on in the ADJUST phase"""
-#    EMPTY_CANVAS = 0  #: Nothing, empty space
-#    CONTROL_NODE = 1  #: Any control node; see target_node_index
-#    ACTION_BUTTON = 2  #: On-canvas action button 
-#                       #  This should be one of _ActionButton enum class.
-#                       #  `self.current_action_button` of OncanvasEditMixin 
-#                       #  shows what button is active, after
-#                       #  `self._update_zone_and_target()` called.
-#
-#class _ActionButton:
-#    """Enumeration of On-canvas action button type.
-#    """
-#    ACCEPT_BUTTON = 0
-#    REJECT_BUTTON = 1
+class EditZone_Mixin:
+    """Enumeration of what the pointer is on in the ADJUST phase"""
+
+    EMPTY_CANVAS = 0  #: Nothing, empty space
+    CONTROL_NODE = 1  #: Any control node; see target_node_index
+    ACCEPT_BUTTON = 2  #: On-canvas action button. Also used when drawing overlay.
+    REJECT_BUTTON = 3  #: On-canvas action button. Also used when drawing overlay.
+
 
 class OncanvasEditMixin(object):
     """ Mixin for modes which have on-canvas node editing ability.
@@ -1131,144 +1124,78 @@ class OncanvasEditMixin(object):
 #           self._start_new_capture_phase(rollback=False)
 #
 #
-#lass OverlayOncanvasMixin(gui.overlays.Overlay):
-#   """ The mixin of overlay for Oncanvas-editing mixin.
-#   """
-#
-#   def __init__(self, mode, tdw):
-#       super(OverlayOncanvasMixin, self).__init__()
-#       self._mode = weakref.proxy(mode)
-#       self._tdw = weakref.proxy(tdw)
-#       self._button_pixbuf_cache = {}
-#       self._button_pos_cache = {}
-#
-#   def get_button_pos(self, button_id):
-#       return self._button_pos_cache.get(button_id, None)
-#
-#   def update_button_positions(self):
-#       """Recalculates the positions of the mode's buttons.
-#       
-#       Normally the class uses this mixin should override
-#       this method, to reject when `self._mode.nodes` is
-#       not ready to display action buttons yet.
-#       """
-#
-#       self._button_pos_cache[_ActionButton.ACCEPT_BUTTON] = None
-#       self._button_pos_cache[_ActionButton.REJECT_BUTTON] = None
-#
-#       button_radius = gui.style.FLOATING_BUTTON_RADIUS
-#       margin = 1.5 * button_radius
-#       alloc = self._tdw.get_allocation()
-#       view_x0, view_y0 = alloc.x, alloc.y
-#       view_x1, view_y1 = view_x0+alloc.width, view_y0+alloc.height
-#
-#       # Force-directed layout: "wandering nodes" for the buttons'
-#       # eventual positions, moving around a constellation of "fixed"
-#       # points corresponding to the nodes the user manipulates.
-#       fixed = []
-#
-#       for i, node in enumerate(nodes):
-#           x, y = self._tdw.model_to_display(node.x, node.y)
-#           fixed.append(_LayoutNode(x, y))
-#
-#       # The reject and accept buttons are connected to different nodes
-#       # in the stroke by virtual springs.
-#       stroke_end_i = len(fixed)-1
-#       stroke_start_i = 0
-#       stroke_last_quarter_i = int(stroke_end_i * 3.0 // 4.0)
-#       assert stroke_last_quarter_i < stroke_end_i
-#       reject_anchor_i = stroke_start_i
-#       accept_anchor_i = stroke_end_i
-#
-#       # Classify the stroke direction as a unit vector
-#       stroke_tail = (
-#           fixed[stroke_end_i].x - fixed[stroke_last_quarter_i].x,
-#           fixed[stroke_end_i].y - fixed[stroke_last_quarter_i].y,
-#       )
-#       stroke_tail_len = math.hypot(*stroke_tail)
-#       if stroke_tail_len <= 0:
-#           stroke_tail = (0., 1.)
-#       else:
-#           stroke_tail = tuple(c/stroke_tail_len for c in stroke_tail)
-#
-#       # Initial positions.
-#       accept_button = _LayoutNode(
-#           fixed[accept_anchor_i].x + stroke_tail[0]*margin,
-#           fixed[accept_anchor_i].y + stroke_tail[1]*margin,
-#       )
-#       reject_button = _LayoutNode(
-#           fixed[reject_anchor_i].x - stroke_tail[0]*margin,
-#           fixed[reject_anchor_i].y - stroke_tail[1]*margin,
-#       )
-#
-#       # Constraint boxes. They mustn't share corners.
-#       # Natural hand strokes are often downwards,
-#       # so let the reject button to go above the accept button.
-#       reject_button_bbox = (
-#           view_x0+margin, view_x1-margin,
-#           view_y0+margin, view_y1-2.666*margin,
-#       )
-#       accept_button_bbox = (
-#           view_x0+margin, view_x1-margin,
-#           view_y0+2.666*margin, view_y1-margin,
-#       )
-#
-#       # Force-update constants
-#       k_repel = -25.0
-#       k_attract = 0.05
-#
-#       # Let the buttons bounce around until they've settled.
-#       for iter_i in xrange(100):
-#           accept_button \
-#               .add_forces_inverse_square(fixed, k=k_repel) \
-#               .add_forces_inverse_square([reject_button], k=k_repel) \
-#               .add_forces_linear([fixed[accept_anchor_i]], k=k_attract)
-#           reject_button \
-#               .add_forces_inverse_square(fixed, k=k_repel) \
-#               .add_forces_inverse_square([accept_button], k=k_repel) \
-#               .add_forces_linear([fixed[reject_anchor_i]], k=k_attract)
-#           reject_button \
-#               .update_position() \
-#               .constrain_position(*reject_button_bbox)
-#           accept_button \
-#               .update_position() \
-#               .constrain_position(*accept_button_bbox)
-#           settled = [(p.speed<0.5) for p in [accept_button, reject_button]]
-#           if all(settled):
-#               break
-#       self._button_pos_cache[_ActionButton.ACCEPT_BUTTON] = (accept_button.x, accept_button.y)
-#       self._button_pos_cache[_ActionButton.REJECT_BUTTON] = (reject_button.x, reject_button.y)
-#
-#   def _get_button_pixbuf(self, name):
-#       """Loads the pixbuf corresponding to a button name (cached)"""
-#       cache = self._button_pixbuf_cache
-#       pixbuf = cache.get(name)
-#       if not pixbuf:
-#           pixbuf = gui.drawutils.load_symbolic_icon(
-#               icon_name=name,
-#               size=gui.style.FLOATING_BUTTON_ICON_SIZE,
-#               fg=(0, 0, 0, 1),
-#           )
-#           cache[name] = pixbuf
-#       return pixbuf
-#
-#   def _get_onscreen_nodes(self):
-#       """Iterates across only the on-screen nodes."""
-#       mode = self._mode
-#       radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
-#       alloc = self._tdw.get_allocation()
-#       for i, node in enumerate(mode.nodes):
-#           x, y = self._tdw.model_to_display(node.x, node.y)
-#           node_on_screen = (
-#               x > alloc.x - radius*2 and
-#               y > alloc.y - radius*2 and
-#               x < alloc.x + alloc.width + radius*2 and
-#               y < alloc.y + alloc.height + radius*2
-#           )
-#           if node_on_screen:
-#               yield (i, node, x, y)
-#
-#   def paint(self, cr):
-#       """Draw adjustable nodes to the screen"""
-#       pass
-#       
+
+class OverlayOncanvasMixin(gui.overlays.Overlay):
+    """ The mixin of overlay for Oncanvas-editing mixin.
+    """
+ 
+    def __init__(self, mode, tdw):
+        super(OverlayOncanvasMixin, self).__init__()
+        self._mode = weakref.proxy(mode)
+        self._tdw = weakref.proxy(tdw)
+        self._button_pixbuf_cache = {}
+        self._button_pos = {}
+ 
+    def get_button_pos(self, button_id):
+        return self._button_pos.get(button_id, None)
+ 
+    def update_button_positions(self):
+        """Recalculates the positions of the mode's buttons.
+        
+        Normally the class uses this mixin should override
+        this method, to reject when `self._mode.nodes` is
+        not ready to display action buttons yet.
+        """
+        pass
+ 
+    def _get_button_pixbuf(self, name):
+        """Loads the pixbuf corresponding to a button name (cached)"""
+        cache = self._button_pixbuf_cache
+        pixbuf = cache.get(name)
+        if not pixbuf:
+            pixbuf = gui.drawutils.load_symbolic_icon(
+                icon_name=name,
+                size=gui.style.FLOATING_BUTTON_ICON_SIZE,
+                fg=(0, 0, 0, 1),
+            )
+            cache[name] = pixbuf
+        return pixbuf
+ 
+    def _get_onscreen_nodes(self):
+        """Iterates across only the on-screen nodes."""
+        mode = self._mode
+        radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
+        alloc = self._tdw.get_allocation()
+        for i, node in enumerate(mode.nodes):
+            x, y = self._tdw.model_to_display(node.x, node.y)
+            node_on_screen = (
+                x > alloc.x - radius*2 and
+                y > alloc.y - radius*2 and
+                x < alloc.x + alloc.width + radius*2 and
+                y < alloc.y + alloc.height + radius*2
+            )
+            if node_on_screen:
+                yield (i, node, x, y)
+
+    def _draw_buttons(self, cr, button_info):
+        radius = gui.style.FLOATING_BUTTON_RADIUS
+        for icon_name, pos, zone in button_info:
+            if pos is None:
+                continue
+            x, y = pos
+            if self._mode.zone == zone:
+                color = gui.style.ACTIVE_ITEM_COLOR
+            else:
+                color = gui.style.EDITABLE_ITEM_COLOR
+            icon_pixbuf = self._get_button_pixbuf(icon_name)
+            gui.drawutils.render_round_floating_button(
+                cr=cr, x=x, y=y,
+                color=color,
+                pixbuf=icon_pixbuf,
+                radius=radius,
+            )
+ 
+    def paint(self, cr):
+        """Draw adjustable nodes to the screen"""
+        pass
+        

@@ -34,9 +34,9 @@ import lib.helpers
 import gui.cursor
 import lib.observable
 from gui.inktool import *
-from gui.inktool import _LayoutNode, _Phase, _EditZone
+from gui.inktool import _LayoutNode, _Phase
 from gui.linemode import *
-import gui.oncanvas
+from gui.oncanvas import *
 
 ## Class defs
 
@@ -185,7 +185,7 @@ class _Node_Bezier (_Control_Handle):
     def __getitem__(self, idx):
         return self._array[idx]
     
-class _EditZone_Bezier(_EditZone):
+class _EditZone(EditZone_Mixin):
     """Enumeration of what the pointer is on in the ADJUST phase"""
     CONTROL_HANDLE = 104 #: Control handle of bezier
 
@@ -300,7 +300,7 @@ class StrokeHistory(object):
 
 
 class BezierMode (InkingMode,
-                  gui.oncanvas.OncanvasEditMixin):
+                  OncanvasEditMixin):
 
     ## Metadata properties
     ACTION_NAME = "BezierCurveMode"
@@ -322,17 +322,17 @@ class BezierMode (InkingMode,
     @property
     def active_cursor(self):
         if self.phase in (_PhaseBezier.INITIAL, _PhaseBezier.CREATE_PATH):
-            if self.zone in (_EditZone_Bezier.CONTROL_NODE,
-                    _EditZone_Bezier.CONTROL_HANDLE):
+            if self.zone in (_EditZone.CONTROL_NODE,
+                    _EditZone.CONTROL_HANDLE):
                 return self._crosshair_cursor
         elif self.phase == _PhaseBezier.MOVE_NODE:
-            if self.zone == _EditZone_Bezier.CONTROL_NODE:
+            if self.zone == _EditZone.CONTROL_NODE:
                 return self._crosshair_cursor
-            elif self.zone != _EditZone_Bezier.EMPTY_CANVAS: # assume button
+            elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
                 return self._arrow_cursor
 
         elif self.phase == _PhaseBezier.ADJUST_PRESSURE:
-            if self.zone == _EditZone_Bezier.CONTROL_NODE:
+            if self.zone == _EditZone.CONTROL_NODE:
                 return self._cursor_move_nw_se
 
         return None  
@@ -430,7 +430,7 @@ class BezierMode (InkingMode,
 
 
         self._ensure_overlay_for_tdw(tdw)
-        new_zone = _EditZone_Bezier.EMPTY_CANVAS
+        new_zone = _EditZone.EMPTY_CANVAS
         if not self.in_drag and len(self.nodes) > 0:
             if self.phase in (_PhaseBezier.MOVE_NODE, 
                     _PhaseBezier.ADJUST_PRESSURE, 
@@ -443,11 +443,12 @@ class BezierMode (InkingMode,
                 hit_dist = gui.style.FLOATING_BUTTON_RADIUS
 
                 if len(self.nodes) > 1:
-                    button_info = [
-                        (_EditZone_Bezier.ACCEPT_BUTTON, overlay.accept_button_pos),
-                        (_EditZone_Bezier.REJECT_BUTTON, overlay.reject_button_pos),
-                    ]
-                    for btn_zone, btn_pos in button_info:
+                   #button_info = [
+                   #    (_EditZone.ACCEPT_BUTTON, overlay.get_button_pos(_EditZone.ACCEPT_BUTTON)),
+                   #    (_EditZone.REJECT_BUTTON, overlay.get_button_pos(_EditZone.REJECT_BUTTON)),
+                   #]
+                    for btn_zone in (_EditZone.ACCEPT_BUTTON, _EditZone.REJECT_BUTTON):
+                        btn_pos = overlay.get_button_pos(btn_zone)
                         if btn_pos is None:
                             continue
                         btn_x, btn_y = btn_pos
@@ -458,7 +459,7 @@ class BezierMode (InkingMode,
                             break
 
 
-                if (new_zone == _EditZone_Bezier.EMPTY_CANVAS):
+                if (new_zone == _EditZone.EMPTY_CANVAS):
 
                     if self.phase == _PhaseBezier.ADJUST_PRESSURE:
                         new_target_node_index = self._search_target_node(tdw, x, y)
@@ -483,7 +484,7 @@ class BezierMode (InkingMode,
                                     continue
                                 new_target_node_index = self.current_node_index
                                 self.current_handle_index = i
-                                new_zone = _EditZone_Bezier.CONTROL_HANDLE
+                                new_zone = _EditZone.CONTROL_HANDLE
                                 break         
 
                         # Test nodes for a hit, in reverse draw order
@@ -491,7 +492,7 @@ class BezierMode (InkingMode,
                             new_target_node_index = self._search_target_node(tdw, x, y)
 
                     if (new_target_node_index != None and 
-                        new_zone == _EditZone_Bezier.EMPTY_CANVAS):
+                        new_zone == _EditZone.EMPTY_CANVAS):
                         new_zone = _EditZone.CONTROL_NODE
                     
                     
@@ -508,7 +509,7 @@ class BezierMode (InkingMode,
 
         elif self.phase == _PhaseBezier.ADJUST_PRESSURE_ONESHOT:
             # Always control node,in pressure editing.
-            new_zone = _EditZone_Bezier.CONTROL_NODE 
+            new_zone = _EditZone.CONTROL_NODE 
 
         # Update the zone, and assume any change implies a button state
         # change as well (for now...)
@@ -524,9 +525,9 @@ class BezierMode (InkingMode,
             cursor = None
             if self.phase in (_PhaseBezier.INITIAL, _PhaseBezier.CREATE_PATH,
                     _PhaseBezier.MOVE_NODE, _PhaseBezier.ADJUST_PRESSURE):
-                if self.zone == _EditZone_Bezier.CONTROL_NODE:
+                if self.zone == _EditZone.CONTROL_NODE:
                     cursor = self._crosshair_cursor
-                elif self.zone != _EditZone_Bezier.EMPTY_CANVAS: # assume button
+                elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
                     cursor = self._arrow_cursor
             if cursor is not self._current_override_cursor:
                 tdw.set_override_cursor(cursor)
@@ -755,8 +756,8 @@ class BezierMode (InkingMode,
         """
 
         for tdw, overlay in self._overlays.items():
-            for pos in (overlay.accept_button_pos,
-                         overlay.reject_button_pos):
+            for pos in (overlay.get_button_pos(_EditZone.ACCEPT_BUTTON),
+                         overlay.get_button_pos(_EditZone.REJECT_BUTTON)):
                 # FIXME duplicate code:from gui.inktool.queue_draw_buttons
                 if pos is None:
                     continue
@@ -875,21 +876,21 @@ class BezierMode (InkingMode,
                 _PhaseBezier.ADJUST_PRESSURE):
             # Initial state - everything starts here!
        
-            if (self.zone in (_EditZone_Bezier.REJECT_BUTTON, 
-                        _EditZone_Bezier.ACCEPT_BUTTON)):
+            if (self.zone in (_EditZone.REJECT_BUTTON, 
+                        _EditZone.ACCEPT_BUTTON)):
                 if (event.button == 1 and 
                         event.type == Gdk.EventType.BUTTON_PRESS):
 
                         # To avoid some of visual glitches,
                         # we need to process button here.
-                        if self.zone == _EditZone_Bezier.REJECT_BUTTON:
+                        if self.zone == _EditZone.REJECT_BUTTON:
                             self.discard_edit()
-                        elif self.zone == _EditZone_Bezier.ACCEPT_BUTTON:
+                        elif self.zone == _EditZone.ACCEPT_BUTTON:
                             self.accept_edit()
                         return False
                     
                     
-            elif self.zone == _EditZone_Bezier.CONTROL_NODE:
+            elif self.zone == _EditZone.CONTROL_NODE:
                 # Grabbing a node...
                 if self.phase == _PhaseBezier.CREATE_PATH:
 
@@ -941,7 +942,7 @@ class BezierMode (InkingMode,
 
                 # FALLTHRU: *do* start a drag 
 
-            elif self.zone == _EditZone_Bezier.EMPTY_CANVAS:
+            elif self.zone == _EditZone.EMPTY_CANVAS:
                 
                 if self.phase == _PhaseBezier.CREATE_PATH:
                     if (len(self.nodes) > 0 and event.button == 1): 
@@ -979,7 +980,7 @@ class BezierMode (InkingMode,
                         self._queue_draw_buttons()
                     self.phase = _PhaseBezier.CHANGE_PHASE
 
-            elif self.zone == _EditZone_Bezier.CONTROL_HANDLE:
+            elif self.zone == _EditZone.CONTROL_HANDLE:
                 if self.phase == _PhaseBezier.CREATE_PATH:
                     self.phase = _PhaseBezier.ADJUST_HANDLE
 
@@ -1037,7 +1038,7 @@ class BezierMode (InkingMode,
         # Basically,all sections should do fall-through.
         if self.phase == _PhaseBezier.CREATE_PATH:
 
-            if self.zone == _EditZone_Bezier.EMPTY_CANVAS:
+            if self.zone == _EditZone.EMPTY_CANVAS:
                 if event.state != 0:
                     # To activate some mode override
                     self._last_event_node = None
@@ -1417,7 +1418,7 @@ class BezierMode (InkingMode,
         if (self.phase in (_Phase.ADJUST ,_Phase.ADJUST_PRESSURE)):
             self._start_new_capture_phase_bezier(rollback=True)
 
-class OverlayBezier (Overlay):
+class OverlayBezier (OverlayOncanvasMixin):
     """Overlay for an BezierMode's adjustable points"""
 
     def __init__(self, mode, tdw):
@@ -1428,12 +1429,12 @@ class OverlayBezier (Overlay):
         """Recalculates the positions of the mode's buttons."""
         # FIXME mostly copied from inktool.Overlay.update_button_positions
         # The difference is for-loop of nodes , to deal with control handles.
-        mode = self._inkmode
+        mode = self._mode
         nodes = mode.nodes
         num_nodes = len(nodes)
         if num_nodes == 0:
-            self.reject_button_pos = None
-            self.accept_button_pos = None
+            self.button_pos[_EditZone.ACCEPT_BUTTON] = None
+            self.button_pos[_EditZone.REJECT_BUTTON] = None
             return False
 
         button_radius = gui.style.FLOATING_BUTTON_RADIUS
@@ -1469,8 +1470,10 @@ class OverlayBezier (Overlay):
                 y = area_radius*math.cos(rad)
                 pos_list.append( (x + cx, - y + cy) )
 
-            self.accept_button_pos = pos_list[0][0], pos_list[0][1]
-            self.reject_button_pos = pos_list[1][0], pos_list[1][1]
+            self._button_pos[_EditZone.ACCEPT_BUTTON] = \
+                    (pos_list[0][0], pos_list[0][1])
+            self._button_pos[_EditZone.REJECT_BUTTON] = \
+                    (pos_list[1][0], pos_list[1][1])
         else:
             # Usually, Bezier tool needs to keep extending control points.
             # So when buttons placed around the tail(newest) node, 
@@ -1504,10 +1507,10 @@ class OverlayBezier (Overlay):
                 dx = vy * margin
                 dy = vx * margin
             
-            self.accept_button_pos = adjust_button_inside(
-                    cx + dx, cy - dy, button_radius * 1.5)
-            self.reject_button_pos = adjust_button_inside(
-                    cx - dx, cy + dy, button_radius * 1.5)
+            self._button_pos[_EditZone.ACCEPT_BUTTON] = \
+                    adjust_button_inside(cx + dx, cy - dy, button_radius * 1.5)
+            self._button_pos[_EditZone.REJECT_BUTTON] = \
+                    adjust_button_inside(cx - dx, cy + dy, button_radius * 1.5)
 
         return True
 
@@ -1521,7 +1524,7 @@ class OverlayBezier (Overlay):
         cr.set_line_width(1)
         for hi in (0,1):                        
             if ((hi == 0 and i > 0) or
-                    (hi == 1 and i <= len(self._inkmode.nodes)-1) or 
+                    (hi == 1 and i <= len(self._mode.nodes)-1) or 
                     self._draw_initial_handle_both): 
                 ch = node.get_control_handle(hi)
                 hx, hy = self._tdw.model_to_display(ch.x, ch.y)
@@ -1531,7 +1534,7 @@ class OverlayBezier (Overlay):
                     cr, hx, hy,
                     gui.style.ACTIVE_ITEM_COLOR, 
                     gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
-                    fill=(hi==self._inkmode.current_handle_index)) 
+                    fill=(hi==self._mode.current_handle_index)) 
                 if draw_line:
                     cr.set_source_rgb(0,0,0)
                     cr.set_dash((), 0)
@@ -1547,7 +1550,7 @@ class OverlayBezier (Overlay):
     
     def paint(self, cr, draw_buttons=True):
         """Draw adjustable nodes to the screen"""
-        mode = self._inkmode
+        mode = self._mode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
         dx, dy = mode.drag_offset.get_display_offset(self._tdw)
@@ -1579,7 +1582,7 @@ class OverlayBezier (Overlay):
                 else:
                     if i == mode.current_node_index:
                         # Drawing control handle
-                        if mode.zone == _EditZone_Bezier.CONTROL_HANDLE:
+                        if mode.zone == _EditZone.CONTROL_HANDLE:
                             show_node = True
                             color = gui.style.ACTIVE_ITEM_COLOR
                                   
@@ -1612,36 +1615,21 @@ class OverlayBezier (Overlay):
                 
         # Buttons
         if (draw_buttons and 
-                not mode.in_drag and len(self._inkmode.nodes) > 1):
+                not mode.in_drag and len(self._mode.nodes) > 1):
             self.update_button_positions()
-            radius = gui.style.FLOATING_BUTTON_RADIUS
             button_info = [
                 (
                     "mypaint-ok-symbolic",
-                    self.accept_button_pos,
-                    _EditZone_Bezier.ACCEPT_BUTTON,
+                    self._button_pos[_EditZone.ACCEPT_BUTTON],
+                    _EditZone.ACCEPT_BUTTON,
                 ),
                 (
                     "mypaint-trash-symbolic",
-                    self.reject_button_pos,
-                    _EditZone_Bezier.REJECT_BUTTON,
+                    self._button_pos[_EditZone.REJECT_BUTTON],
+                    _EditZone.REJECT_BUTTON,
                 ),
             ]
-            for icon_name, pos, zone in button_info:
-                if pos is None:
-                    continue
-                x, y = pos
-                if mode.zone == zone:
-                    color = gui.style.ACTIVE_ITEM_COLOR
-                else:
-                    color = gui.style.EDITABLE_ITEM_COLOR
-                icon_pixbuf = self._get_button_pixbuf(icon_name)
-                gui.drawutils.render_round_floating_button(
-                    cr=cr, x=x, y=y,
-                    color=color,
-                    pixbuf=icon_pixbuf,
-                    radius=radius,
-                )
+            self._draw_buttons(cr, button_info)
         
 
                 

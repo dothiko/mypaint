@@ -104,12 +104,12 @@ class _Node (collections.namedtuple("_Node", _NODE_FIELDS)):
     """
 
 
-class _EditZone:
+class _EditZone(gui.oncanvas.EditZone_Mixin):
     """Enumeration of what the pointer is on in the ADJUST phase"""
-    EMPTY_CANVAS = 0  #: Nothing, empty space
-    CONTROL_NODE = 1  #: Any control node; see target_node_index
-    REJECT_BUTTON = 2  #: On-canvas button that abandons the current line
-    ACCEPT_BUTTON = 3  #: On-canvas button that commits the current line
+   #EMPTY_CANVAS = 0  #: Nothing, empty space
+   #CONTROL_NODE = 1  #: Any control node; see target_node_index
+   #REJECT_BUTTON = 2  #: On-canvas button that abandons the current line
+   #ACCEPT_BUTTON = 3  #: On-canvas button that commits the current line
 
 
 class InkingMode (gui.mode.ScrollableModeMixin,
@@ -616,8 +616,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 overlay = self._ensure_overlay_for_tdw(tdw)
                 hit_dist = gui.style.FLOATING_BUTTON_RADIUS
                 button_info = [
-                    (_EditZone.ACCEPT_BUTTON, overlay.accept_button_pos),
-                    (_EditZone.REJECT_BUTTON, overlay.reject_button_pos),
+                    (_EditZone.ACCEPT_BUTTON, overlay.get_button_pos(_EditZone.ACCEPT_BUTTON)),
+                    (_EditZone.REJECT_BUTTON, overlay.get_button_pos(_EditZone.REJECT_BUTTON)),
                 ]
                 for btn_zone, btn_pos in button_info:
                     if btn_pos is None:
@@ -679,8 +679,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         for tdw, overlay in self._overlays.items():
             overlay.update_button_positions()
             positions = (
-                overlay.reject_button_pos,
-                overlay.accept_button_pos,
+                overlay.get_button_pos(_EditZone.REJECT_BUTTON),
+                overlay.get_button_pos(_EditZone.ACCEPT_BUTTON),
             )
             for pos in positions:
                 if pos is None:
@@ -1780,24 +1780,24 @@ class InkingMode (gui.mode.ScrollableModeMixin,
 
 
 
-class Overlay (gui.overlays.Overlay):
+class Overlay (gui.oncanvas.OverlayOncanvasMixin):
     """Overlay for an InkingMode's adjustable points"""
 
-    def __init__(self, inkmode, tdw):
-        super(Overlay, self).__init__()
-        self._inkmode = weakref.proxy(inkmode)
-        self._tdw = weakref.proxy(tdw)
-        self._button_pixbuf_cache = {}
-        self.accept_button_pos = None
-        self.reject_button_pos = None
+#   def __init__(self, inkmode, tdw):
+#       super(Overlay, self).__init__()
+#       self._mode = weakref.proxy(inkmode)
+#       self._tdw = weakref.proxy(tdw)
+#       self._button_pixbuf_cache = {}
+#       self.get_button_pos(_EditZone.ACCEPT_BUTTON) = None
+#       self.get_button_pos(_EditZone.REJECT_BUTTON) = None
 
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
-        nodes = self._inkmode.nodes
+        nodes = self._mode.nodes
         num_nodes = len(nodes)
         if num_nodes == 0:
-            self.reject_button_pos = None
-            self.accept_button_pos = None
+            self.self._button_pos[_EditZone.REJECT_BUTTON] = None
+            self.self._button_pos[_EditZone.ACCEPT_BUTTON] = None
             return
 
         button_radius = gui.style.FLOATING_BUTTON_RADIUS
@@ -1880,25 +1880,28 @@ class Overlay (gui.overlays.Overlay):
             settled = [(p.speed<0.5) for p in [accept_button, reject_button]]
             if all(settled):
                 break
-        self.accept_button_pos = accept_button.x, accept_button.y
-        self.reject_button_pos = reject_button.x, reject_button.y
+        self.self._button_pos[_EditZone.ACCEPT_BUTTON] = accept_button.x, accept_button.y
+        self.self._button_pos[_EditZone.REJECT_BUTTON] = reject_button.x, reject_button.y
 
-    def _get_button_pixbuf(self, name):
-        """Loads the pixbuf corresponding to a button name (cached)"""
-        cache = self._button_pixbuf_cache
-        pixbuf = cache.get(name)
-        if not pixbuf:
-            pixbuf = gui.drawutils.load_symbolic_icon(
-                icon_name=name,
-                size=gui.style.FLOATING_BUTTON_ICON_SIZE,
-                fg=(0, 0, 0, 1),
-            )
-            cache[name] = pixbuf
-        return pixbuf
+#   def _get_button_pixbuf(self, name):
+#       """Loads the pixbuf corresponding to a button name (cached)"""
+#       cache = self._button_pixbuf_cache
+#       pixbuf = cache.get(name)
+#       if not pixbuf:
+#           pixbuf = gui.drawutils.load_symbolic_icon(
+#               icon_name=name,
+#               size=gui.style.FLOATING_BUTTON_ICON_SIZE,
+#               fg=(0, 0, 0, 1),
+#           )
+#           cache[name] = pixbuf
+#       return pixbuf
 
     def _get_onscreen_nodes(self):
-        """Iterates across only the on-screen nodes."""
-        mode = self._inkmode
+        """ Override mixin method.
+        Iterates across only the on-screen nodes.
+        with range-based adjustment.
+        """
+        mode = self._mode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
         for i, node, x, y in mode.nodes_position_iter(self._tdw):
@@ -1922,7 +1925,7 @@ class Overlay (gui.overlays.Overlay):
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
         # Control nodes
-        mode = self._inkmode
+        mode = self._mode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
         dx,dy = mode.drag_offset.get_display_offset(self._tdw)
@@ -1967,34 +1970,19 @@ class Overlay (gui.overlays.Overlay):
                  _Phase.ADJUST_PRESSURE_ONESHOT) and
                 not mode.in_drag):
             self.update_button_positions()
-            radius = gui.style.FLOATING_BUTTON_RADIUS
             button_info = [
                 (
                     "mypaint-ok-symbolic",
-                    self.accept_button_pos,
+                    self.get_button_pos(_EditZone.ACCEPT_BUTTON),
                     _EditZone.ACCEPT_BUTTON,
                 ),
                 (
                     "mypaint-trash-symbolic",
-                    self.reject_button_pos,
+                    self.get_button_pos(_EditZone.REJECT_BUTTON),
                     _EditZone.REJECT_BUTTON,
                 ),
             ]
-            for icon_name, pos, zone in button_info:
-                if pos is None:
-                    continue
-                x, y = pos
-                if mode.zone == zone:
-                    color = gui.style.ACTIVE_ITEM_COLOR
-                else:
-                    color = gui.style.EDITABLE_ITEM_COLOR
-                icon_pixbuf = self._get_button_pixbuf(icon_name)
-                gui.drawutils.render_round_floating_button(
-                    cr=cr, x=x, y=y,
-                    color=color,
-                    pixbuf=icon_pixbuf,
-                    radius=radius,
-                )
+            self._draw_buttons(cr, button_info)
 
         if mode.phase == _Phase.ADJUST:
             if mode.in_drag and mode.range_radius > 0:

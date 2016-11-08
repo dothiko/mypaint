@@ -29,13 +29,14 @@ import gui.mode
 from drawutils import spline_4p
 from lib import mypaintlib
 from gui.inktool import *
-from gui.inktool import _LayoutNode, _Phase, _EditZone
+from gui.inktool import _LayoutNode, _Phase
 from gui.linemode import *
 from lib.command import Command
 from gui.ui_utils import *
 from gui.stamps import *
 from lib.color import HCYColor, RGBColor
 import lib.helpers
+from gui.oncanvas import *
 
 ## Module settings
 
@@ -68,7 +69,7 @@ class _PhaseStamp(_Phase):
     ADJUST_SOURCE = 107    #: Adjust source target area
     ADJUST_SOURCE_BY_HANDLE = 108    #: Adjust source target area with handle.
 
-class _EditZone_Stamp:
+class _EditZone(EditZone_Mixin):
     """Enumeration of what the pointer is on in phases"""
     CONTROL_HANDLE_0 = 100
     CONTROL_HANDLE_1 = 101
@@ -115,7 +116,7 @@ class DrawStamp(Command):
 
 
 
-class StampMode (InkingMode):
+class StampMode (InkingMode, OncanvasEditMixin):
 
     ## Metadata properties
 
@@ -342,11 +343,14 @@ class StampMode (InkingMode):
                 # Test buttons for hits
                 overlay = self._ensure_overlay_for_tdw(tdw)
                 hit_dist = gui.style.FLOATING_BUTTON_RADIUS
-                button_info = [
-                    (_EditZone.ACCEPT_BUTTON, overlay.accept_button_pos),
-                    (_EditZone.REJECT_BUTTON, overlay.reject_button_pos),
-                ]
-                for btn_zone, btn_pos in button_info:
+               #button_info = [
+               #    (_EditZone.ACCEPT_BUTTON, overlay.accept_button_pos),
+               #    (_EditZone.REJECT_BUTTON, overlay.reject_button_pos),
+               #]
+               #for btn_zone, btn_pos in button_info:
+                for btn_zone in (_EditZone.ACCEPT_BUTTON, 
+                                _EditZone.REJECT_BUTTON):
+                    btn_pos = overlay.get_button_pos(btn_zone)
                     if btn_pos is None:
                         continue
                     btn_x, btn_y = btn_pos
@@ -362,7 +366,7 @@ class StampMode (InkingMode):
                             self._search_target_node(tdw, x, y)
                     if new_target_node_index != None:
                         if  0<= control_node_idx <= 3:
-                            new_zone = _EditZone_Stamp.CONTROL_HANDLE_BASE + \
+                            new_zone = _EditZone.CONTROL_HANDLE_BASE + \
                                         control_node_idx
                         else:
                             new_zone = _EditZone.CONTROL_NODE
@@ -379,7 +383,7 @@ class StampMode (InkingMode):
                             for  t, tx, ty in enum_area_point(*area):
                                 if (tx-margin <= x <= tx+margin and 
                                         ty-margin <= y <= ty+margin):
-                                    new_zone = _EditZone_Stamp.SOURCE_AREA_HANDLE
+                                    new_zone = _EditZone.SOURCE_AREA_HANDLE
                                     new_target_area_handle = t
                                     new_target_area_index = i
                                     break
@@ -391,7 +395,7 @@ class StampMode (InkingMode):
                                 hit_dist = gui.style.FLOATING_BUTTON_RADIUS / 2
 
                                 if sx <= x <= ex and sy <= y <= ey:
-                                    new_zone = _EditZone_Stamp.SOURCE_AREA
+                                    new_zone = _EditZone.SOURCE_AREA
                                     new_target_area_index = i
 
                                     if self.show_area_trash_button:
@@ -399,7 +403,7 @@ class StampMode (InkingMode):
                                         btn_y = sy + (ey - sy) / 2
                                         d = math.hypot(btn_x - x, btn_y - y)
                                         if d <= hit_dist:
-                                            new_zone = _EditZone_Stamp.SOURCE_TRASH_BUTTON
+                                            new_zone = _EditZone.SOURCE_TRASH_BUTTON
 
                             # Check zone again.
                             # Either cursor is on handle or on rect,
@@ -590,7 +594,7 @@ class StampMode (InkingMode):
 
             if self.zone in (_EditZone.REJECT_BUTTON,
                              _EditZone.ACCEPT_BUTTON,
-                             _EditZone_Stamp.SOURCE_TRASH_BUTTON):
+                             _EditZone.SOURCE_TRASH_BUTTON):
                 if (button == 1 and
                         event.type == Gdk.EventType.BUTTON_PRESS):
                     self._click_info = (button, self.zone)
@@ -625,21 +629,21 @@ class StampMode (InkingMode):
 
                 # FALLTHRU: *do* start a drag
 
-            elif (_EditZone_Stamp.CONTROL_HANDLE_0 <= 
-                    self.zone <= _EditZone_Stamp.CONTROL_HANDLE_3):
+            elif (_EditZone.CONTROL_HANDLE_0 <= 
+                    self.zone <= _EditZone.CONTROL_HANDLE_3):
                 if button == 1:
 
                     self.current_handle_index = \
-                            self.zone - _EditZone_Stamp.CONTROL_HANDLE_BASE
+                            self.zone - _EditZone.CONTROL_HANDLE_BASE
 
                     if ctrl_state:
                         self.phase = _PhaseStamp.ROTATE_BY_HANDLE
                     else:
                         self.phase = _PhaseStamp.SCALE_BY_HANDLE
-            elif self.zone in (_EditZone_Stamp.SOURCE_AREA,
-                               _EditZone_Stamp.SOURCE_AREA_HANDLE):
+            elif self.zone in (_EditZone.SOURCE_AREA,
+                               _EditZone.SOURCE_AREA_HANDLE):
                 if button == 1:
-                    if self.zone == _EditZone_Stamp.SOURCE_AREA:
+                    if self.zone == _EditZone.SOURCE_AREA:
                         self.phase = _PhaseStamp.ADJUST_SOURCE
                     else:
                         self.phase = _PhaseStamp.ADJUST_SOURCE_BY_HANDLE
@@ -684,7 +688,7 @@ class StampMode (InkingMode):
                         elif zone0 == _EditZone.ACCEPT_BUTTON:
                             self._start_new_capture_phase(rollback=False)
                             assert self.phase == _Phase.CAPTURE
-                        elif zone0 == _EditZone_Stamp.SOURCE_TRASH_BUTTON:
+                        elif zone0 == _EditZone.SOURCE_TRASH_BUTTON:
                             assert self.stamp.is_support_selection
                             assert self.target_area_handle == None
                             self._queue_selection_area(tdw)
@@ -749,8 +753,8 @@ class StampMode (InkingMode):
                             shift_state):
                         
                         self.show_area_trash_button = \
-                                (self.zone in (_EditZone_Stamp.SOURCE_AREA,
-                                               _EditZone_Stamp.SOURCE_TRASH_BUTTON))
+                                (self.zone in (_EditZone.SOURCE_AREA,
+                                               _EditZone.SOURCE_TRASH_BUTTON))
                     else:
                         self.show_area_trash_button = False
 
@@ -1176,7 +1180,7 @@ class StampMode (InkingMode):
 
 
 
-class Overlay_Stamp (Overlay):
+class Overlay_Stamp (OverlayOncanvasMixin):
     """Overlay for an StampMode's adjustable points"""
 
     SELECTED_COLOR = \
@@ -1191,7 +1195,7 @@ class Overlay_Stamp (Overlay):
 
     def _get_onscreen_nodes(self):
         """Iterates across only the on-screen nodes."""
-        mode = self._inkmode
+        mode = self._mode
         alloc = self._tdw.get_allocation()
         dx,dy = mode.drag_offset.get_model_offset()
         for i, node in enumerate(mode.nodes):
@@ -1218,12 +1222,12 @@ class Overlay_Stamp (Overlay):
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
 
-        mode = self._inkmode
+        mode = self._mode
         nodes = mode.nodes
         num_nodes = len(nodes)
         if num_nodes == 0:
-            self.reject_button_pos = None
-            self.accept_button_pos = None
+            self._button_pos[_EditZone.REJECT_BUTTON] = None
+            self._button_pos[_EditZone.ACCEPT_BUTTON] = None
             return False
 
         button_radius = gui.style.FLOATING_BUTTON_RADIUS
@@ -1259,8 +1263,8 @@ class Overlay_Stamp (Overlay):
                 y = area_radius*math.cos(rad)
                 pos_list.append( (x + cx, - y + cy) )
 
-            self.accept_button_pos = pos_list[0][0], pos_list[0][1]
-            self.reject_button_pos = pos_list[1][0], pos_list[1][1]
+            self._button_pos[_EditZone.ACCEPT_BUTTON] = pos_list[0][0], pos_list[0][1]
+            self._button_pos[_EditZone.REJECT_BUTTON] = pos_list[1][0], pos_list[1][1]
         else:
             # Usually, these tool needs to keep extending control points.
             # So when buttons placed around the tail(newest) node, 
@@ -1287,9 +1291,9 @@ class Overlay_Stamp (Overlay):
             dx = vx * margin
             dy = vy * margin
             
-            self.accept_button_pos = adjust_button_inside(
+            self._button_pos[_EditZone.ACCEPT_BUTTON] = adjust_button_inside(
                     cx + dy, cy - dx, button_radius * 1.5)
-            self.reject_button_pos = adjust_button_inside(
+            self._button_pos[_EditZone.REJECT_BUTTON] = adjust_button_inside(
                     cx - dy, cy + dx, button_radius * 1.5)
 
         return True
@@ -1304,7 +1308,7 @@ class Overlay_Stamp (Overlay):
         :param dx, dy: display coordinate position of node.
         :param color: color of stamp rectangle
         """
-        mode = self._inkmode
+        mode = self._mode
         pos = mode.stamp.get_boundary_points(node, tdw=self._tdw)
         x, y = self._tdw.model_to_display(node.x, node.y)
         normal_color, selected_color = colors
@@ -1314,7 +1318,7 @@ class Overlay_Stamp (Overlay):
             x+=dx
             y+=dy
             for i, pt in enumerate(pos):
-                handle_idx = _EditZone_Stamp.CONTROL_HANDLE_BASE + i
+                handle_idx = _EditZone.CONTROL_HANDLE_BASE + i
                 gui.drawutils.render_square_floating_color_chip(
                     cr, pt[0] + dx, pt[1] + dy,
                     gui.style.ACTIVE_ITEM_COLOR, 
@@ -1327,7 +1331,7 @@ class Overlay_Stamp (Overlay):
 
     def draw_stamp_rect(self, cr, idx, dx, dy, color, position=None):
         cr.save()
-        mode = self._inkmode
+        mode = self._mode
         cr.set_line_width(1)
 
         cr.set_source_rgb(0, 0, 0)
@@ -1354,7 +1358,7 @@ class Overlay_Stamp (Overlay):
         cr.save()
         cr.set_line_width(1)
         tdw = self._tdw
-        mode = self._inkmode
+        mode = self._mode
         icon_pixbuf = None
         current_layer = tdw.doc.layer_stack.current
         assert mode.stamp and hasattr(mode.stamp, "enum_visible_selection_areas")
@@ -1409,7 +1413,7 @@ class Overlay_Stamp (Overlay):
                         icon_pixbuf = self._get_button_pixbuf("mypaint-trash-symbolic")
                         radius = gui.style.FLOATING_BUTTON_RADIUS / 2
 
-                    if mode.zone == _EditZone_Stamp.SOURCE_TRASH_BUTTON:
+                    if mode.zone == _EditZone.SOURCE_TRASH_BUTTON:
                         btn_color = gui.style.ACTIVE_ITEM_COLOR
                     else:
                         btn_color = gui.style.EDITABLE_ITEM_COLOR
@@ -1426,7 +1430,7 @@ class Overlay_Stamp (Overlay):
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
 
-        mode = self._inkmode
+        mode = self._mode
         if mode.stamp == None:
             return
 
@@ -1464,34 +1468,19 @@ class Overlay_Stamp (Overlay):
                 len(mode.nodes) > 0 and
                 not mode.in_drag):
             self.update_button_positions()
-            radius = gui.style.FLOATING_BUTTON_RADIUS
             button_info = [
                 (
                     "mypaint-ok-symbolic",
-                    self.accept_button_pos,
+                    self.get_button_pos(_EditZone.ACCEPT_BUTTON),
                     _EditZone.ACCEPT_BUTTON,
                 ),
                 (
                     "mypaint-trash-symbolic",
-                    self.reject_button_pos,
+                    self.get_button_pos(_EditZone.REJECT_BUTTON),
                     _EditZone.REJECT_BUTTON,
                 ),
             ]
-            for icon_name, pos, zone in button_info:
-                if pos is None:
-                    continue
-                x, y = pos
-                if mode.zone == zone:
-                    color = gui.style.ACTIVE_ITEM_COLOR
-                else:
-                    color = gui.style.EDITABLE_ITEM_COLOR
-                icon_pixbuf = self._get_button_pixbuf(icon_name)
-                gui.drawutils.render_round_floating_button(
-                    cr=cr, x=x, y=y,
-                    color=color,
-                    pixbuf=icon_pixbuf,
-                    radius=radius,
-                )
+            self._draw_buttons(cr, button_info)
 
 
 class OptionsPresenter_Stamp (object):
