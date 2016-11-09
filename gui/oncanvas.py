@@ -2,6 +2,8 @@
 # -*- coding: UTF-8 -*-
 # This file is part of MyPaint.
 # Copyright (C) 2016 by Dothiko <a.t.dothiko@gmail.com>
+# Most part of this file is transplanted from
+# original gui/inktool.py, re-organized it as Mixin.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -63,17 +65,15 @@ import gui.ui_utils
 #            self._queue_draw_buttons()
 #        return result
 #    return _decorator
-#
-#
-### Class defs
-#
-#
-#
-#class _Phase:
-#    """Enumeration of the states that an InkingMode can be in"""
-#    CAPTURE = 0
-#    ADJUST = 1
-#
+
+
+## Class defs
+
+class Phase_Mixin:
+    """Enumeration of the states that an InkingMode can be in"""
+    CAPTURE = 0
+    ADJUST = 1
+
 #
 ##_NODE_FIELDS = ("x", "y", "pressure", "xtilt", "ytilt", "time")
 ##
@@ -99,8 +99,17 @@ class EditZone_Mixin:
     REJECT_BUTTON = 3  #: On-canvas action button. Also used when drawing overlay.
 
 
-class OncanvasEditMixin(object):
+class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
+                        gui.mode.BrushworkModeMixin,
+                        gui.mode.DragMode):
     """ Mixin for modes which have on-canvas node editing ability.
+
+    Actually, to create new oncanvas editable mode,
+    you will need other useful mixins such as
+
+    gui.mode.ScrollableModeMixin,
+    gui.mode.BrushworkModeMixin,
+    and gui.mode.DragMode.
 
     This mixin adds the ability to edit on-canvas nodes.
     The `accept()` finalize the node editing result
@@ -113,25 +122,14 @@ class OncanvasEditMixin(object):
     pointer_behavior = gui.mode.Behavior.PAINT_FREEHAND
     scroll_behavior = gui.mode.Behavior.CHANGE_VIEW
 
-    def _queue_draw_node(self, idx):
-        """ queue an oncanvas item to draw."""
-
-    def _queue_draw_selected_nodes(self):
-        for i in self.selected_nodes:
-            self._queue_draw_node(i)
-
-    def _queue_redraw_all_nodes(self):
-        """Redraws all nodes on all known view TDWs"""
-        for i in xrange(len(self.nodes)):
-            self._queue_draw_node(i)
 
 
     ## Metadata methods
 
-#   @property
-#   def inactive_cursor(self):
-#       return None
-#
+    @property
+    def inactive_cursor(self):
+        return None
+ 
 #   @property
 #   def active_cursor(self):
 #       if self.phase == _Phase.ADJUST:
@@ -145,216 +143,246 @@ class OncanvasEditMixin(object):
 #               return self._cursor_move_nw_se
 #
 #       return None
-#
-#   ## Override action
-#   permitted_switch_actions = None
-#   _enable_switch_actions = set()   # Any action is permitted,for now.
-#   _disable_switch_actions=set(gui.mode.BUTTON_BINDING_ACTIONS).union([
-#           'RotateViewMode',
-#           'ZoomViewMode',
-#           'PanViewMode',
-#           "SelectionMode",
-#       ])
-#
-#   @classmethod
-#   def enable_switch_actions(cls, flag):
-#       if flag:
-#           cls.permitted_switch_actions = cls._enable_switch_actions
-#       else:
-#           cls.permitted_switch_actions = cls._disable_switch_actions
-#
-#
-#
-#   ## Class attributes
-#
-#   _OPTIONS_PRESENTER = None   #: Options presenter singleton
-#
-#   drag_offset = gui.ui_utils.DragOffset()
-#
-#   # _BUTTONS attribute is a dict of tuples, to contain information of 
-#   # on-canvas action buttons.
-#   # The information tuple is consist of ( _EditZone-id , callback )
-#   # 
-#   # It should be something like that:
-#   #
-#   
-#   _BUTTONS = { 
-#      _EditZone.ACCEPT_BUTTON : self.accept_button_cb ,
-#      _EditZone.REJECT_BUTTON : self.reject_button_cb ,
-#   }
-#   
-#   ## Initialization & lifecycle methods
-#
-#   def __init__(self, **kwargs):
-#
-#       #+ initialize selected nodes - 
-#       #+ place this prior to _reset_nodes()
-#       self.selected_nodes=[]
-#
-#       self.phase = _Phase.CAPTURE
-#       self.zone = _EditZone.EMPTY_CANVAS
-#       self.current_node_index = None  #: Node active in the options ui
-#       self.target_node_index = None  #: Node that's prelit
-#       self._overlays = {}  # keyed by tdw
-#       self._reset_nodes()
-#       self._reset_adjust_data()
-#       self._task_queue = collections.deque()  # (cb, args, kwargs)
-#       self._task_queue_runner_id = None
-#       self._clicked_action_button = None  # id of self._BUTTONS
-#       self._current_override_cursor = None
-#       # Button pressed while drawing
-#       # Not every device sends button presses, but evdev ones
-#       # do, and this is used as a workaround for an evdev bug:
-#       # https://github.com/mypaint/mypaint/issues/223
-#       self._button_down = None
-#
-#       #+ Hiding nodes functionality
-#       self._hide_nodes = False
-#
-#       #+ Previous scroll event time.
-#       #  in some environment, Gdk.ScrollDirection.UP/DOWN/LEFT/RIGHT
-#       #  and Gdk.ScrollDirection.SMOOTH might happen at same time.
-#       #  to reject such event, this attribute needed.
-#       self._prev_scroll_time = None
-#
-#       #+ Sub phase, use in deriving class.
-#       self.subphase = None
-#
-#
-#   def _reset_nodes(self):
-#       self.nodes = []  # nodes that met the distance+time criteria
-#       self._reset_selected_nodes(None)
-#
-#
-#   def _reset_adjust_data(self):
-#       self.zone = _EditZone.EMPTY_CANVAS
-#       self.current_node_index = None
-#       self.target_node_index = None
-#       self._dragged_node_start_pos = None
-#       self.drag_offset.reset()
-#
-#       # Multiple selected nodes.
-#       # This is a index list of node from self.nodes
-#       self._reset_selected_nodes()
-#
-#       self.hide_nodes = False
-#
-#
-#   def _reset_selected_nodes(self, initial_idx=None):
-#       """ Resets selected_nodes list and assign
-#       initial index,if needed.
-#
-#       :param initial_idx: initial node index.in most case,
-#                           node will manipurate by solo.
-#                           it might be inefficient to
-#                           generate list each time s solo node
-#                           is moved,so use this parameter in such case.
-#       """
-#
-#       if initial_idx == None:
-#           if len(self.selected_nodes) > 0:
-#               self.selected_nodes=[]
-#       elif len(self.selected_nodes) == 0:
-#           self.selected_nodes.append(initial_idx)
-#       elif len(self.selected_nodes) == 1:
-#           self.selected_nodes[0] = initial_idx
-#       else:
-#           self.selected_nodes = [initial_idx, ]
-#
-#
-#   def _ensure_overlay_for_tdw(self, tdw):
-#       overlay = self._overlays.get(tdw)
-#       if not overlay:
-#           overlay = Overlay(self, tdw)
-#           tdw.display_overlays.append(overlay)
-#           self._overlays[tdw] = overlay
-#       return overlay
-#
-#   def _is_active(self):
-#       """ To know whether this mode is active or not. 
-#       """
-#       for mode in self.doc.modes:
-#           if mode is self:
-#               return True
-#       return False
-#
-#   def _discard_overlays(self):
-#       for tdw, overlay in self._overlays.items():
-#           tdw.display_overlays.remove(overlay)
-#           tdw.queue_draw()
-#       self._overlays.clear()
-#
-#
-#
-#   def _start_new_capture_phase(self, rollback=False):
-#       """Let the end-user start a new capture phase.
-#       The mixin user class should implement
-#       `self.commit_editing_cb()`
-#       or, override this method completely.
-#
-#       :param rollback: If this is True, current editing
-#                           should be discarded.
-#                        Otherwise, the current editing
-#                        should be commited.
-#       
-#       """
-#       if rollback:
-#           self._stop_task_queue_runner(complete=False)
-#       else:
-#           self._stop_task_queue_runner(complete=True)
-#
-#       self.finalize_editing_cb(committed=rollback)
-#
-#       self.options_presenter.target = (self, None)
-#       self._queue_draw_buttons()
-#       self._queue_redraw_all_nodes()
-#       self._reset_nodes()
-#       self._reset_capture_data()
-#       self._reset_adjust_data()
-#       self.phase = _Phase.CAPTURE
-#       OncanvasEditMixin.enable_switch_actions(True)
-#
-#   def motion_notify_cb(self, tdw, event):
-#       self._ensure_overlay_for_tdw(tdw)
-#       current_layer = tdw.doc._layers.current
-#       if not (tdw.is_sensitive and current_layer.get_paintable()):
-#           return False
-#
-#       self._update_zone_and_target(tdw, event.x, event.y)
-#       return super(InkingMode, self).motion_notify_cb(tdw, event)
-#
-#   def _update_current_node_index(self):
-#       """Updates current_node_index from target_node_index & redraw"""
-#       new_index = self.target_node_index
-#       old_index = self.current_node_index
-#       if new_index == old_index:
-#           return
-#       self.current_node_index = new_index
-#       self.current_node_changed(new_index)
-#       self.options_presenter.target = (self, new_index)
-#       for i in (old_index, new_index):
-#           if i is not None:
-#               self._queue_draw_node(i)
-#
-#   @lib.observable.event
-#   def current_node_changed(self, index):
-#       """Event: current_node_index was changed"""
-#
-#   def _search_target_node(self, tdw, x, y, margin=12):
-#       """ utility method: to commonize processing,
-#       even in inherited classes.
-#       """
-#       hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + margin
-#       new_target_node_index = None
-#       for i, node in reversed(list(enumerate(self.nodes))):
-#           node_x, node_y = tdw.model_to_display(node.x, node.y)
-#           d = math.hypot(node_x - x, node_y - y)
-#           if d > hit_dist:
-#               continue
-#           new_target_node_index = i
-#           break
-#       return new_target_node_index
-#
+ 
+    ## Override action
+    permitted_switch_actions = None
+    _enable_switch_actions = set()   # Any action is permitted,for now.
+    _disable_switch_actions=set(gui.mode.BUTTON_BINDING_ACTIONS).union([
+            'RotateViewMode',
+            'ZoomViewMode',
+            'PanViewMode',
+            "SelectionMode",
+        ])
+ 
+    @classmethod
+    def enable_switch_actions(cls, flag):
+        if flag:
+            cls.permitted_switch_actions = cls._enable_switch_actions
+        else:
+            cls.permitted_switch_actions = cls._disable_switch_actions
+ 
+
+    ## Class config vars
+
+    # Input node capture settings:
+    MAX_INTERNODE_DISTANCE_MIDDLE = 30   # display pixels
+    MAX_INTERNODE_DISTANCE_ENDS = 10   # display pixels
+    MAX_INTERNODE_TIME = 1/100.0   # seconds
+
+    # Node value adjustment settings
+    MIN_INTERNODE_TIME = 1/200.0   # seconds (used to manage adjusting)
+
+
+    ## Class attributes
+ 
+    _OPTIONS_PRESENTER = None   #: Options presenter singleton
+ 
+    drag_offset = gui.ui_utils.DragOffset() #: Dragging management class singleton
+
+ 
+    ## Initialization & lifecycle methods
+ 
+    def __init__(self, **kwargs):
+
+        super(OncanvasEditMixin, self).__init__(**kwargs)
+ 
+        #+ initialize selected nodes - 
+        #+ place this prior to _reset_nodes()
+        self.selected_nodes=[]
+ 
+        self.phase = Phase_Mixin.CAPTURE
+        self.zone = EditZone_Mixin.EMPTY_CANVAS
+        self.current_node_index = None  #: Node active in the options ui
+        self.target_node_index = None  #: Node that's prelit
+        self._overlays = {}  # keyed by tdw
+        self._reset_nodes()
+        self._reset_adjust_data()
+        self._task_queue = collections.deque()  # (cb, args, kwargs)
+        self._task_queue_runner_id = None
+        self._clicked_action_button = None  # id of self._BUTTONS
+        self._current_override_cursor = None
+        # Button pressed while drawing
+        # Not every device sends button presses, but evdev ones
+        # do, and this is used as a workaround for an evdev bug:
+        # https://github.com/mypaint/mypaint/issues/223
+        self._button_down = None
+ 
+        #+ Hiding nodes functionality
+        self._hide_nodes = False
+ 
+        #+ Previous scroll event time.
+        #  in some environment, Gdk.ScrollDirection.UP/DOWN/LEFT/RIGHT
+        #  and Gdk.ScrollDirection.SMOOTH might happen at same time.
+        #  to reject such event, this attribute needed.
+        self._prev_scroll_time = None
+ 
+        #+ Sub phase, use in deriving class.
+        self.subphase = None
+
+        #+ returning phase.for special phase changing case.
+        self._returning_phase = None
+ 
+ 
+    def _reset_nodes(self):
+        self.nodes = []  # nodes that met the distance+time criteria
+        self._reset_selected_nodes(None)
+ 
+ 
+    def _reset_adjust_data(self):
+        self.zone = EditZone_Mixin.EMPTY_CANVAS
+        self.current_node_index = None
+        self.target_node_index = None
+        self._dragged_node_start_pos = None
+        self.drag_offset.reset()
+ 
+        # Multiple selected nodes.
+        # This is a index list of node from self.nodes
+        self._reset_selected_nodes()
+ 
+        self.hide_nodes = False
+
+        self._click_info = None
+ 
+ 
+    def _reset_selected_nodes(self, initial_idx=None):
+        """ Resets selected_nodes list and assign
+        initial index,if needed.
+ 
+        :param initial_idx: initial node index.in most case,
+                            node will manipurate by solo.
+                            it might be inefficient to
+                            generate list each time s solo node
+                            is moved,so use this parameter in such case.
+        """
+ 
+        if initial_idx == None:
+            if len(self.selected_nodes) > 0:
+                self.selected_nodes=[]
+        elif len(self.selected_nodes) == 0:
+            self.selected_nodes.append(initial_idx)
+        elif len(self.selected_nodes) == 1:
+            self.selected_nodes[0] = initial_idx
+        else:
+            self.selected_nodes = [initial_idx, ]
+ 
+    def _is_active(self):
+        """ To know whether this mode is active or not. 
+        """
+        for mode in self.doc.modes:
+            if mode is self:
+                return True
+        return False
+ 
+    ## Overlay related
+
+    def _ensure_overlay_for_tdw(self, tdw):
+        overlay = self._overlays.get(tdw)
+        if not overlay:
+            overlay = self._generate_overlay(tdw)
+            tdw.display_overlays.append(overlay)
+            self._overlays[tdw] = overlay
+        return overlay
+
+    def _discard_overlays(self):
+        for tdw, overlay in self._overlays.items():
+            tdw.display_overlays.remove(overlay)
+            tdw.queue_draw()
+        self._overlays.clear()
+
+    def _generate_overlay(self, tdw):
+        """ generate mode own overlay.
+        This is placeholder, should be implemented 
+        in child class.
+        """
+        pass
+ 
+
+    ##  Option presenter related
+    @property
+    def options_presenter(self):
+        """MVP presenter object for the node editor panel"""
+        cls = self.__class__
+        if cls._OPTIONS_PRESENTER is None:
+            cls._OPTIONS_PRESENTER = self._generate_presenter()
+        return cls._OPTIONS_PRESENTER
+
+    def get_options_widget(self):
+        """Get the (class singleton) options widget"""
+        return self.options_presenter.widget
+
+    ## Internal states
+
+    def _start_new_capture_phase(self, rollback=False):
+        """Let the user capture a new stroke"""
+        if rollback:
+            self._stop_task_queue_runner(complete=False)
+            self.brushwork_rollback_all()
+        else:
+            self._stop_task_queue_runner(complete=True)
+            self.brushwork_commit_all()
+        self.options_presenter.target = (self, None)
+        self._queue_draw_buttons()
+        self._queue_redraw_all_nodes()
+        self._reset_nodes()
+        self._reset_adjust_data()
+        self.phase = Phase_Mixin.CAPTURE
+        self.enable_switch_actions(True)
+
+    def enter(self, doc, **kwds):
+        """Enters the mode: called by `ModeStack.push()` etc."""
+        super(OncanvasEditMixin, self).enter(doc, **kwds)
+        if not self._is_active():
+            self._discard_overlays()
+        self._ensure_overlay_for_tdw(self.doc.tdw)
+        self._arrow_cursor = self.doc.app.cursors.get_action_cursor(
+            self.ACTION_NAME,
+            gui.cursor.Name.ARROW,
+        )
+        self._crosshair_cursor = self.doc.app.cursors.get_action_cursor(
+            self.ACTION_NAME,
+            gui.cursor.Name.CROSSHAIR_OPEN_PRECISE,
+        )
+        self._cursor_move_nw_se = self.doc.app.cursors.get_action_cursor(
+            self.ACTION_NAME,
+            gui.cursor.Name.MOVE_NORTHWEST_OR_SOUTHEAST,
+        )
+        self.drag_offset.reset()
+        self.enable_switch_actions(True)
+
+    def leave(self, **kwds):
+        """Leaves the mode: called by `ModeStack.pop()` etc."""
+        if not self._is_active():
+            self._discard_overlays()
+        self._stop_task_queue_runner(complete=True)
+        self.enable_switch_actions(False)
+        super(OncanvasEditMixin, self).leave(**kwds)  # supercall will commit
+
+    def checkpoint(self, flush=True, **kwargs):
+        """Sync pending changes from (and to) the model
+
+        If called with flush==False, this is an override which just
+        redraws the pending stroke with the current brush settings and
+        color. This is the behavior our testers expect:
+        https://github.com/mypaint/mypaint/issues/226
+
+        When this mode is left for another mode (see `leave()`), the
+        pending brushwork is committed properly.
+
+        """
+        if flush:
+            # Commit the pending work normally
+            self._start_new_capture_phase(rollback=False)
+            super(OncanvasEditMixin, self).checkpoint(flush=flush, **kwargs)
+        else:
+            # Queue a re-rendering with any new brush data
+            # No supercall
+            self._stop_task_queue_runner(complete=False)
+            self._queue_draw_buttons()
+            self._queue_redraw_all_nodes()
+            self._queue_redraw_curve()
+ 
+ 
+ 
 #   def _update_zone_and_target(self, tdw, x, y):
 #       """Update the zone and target node under a cursor position"""
 #
@@ -425,48 +453,40 @@ class OncanvasEditMixin(object):
 #
 #
 #   ## Redraws
-#
-#   def _queue_draw_buttons(self):
-#       """Redraws the accept/reject buttons on all known view TDWs"""
-#       for tdw, overlay in self._overlays.items():
-#          #positions = overlay.update_button_positions()
-#          #positions = (
-#          #    overlay.reject_button_pos,
-#          #    overlay.accept_button_pos,
-#          #)
-#           for id in self._BUTTONS.keys():
-#               pos = overlay.get_button_pos(id)
-#               if pos is None:
-#                   continue
-#               r = gui.style.FLOATING_BUTTON_ICON_SIZE
-#               r += max(
-#                   gui.style.DROP_SHADOW_X_OFFSET,
-#                   gui.style.DROP_SHADOW_Y_OFFSET,
-#               )
-#               r += gui.style.DROP_SHADOW_BLUR
-#               x, y = pos
-#               tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
-#
-#
-#   def _queue_draw_node(self, i):
-#       """Redraws a specific control node on all known view TDWs"""
-#       node = self.nodes[i]
-#       dx,dy = self.drag_offset.get_model_offset()
-#       for tdw in self._overlays:
-#           if i in self.selected_nodes:
-#               x, y = tdw.model_to_display(
-#                       node.x + dx, node.y + dy)
-#           else:
-#               x, y = tdw.model_to_display(node.x, node.y)
-#           x = math.floor(x)
-#           y = math.floor(y)
-#           size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
-#           tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
-#
-#   def _queue_draw_selected_nodes(self):
-#       for i in self.selected_nodes:
-#           self._queue_draw_node(i)
-#
+
+    def _queue_draw_buttons(self):
+        """Redraws the accept/reject buttons on all known view TDWs"""
+        for tdw, overlay in self._overlays.items():
+            overlay.update_button_positions()
+            positions = (
+                overlay.get_button_pos(EditZone_Mixin.REJECT_BUTTON),
+                overlay.get_button_pos(EditZone_Mixin.ACCEPT_BUTTON),
+            )
+            for pos in positions:
+                if pos is None:
+                    continue
+                r = gui.style.FLOATING_BUTTON_ICON_SIZE
+                r += max(
+                    gui.style.DROP_SHADOW_X_OFFSET,
+                    gui.style.DROP_SHADOW_Y_OFFSET,
+                )
+                r += gui.style.DROP_SHADOW_BLUR
+                x, y = pos
+                tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
+
+    def _queue_draw_node(self, idx):
+        """ queue an oncanvas item to draw."""
+
+    def _queue_draw_selected_nodes(self):
+        for i in self.selected_nodes:
+            self._queue_draw_node(i)
+
+    def _queue_redraw_all_nodes(self):
+        """Redraws all nodes on all known view TDWs"""
+        for i in xrange(len(self.nodes)):
+            self._queue_draw_node(i)
+
+ 
 #   def _queue_redraw_display(self):
 #       """ queue redraw entire(not only overlay) displaying items.
 #       """
@@ -474,50 +494,48 @@ class OncanvasEditMixin(object):
 #       self._queue_redraw_all_nodes()
 #       self._queue_draw_buttons()
 #
-#   def _queue_redraw_all_nodes(self):
-#       """ Redraws all nodes on all known view TDWs"""
-#       for i in xrange(len(self.nodes)):
-#           self._queue_draw_node(i)
-#
 #   def _queue_redraw_contents(self):
 #       """ Redraws class specific drawing contents
 #       like a stroke in Inktool.
 #       """
 #       pass
 #
-#   def _queue_task(self, callback, *args, **kwargs):
-#       """Append a task to be done later in an idle cycle"""
-#       self._task_queue.append((callback, args, kwargs))
-#
-#   def _start_task_queue_runner(self):
-#       """Begin processing the task queue, if not already going"""
-#       if self._task_queue_runner_id is not None:
-#           return
-#       idler_id = GLib.idle_add(self._task_queue_runner_cb)
-#       self._task_queue_runner_id = idler_id
-#
-#   def _stop_task_queue_runner(self, complete=True):
-#       """Halts processing of the task queue, and clears it"""
-#       if self._task_queue_runner_id is None:
-#           return
-#       if complete:
-#           for (callback, args, kwargs) in self._task_queue:
-#               callback(*args, **kwargs)
-#       self._task_queue.clear()
-#       GLib.source_remove(self._task_queue_runner_id)
-#       self._task_queue_runner_id = None
-#
-#   def _task_queue_runner_cb(self):
-#       """Idle runner callback for the task queue"""
-#       try:
-#           callback, args, kwargs = self._task_queue.popleft()
-#       except IndexError:  # queue empty
-#           self._task_queue_runner_id = None
-#           return False
-#       else:
-#           callback(*args, **kwargs)
-#           return True
-#
+
+    ## Redrawing task management
+
+    def _queue_task(self, callback, *args, **kwargs):
+        """Append a task to be done later in an idle cycle"""
+        self._task_queue.append((callback, args, kwargs))
+ 
+    def _start_task_queue_runner(self):
+        """Begin processing the task queue, if not already going"""
+        if self._task_queue_runner_id is not None:
+            return
+        idler_id = GLib.idle_add(self._task_queue_runner_cb)
+        self._task_queue_runner_id = idler_id
+ 
+    def _stop_task_queue_runner(self, complete=True):
+        """Halts processing of the task queue, and clears it"""
+        if self._task_queue_runner_id is None:
+            return
+        if complete:
+            for (callback, args, kwargs) in self._task_queue:
+                callback(*args, **kwargs)
+        self._task_queue.clear()
+        GLib.source_remove(self._task_queue_runner_id)
+        self._task_queue_runner_id = None
+ 
+    def _task_queue_runner_cb(self):
+        """Idle runner callback for the task queue"""
+        try:
+            callback, args, kwargs = self._task_queue.popleft()
+        except IndexError:  # queue empty
+            self._task_queue_runner_id = None
+            return False
+        else:
+            callback(*args, **kwargs)
+            return True
+ 
 #   ## Editing result commit/cancel callbacks
 #
 #   def finalize_editing_cb(self, commited):
@@ -532,7 +550,17 @@ class OncanvasEditMixin(object):
 #       """
 #       pass
 #
-#   ## Raw event handling (prelight & zone selection in adjust phase)
+    ## Raw event handling (prelight & zone selection in adjust phase)
+
+    def motion_notify_cb(self, tdw, event):
+        self._ensure_overlay_for_tdw(tdw)
+        current_layer = tdw.doc._layers.current
+        if not (tdw.is_sensitive and current_layer.get_paintable()):
+            return False
+ 
+        self._update_zone_and_target(tdw, event.x, event.y)
+        return super(OncanvasEditMixin, self).motion_notify_cb(tdw, event)
+
 #   def button_press_cb(self, tdw, event):
 #       self._ensure_overlay_for_tdw(tdw)
 #       current_layer = tdw.doc._layers.current
@@ -805,123 +833,134 @@ class OncanvasEditMixin(object):
 #       pass
 #
 #
-#   ## Interrogating events
-#
-#   def _get_event_data(self, tdw, event):
-#       x, y = tdw.display_to_model(event.x, event.y)
-#       xtilt, ytilt = self._get_event_tilt(tdw, event)
-#       return _Node(
-#           x=x, y=y,
-#           pressure=self._get_event_pressure(event),
-#           xtilt=xtilt, ytilt=ytilt,
-#           time=(event.time / 1000.0),
-#       )
-#
-#   def _get_event_pressure(self, event):
-#       # FIXME: CODE DUPLICATION: copied from freehand.py
-#       pressure = event.get_axis(Gdk.AxisUse.PRESSURE)
-#       if pressure is not None:
-#           if not np.isfinite(pressure):
-#               pressure = None
-#           else:
-#               pressure = lib.helpers.clamp(pressure, 0.0, 1.0)
-#
-#       if pressure is None:
-#           pressure = 0.0
-#           if event.state & Gdk.ModifierType.BUTTON1_MASK:
-#               pressure = 0.5
-#
-#       # Workaround for buggy evdev behaviour.
-#       # Events sometimes get a zero raw pressure reading when the
-#       # pressure reading has not changed. This results in broken
-#       # lines. As a workaround, forbid zero pressures if there is a
-#       # button pressed down, and substitute the last-known good value.
-#       # Detail: https://github.com/mypaint/mypaint/issues/223
-#       if self._button_down is not None:
-#           if pressure == 0.0:
-#               pressure = self._last_good_raw_pressure
-#           elif pressure is not None and np.isfinite(pressure):
-#               self._last_good_raw_pressure = pressure
-#       return pressure
-#
-#   def _get_event_tilt(self, tdw, event):
-#       # FIXME: CODE DUPLICATION: copied from freehand.py
-#       xtilt = event.get_axis(Gdk.AxisUse.XTILT)
-#       ytilt = event.get_axis(Gdk.AxisUse.YTILT)
-#       if xtilt is None or ytilt is None or not np.isfinite(xtilt + ytilt):
-#           return (0.0, 0.0)
-#
-#       # Switching from a non-tilt device to a device which reports
-#       # tilt can cause GDK to return out-of-range tilt values, on X11.
-#       xtilt = lib.helpers.clamp(xtilt, -1.0, 1.0)
-#       ytilt = lib.helpers.clamp(ytilt, -1.0, 1.0)
-#
-#       # Evdev workaround. X and Y tilts suffer from the same
-#       # problem as pressure for fancier devices.
-#       if self._button_down is not None:
-#           if xtilt == 0.0:
-#               xtilt = self._last_good_raw_xtilt
-#           else:
-#               self._last_good_raw_xtilt = xtilt
-#           if ytilt == 0.0:
-#               ytilt = self._last_good_raw_ytilt
-#           else:
-#               self._last_good_raw_ytilt = ytilt
-#
-#       # Tilt inputs are assumed to be relative to the viewport,
-#       # but the canvas may be rotated or mirrored, or both.
-#       # Compensate before passing them to the brush engine.
-#       # https://gna.org/bugs/?19988
-#       if tdw.mirrored:
-#           xtilt *= -1.0
-#       if tdw.rotation != 0:
-#           tilt_angle = math.atan2(ytilt, xtilt) - tdw.rotation
-#           tilt_magnitude = math.sqrt((xtilt**2) + (ytilt**2))
-#           xtilt = tilt_magnitude * math.cos(tilt_angle)
-#           ytilt = tilt_magnitude * math.sin(tilt_angle)
-#
-#       return (xtilt, ytilt)
-#
-#   ## Node editing
-#
-#   def update_node(self, i, **kwargs):
-#       """Updates properties of a node, and redraws it"""
-#       changing_pos = bool({"x", "y"}.intersection(kwargs))
-#       oldnode = self.nodes[i]
-#       if changing_pos:
-#           self._queue_draw_node(i)
-#       self.nodes[i] = oldnode._replace(**kwargs)
-#       # FIXME: The curve redraw is a bit flickery.
-#       #   Perhaps dragging to adjust should only draw an
-#       #   armature during the drag, leaving the redraw to
-#       #   the stop handler.
-#       self._queue_redraw_curve()
-#       if changing_pos:
-#           self._queue_draw_node(i)
-#
-#   def get_node_dtime(self, i):
-#       if not (0 < i < len(self.nodes)):
-#           return 0.0
-#       n0 = self.nodes[i-1]
-#       n1 = self.nodes[i]
-#       dtime = n1.time - n0.time
-#       dtime = max(dtime, self.CAPTURE_SETTING.min_internode_time)
-#       return dtime
-#
-#   def set_node_dtime(self, i, dtime):
-#       dtime = max(dtime, self.CAPTURE_SETTING.min_internode_time)
-#       nodes = self.nodes
-#       if not (0 < i < len(nodes)):
-#           return
-#       old_dtime = nodes[i].time - nodes[i-1].time
-#       for j in range(i, len(nodes)):
-#           n = nodes[j]
-#           new_time = n.time + dtime - old_dtime
-#           self.update_node(j, time=new_time)
-#
-#   def can_delete_node(self, i):
-#       return 0 < i < len(self.nodes)-1
-#
+    ## Interrogating events
+ 
+ 
+    def _get_event_pressure(self, event):
+        # FIXME: CODE DUPLICATION: copied from freehand.py
+        pressure = event.get_axis(Gdk.AxisUse.PRESSURE)
+        if pressure is not None:
+            if not np.isfinite(pressure):
+                pressure = None
+            else:
+                pressure = lib.helpers.clamp(pressure, 0.0, 1.0)
+ 
+        if pressure is None:
+            pressure = 0.0
+            if event.state & Gdk.ModifierType.BUTTON1_MASK:
+                pressure = 0.5
+ 
+        # Workaround for buggy evdev behaviour.
+        # Events sometimes get a zero raw pressure reading when the
+        # pressure reading has not changed. This results in broken
+        # lines. As a workaround, forbid zero pressures if there is a
+        # button pressed down, and substitute the last-known good value.
+        # Detail: https://github.com/mypaint/mypaint/issues/223
+        if self._button_down is not None:
+            if pressure == 0.0:
+                pressure = self._last_good_raw_pressure
+            elif pressure is not None and np.isfinite(pressure):
+                self._last_good_raw_pressure = pressure
+        return pressure
+ 
+    def _get_event_tilt(self, tdw, event):
+        # FIXME: CODE DUPLICATION: copied from freehand.py
+        xtilt = event.get_axis(Gdk.AxisUse.XTILT)
+        ytilt = event.get_axis(Gdk.AxisUse.YTILT)
+        if xtilt is None or ytilt is None or not np.isfinite(xtilt + ytilt):
+            return (0.0, 0.0)
+ 
+        # Switching from a non-tilt device to a device which reports
+        # tilt can cause GDK to return out-of-range tilt values, on X11.
+        xtilt = lib.helpers.clamp(xtilt, -1.0, 1.0)
+        ytilt = lib.helpers.clamp(ytilt, -1.0, 1.0)
+ 
+        # Evdev workaround. X and Y tilts suffer from the same
+        # problem as pressure for fancier devices.
+        if self._button_down is not None:
+            if xtilt == 0.0:
+                xtilt = self._last_good_raw_xtilt
+            else:
+                self._last_good_raw_xtilt = xtilt
+            if ytilt == 0.0:
+                ytilt = self._last_good_raw_ytilt
+            else:
+                self._last_good_raw_ytilt = ytilt
+ 
+        # Tilt inputs are assumed to be relative to the viewport,
+        # but the canvas may be rotated or mirrored, or both.
+        # Compensate before passing them to the brush engine.
+        # https://gna.org/bugs/?19988
+        if tdw.mirrored:
+            xtilt *= -1.0
+        if tdw.rotation != 0:
+            tilt_angle = math.atan2(ytilt, xtilt) - tdw.rotation
+            tilt_magnitude = math.sqrt((xtilt**2) + (ytilt**2))
+            xtilt = tilt_magnitude * math.cos(tilt_angle)
+            ytilt = tilt_magnitude * math.sin(tilt_angle)
+ 
+        return (xtilt, ytilt)
+ 
+    ## Node related
+
+    def _update_current_node_index(self):
+        """Updates current_node_index from target_node_index & redraw"""
+        new_index = self.target_node_index
+        old_index = self.current_node_index
+        if new_index == old_index:
+            return
+        self.current_node_index = new_index
+        self.current_node_changed(new_index)
+        self.options_presenter.target = (self, new_index)
+        for i in (old_index, new_index):
+            if i is not None:
+                self._queue_draw_node(i)
+ 
+    @lib.observable.event
+    def current_node_changed(self, index):
+        """Event: current_node_index was changed"""
+ 
+    def _search_target_node(self, tdw, x, y, margin=12):
+        """ utility method: to commonize node searching codes
+        """
+        hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + margin
+        new_target_node_index = None
+        for i, node in reversed(list(enumerate(self.nodes))):
+            node_x, node_y = tdw.model_to_display(node.x, node.y)
+            d = math.hypot(node_x - x, node_y - y)
+            if d > hit_dist:
+                continue
+            new_target_node_index = i
+            break
+        return new_target_node_index
+
+    def get_node_dtime(self, i):
+        if not (0 < i < len(self.nodes)):
+            return 0.0
+        n0 = self.nodes[i-1]
+        n1 = self.nodes[i]
+        dtime = n1.time - n0.time
+        dtime = max(dtime, self.MIN_INTERNODE_TIME)
+        return dtime
+ 
+    def set_node_dtime(self, i, dtime):
+        dtime = max(dtime, self.MIN_INTERNODE_TIME)
+        nodes = self.nodes
+        if not (0 < i < len(nodes)):
+            return
+        old_dtime = nodes[i].time - nodes[i-1].time
+        for j in range(i, len(nodes)):
+            n = nodes[j]
+            new_time = n.time + dtime - old_dtime
+            self.update_node(j, time=new_time)
+
+ 
+    def can_insert_node(self, i):
+        return 0 <= i < len(self.nodes)-1
+ 
+    def can_delete_node(self, i):
+        pass
+
 #  #def _adjust_current_node_index(self):
 #  #    """ Adjust self.current_node_index
 #  #    child classes might have different behavior
@@ -976,9 +1015,7 @@ class OncanvasEditMixin(object):
 #       # Issue redraws for the changed on-canvas elements
 #       self._queue_redraw_display()
 #
-#   def can_insert_node(self, i):
-#       return 0 <= i < len(self.nodes)-1
-#
+ 
 #   def insert_node(self, i):
 #       """Insert a node, and issue redraws & updates"""
 #       assert self.can_insert_node(i), "Can't insert back of the endpoint"
@@ -1099,20 +1136,21 @@ class OncanvasEditMixin(object):
 #       self.nodes = new_nodes
 #
 #
-#   ## Nodes hide
-#   @property
-#   def hide_nodes(self):
-#       return self._hide_nodes
-#
-#   @hide_nodes.setter
-#   def hide_nodes(self, flag):
-#       self._hide_nodes = flag
-#       self._queue_redraw_all_nodes()
-#
-#   ## Generic Oncanvas-editing handler
-#   def delete_item(self):
-#       self.delete_selected_nodes()
-#
+    ## Nodes hide
+    @property
+    def hide_nodes(self):
+        return self._hide_nodes
+ 
+    @hide_nodes.setter
+    def hide_nodes(self, flag):
+        self._hide_nodes = flag
+        self._queue_redraw_all_nodes()
+ 
+    ## Generic Oncanvas-editing interface
+
+    def delete_item(self):
+        self.delete_selected_nodes()
+ 
 #   ## Editing finalize / discarding
 #   def accept(self):
 #       if self.phase == _Phase.ADJUST:
@@ -1123,7 +1161,8 @@ class OncanvasEditMixin(object):
 #       if self.phase == _Phase.ADJUST:
 #           self._start_new_capture_phase(rollback=False)
 #
-#
+
+
 
 class OverlayOncanvasMixin(gui.overlays.Overlay):
     """ The mixin of overlay for Oncanvas-editing mixin.

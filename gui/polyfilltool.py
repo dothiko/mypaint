@@ -38,7 +38,7 @@ import lib.observable
 from gui.inktool import *
 from gui.linemode import *
 from gui.beziertool import *
-from gui.beziertool import _Control_Handle, _Node_Bezier, _PhaseBezier
+from gui.beziertool import _Control_Handle, _Node_Bezier, _Phase
 from lib.command import Command
 import lib.surface
 import lib.mypaintlib
@@ -479,14 +479,14 @@ class _Shape_Bezier(_Shape):
 
     def button_press_cb(self, mode, tdw, event):
 
-        if mode.phase in (_PhaseBezier.CREATE_PATH,):
+        if mode.phase in (_Phase.CREATE_PATH,):
             if mode.zone == _EditZone.CONTROL_NODE:
                 # Grabbing a node...
                 button = event.button
-                if mode.phase == _PhaseBezier.CREATE_PATH:
+                if mode.phase == _Phase.CREATE_PATH:
 
                     # normal move node start
-                    mode.phase = _PhaseBezier.MOVE_NODE
+                    mode.phase = _Phase.MOVE_NODE
 
                     if button == 1 and mode.current_node_index != None:
                         if self.ctrl_state:
@@ -514,7 +514,7 @@ class _Shape_Bezier(_Shape):
 
             elif mode.zone == _EditZone.EMPTY_CANVAS:
                 
-                if mode.phase == _PhaseBezier.CREATE_PATH:
+                if mode.phase == _Phase.CREATE_PATH:
                     if (len(mode.nodes) > 0): 
                        #if shift_state and ctrl_state:
                         if self.ctrl_state:
@@ -532,20 +532,20 @@ class _Shape_Bezier(_Shape):
                                 # queue new node here.
                                 mode._queue_draw_node(pressed_segment[0] + 1)
                                 
-                                mode.phase = _PhaseBezier.PLACE_NODE
+                                mode.phase = _Phase.PLACE_NODE
                                 return _Shape.CANCEL_EVENT # Cancel drag event
 
 
             elif mode.zone == _EditZone.CONTROL_HANDLE:
-                if mode.phase == _PhaseBezier.CREATE_PATH:
-                    mode.phase = _PhaseBezier.ADJUST_HANDLE
+                if mode.phase == _Phase.CREATE_PATH:
+                    mode.phase = _Phase.ADJUST_HANDLE
 
 
             # FALLTHRU: *do* start a drag 
 
-        elif mode.phase in (_PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
+        elif mode.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
             pass
-        elif mode.phase in (_PhaseBezier.MOVE_NODE, _PhaseBezier.CHANGE_PHASE):
+        elif mode.phase in (_Phase.MOVE_NODE, _Phase.CHANGE_PHASE):
             # THIS CANNOT BE HAPPEN...might be an evdev dropout.through it.
             pass
         else:
@@ -560,9 +560,9 @@ class _Shape_Bezier(_Shape):
         # prior to drag_stop_cb.
         # so, in this method, changing mode._phase
         # is very special case. 
-        if mode.phase == _PhaseBezier.PLACE_NODE:
+        if mode.phase == _Phase.PLACE_NODE:
             mode._queue_redraw_curve(tdw) 
-            mode.phase = _PhaseBezier.CREATE_PATH
+            mode.phase = _Phase.CREATE_PATH
 
 
 
@@ -570,7 +570,7 @@ class _Shape_Bezier(_Shape):
         # Basically,all sections should do fall-through.
         mx, my = tdw.display_to_model(event.x, event.y)
 
-        if mode.phase == _PhaseBezier.CREATE_PATH:
+        if mode.phase == _Phase.CREATE_PATH:
 
             if mode.zone == _EditZone.EMPTY_CANVAS:
                 if event.state != 0:
@@ -582,7 +582,7 @@ class _Shape_Bezier(_Shape):
                     node = mode._get_event_data(tdw, event)
                     mode.nodes.append(node)
                     mode._last_event_node = node
-                    mode.phase = _PhaseBezier.INIT_HANDLE
+                    mode.phase = _Phase.INIT_HANDLE
                     mode.current_node_index=len(mode.nodes)-1
                     mode._reset_selected_nodes(mode.current_node_index)
                     # Important: with setting initial control handle 
@@ -592,12 +592,12 @@ class _Shape_Bezier(_Shape):
 
                     mode._queue_draw_node(mode.current_node_index)
 
-        elif mode.phase == _PhaseBezier.MOVE_NODE:
+        elif mode.phase == _Phase.MOVE_NODE:
             if len(mode.selected_nodes) > 0:
                 mode.drag_offset.start(mx, my)
-        elif mode.phase == _PhaseBezier.ADJUST_HANDLE:
+        elif mode.phase == _Phase.ADJUST_HANDLE:
             mode._last_event_node = mode.nodes[mode.target_node_index]
-        elif mode.phase == _PhaseBezier.CHANGE_PHASE:
+        elif mode.phase == _Phase.CHANGE_PHASE:
             # DO NOT DO ANYTHING.
             pass
         else:
@@ -608,10 +608,10 @@ class _Shape_Bezier(_Shape):
 
         mx, my = tdw.display_to_model(event.x, event.y)
 
-        if mode.phase == _PhaseBezier.CREATE_PATH:
+        if mode.phase == _Phase.CREATE_PATH:
             pass
             
-        elif mode.phase in (_PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
+        elif mode.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
             mode._queue_redraw_curve(tdw)  
             node = mode._last_event_node
             if mode._last_event_node:
@@ -623,21 +623,21 @@ class _Shape_Bezier(_Shape):
                 mode._queue_draw_node(mode.current_node_index)
             mode._queue_redraw_curve(tdw)
                 
-        elif mode.phase == _PhaseBezier.MOVE_NODE:
+        elif mode.phase == _Phase.MOVE_NODE:
             if len(mode.selected_nodes) > 0:
                 mode._queue_redraw_curve(tdw)  
                 mode._queue_draw_selected_nodes()
                 mode.drag_offset.end(mx, my)
                 mode._queue_draw_selected_nodes()
                 mode._queue_redraw_curve(tdw)
-        elif mode.phase == _PhaseBezier.CHANGE_PHASE:
+        elif mode.phase == _Phase.CHANGE_PHASE:
             # DO NOT DO ANYTHING.
             pass
         else:
             raise NotImplementedError("Unknown phase %r" % mode.phase)
 
     def drag_stop_cb(self, mode, tdw):
-        if mode.phase == _PhaseBezier.CREATE_PATH:
+        if mode.phase == _Phase.CREATE_PATH:
             mode._reset_adjust_data()
             if len(mode.nodes) > 0:
                 mode._queue_redraw_curve(tdw)
@@ -646,12 +646,12 @@ class _Shape_Bezier(_Shape):
                     mode._queue_draw_buttons()
                 
             
-        elif mode.phase in (_PhaseBezier.ADJUST_HANDLE, _PhaseBezier.INIT_HANDLE):
+        elif mode.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
             node = mode._last_event_node
       
             # At initialize handle phase, even if the node is not 'curve'
             # Set the handles as symmetry.
-            if (mode.phase == _PhaseBezier.INIT_HANDLE):
+            if (mode.phase == _Phase.INIT_HANDLE):
                 node.curve = not mode.DEFAULT_POINT_CORNER
 
             mode._queue_redraw_all_nodes()
@@ -659,8 +659,8 @@ class _Shape_Bezier(_Shape):
             if len(mode.nodes) > 1:
                 mode._queue_draw_buttons()
                 
-            mode.phase = _PhaseBezier.CREATE_PATH
-        elif mode.phase == _PhaseBezier.MOVE_NODE:
+            mode.phase = _Phase.CREATE_PATH
+        elif mode.phase == _Phase.MOVE_NODE:
             dx, dy = mode.drag_offset.get_model_offset()
 
             for idx in mode.selected_nodes:
@@ -671,9 +671,9 @@ class _Shape_Bezier(_Shape):
             mode._dragged_node_start_pos = None
             mode._queue_redraw_curve(tdw)
             mode._queue_draw_buttons()
-            mode.phase = _PhaseBezier.CREATE_PATH
+            mode.phase = _Phase.CREATE_PATH
 
-        elif mode.phase == _PhaseBezier.CHANGE_PHASE:
+        elif mode.phase == _Phase.CHANGE_PHASE:
             pass
 
 
@@ -750,7 +750,7 @@ class _Shape_Polyline(_Shape_Bezier):
         # Basically,all sections should do fall-through.
         mx, my = tdw.display_to_model(event.x, event.y)
 
-        if mode.phase == _PhaseBezier.CREATE_PATH:
+        if mode.phase == _Phase.CREATE_PATH:
 
             if mode.zone == _EditZone.EMPTY_CANVAS:
                 if event.state != 0:
@@ -765,7 +765,7 @@ class _Shape_Polyline(_Shape_Bezier):
                     mode.current_node_index = len(mode.nodes)-1
                     mode._reset_selected_nodes(mode.current_node_index)
                     mode._queue_draw_node(mode.current_node_index)
-                    mode.phase = _PhaseBezier.MOVE_NODE
+                    mode.phase = _Phase.MOVE_NODE
                     mode.drag_offset.start(mx, my)
         else:
             return super(_Shape_Polyline, self).drag_start_cb(
@@ -955,12 +955,12 @@ class _Shape_Rectangle(_Shape):
     def button_press_cb(self, mode, tdw, event):
         mx, my = tdw.display_to_model(event.x, event.y)
 
-        if mode.phase in (_PhaseBezier.CREATE_PATH,):
+        if mode.phase in (_Phase.CREATE_PATH,):
             if mode.zone == _EditZone.CONTROL_NODE:
                 # Grabbing a node...
                 button = event.button
                 # normal move node start
-                mode.phase = _PhaseBezier.MOVE_NODE
+                mode.phase = _Phase.MOVE_NODE
                 mode.selected_nodes = (mode.current_node_index, )
 
                 # FALLTHRU: *do* start a drag 
@@ -971,7 +971,7 @@ class _Shape_Rectangle(_Shape):
 
             # FALLTHRU: *do* start a drag 
 
-        elif mode.phase in (_PhaseBezier.MOVE_NODE, _PhaseBezier.CHANGE_PHASE):
+        elif mode.phase in (_Phase.MOVE_NODE, _Phase.CHANGE_PHASE):
             # THIS CANNOT BE HAPPEN...might be an evdev dropout.through it.
             pass
         else:
@@ -985,9 +985,9 @@ class _Shape_Rectangle(_Shape):
         # prior to drag_stop_cb.
         # so, in this method, changing mode._phase
         # is very special case. 
-        if mode.phase == _PhaseBezier.PLACE_NODE:
+        if mode.phase == _Phase.PLACE_NODE:
             mode._queue_redraw_curve(tdw) 
-            mode.phase = _PhaseBezier.CREATE_PATH
+            mode.phase = _Phase.CREATE_PATH
 
 
 
@@ -995,7 +995,7 @@ class _Shape_Rectangle(_Shape):
         # Basically,all sections should do fall-through.
         mx, my = tdw.display_to_model(event.x, event.y)
 
-        if mode.phase == _PhaseBezier.CREATE_PATH:
+        if mode.phase == _Phase.CREATE_PATH:
 
             if mode.zone == _EditZone.EMPTY_CANVAS:
                 if event.state != 0:
@@ -1010,10 +1010,10 @@ class _Shape_Rectangle(_Shape):
                     mode._queue_redraw_curve(tdw)  
                     mode._queue_redraw_all_nodes()
 
-        elif mode.phase == _PhaseBezier.MOVE_NODE:
+        elif mode.phase == _Phase.MOVE_NODE:
             if len(mode.selected_nodes) > 0:
                 mode.drag_offset.start(mx, my)
-        elif mode.phase == _PhaseBezier.CHANGE_PHASE:
+        elif mode.phase == _Phase.CHANGE_PHASE:
             pass
         else:
             raise NotImplementedError("Unknown phase %r" % mode.phase)
@@ -1023,27 +1023,27 @@ class _Shape_Rectangle(_Shape):
 
         mx, my = tdw.display_to_model(event.x, event.y)
 
-        if mode.phase == _PhaseBezier.CREATE_PATH:
+        if mode.phase == _Phase.CREATE_PATH:
             self.queue_redraw_nodes(tdw, mode)
             mode._queue_redraw_curve(tdw)  
             mode.drag_offset.end(mx, my)
             self.queue_redraw_nodes(tdw, mode)
             mode._queue_redraw_curve(tdw)  
-        elif mode.phase == _PhaseBezier.MOVE_NODE:
+        elif mode.phase == _Phase.MOVE_NODE:
             if len(mode.selected_nodes) > 0:
                 mode._queue_redraw_curve(tdw)  
                 mode._queue_redraw_all_nodes()
                 mode.drag_offset.end(mx, my)
                 mode._queue_redraw_all_nodes()
                 mode._queue_redraw_curve(tdw)
-        elif mode.phase == _PhaseBezier.CHANGE_PHASE:
+        elif mode.phase == _Phase.CHANGE_PHASE:
             # DO NOT DO ANYTHING.
             pass
         else:
             raise NotImplementedError("Unknown phase %r" % mode.phase)
 
     def drag_stop_cb(self, mode, tdw):
-        if mode.phase == _PhaseBezier.CREATE_PATH:
+        if mode.phase == _Phase.CREATE_PATH:
             sx, sy = tdw.display_to_model(
                     mode.start_x, mode.start_y)
             dx, dy = mode.drag_offset.get_model_offset()
@@ -1058,7 +1058,7 @@ class _Shape_Rectangle(_Shape):
             mode._queue_draw_buttons()
             mode._reset_adjust_data()
             
-        elif mode.phase == _PhaseBezier.MOVE_NODE:
+        elif mode.phase == _Phase.MOVE_NODE:
             dx, dy = mode.drag_offset.get_model_offset()
 
             # Move entire rectangle, when 4 nodes selected. 
@@ -1088,7 +1088,7 @@ class _Shape_Rectangle(_Shape):
             mode._queue_redraw_curve(tdw)
             mode._queue_draw_buttons()
             mode._queue_redraw_all_nodes()
-            mode.phase = _PhaseBezier.CREATE_PATH
+            mode.phase = _Phase.CREATE_PATH
             mode._reset_adjust_data()
 
 
@@ -1230,7 +1230,7 @@ class PolyfillMode (BezierMode):
         super(PolyfillMode, self).__init__(**kwargs)
         self._polygon_preview_fill = False
         self.options_presenter.target = (self, None)
-        self.phase = _PhaseBezier.CREATE_PATH
+        self.phase = _Phase.CREATE_PATH
         if PolyfillMode._shape == None:
             self.shape_type = _Shape.TYPE_BEZIER
 
@@ -1238,15 +1238,16 @@ class PolyfillMode (BezierMode):
 
     ## Update inner states methods
     def _ensure_overlay_for_tdw(self, tdw):
-        overlay = self._overlays.get(tdw)
-        if not overlay:
-            overlay = OverlayPolyfill(self, tdw)
-            tdw.display_overlays.append(overlay)
-            self._overlays[tdw] = overlay
-            if len(self.nodes) > 0:
-                self._queue_redraw_curve()
-        return overlay
+        super(PolyfillMode, self)._ensure_overlay_for_tdw(tdw)
+        assert self._overlays.get(tdw)
+        if len(self.nodes) > 0:
+            self._queue_redraw_curve()
 
+    def _generate_overlay(self, tdw):
+        return OverlayPolyfill(self, tdw)
+
+    def _generate_presenter(self):
+        return OptionsPresenter_Polyfill()
         
     def _update_zone_and_target(self, tdw, x, y, ignore_handle=False):
         """Update the zone and target node under a cursor position"""
@@ -1254,8 +1255,8 @@ class PolyfillMode (BezierMode):
         self._ensure_overlay_for_tdw(tdw)
         new_zone = _EditZone.EMPTY_CANVAS
         if not self.in_drag and len(self.nodes) > 0:
-            if self.phase in (_PhaseBezier.MOVE_NODE, 
-                    _PhaseBezier.CREATE_PATH):
+            if self.phase in (_Phase.MOVE_NODE, 
+                    _Phase.CREATE_PATH):
 
                 new_target_node_index = None
                 
@@ -1324,8 +1325,8 @@ class PolyfillMode (BezierMode):
         # these codes also a little changed from inktool.
         if not self.in_drag:
             cursor = None
-            if self.phase in (_PhaseBezier.INITIAL, _PhaseBezier.CREATE_PATH,
-                    _PhaseBezier.MOVE_NODE):
+            if self.phase in (_Phase.INITIAL, _Phase.CREATE_PATH,
+                    _Phase.MOVE_NODE):
                 if self.zone == _EditZone.CONTROL_NODE:
                     cursor = self._crosshair_cursor
                 elif self.zone in self.button_info.button_zones:
@@ -1343,7 +1344,6 @@ class PolyfillMode (BezierMode):
         self._queue_redraw_all_nodes()
         self._queue_redraw_curve() 
         self._reset_nodes()
-        self._reset_capture_data()
         self._reset_adjust_data()
         self._stroke_from_history = False
         self.forced_button_pos = None
@@ -1412,11 +1412,22 @@ class PolyfillMode (BezierMode):
 
 
     def leave(self):
-        if not self._is_active() and len(self.nodes) > 1:
-            # The modechange is not overriding.
-            # so commit last pending work
-            self._start_new_capture_phase_polyfill(None, rollback=False)
+        if not self._is_active():
+            
+            if len(self.nodes) > 1:
+                # There is still uncommited pending work.
+                # so commit it.
+                #
+                # Within this _start_new_capture_phase_polyfill method,
+                # _stop_task_queue_runner is called,
+                # so there is no needs to invoke superclass leave() method.
+                self._start_new_capture_phase_polyfill(None, rollback=False)
 
+            self._discard_overlays()
+        
+        self.enable_switch_actions(False)
+
+        # Super-super class call.
         super(BezierMode, self).leave()
 
     def checkpoint(self, flush=True, **kwargs):
@@ -1426,7 +1437,7 @@ class PolyfillMode (BezierMode):
     
         """
         if flush:
-            super(InkingMode, self).checkpoint(flush=flush, **kwargs) # call super-superclass method
+            pass
         else:
             # Queue a re-rendering with any new brush data
             # No supercall
@@ -1439,7 +1450,7 @@ class PolyfillMode (BezierMode):
     ### Event handling
     def scroll_cb(self, tdw, event):
         # to cancelling scroll-wheel pressure modification.
-        return super(InkingMode, self).scroll_cb(tdw, event) # simply call super-superclass!
+        return super(BezierMode, self).scroll_cb(tdw, event) # simply call super-superclass!
 
     ## Raw event handling (prelight & zone selection in adjust phase)
     def button_press_cb(self, tdw, event):
@@ -1457,7 +1468,7 @@ class PolyfillMode (BezierMode):
 
 
         # common processing for all shape type.
-        if self.phase in (_PhaseBezier.CREATE_PATH,):
+        if self.phase in (_Phase.CREATE_PATH,):
             # Initial state - everything starts here!
        
             if (self.zone in self.button_info.button_zones): 
@@ -1475,14 +1486,14 @@ class PolyfillMode (BezierMode):
 
             elif self.zone == _EditZone.EMPTY_CANVAS:
                 
-                if self.phase == _PhaseBezier.CREATE_PATH:
+                if self.phase == _Phase.CREATE_PATH:
                     if (len(self.nodes) > 0): 
                        #if shift_state and ctrl_state:
                         if shape.alt_state:
                             self._queue_draw_buttons() 
                             self.forced_button_pos = (event.x, event.y)
-                            self.phase = _PhaseBezier.CHANGE_PHASE 
-                            self._returning_phase = _PhaseBezier.CREATE_PATH
+                            self.phase = _Phase.CHANGE_PHASE 
+                            self._returning_phase = _Phase.CREATE_PATH
                             self._queue_draw_buttons() 
                             return False
 
@@ -1493,13 +1504,13 @@ class PolyfillMode (BezierMode):
         elif ret == _Shape.CALL_BASECLASS_HANDLER:
             return super(PolyFillMode, self).button_press_cb(tdw, event) 
         elif ret == _Shape.CALL_ANCESTER_HANDLER:
-            return super(InkingMode, self).button_press_cb(tdw, event) 
+            return super(BezierMode, self).button_press_cb(tdw, event) 
 
         # Update workaround state for evdev dropouts
         self._button_down = event.button
 
         # Super-Supercall(not supercall) would invoke drag-related callbacks.
-        return super(InkingMode, self).button_press_cb(tdw, event) 
+        return super(BezierMode, self).button_press_cb(tdw, event) 
 
     def button_release_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
@@ -1514,13 +1525,13 @@ class PolyfillMode (BezierMode):
         elif ret == _Shape.CALL_BASECLASS_HANDLER:
             return super(PolyFillMode, self).button_release_cb(tdw, event) 
         elif ret == _Shape.CALL_ANCESTER_HANDLER:
-            return super(InkingMode, self).button_release_cb(tdw, event) 
+            return super(BezierMode, self).button_release_cb(tdw, event) 
 
         # Update workaround state for evdev dropouts
         self._button_down = None
 
         # Super-Supercall(not supercall) would invoke drag_stop_cb signal.
-        return super(InkingMode, self).button_release_cb(tdw, event)
+        return super(BezierMode, self).button_release_cb(tdw, event)
 
     def motion_notify_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
@@ -1533,7 +1544,7 @@ class PolyfillMode (BezierMode):
         self._update_zone_and_target(tdw, event.x, event.y,
                 ignore_handle = not shape.accept_handle)
 
-        return super(InkingMode, self).motion_notify_cb(tdw, event)
+        return super(OncanvasEditMixin, self).motion_notify_cb(tdw, event)
         
 
     ## Drag handling (both capture and adjust phases)
@@ -1549,7 +1560,7 @@ class PolyfillMode (BezierMode):
         elif ret == _Shape.CALL_BASECLASS_HANDLER:
             return super(PolyFillMode, self).drag_start_cb(tdw, event) 
         elif ret == _Shape.CALL_ANCESTER_HANDLER:
-            return super(InkingMode, self).drag_start_cb(tdw, event) 
+            return super(BezierMode, self).drag_start_cb(tdw, event) 
 
     def drag_update_cb(self, tdw, event, dx, dy):
         self._ensure_overlay_for_tdw(tdw)
@@ -1561,7 +1572,7 @@ class PolyfillMode (BezierMode):
         elif ret == _Shape.CALL_BASECLASS_HANDLER:
             return super(PolyFillMode, self).drag_update_cb(tdw, event) 
         elif ret == _Shape.CALL_ANCESTER_HANDLER:
-            return super(InkingMode, self).drag_update_cb(tdw, event) 
+            return super(BezierMode, self).drag_update_cb(tdw, event) 
         
 
     def drag_stop_cb(self, tdw):
@@ -1575,7 +1586,7 @@ class PolyfillMode (BezierMode):
             elif ret == _Shape.CALL_BASECLASS_HANDLER:
                 return super(PolyFillMode, self).drag_stop_cb(tdw)
             elif ret == _Shape.CALL_ANCESTER_HANDLER:
-                return super(InkingMode, self).drag_stop_cb(tdw)
+                return super(BezierMode, self).drag_stop_cb(tdw)
 
             # Common processing
             if self.current_node_index != None:
@@ -1661,14 +1672,14 @@ class PolyfillMode (BezierMode):
     
     ## Generic Oncanvas-editing handler
     def accept_edit(self):
-        if (self.phase in (_PhaseBezier.CREATE_PATH, ) and
+        if (self.phase in (_Phase.CREATE_PATH, ) and
                 len(self.nodes) > 1):
             self._start_new_capture_phase_polyfill(
                 self.button_info.get_mode_from_zone(self.zone),
                 rollback=False)
 
     def discard_edit(self):
-        if (self.phase in (_PhaseBezier.CREATE_PATH, )):
+        if (self.phase in (_Phase.CREATE_PATH, )):
             self._start_new_capture_phase_polyfill(
                 None, rollback=True)
 

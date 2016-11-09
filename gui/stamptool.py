@@ -29,7 +29,7 @@ import gui.mode
 from drawutils import spline_4p
 from lib import mypaintlib
 from gui.inktool import *
-from gui.inktool import _LayoutNode, _Phase
+from gui.inktool import _LayoutNode
 from gui.linemode import *
 from lib.command import Command
 from gui.ui_utils import *
@@ -58,8 +58,11 @@ class _StampNode (collections.namedtuple("_StampNode", _NODE_FIELDS)):
     * scale_w: float in [0.0, 3.0]
     * scale_h: float in [0.0, 3.0]
     """
-class _PhaseStamp(_Phase):
+class _Phase(Phase_Mixin):
     """Enumeration of the states that an BezierCurveMode can be in"""
+    ADJUST_PRESSURE = 2
+    ADJUST_PRESSURE_ONESHOT = 4
+    CHANGE_PHASE = 5
     MOVE   = 100         #: Moving stamp
     ROTATE = 101         #: Rotate with mouse drag 
     SCALE  = 102         #: Scale with mouse drag 
@@ -116,7 +119,7 @@ class DrawStamp(Command):
 
 
 
-class StampMode (InkingMode, OncanvasEditMixin):
+class StampMode (OncanvasEditMixin):
 
     ## Metadata properties
 
@@ -248,7 +251,7 @@ class StampMode (InkingMode, OncanvasEditMixin):
         # FIXME almost copyied from polyfilltool.py
         if flush:
             # Commit the pending work normally
-            super(InkingMode, self).checkpoint(flush=flush, **kwargs) # call super-superclass method
+            super(StampMode, self).checkpoint(flush=flush, **kwargs) 
         else:
             # Queue a re-rendering with any new brush data
             # No supercall
@@ -260,35 +263,36 @@ class StampMode (InkingMode, OncanvasEditMixin):
     def _commit_all(self):
         # We need that the target layer(current layer)
         # has surface and not locked. 
-        bbox = self._stamp.get_bbox(None, self.nodes[0])
-        if bbox:
-            sx, sy, w, h = bbox
+        if len(self.nodes) > 0:
+            bbox = self._stamp.get_bbox(None, self.nodes[0])
+            if bbox:
+                sx, sy, w, h = bbox
 
-            ex = sx + w
-            ey = sy + h
-            for cn in self.nodes[1:]:
-                tsx, tsy, tw, th = self._stamp.get_bbox(None, cn)
-                sx = min(sx, tsx)
-                sy = min(sy, tsy)
-                ex = max(ex, tsx + tw)
-                ey = max(ey, tsy + th)
+                ex = sx + w
+                ey = sy + h
+                for cn in self.nodes[1:]:
+                    tsx, tsy, tw, th = self._stamp.get_bbox(None, cn)
+                    sx = min(sx, tsx)
+                    sy = min(sy, tsy)
+                    ex = max(ex, tsx + tw)
+                    ey = max(ey, tsy + th)
 
-            if hasattr(self._stamp, 'pixbuf'):
-                # This means 'Current stamp is dynamic'. 
-                # Therefore we need save its current content 
-                # during draw command exist.
-                stamp = ProxyStamp('', self._stamp.pixbuf)
+                if hasattr(self._stamp, 'pixbuf'):
+                    # This means 'Current stamp is dynamic'. 
+                    # Therefore we need save its current content 
+                    # during draw command exist.
+                    stamp = ProxyStamp('', self._stamp.pixbuf)
+                else:
+                    stamp = self._stamp
+
+
+                cmd = DrawStamp(self.doc.model,
+                        stamp,
+                        self.nodes,
+                        (sx, sy, abs(ex-sx)+1, abs(ey-sy)+1))
+                self.doc.model.do(cmd)
             else:
-                stamp = self._stamp
-
-
-            cmd = DrawStamp(self.doc.model,
-                    stamp,
-                    self.nodes,
-                    (sx, sy, abs(ex-sx)+1, abs(ey-sy)+1))
-            self.doc.model.do(cmd)
-        else:
-            logger.warning("stamptool.commit_all encounter enpty bbox")
+                logger.warning("stamptool.commit_all encounter enpty bbox")
 
     def _start_new_capture_phase(self, rollback=False):
         """Let the user capture a new ink stroke"""
@@ -308,21 +312,18 @@ class StampMode (InkingMode, OncanvasEditMixin):
         self._queue_draw_buttons()
         self._queue_redraw_all_nodes()
         self._reset_nodes()
-        self._reset_capture_data()
         self._reset_adjust_data()
         self.phase = _Phase.CAPTURE
 
         if self.stamp:
             self.stamp.initialize_phase(self)
 
-    def _ensure_overlay_for_tdw(self, tdw):
-        overlay = self._overlays.get(tdw)
-        if not overlay:
-            overlay = Overlay_Stamp(self, tdw)
-            tdw.display_overlays.append(overlay)
-            self._overlays[tdw] = overlay
-        return overlay
 
+    def _generate_overlay(self, tdw):
+        return Overlay_Stamp(self, tdw)
+
+    def _generate_presenter(self):
+        return OptionsPresenter_Stamp()
 
     def _update_zone_and_target(self, tdw, x, y):
         """Update the zone and target node under a cursor position"""
@@ -501,7 +502,6 @@ class StampMode (InkingMode, OncanvasEditMixin):
         new_target_node_index = None
         handle_idx = -1
         stamp = self._stamp
-       #mx, my = tdw.display_to_model(x, y)
         for i, node in reversed(list(enumerate(self.nodes))):
             handle_idx = stamp.get_handle_index(tdw, x, y, node,
                    gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
@@ -578,7 +578,7 @@ class StampMode (InkingMode, OncanvasEditMixin):
             return False
 
         if not self._stamp or not self._stamp.is_ready:
-            return super(InkingMode, self).button_press_cb(tdw, event)
+            return super(StampMode, self).button_press_cb(tdw, event)
 
         self._update_zone_and_target(tdw, event.x, event.y)
         self._update_current_node_index()
@@ -637,24 +637,24 @@ class StampMode (InkingMode, OncanvasEditMixin):
                             self.zone - _EditZone.CONTROL_HANDLE_BASE
 
                     if ctrl_state:
-                        self.phase = _PhaseStamp.ROTATE_BY_HANDLE
+                        self.phase = _Phase.ROTATE_BY_HANDLE
                     else:
-                        self.phase = _PhaseStamp.SCALE_BY_HANDLE
+                        self.phase = _Phase.SCALE_BY_HANDLE
             elif self.zone in (_EditZone.SOURCE_AREA,
                                _EditZone.SOURCE_AREA_HANDLE):
                 if button == 1:
                     if self.zone == _EditZone.SOURCE_AREA:
-                        self.phase = _PhaseStamp.ADJUST_SOURCE
+                        self.phase = _Phase.ADJUST_SOURCE
                     else:
-                        self.phase = _PhaseStamp.ADJUST_SOURCE_BY_HANDLE
+                        self.phase = _Phase.ADJUST_SOURCE_BY_HANDLE
             else:
                 raise NotImplementedError("Unrecognized zone %r", self.zone)
 
 
-        elif self.phase in (_PhaseStamp.ROTATE,
-                            _PhaseStamp.SCALE,
-                            _PhaseStamp.ROTATE_BY_HANDLE,
-                            _PhaseStamp.SCALE_BY_HANDLE):
+        elif self.phase in (_Phase.ROTATE,
+                            _Phase.SCALE,
+                            _Phase.ROTATE_BY_HANDLE,
+                            _Phase.SCALE_BY_HANDLE):
             # XXX Not sure what to do here.
             pass
         else:
@@ -663,7 +663,7 @@ class StampMode (InkingMode, OncanvasEditMixin):
         self._button_down = event.button
 
         # Supercall: start drags etc
-        return super(InkingMode, self).button_press_cb(tdw, event)
+        return super(StampMode, self).button_press_cb(tdw, event)
 
     def button_release_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
@@ -672,7 +672,7 @@ class StampMode (InkingMode, OncanvasEditMixin):
             return False
 
         if not self._stamp or not self._stamp.is_ready:
-            return super(InkingMode, self).button_release_cb(tdw, event)
+            return super(StampMode, self).button_release_cb(tdw, event)
 
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
         ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
@@ -732,7 +732,7 @@ class StampMode (InkingMode, OncanvasEditMixin):
             self.options_presenter.target = (self, self.current_node_index)
 
         # Supercall: stop current drag
-        return super(InkingMode, self).button_release_cb(tdw, event)
+        return super(StampMode, self).button_release_cb(tdw, event)
 
     def motion_notify_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
@@ -763,13 +763,13 @@ class StampMode (InkingMode, OncanvasEditMixin):
                     
 
         # call super-superclass callback
-        return super(InkingMode, self).motion_notify_cb(tdw, event)
+        return super(StampMode, self).motion_notify_cb(tdw, event)
 
     ## Drag handling (both capture and adjust phases)
 
     def drag_start_cb(self, tdw, event):
         if not self._stamp or not self._stamp.is_ready:
-            super(InkingMode, self).drag_start_cb(tdw, event)
+            super(StampMode, self).drag_start_cb(tdw, event)
 
         self._ensure_overlay_for_tdw(tdw)
         mx, my = tdw.display_to_model(event.x, event.y)
@@ -778,7 +778,7 @@ class StampMode (InkingMode, OncanvasEditMixin):
             if event.state != 0:
                 # here when something go wrong,and cancelled.
                 self.current_node_index = None
-                return super(InkingMode, self).drag_start_cb(tdw, event)
+                return super(StampMode, self).drag_start_cb(tdw, event)
             elif self.stamp.tile_count > 0:
                 node = _StampNode(mx, my, 
                         self._stamp.default_angle,
@@ -805,13 +805,13 @@ class StampMode (InkingMode, OncanvasEditMixin):
             pass
         elif self.phase == _Phase.CHANGE_PHASE:
             pass
-        elif self.phase in (_PhaseStamp.ROTATE,
-                            _PhaseStamp.SCALE,
-                            _PhaseStamp.ROTATE_BY_HANDLE,
-                            _PhaseStamp.SCALE_BY_HANDLE):
+        elif self.phase in (_Phase.ROTATE,
+                            _Phase.SCALE,
+                            _Phase.ROTATE_BY_HANDLE,
+                            _Phase.SCALE_BY_HANDLE):
             pass
-        elif self.phase in (_PhaseStamp.ADJUST_SOURCE,
-                            _PhaseStamp.ADJUST_SOURCE_BY_HANDLE):
+        elif self.phase in (_Phase.ADJUST_SOURCE,
+                            _Phase.ADJUST_SOURCE_BY_HANDLE):
             self.drag_offset.start(mx, my)
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
@@ -819,7 +819,7 @@ class StampMode (InkingMode, OncanvasEditMixin):
 
     def drag_update_cb(self, tdw, event, dx, dy):
         if not self._stamp or not self._stamp.is_ready:
-            super(InkingMode, self).drag_update_cb(tdw, event, dx, dy)
+            super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
 
         self._ensure_overlay_for_tdw(tdw)
 
@@ -829,9 +829,9 @@ class StampMode (InkingMode, OncanvasEditMixin):
 
         def override_scale_and_rotate():
             if ctrl_state:
-                self.phase = _PhaseStamp.ROTATE
+                self.phase = _Phase.ROTATE
             else:
-                self.phase = _PhaseStamp.SCALE
+                self.phase = _Phase.SCALE
             # Re-enter drag operation again
             self.drag_update_cb(tdw, event, dx, dy)
             self.phase = _Phase.CAPTURE
@@ -850,9 +850,13 @@ class StampMode (InkingMode, OncanvasEditMixin):
                 override_scale_and_rotate()
             else:
                 self._queue_redraw_curve()
-                super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
-        elif self.phase in (_PhaseStamp.SCALE,
-                            _PhaseStamp.ROTATE):
+               #super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
+               #self.drag_update_cb(tdw, event, dx, dy)
+                assert self.target_node_index >= 0
+                self.drag_offset.end(mx, my)
+                
+        elif self.phase in (_Phase.SCALE,
+                            _Phase.ROTATE):
             assert self.current_node_index is not None
             self._queue_redraw_curve()
             node = self.nodes[self.current_node_index]
@@ -862,7 +866,7 @@ class StampMode (InkingMode, OncanvasEditMixin):
                     event.x, event.y)
 
             if dir >= 0:
-                if self.phase == _PhaseStamp.ROTATE:
+                if self.phase == _Phase.ROTATE:
                     rad = length * 0.005
                     if dir in (0, 3):
                         rad *= -1
@@ -878,7 +882,7 @@ class StampMode (InkingMode, OncanvasEditMixin):
                 self._queue_redraw_curve()
                 self.start_x = event.x
                 self.start_y = event.y
-        elif self.phase == _PhaseStamp.SCALE_BY_HANDLE:
+        elif self.phase == _Phase.SCALE_BY_HANDLE:
             assert self.target_node_index is not None
             self._queue_redraw_curve()
             node = self.nodes[self.target_node_index]
@@ -947,7 +951,7 @@ class StampMode (InkingMode, OncanvasEditMixin):
 
             self._queue_redraw_curve()
 
-        elif self.phase == _PhaseStamp.ROTATE_BY_HANDLE:
+        elif self.phase == _Phase.ROTATE_BY_HANDLE:
             assert self.target_node_index is not None
             self._queue_redraw_curve()
             node = self.nodes[self.target_node_index]
@@ -975,8 +979,8 @@ class StampMode (InkingMode, OncanvasEditMixin):
                       
             self._queue_redraw_curve()
             
-        elif self.phase in (_PhaseStamp.ADJUST_SOURCE,
-                            _PhaseStamp.ADJUST_SOURCE_BY_HANDLE):
+        elif self.phase in (_Phase.ADJUST_SOURCE,
+                            _Phase.ADJUST_SOURCE_BY_HANDLE):
 
             self._queue_selection_area(tdw)
             self.drag_offset.end(mx, my)
@@ -987,7 +991,7 @@ class StampMode (InkingMode, OncanvasEditMixin):
 
     def drag_stop_cb(self, tdw):
         if not self._stamp or not self._stamp.is_ready:
-            return super(InkingMode, self).drag_stop_cb(tdw)
+            return super(StampMode, self).drag_stop_cb(tdw)
         
 
         self._ensure_overlay_for_tdw(tdw)
@@ -996,9 +1000,8 @@ class StampMode (InkingMode, OncanvasEditMixin):
             if not self.nodes or self.current_node_index == None:
                 # Cancelled drag event (and current capture phase)
                 # call super-superclass directly to bypass this phase
-                self._reset_capture_data()
                 self._reset_adjust_data()
-                return super(InkingMode, self).drag_stop_cb(tdw) 
+                return super(StampMode, self).drag_stop_cb(tdw) 
 
             node = self.nodes[self.current_node_index]
             dx, dy = self.drag_offset.get_model_offset()
@@ -1017,19 +1020,27 @@ class StampMode (InkingMode, OncanvasEditMixin):
                 tdw.queue_draw()
 
         elif self.phase == _Phase.ADJUST:
-            super(StampMode, self).drag_stop_cb(tdw)
+            self._queue_draw_selected_nodes() # to ensure erase them
+
+            ox, oy = self.drag_offset.get_model_offset()
+            for i in self.selected_nodes:
+                cn = self.nodes[i]
+                self.nodes[i] = cn._replace(x=cn.x + ox, 
+                                            y=cn.y + oy)
+            self.drag_offset.reset()
+            
             self._queue_redraw_all_nodes()
             self._queue_redraw_curve()
             self._queue_draw_buttons()
 
-        elif self.phase in (_PhaseStamp.ROTATE,
-                            _PhaseStamp.SCALE,
-                            _PhaseStamp.ROTATE_BY_HANDLE,
-                            _PhaseStamp.SCALE_BY_HANDLE):
+        elif self.phase in (_Phase.ROTATE,
+                            _Phase.SCALE,
+                            _Phase.ROTATE_BY_HANDLE,
+                            _Phase.SCALE_BY_HANDLE):
             self.phase = _Phase.ADJUST
 
-        elif self.phase in (_PhaseStamp.ADJUST_SOURCE,
-                            _PhaseStamp.ADJUST_SOURCE_BY_HANDLE):
+        elif self.phase in (_Phase.ADJUST_SOURCE,
+                            _Phase.ADJUST_SOURCE_BY_HANDLE):
             area = self.adjust_selection_area(
                             self.target_area_index,
                             self.stamp.get_selection_area(self.target_area_index))
@@ -1088,7 +1099,7 @@ class StampMode (InkingMode, OncanvasEditMixin):
             self._prev_scroll_time = event.time
         else:
             # calling super-supreclass handler, to invoke original scroll events.
-            return super(InkingMode, self).scroll_cb(tdw, event)
+            return super(StampMode, self).scroll_cb(tdw, event)
 
 
     ## Interrogating events
