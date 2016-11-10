@@ -246,8 +246,9 @@ class Stabilizer(Assistbase):
 
     def __init__(self, app):
         super(Stabilizer, self).__init__(app)
-        self._rx = None
-        self._ry = None
+        print('construct')
+        self._rx = 0.0
+        self._ry = 0.0
         self._average_previous = True
         self._stabilize_range = 48
         self._current_range = self._stabilize_range
@@ -348,8 +349,8 @@ class Stabilizer(Assistbase):
         
     def reset(self):
         super(Stabilizer, self).reset()
-        self._cx = None
-        self._cy = None
+        self._cx = 0.0
+        self._cy = 0.0
         self._latest_pressure = None
         self._last_button = None
         self._start_time = None
