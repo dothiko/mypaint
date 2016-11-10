@@ -130,19 +130,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     def inactive_cursor(self):
         return None
  
-#   @property
-#   def active_cursor(self):
-#       if self.phase == _Phase.ADJUST:
-#           if self.zone == _EditZone.CONTROL_NODE:
-#               return self._crosshair_cursor
-#           elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
-#               return self._arrow_cursor
-#
-#       elif self.phase in (_Phase.ADJUST_PRESSURE, _Phase.ADJUST_PRESSURE_ONESHOT):
-#           if self.zone == _EditZone.CONTROL_NODE:
-#               return self._cursor_move_nw_se
-#
-#       return None
  
     ## Override action
     permitted_switch_actions = None
