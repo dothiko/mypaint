@@ -1667,8 +1667,10 @@ class OptionsPresenter_Bezier (OptionsPresenter):
         self._default_dtime_adj = builder.get_object("default_dtime_adj")
         self._default_pressure_adj = builder.get_object("default_pressure_adj")
 
-        self._default_dtime_adj.set_value(BezierMode._DEFAULT_DTIME)
-        self._default_pressure_adj.set_value(BezierMode._DEFAULT_PRESSURE)
+        self._default_dtime_adj.set_value(self._app.preferences.get(
+            "beziertool.default_dtime", BezierMode._DEFAULT_DTIME))
+        self._default_pressure_adj.set_value(self._app.preferences.get(
+            "beziertool.default_pressure", BezierMode._DEFAULT_PRESSURE))
 
         combo = builder.get_object('stroke_history_combobox')
         combo.set_model(BezierMode.stroke_history.liststore)
@@ -1737,20 +1739,20 @@ class OptionsPresenter_Bezier (OptionsPresenter):
         self._check_curvepoint.set_active(flag)
         self._updating_ui = entering_updating_ui
 
-    def set_default_values(self, dtime, pressure):
-        """ called from BezierMode object,
-        when default dtime or pressure changed.
-        """
-
-        # avoid cancelling other ongoing ui updating
-        entering_updating_ui = self._updating_ui
-
-        self._updating_ui = True
-        if dtime:
-            self._default_dtime_adj.set_value(dtime)
-        if pressure:
-            self._default_pressure_adj.set_value(pressure)
-        self._updating_ui = entering_updating_ui
+   #def set_default_values(self, dtime, pressure):
+   #    """ called from BezierMode object,
+   #    when default dtime or pressure changed.
+   #    """
+   #
+   #    # avoid cancelling other ongoing ui updating
+   #    entering_updating_ui = self._updating_ui
+   #
+   #    self._updating_ui = True
+   #    if dtime:
+   #        self._default_dtime_adj.set_value(dtime)
+   #    if pressure:
+   #        self._default_pressure_adj.set_value(pressure)
+   #    self._updating_ui = entering_updating_ui
 
     def set_checkbutton_curvepoint(self, flag):
         """ called from BezierMode object,
@@ -1795,11 +1797,13 @@ class OptionsPresenter_Bezier (OptionsPresenter):
     def _default_dtime_value_changed_cb(self, adj):
         if self._updating_ui:
             return
+        self._app.preferences['beziertool.default_dtime'] = adj.get_value()
         BezierMode.set_default_dtime(adj.get_value())
 
     def _default_pressure_value_changed_cb(self, adj):
         if self._updating_ui:
             return
+        self._app.preferences['beziertool.default_pressure'] = adj.get_value()
         BezierMode.set_default_pressure(adj.get_value())
     
     def stroke_history_combobox_changed_cb(self, widget):
