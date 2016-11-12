@@ -1284,6 +1284,19 @@ class Document (object):
             cmd = cmd_class(self, locked, layer)
             self.do(cmd)
 
+    def set_layer_alpha_locked(self, locked, layer):
+        """Sets the input-alpha-locked status of a layer.
+        """
+        if layer is self.layer_stack:
+            return
+        cmd_class = command.SetLayerAlphaLocked
+        cmd = self.get_last_command()
+        if isinstance(cmd, cmd_class) and cmd.layer is layer:
+            self.update_last_command(locked=locked)
+        else:
+            cmd = cmd_class(self, locked, layer)
+            self.do(cmd)
+
     def set_selected_layers_visibility(self, visible, layers):
         """Sets the visibility of selected layers."""
         assert len(layers) >= 2
@@ -2065,7 +2078,6 @@ class Document (object):
             fp.write(xml)
 
         return thumbnail
-
 
 
 def _save_layers_to_new_orazip(root_stack, filename, bbox=None, xres=None, yres=None, frame_active=False, **kwargs):

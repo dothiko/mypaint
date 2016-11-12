@@ -107,6 +107,12 @@ class LayersTool (SizedVBoxToolWidget):
         view = layers.RootStackTreeView(docmodel)
         self._treemodel = view.get_model()
         self._treeview = view
+        # For Layer-alphalock feature:
+        # In application class, there is no obvious codes
+        # to build LayersTool instance,
+        # so I placed this line here.
+        view.current_layer_alpha_lock_changed += app.current_layer_alphalock_changed_cb
+
         # Motion and modifier keys during drag
         view.current_layer_rename_requested += self._rename_current_layer_cb
         view.current_layer_changed += self._blink_current_layer_cb
@@ -403,7 +409,6 @@ class LayersTool (SizedVBoxToolWidget):
 
     def _hover_leave_cb(self, widget):
         if self._hover_popup and self._hover_popup.active:
-            pass
            #self._hover_popup.leave('leave_tree')
             pass
 

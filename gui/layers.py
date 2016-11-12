@@ -392,9 +392,20 @@ class RootStackTreeView (Gtk.TreeView):
         col.set_fixed_width(24)
         self._locked_col = col
 
+        # Alpha Locked column
+        cell = Gtk.CellRendererPixbuf()
+        col = Gtk.TreeViewColumn(_("AlphaLocked"))
+        col.pack_start(cell, False)
+        datafunc = layer_alpha_locked_pixbuf_datafunc
+        col.set_cell_data_func(cell, datafunc)
+        col.set_sizing(Gtk.TreeViewColumnSizing.FIXED)
+        col.set_fixed_width(24)
+        self._alpha_locked_col = col
+
         # Column order on screen
         self.append_column(self._visible_col)
         self.append_column(self._locked_col)
+        self.append_column(self._alpha_locked_col)
         self.append_column(self._name_col)
         self.append_column(self._type_col)
 
@@ -435,6 +446,7 @@ class RootStackTreeView (Gtk.TreeView):
             # (Column, single, double, handler)
             (self._visible_col, True, False, self._handle_visible_col_click),
             (self._locked_col, True, False, self._handle_lock_col_click),
+            (self._alpha_locked_col, True, False, self._handle_alpha_lock_col_click),
             (self._name_col, False, True, self._handle_name_col_2click),
             (self._name_col, True, False, self._handle_name_col_1click),
             (self._type_col, True, False, self._handle_type_col_click),
@@ -541,6 +553,38 @@ class RootStackTreeView (Gtk.TreeView):
         """Toggle the clicked layer's visibility."""
         new_locked = not layer.locked
         self._docmodel.set_layer_locked(new_locked, layer)
+        return True
+
+    def _handle_alpha_lock_col_click(self, event, layer, path):
+        """Toggle the clicked layer's alpha pixel writable state."""
+        if isinstance(layer, lib.layer.PaintingLayer):
+            new_locked = not layer.alpha_locked
+            # 'set_layer_alpha_locked' will invoke command.SetLayerAlphaLocked
+            # but it changes only boolean flag of layer (with undoable style)
+            # does not change app.blendmodifier state.
+            self._docmodel.set_layer_alpha_locked(new_locked, layer)
+
+            if layer == self._docmodel.layer_stack.current:
+                # So We need to tell app.blendmofier that blend mode
+                # must be changed right now.
+                # But, the state of layer alphalock flag MIGHT NOT CHANGED YET
+                # because command will be issued asychronously.
+                # Methods which refer to very 'current' state of layer object
+                # is not match for this processing.
+                # 
+                # Therefore, notify clicked event to app instance
+                # via event decorator directly.
+                # 
+                # Currently, this event connected to 
+                # app.current_layer_alphalock_changed_cb
+                # (it is connected at the constructor of lib.layerswindow.LayersTool)
+                self.current_layer_alpha_lock_changed(layer, new_locked)
+
+                # Otherwise, We can use get_app() function at command.SetLayerAlphaLocked,
+                # and invoke application class callback from there.
+                # With this way, we can fire the callback at right timing,
+                # but using get_app() inside command.py is not good...? 
+
         return True
 
     def _handle_type_col_click(self, event, layer, path):
@@ -891,6 +935,16 @@ class RootStackTreeView (Gtk.TreeView):
                     dest_layer
                 )
 
+    ## Layer Alpha-lock related
+    @event
+    def current_layer_alpha_lock_changed(self, layer, locked):
+        """ Event: current layers alpha lock state changed
+        by clicking column.
+
+        :param layer: changed layer, This might Not be current(active) layer.
+        :param locked: boolean, new state of alpha-lock
+        """
+
     ## utility methods
 
     def cancel_multiple_selection(self):
@@ -983,6 +1037,23 @@ def layer_locked_pixbuf_datafunc(column, cell, model, it, data):
     cell.set_property("icon-name", icon_name)
     cell.set_property("sensitive", sensitive)
 
+def layer_alpha_locked_pixbuf_datafunc(column, cell, model, it, data):
+    """Use a alpha icon to show layer immutability statuses"""
+    layer = model.get_layer(it=it)
+    locked = False
+    enabled = False
+    if layer:
+        locked = layer.alpha_locked
+        enabled = isinstance(layer, lib.layer.PaintingLayer)
+
+    if not enabled:
+        icon_name = "mypaint-object-alpha-disabled-symbolic"
+    else:
+        icon_name = "mypaint-object-alpha-{}-symbolic".format(
+            "locked" if locked else "unlocked",
+        )
+    cell.set_property("icon-name", icon_name)
+    cell.set_property("sensitive", enabled)
 
 def layer_type_pixbuf_datafunc(column, cell, model, it, data):
     """Use the layer's icon to show its type"""

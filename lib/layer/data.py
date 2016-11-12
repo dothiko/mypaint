@@ -1354,6 +1354,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
     _ORA_STROKEMAP_ATTR = "{%s}strokemap" % (lib.xml.OPENRASTER_MYPAINT_NS,)
     _ORA_STROKEMAP_LEGACY_ATTR = "mypaint_strokemap_v2"
+    _ORA_ALPHALOCK_ATTR= "{%s}alphalock" % (lib.xml.OPENRASTER_MYPAINT_NS,)
 
 
     ## Initializing & resetting
@@ -1389,6 +1390,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
             **kwargs
         )
         self._load_strokemap_from_ora(elem, x, y, orazip=orazip)
+        self._load_expanded_attrs_from_ora(elem)
 
     def load_from_openraster_dir(self, oradir, elem, cache_dir, feedback_cb,
                                  x=0, y=0, **kwargs):
@@ -1403,6 +1405,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
             **kwargs
         )
         self._load_strokemap_from_ora(elem, x, y, oradir=oradir)
+        self._load_expanded_attrs_from_ora(elem)
 
     def _load_strokemap_from_ora(self, elem, x, y, orazip=None, oradir=None):
         """Load the strokemap from a layer elem & an ora{zip|dir}."""
@@ -1435,6 +1438,15 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
                 self.load_strokemap_from_file(sfp, x, y)
         else:
             raise ValueError("either orazip or oradir must be specified")
+
+    def _load_expanded_attrs_from_ora(self, elem):
+        """ Load expanded(extra) attributes from orafile element.
+        """ 
+        attrs = elem.attrib
+
+        # Layer alphalock:
+        alpha_locked = attrs.get(self._ORA_ALPHALOCK_ATTR, 'false').lower()
+        self.alpha_locked = (alpha_locked == 'true')
 
     def get_paintable(self):
         """True if this layer currently accepts painting brushstrokes"""
@@ -1640,6 +1652,8 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         # See comment above for compatibility strategy.
         elem.attrib[self._ORA_STROKEMAP_ATTR] = storepath
         elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = storepath
+        # Add expanded attributes
+        self._save_expanded_attrs_to_ora(elem)
         return elem
 
     def save_to_project(self, projdir, backupdir, path,
@@ -1675,6 +1689,8 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         # See comment above for compatibility strategy.
         elem.attrib[self._ORA_STROKEMAP_ATTR] = dat_relpath
         elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = dat_relpath
+        # Add expanded attributes
+        self._save_expanded_attrs_to_ora(elem)
         return elem
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
@@ -1706,7 +1722,15 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         # See comment above for compatibility strategy.
         elem.attrib[self._ORA_STROKEMAP_ATTR] = dat_relpath
         elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = dat_relpath
+        # Add expanded attributes
+        self._save_expanded_attrs_to_ora(elem)
         manifest.add(dat_relpath)
+        return elem
+
+    def _save_expanded_attrs_to_ora(self, elem):
+        """ save(write/set) expanded attributes into elem object. 
+        """
+        elem.attrib[self._ORA_ALPHALOCK_ATTR] = str(self.alpha_locked)
         return elem
 
     ## Type-specific stuff
