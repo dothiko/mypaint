@@ -365,8 +365,13 @@ class _StampMixin(object):
 
     THUMBNAIL_SIZE = 32
 
-    def _init_stamp(self, name):
+    def _init_stamp(self, name, desc):
+        """
+        :param name: name of stamp
+        :param desc: stamp description, it should be same as tooltip.
+        """
         self.name = name
+        self.desc = desc
         self._default_scale_x = 1.0
         self._default_scale_y = 1.0
         self._default_angle = 0.0
@@ -683,9 +688,9 @@ class Stamp(_PixbufSourceMixin, _StampMixin):
     and it is merged into current layer.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, desc):
         self._init_source()
-        self._init_stamp(name)
+        self._init_stamp(name, desc)
 
     ## Information methods
 
@@ -700,16 +705,16 @@ class TiledStamp(_TiledSourceMixin, _StampMixin):
     Tiled stamp. 
     'tiled' means 'a picture(pixbuf) divided into small parts(tiles)'
     """
-    def __init__(self, name, tw, th):
+    def __init__(self, name, desc, tw, th):
         self._init_source(tw, th)
-        self._init_stamp(name)
+        self._init_stamp(name, desc)
 
 
 class ClipboardStamp(_DynamicSourceMixin, _StampMixin):
 
-    def __init__(self, name):
+    def __init__(self, name, desc):
         self._init_source()
-        self._init_stamp(name)
+        self._init_stamp(name, desc)
 
     @property
     def is_ready(self):
@@ -766,12 +771,12 @@ class LayerStamp(_DynamicSourceMixin, _StampMixin):
     Each area is model coordinate.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, desc):
         self._init_source()
-        self._init_stamp(name)
+        self._init_stamp(name, desc)
 
-    def _init_stamp(self, name):
-        super(LayerStamp, self)._init_stamp(name)
+    def _init_stamp(self, name, desc):
+        super(LayerStamp, self)._init_stamp(name, desc)
         self._sel_areas = {}
         self._tile_index_seed = 0
         self._mode_ref = None
@@ -964,8 +969,8 @@ class VisibleStamp(LayerStamp):
     """ A Stamp which sources the currently visible area.
     """
 
-    def __init__(self, name):
-        self._init_stamp(name)
+    def __init__(self, name, desc):
+        self._init_stamp(name, desc)
 
     def set_selection_area(self, tile_index, area, layer):
         super(VisibleStamp, self).set_selection_area(
@@ -981,9 +986,9 @@ class ForegroundStamp(_PixbufMaskMixin, _StampMixin):
     """ Foreground color stamp.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, desc):
         self._init_source()
-        self._init_stamp(name)
+        self._init_stamp(name, desc)
 
     def draw(self, tdw, cr, x, y, node, save_context=False):
         """ Draw this stamp into cairo surface.
@@ -1042,13 +1047,13 @@ class ForegroundLayerStamp(ForegroundStamp,
     In this version,mask is generated from current layer.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, desc):
         # Call LayerStamp constructor
         # (CAUTION: NOT ForegroundStamp)
         # actually & currently, the both is same
         # but this class largely based on layerstamp
         # except for draw() method.
-        LayerStamp.__init__(self, name)
+        LayerStamp.__init__(self, name, desc)
 
     def draw(self, tdw, cr, x, y, node, save_context=False):
         ForegroundStamp.draw(self, tdw,  cr,
@@ -1071,8 +1076,8 @@ class ProxyStamp(ClipboardStamp):
     to this stamp class, instead of ClipboardStamp.
     """
 
-    def __init__(self, name, surfs):
-        super(ProxyStamp, self).__init__(name)
+    def __init__(self, name, desc, surfs):
+        super(ProxyStamp, self).__init__(name, desc)
         self._surfs = surfs
 
 
@@ -1098,7 +1103,39 @@ class StampPresetManager(object):
         if app:
             icon_theme.append_search_path(app.state_dirs.app_icons)
 
-        self._default_icon = icon_theme.load_icon('mypaint', 32, 0)
+        try:
+            self._default_icon = icon_theme.load_icon('mypaint', 32, 0)
+        except GLib.Error:
+            self._default_icon = icon_theme.load_icon('gtk-paste', 32, 0)
+
+        stamplist = []
+
+        for cs in BUILT_IN_STAMPS:
+            stamp = self.create_stamp_from_json(cs)
+            stamplist.append(stamp)
+
+        for cf in glob.glob(self._get_adjusted_path("*.mys")):
+            stamp = self.load_from_file(cf)
+            stamplist.append(stamp)
+
+        self.stamps = stamplist
+        self._stamp_store = {}
+        self._current = None
+
+    @property
+    def current(self):
+        return self._current
+       #if self._current_index is not None:
+       #    return self_stamps[self._current_index]
+
+    def set_current_iter(self, iter):
+        self._current = self._stamp_store[iter]
+        return self._current
+
+    def set_current_index(self, idx):
+        self._current = self.stamps[idx]
+        return self._current
+
 
     def _get_adjusted_path(self, filepath):
         """ Return absolute path according to application setting.
@@ -1107,7 +1144,7 @@ class StampPresetManager(object):
         However, glob.glob() will accept nonexistant path,
         glob.glob() returns empty list for such one.
         """
-        if not os.path.isabs(filepath):
+        if not os.path.isabs(filepath) and self._app is not None:
             return os.path.join(self._app.state_dirs.user_data,
                         self.STAMP_DIR_NAME, filepath)
         else:
@@ -1121,13 +1158,17 @@ class StampPresetManager(object):
         """
         liststore = Gtk.ListStore(GdkPixbuf.Pixbuf, str, object)
 
-        for cs in BUILT_IN_STAMPS:
-            stamp = self.create_stamp_from_json(cs)
-            liststore.append([stamp.thumbnail, stamp.name, stamp])
+        for stamp in self._stamps:
+            iter = liststore.append([stamp.thumbnail, stamp.name, stamp])
+            self._stamp_store[iter] = stamp
 
-        for cf in glob.glob(self._get_adjusted_path("*.mys")):
-            stamp = self.load_from_file(cf)
-            liststore.append([stamp.thumbnail, stamp.name, stamp])
+       #for cs in BUILT_IN_STAMPS:
+       #    stamp = self.create_stamp_from_json(cs)
+       #    liststore.append([stamp.thumbnail, stamp.name, stamp])
+       #
+       #for cf in glob.glob(self._get_adjusted_path("*.mys")):
+       #    stamp = self.load_from_file(cf)
+       #    liststore.append([stamp.thumbnail, stamp.name, stamp])
 
         return liststore
 
@@ -1159,7 +1200,8 @@ class StampPresetManager(object):
     def create_stamp_from_json(self, jo):
         """ Create a stamp from json-generated dictionary object.
         :param jo: dictionary object, mostly created with json.load()/loads()
-        :rtype: Stump class instance.
+
+        :return: Stump class instance.
 
         ## The specification of mypaint stamp preset file(.mys)
 
@@ -1171,7 +1213,8 @@ class StampPresetManager(object):
             "settings" : a dictionary to contain 'Stamp setting's.
             "thumbnail" : a thumbnail .jpg/.png filename
             "version" : 1
-            "tooltip" : (Optional) tooltip message of this stamp,for iconview item.
+            "desc" : (Optional) description of this stamp,for iconview item.
+                     this is also used for tooltip message.
 
         Stamp setting:
             "source" : "file" - Stamp from files.
@@ -1220,32 +1263,43 @@ class StampPresetManager(object):
                      Needless to say, 'tile-*' setting will ignore 
                      when there is no tile setting.
 
+            "icon" : load a picture file as Gtk predefined icon for the stamp.
+                     when this is not absolute path, 
+                     stampmanager assumes it would be placed at 
+                     self.STAMP_DIR_NAME below of _app.state_dirs.user_data
+
+            "gtk-thumbnail" : Use thumbnail as Gtk predefined icon for the stamp.
+
         """
 
         if jo['version'] == "1":
             settings = jo['settings']
+            name = jo.get('name', 'unnamed stamp')
+            desc = jo.get('desc', None)
             source = settings['source']
+
             if source == 'file':
                 assert 'filenames' in settings
-                stamp = Stamp(jo['name'])
+                stamp = Stamp(name, desc)
                 stamp.set_file_sources(settings['filenames'])
             elif source == 'tiled-file':
                 assert 'filenames' in settings
                 assert 'tile' in settings
-                stamp = TiledStamp(jo['name'], *settings.get('tile', (1, 1)))
+                stamp = TiledStamp(name, desc, 
+                        *settings.get('tile', (1, 1)))
                 stamp.set_file_sources(settings['filenames'])
             elif source == 'clipboard':
-                stamp = ClipboardStamp(jo['name'])
+                stamp = ClipboardStamp(name, desc)
             elif source == 'layer':
-                stamp = LayerStamp(jo['name'])
+                stamp = LayerStamp(name, desc)
             elif source == 'current-visible':
-                stamp = VisibleStamp(jo['name'])
+                stamp = VisibleStamp(name, desc)
             elif source == 'foreground':
-                stamp = ForegroundStamp(jo['name'])
+                stamp = ForegroundStamp(name, desc)
                 assert 'mask' in settings
                 stamp.set_file_sources(settings['mask'])
             elif source == 'foreground-layermask':
-                stamp = ForegroundLayerStamp(jo['name'])
+                stamp = ForegroundLayerStamp(name, desc)
             else:
                 raise NotImplementedError("Unknown source %r" % source)
 
@@ -1256,15 +1310,27 @@ class StampPresetManager(object):
             if 'angle' in settings:
                 stamp.set_default_angle(math.radians(settings['angle'] % 360.0))
 
-            if 'gtk-thumbnail' in settings:
-                pixbuf = Gtk.IconTheme.get_default().load_icon(
-                        settings['gtk-thumbnail'], Stamp.THUMBNAIL_SIZE, 0)
-                stamp.set_thumbnail(pixbuf)
-            else:
-                stamp.set_thumbnail(
-                        self.load_thumbnail(settings.get('thumbnail', None)))
+            if 'icon' in settings:
+                try:
+                    pixbuf = self.load_thumbnail(settings['icon'])
+                    stamp.set_thumbnail(pixbuf)
+                except:
+                    logger.error('stamp cannot load icon filename %s' % 
+                            icon_fname)
 
-            # TODO tooltip does not supported yet
+            elif 'gtk-thumbnail' in settings:
+                try:
+                    pixbuf = Gtk.IconTheme.get_default().load_icon(
+                            settings['gtk-thumbnail'], Stamp.THUMBNAIL_SIZE, 0)
+                    stamp.set_thumbnail(pixbuf)
+                except:
+                    logger.error('stamp cannot set gtk icon %s' % 
+                            settings['gtk-thumbnail'])
+           #else:
+           #    stamp.set_thumbnail(
+           #            self.load_thumbnail(settings.get('thumbnail', None)))
+
+
             return stamp
 
         else:
@@ -1286,28 +1352,28 @@ BUILT_IN_STAMPS = [
                   "source" : "clipboard",
                   "gtk-thumbnail" : "gtk-paste"
                   },
-              "tooltip" : _("Stamp of Clipboard Image")
+              "desc" : _("Stamp of Clipboard Image")
             },
             { "version" : "1",
               "name" : "layer stamp",
               "settings" : {
                   "source" : "layer"
                   },
-              "tooltip" : _("Stamp of area of Layer.")
+              "desc" : _("Stamp of area of Layer.")
             },
             { "version" : "1",
               "name" : "visible stamp",
               "settings" : {
                   "source" : "current-visible"
                   },
-              "tooltip" : _("Stamp of area of current visible.")
+              "desc" : _("Stamp of area of current visible.")
             },
             { "version" : "1",
               "name" : "layer mask",
               "settings" : {
                   "source" : "foreground-layermask"
                   },
-              "tooltip" : _("Stamp of forground color, masked with area of Layer.")
+              "desc" : _("Stamp of forground color, masked with area of Layer.")
             },
         ]
               

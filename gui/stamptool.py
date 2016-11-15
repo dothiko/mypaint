@@ -1658,7 +1658,10 @@ class OptionsPresenter_Stamp (object):
             if len(iconview.get_selected_items()) > 0:
                 path = iconview.get_selected_items()[0]
                 iter = self._stamps_store.get_iter(path)
-                mode.set_stamp(self._stamps_store.get(iter, 2)[0])
+                manager = self._app.stamp_manager
+                manager.set_current_iter(iter)
+               #mode.set_stamp(self._stamps_store.get(iter, 2)[0])
+                mode.set_stamp(manager.current)
 
 
 
