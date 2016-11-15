@@ -2353,12 +2353,12 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
                 file_list = glob.glob(os.path.join(cur_path, "*.py"))
                 if len(file_list) > 0:
                     sys.path.append(cur_path)
-                    for cur_file in file_list:
-                        modname = os.path.splitext(os.path.basename(cur_file))[0]
+                    for fname in file_list:
+                        modname = os.path.splitext(os.path.basename(fname))[0]
                         module = __import__(modname, globals(), locals(), [], -1)
                         try:
                             reg_method = getattr(module, "register")
-                            info = reg_method(self)
+                            info = reg_method(app)
                             if info:
                                 label, icon, plugin = info
                                 if menu_plug_sub == None:

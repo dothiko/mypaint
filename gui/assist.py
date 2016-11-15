@@ -246,7 +246,6 @@ class Stabilizer(Assistbase):
 
     def __init__(self, app):
         super(Stabilizer, self).__init__(app)
-        print('construct')
         self._rx = 0.0
         self._ry = 0.0
         self._average_previous = True

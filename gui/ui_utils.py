@@ -171,6 +171,47 @@ def display_to_model_distance(tdw, disp_dist):
     lx, ly = tdw.display_to_model(disp_dist, 0)
     return math.hypot(lx - bx, ly - by)
 
+
+def setup_round_position(tdw, pos, count, radius):
+    """ setup button position,rotating around (x,y)
+    with considering tdw viewing area.
+    
+    :param pos:   a tuple of center position,in display coordinate.
+    :param count: maximum button count
+    :param radius: the radius of button circle.
+
+    :return : a list of positions.position is a tuple of (x, y) 
+    """
+    x, y = pos
+    button_radius = gui.style.FLOATING_BUTTON_RADIUS
+    margin = 1.5 * button_radius
+    alloc = tdw.get_allocation()
+    view_x0, view_y0 = alloc.x, alloc.y
+    view_x1, view_y1 = view_x0+alloc.width, view_y0+alloc.height
+    buttons = []
+
+    palette_radius = 64 #gui.style.BUTTON_PALETTE_RADIUS
+    area_radius = radius + margin 
+
+    if x + area_radius > view_x1:
+        x = view_x1 - area_radius
+    elif x - area_radius < view_x0:
+        x = view_x0 + area_radius
+    
+    if y + area_radius > view_y1:
+        y = view_y1 - area_radius
+    elif y - area_radius < view_y0:
+        y = view_y0 + area_radius
+
+    for i in xrange(count):
+        rad = (math.pi / count) * 2.0 * i
+        dx = - palette_radius * math.sin(rad)
+        dy = palette_radius * math.cos(rad)
+        buttons.append(x + dx, y - dy) 
+
+    return buttons
+
+
 ## Decorators
 
 def dashedline_wrapper(callable):

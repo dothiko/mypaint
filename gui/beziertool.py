@@ -34,7 +34,7 @@ import lib.helpers
 import gui.cursor
 import lib.observable
 from gui.inktool import *
-from gui.inktool import _LayoutNode, _Phase
+from gui.inktool import _LayoutNode
 from gui.linemode import *
 from gui.oncanvas import *
 
@@ -185,35 +185,19 @@ class _Node_Bezier (_Control_Handle):
     def __getitem__(self, idx):
         return self._array[idx]
     
-class _EditZone(EditZone_Mixin):
+class _EditZone(EditZoneMixin):
     """Enumeration of what the pointer is on in the ADJUST phase"""
     CONTROL_HANDLE = 104 #: Control handle of bezier
 
-    # _EditZone-enum also used,they are defined at gui.inktool._EditZone
-   #EMPTY_CANVAS   #: Nothing, empty space
-   #CONTROL_NODE   #: Any control node; see target_node_index
-   #REJECT_BUTTON  #: On-canvas button that abandons the current line
-   #ACCEPT_BUTTON  #: On-canvas button that commits the current line
-
-class _Phase(Phase_Mixin):
+class _Phase(PressPhase):
     """Enumeration of the states that an BezierCurveMode can be in"""
-    ADJUST_PRESSURE = 2
-    ADJUST_PRESSURE_ONESHOT = 4
-    CHANGE_PHASE = 5
-    INITIAL = Phase_Mixin.CAPTURE     #: Initial Phase,before creating any node.
-                                 #  This is needed when change changing brush size 
-                                 #  before create path.
-
-    CREATE_PATH = Phase_Mixin.ADJUST  #: Main Phase.creating path(adding node)
-                                 # THIS MEMBER MUST SAME AS _Phase.ADJUST
-                                 # because for InkingMode.scroll_cb()
-    MOVE_NODE = 100         #: Moving node(s)
     ADJUST_HANDLE = 103     #: change control-handle position
     INIT_HANDLE = 104       #: initialize control handle,right after create a node
     PLACE_NODE = 105        #: place a new node into clicked position on current
                             # stroke,when you click with holding CTRL key
-    CALL_BUTTONS = 106      #: call buttons around clicked point. 
+    CALL_BUTTONS = 106      #: show action buttons around the clicked point. 
 
+_ActionButton = ActionButtonMixin
 
 class PressureMap(object):
     """ PressureMap wrapper object, to mapping 'pressure-variation'
@@ -300,7 +284,7 @@ class StrokeHistory(object):
 
 
 
-class BezierMode (OncanvasEditMixin):
+class BezierMode (PressureEditableMixin):
 
     ## Metadata properties
     ACTION_NAME = "BezierCurveMode"
@@ -317,11 +301,11 @@ class BezierMode (OncanvasEditMixin):
 
     @property
     def active_cursor(self):
-        if self.phase in (_Phase.INITIAL, _Phase.CREATE_PATH):
+        if self.phase == _Phase.ADJUST:
             if self.zone in (_EditZone.CONTROL_NODE,
                     _EditZone.CONTROL_HANDLE):
                 return self._crosshair_cursor
-        elif self.phase == _Phase.MOVE_NODE:
+        elif self.phase == _Phase.ADJUST_POS:
             if self.zone == _EditZone.CONTROL_NODE:
                 return self._crosshair_cursor
             elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
@@ -339,11 +323,25 @@ class BezierMode (OncanvasEditMixin):
 
     @phase.setter
     def phase(self, new_phase):
-        if new_phase == _Phase.INITIAL:
-            self.enable_switch_actions(True)
-        else:
-            self.enable_switch_actions(False)
+       #if new_phase == _Phase.ADJUST:
+       #    self.enable_switch_actions(True)
+       #else:
+       #    self.enable_switch_actions(False)
         self._phase = new_phase
+
+    @property
+    def is_editing_phase(self):
+        return self.phase in (_Phase.ADJUST,
+                              _Phase.ADJUST_POS,
+                              _Phase.ADJUST_PRESSURE,
+                              _Phase.ADJUST_HANDLE)
+    @property
+    def is_adjusting_phase(self):
+        return self.phase in (_Phase.ADJUST,
+                              _Phase.ADJUST_POS,
+                              _Phase.ADJUST_PRESSURE,
+                              _Phase.ADJUST_PRESSURE_ONESHOT,
+                              _Phase.ADJUST_HANDLE)
 
     @classmethod
     def set_default_dtime(cls, new_dtime):
@@ -381,6 +379,9 @@ class BezierMode (OncanvasEditMixin):
         self._stroke_from_history = False
         self.forced_button_pos = None
 
+    def _reset_capture_data(self):
+        super(BezierMode, self)._reset_capture_data()
+        self.phase = _Phase.ADJUST
 
     def _reset_adjust_data(self):
         super(BezierMode, self)._reset_adjust_data()
@@ -408,6 +409,9 @@ class BezierMode (OncanvasEditMixin):
         # so we need to queue drawing button.
         self._queue_draw_buttons() 
 
+        if self.current_node_index != None:
+            self._queue_draw_node(self.current_node_index) # To Erase
+
         self.current_node_index = new_index
         self.current_node_changed(new_index)
         self.options_presenter.target = (self, new_index)
@@ -416,118 +420,73 @@ class BezierMode (OncanvasEditMixin):
                 self._queue_draw_node(i)
 
         self._queue_draw_buttons()
+
+   #def _update_zone_and_target(self, tdw, x, y, ignore_handle=False):
+   # inherit from HandleNodeMixin
         
     def _update_zone_and_target(self, tdw, x, y, ignore_handle=False):
         """Update the zone and target node under a cursor position"""
-        ## FIXME mostly copied from inktool.py
-        ## the differences are 'control handle processing' and
-        ## 'cursor changing' and, queuing buttons draw 
-        ## to follow current_node_index
 
+        super(BezierMode, self)._update_zone_and_target(
+                tdw, x, y)
 
-        self._ensure_overlay_for_tdw(tdw)
-        new_zone = _EditZone.EMPTY_CANVAS
-        if not self.in_drag and len(self.nodes) > 0:
-            if self.phase in (_Phase.MOVE_NODE, 
-                    _Phase.ADJUST_PRESSURE, 
-                    _Phase.CREATE_PATH):
+        if self.phase in (_Phase.ADJUST, 
+                          _Phase.ADJUST_POS):
 
+            # Checking Control handles first:
+            # because when you missed setting control handle 
+            # at node creation stage,if node zone detection
+            # is prior to control handle, they are unoperatable.
+            if (self.current_node_index is not None and 
+                    ignore_handle == False):
+                c_node = self.nodes[self.current_node_index]
+                new_zone = None
                 new_target_node_index = None
-                
-                # Test buttons for hits
-                overlay = self._ensure_overlay_for_tdw(tdw)
                 hit_dist = gui.style.FLOATING_BUTTON_RADIUS
+                self.current_handle_index = None
+                if self.current_node_index == 0:
+                    seq = (1,)
+                else:
+                    seq = (0, 1)
+                for i in seq:
+                    handle = c_node.get_control_handle(i)
+                    hx, hy = tdw.model_to_display(handle.x, handle.y)
+                    d = math.hypot(hx - x, hy - y)
+                    if d > hit_dist:
+                        continue
+                    new_target_node_index = self.current_node_index
+                    self.current_handle_index = i
+                    new_zone = _EditZone.CONTROL_HANDLE
+                    break         
 
-                if len(self.nodes) > 1:
-                   #button_info = [
-                   #    (_EditZone.ACCEPT_BUTTON, overlay.get_button_pos(_EditZone.ACCEPT_BUTTON)),
-                   #    (_EditZone.REJECT_BUTTON, overlay.get_button_pos(_EditZone.REJECT_BUTTON)),
-                   #]
-                    for btn_zone in (_EditZone.ACCEPT_BUTTON, _EditZone.REJECT_BUTTON):
-                        btn_pos = overlay.get_button_pos(btn_zone)
-                        if btn_pos is None:
-                            continue
-                        btn_x, btn_y = btn_pos
-                        d = math.hypot(btn_x - x, btn_y - y)
-                        if d <= hit_dist:
-                            new_target_node_index = None
-                            new_zone = btn_zone
-                            break
-
-
-                if (new_zone == _EditZone.EMPTY_CANVAS):
-
-                    if self.phase == _Phase.ADJUST_PRESSURE:
-                        new_target_node_index = self._search_target_node(tdw, x, y)
-                    else:
-                        # Checking Control handles first:
-                        # because when you missed setting control handle 
-                        # at node creation stage,if node zone detection
-                        # is prior to control handle, they are unoperatable.
-                        if (self.current_node_index is not None and 
-                                ignore_handle == False):
-                            c_node = self.nodes[self.current_node_index]
-                            self.current_handle_index = None
-                            if self.current_node_index == 0:
-                                seq = (1,)
-                            else:
-                                seq = (0, 1)
-                            for i in seq:
-                                handle = c_node.get_control_handle(i)
-                                hx, hy = tdw.model_to_display(handle.x, handle.y)
-                                d = math.hypot(hx - x, hy - y)
-                                if d > hit_dist:
-                                    continue
-                                new_target_node_index = self.current_node_index
-                                self.current_handle_index = i
-                                new_zone = _EditZone.CONTROL_HANDLE
-                                break         
-
-                        # Test nodes for a hit, in reverse draw order
-                        if new_target_node_index == None:
-                            new_target_node_index = self._search_target_node(tdw, x, y)
-
-                    if (new_target_node_index != None and 
-                        new_zone == _EditZone.EMPTY_CANVAS):
-                        new_zone = _EditZone.CONTROL_NODE
-                    
-                    
-                # Update the prelit node, and draw changes to it
-                if new_target_node_index != self.target_node_index:
-                    if self.target_node_index is not None:
-                        self._queue_draw_node(self.target_node_index)
-                    self.target_node_index = new_target_node_index
-                    if self.target_node_index is not None:
+                if new_target_node_index is not None:
+                    if self.target_node_index:
                         self._queue_draw_node(self.target_node_index)
 
-                ## Fallthru below
+                    if new_target_node_index != self.target_node_index:
+                        self.target_node_index = new_target_node_index
+                        self._queue_draw_node(self.target_node_index)
 
+                    self.zone = new_zone
+                    if len(self.nodes) > 1:
+                        self._queue_draw_buttons()
 
-        elif self.phase == _Phase.ADJUST_PRESSURE_ONESHOT:
-            # Always control node,in pressure editing.
-            new_zone = _EditZone.CONTROL_NODE 
+                    if not self.in_drag:
+                        self.update_cursor(tdw) 
 
-        # Update the zone, and assume any change implies a button state
-        # change as well (for now...)
-        if self.zone != new_zone:
-            self.zone = new_zone
-            self._ensure_overlay_for_tdw(tdw)
-            if len(self.nodes) > 1:
-                self._queue_previous_draw_buttons()
-
+    def update_cursor(self, tdw): 
         # Update the "real" inactive cursor too:
         # these codes also a little changed from inktool.
-        if not self.in_drag:
-            cursor = None
-            if self.phase in (_Phase.INITIAL, _Phase.CREATE_PATH,
-                    _Phase.MOVE_NODE, _Phase.ADJUST_PRESSURE):
-                if self.zone == _EditZone.CONTROL_NODE:
-                    cursor = self._crosshair_cursor
-                elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
-                    cursor = self._arrow_cursor
-            if cursor is not self._current_override_cursor:
-                tdw.set_override_cursor(cursor)
-                self._current_override_cursor = cursor
+        cursor = None
+        if self.is_editing_phase:
+            if self.zone == _EditZone.CONTROL_NODE:
+                cursor = self._crosshair_cursor
+            elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
+                cursor = self._arrow_cursor
+
+        if cursor is not self._current_override_cursor:
+            tdw.set_override_cursor(cursor)
+            self._current_override_cursor = cursor
 
     def _start_new_capture_phase(self, rollback=False):
         if rollback:
@@ -639,18 +598,13 @@ class BezierMode (OncanvasEditMixin):
 
     ## Redraws
     
-    def _queue_draw_node(self, i):
+    def _queue_draw_node(self, i, dx=0, dy=0):
         """Redraws a specific control node on all known view TDWs
         """
         node = self.nodes[i]
-        dx,dy = self.drag_offset.get_model_offset()
         
         def get_area(node_idx, nx, ny, radius, area=None):
-            if node_idx in self.selected_nodes:
-                x, y = tdw.model_to_display(
-                        nx + dx, ny + dy)
-            else:
-                x, y = tdw.model_to_display(nx, ny)
+            x, y = tdw.model_to_display(nx, ny)
 
             x = math.ceil(x)
             y = math.ceil(y)
@@ -670,18 +624,29 @@ class BezierMode (OncanvasEditMixin):
         for tdw in self._overlays:
             area = get_area(i, node.x, node.y, radius)
 
-            # Active control handles also should be queued.
-            for hi in (0,1):
-                # But,the first node only shows 2nd(index 1) handle.
-                if self.is_drawn_handle(i, hi):
-                    handle = node.get_control_handle(hi)
-                    area = get_area(i, 
-                        handle.x, handle.y,
-                        radius, area)
+            if self.current_node_index == i:
+                # Active control handles also should be queued.
+                for hi in (0,1):
+                    # But,the first node only shows 2nd(index 1) handle.
+                    if self.is_drawn_handle(i, hi):
+                        handle = node.get_control_handle(hi)
+                        area = get_area(i, 
+                            handle.x, handle.y,
+                            radius, area)
 
             tdw.queue_draw_area(area[0], area[1], 
                     area[2] - area[0] + 1, 
                     area[3] - area[1] + 1)
+
+    def _queue_draw_selected_nodes(self):
+        if self.zone == _EditZone.CONTROL_NODE:
+            dx, dy = self.drag_offset.get_model_offset()
+            for i in self.selected_nodes:
+                self._queue_draw_node(i, dx, dy)
+        else:
+            for i in self.selected_nodes:
+                self._queue_draw_node(i)
+            
 
     def is_drawn_handle(self, node_idx, hndl_idx):
         return ((hndl_idx == 0 and node_idx > 0) or 
@@ -745,28 +710,28 @@ class BezierMode (OncanvasEditMixin):
         if len(self.nodes) >= 2:
             super(BezierMode, self)._queue_draw_buttons()
 
-    def _queue_previous_draw_buttons(self):
-        """ Queue previous (current) button position to draw.
-        It means erase old position buttons.
-        BezierCurveMode changes dramatically button position with its 
-        node selection state (due to display control handles),
-        so we might miss calcurate button location in some case.
-        """
-
-        for tdw, overlay in self._overlays.items():
-            for pos in (overlay.get_button_pos(_EditZone.ACCEPT_BUTTON),
-                         overlay.get_button_pos(_EditZone.REJECT_BUTTON)):
-                # FIXME duplicate code:from gui.inktool.queue_draw_buttons
-                if pos is None:
-                    continue
-                r = gui.style.FLOATING_BUTTON_ICON_SIZE
-                r += max(
-                    gui.style.DROP_SHADOW_X_OFFSET,
-                    gui.style.DROP_SHADOW_Y_OFFSET,
-                )
-                r += gui.style.DROP_SHADOW_BLUR
-                x, y = pos
-                tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
+   #def _queue_previous_draw_buttons(self):
+   #    """ Queue previous (current) button position to draw.
+   #    It means erase old position buttons.
+   #    BezierCurveMode changes dramatically button position with its 
+   #    node selection state (due to display control handles),
+   #    so we might miss calcurate button location in some case.
+   #    """
+   #
+   #    for tdw, overlay in self._overlays.items():
+   #        for pos in (overlay.get_button_pos(_EditZone.ACCEPT_BUTTON),
+   #                     overlay.get_button_pos(_EditZone.REJECT_BUTTON)):
+   #            # FIXME duplicate code:from gui.inktool.queue_draw_buttons
+   #            if pos is None:
+   #                continue
+   #            r = gui.style.FLOATING_BUTTON_ICON_SIZE
+   #            r += max(
+   #                gui.style.DROP_SHADOW_X_OFFSET,
+   #                gui.style.DROP_SHADOW_Y_OFFSET,
+   #            )
+   #            r += gui.style.DROP_SHADOW_BLUR
+   #            x, y = pos
+   #            tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
 
 
     def _draw_curve_segment(self, model, sidx, eidx, dx, dy, step,
@@ -856,191 +821,100 @@ class BezierMode (OncanvasEditMixin):
 
     ### Event handling
 
+
     ## Raw event handling (prelight & zone selection in adjust phase)
-    def button_press_cb(self, tdw, event):
-        self._ensure_overlay_for_tdw(tdw)
-        current_layer = tdw.doc._layers.current
-        if not (tdw.is_sensitive and current_layer.get_paintable()):
-            return False
-        self._update_zone_and_target(tdw, event.x, event.y,
-                event.state & Gdk.ModifierType.MOD1_MASK)
-        self._update_current_node_index()
+    def mode_button_press_cb(self, tdw, event):
 
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
         ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
+        if self.phase == _Phase.CAPTURE:
+            # In this class, we can add nodes
+            # everytime we want.
+            # so actually there is no 'CAPTURE' phase.
+            self.phase = _Phase.ADJUST
 
-        if self.phase == _Phase.INITIAL: 
-            self.phase = _Phase.CREATE_PATH
-            # FALLTHRU: *do* start a drag 
-        elif self.phase in (_Phase.CREATE_PATH,
-                _Phase.ADJUST_PRESSURE):
-            # Initial state - everything starts here!
-       
-            if (self.zone in (_EditZone.REJECT_BUTTON, 
-                        _EditZone.ACCEPT_BUTTON)):
-                if (event.button == 1 and 
-                        event.type == Gdk.EventType.BUTTON_PRESS):
-
-                        # To avoid some of visual glitches,
-                        # we need to process button here.
-                        if self.zone == _EditZone.REJECT_BUTTON:
-                            self.discard_edit()
-                        elif self.zone == _EditZone.ACCEPT_BUTTON:
-                            self.accept_edit()
-                        return False
+        if self.phase == _Phase.ADJUST: 
                     
+            if self.zone == _EditZone.EMPTY_CANVAS:
+                
+                if (len(self.nodes) > 0 and event.button == 1): 
                     
-            elif self.zone == _EditZone.CONTROL_NODE:
-                # Grabbing a node...
-                if self.phase == _Phase.CREATE_PATH:
+                    if shift_state and ctrl_state:
+                        # Call buttons into this position.
+                        self._queue_draw_buttons() 
+                        self.forced_button_pos = (event.x, event.y)
+                        self._bypass_phase(_Phase.ADJUST)
+                    elif ctrl_state:
+                        mx, my = tdw.display_to_model(event.x, event.y)
+                        pressed_segment = self._detect_on_stroke(mx, my)
+                        if pressed_segment:
+                            # pressed_segment is a tuple which contains
+                            # (node index of start of segment, stroke step)
 
-                    if (self.current_node_index is not None and 
-                            event.button == 1 and
-                            shift_state):
-                        # It's 'Entering On-canvas Pressure Adjustment Phase'!
-
-                        self._returning_phase = self.phase
-                        self.phase = _Phase.ADJUST_PRESSURE_ONESHOT
-                
-                        # And do not forget,this can be a node selection.
-                        if not self.current_node_index in self.selected_nodes:
-                            # To avoid old selected nodes still lit.
-                            self._queue_draw_selected_nodes() 
-                            self._reset_selected_nodes(self.current_node_index)
-                        else:
-                            # The node is already included to self.selected_nodes
-                            pass
-                
-                        # FALLTHRU: *do* start a drag 
-                    else:
-                        # normal move node start
-                        self.phase = _Phase.MOVE_NODE
-
-                        if event.button == 1:
-                            if ctrl_state:
-                                # Holding CONTROL key = adding or removing a node.
-                                if self.current_node_index in self.selected_nodes:
-                                    self.selected_nodes.remove(self.current_node_index)
-                                else:
-                                    self.selected_nodes.append(self.current_node_index)
-            
-                                self._queue_draw_selected_nodes() 
-                            else:
-                                # no CONTROL Key holded.
-                                # If new solo node clicked without holding 
-                                # CONTROL key,then reset all selected nodes.
-            
-                                assert self.current_node_index != None
-            
-                                do_reset = ((event.state & Gdk.ModifierType.MOD1_MASK) != 0)
-                                do_reset |= not (self.current_node_index in self.selected_nodes)
-            
-                                if do_reset:
-                                    # To avoid old selected nodes still lit.
-                                    self._queue_draw_selected_nodes() 
-                                    self._reset_selected_nodes(self.current_node_index)
-
-                # FALLTHRU: *do* start a drag 
-
-            elif self.zone == _EditZone.EMPTY_CANVAS:
-                
-                if self.phase == _Phase.CREATE_PATH:
-                    if (len(self.nodes) > 0 and event.button == 1): 
-                        
-                        if shift_state and ctrl_state:
+                            # To erase buttons 
                             self._queue_draw_buttons() 
-                            self.forced_button_pos = (event.x, event.y)
-                            self.phase = _Phase.CHANGE_PHASE 
-                            self._returning_phase = _Phase.CREATE_PATH
-                        elif ctrl_state:
-                            mx, my = tdw.display_to_model(event.x, event.y)
-                            pressed_segment = self._detect_on_stroke(mx, my)
-                            if pressed_segment:
-                                # pressed_segment is a tuple which contains
-                                # (node index of start of segment, stroke step)
 
-                                # To erase buttons 
-                                self._queue_draw_buttons() 
+                            self._divide_bezier(*pressed_segment)
 
-                                self._divide_bezier(*pressed_segment)
+                            # queue new node here.
+                            self._queue_draw_node(pressed_segment[0] + 1)
+                            
+                            self._bypass_phase(_Phase.ADJUST)
+                            return True # Cancel drag event
 
-                                # queue new node here.
-                                self._queue_draw_node(pressed_segment[0] + 1)
-                                
-                                self.phase = _Phase.PLACE_NODE
-                                return False # Cancel drag event
-
-                        ## Otherwise, after this callback
-                        ## a new node created in drag_stop_cb.
-
-                elif self.phase == _Phase.ADJUST_PRESSURE:
-                    if self._returning_phase == None:
-                        self._returning_phase = _Phase.CREATE_PATH
-                        self._queue_redraw_all_nodes()
-                        self._queue_draw_buttons()
-                    self.phase = _Phase.CHANGE_PHASE
+                    ## Otherwise, after this callback
+                    ## a new node created in drag_stop_cb.
 
             elif self.zone == _EditZone.CONTROL_HANDLE:
-                if self.phase == _Phase.CREATE_PATH:
+                
+                assert len(self.nodes) > 0 
+                if event.button == 1: 
                     self.phase = _Phase.ADJUST_HANDLE
-
+                    return # Do drag,but not supercall
 
             # FALLTHRU: *do* start a drag 
-
-        elif self.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
-            pass
-        elif self.phase in (_Phase.ADJUST_PRESSURE, 
-                _Phase.ADJUST_PRESSURE_ONESHOT):
+        
+        elif self.phase == _Phase.ADJUST_PRESSURE: 
             # XXX in some cases,ADJUST_PRESSURE phase come here
             # without reaching drag_stop_cb.(it might due to pen tablet...)
             # so ignore this for now,or something should be done here?
             pass 
-        elif self.phase in (_Phase.MOVE_NODE, _Phase.CHANGE_PHASE):
-            # THIS CANNOT BE HAPPEN...might be an evdev dropout.through it.
-            pass
-        else:
-            raise NotImplementedError("Unrecognized phase %r", self.phase)
-        # Update workaround state for evdev dropouts
-        self._button_down = event.button
+        
+        # Supercall : inside inherited class, basic operation (such as
+        # moving nodes) would be done.
+        return super(BezierMode, self).mode_button_press_cb(tdw, event) 
 
-        return super(BezierMode, self).button_press_cb(tdw, event) 
-
-    def button_release_cb(self, tdw, event):
-        self._ensure_overlay_for_tdw(tdw)
-        current_layer = tdw.doc._layers.current
-        if not (tdw.is_sensitive and current_layer.get_paintable()):
-            return False
+    def mode_button_release_cb(self, tdw, event):
 
         # Here is 'button_release_cb',which called 
         # prior to drag_stop_cb.
         # so, in this method, changing self._phase
         # is very special case. 
-        if self.phase == _Phase.PLACE_NODE:
-            self._queue_redraw_curve() 
-            self.phase = _Phase.CREATE_PATH
-            pass
+       #if self.phase == _Phase.PLACE_NODE:
+       #    self._queue_redraw_curve() 
+       #    self.phase = _Phase.ADJUST
+       #    pass
 
-        # Update workaround state for evdev dropouts
-        self._button_down = None
+       #if self.phase == _Phase.ADJUST: 
+       #    self.enable_switch_actions(True)
 
-        return super(BezierMode, self).button_release_cb(tdw, event)
+        return super(BezierMode, self).mode_button_release_cb(tdw, event)
         
 
     ## Drag handling (both capture and adjust phases)
-    def drag_start_cb(self, tdw, event):
-        self._ensure_overlay_for_tdw(tdw)
+    def node_drag_start_cb(self, tdw, event):
         mx, my = tdw.display_to_model(event.x, event.y)
 
-        self._queue_previous_draw_buttons() # To erase button,and avoid glitch
+        self._queue_draw_buttons() # To erase button,and avoid glitch
 
         # Basically,all sections should do fall-through.
-        if self.phase == _Phase.CREATE_PATH:
+        if self.phase == _Phase.ADJUST:
 
             if self.zone == _EditZone.EMPTY_CANVAS:
                 if event.state != 0:
                     # To activate some mode override
                     self._last_event_node = None
-                    return super(BezierMode, self).drag_start_cb(tdw, event)
+                    return 
                 else:
                     # New node added!
                     node = self._get_event_data(tdw, event)
@@ -1056,30 +930,18 @@ class BezierMode (OncanvasEditMixin):
 
                     self._queue_draw_node(self.current_node_index)
 
-        elif self.phase == _Phase.MOVE_NODE:
-            if len(self.selected_nodes) > 0:
-                # Use selection_rect class as offset-information
-                self.drag_offset.start(mx, my)
-        
-        elif self.phase in (_Phase.ADJUST_PRESSURE, 
-                _Phase.ADJUST_PRESSURE_ONESHOT):
-            pass
         elif self.phase == _Phase.ADJUST_HANDLE:
             self._last_event_node = self.nodes[self.target_node_index]
             pass
-        elif self.phase == _Phase.CHANGE_PHASE:
-            # DO NOT DO ANYTHING.
-            pass
         else:
-            raise NotImplementedError("Unknown phase %r" % self.phase)
+            super(BezierMode, self).node_drag_start_cb(tdw, event)
 
 
-    def drag_update_cb(self, tdw, event, dx, dy):
-        self._ensure_overlay_for_tdw(tdw)
+    def node_drag_update_cb(self, tdw, event, dx, dy):
         mx, my = tdw.display_to_model(event.x, event.y)
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
 
-        if self.phase == _Phase.CREATE_PATH:
+        if self.phase == _Phase.ADJUST:
             pass
             
         elif self.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
@@ -1093,24 +955,11 @@ class BezierMode (OncanvasEditMixin):
                 self._queue_draw_node(self.current_node_index)
             self._queue_redraw_curve()
                 
-        elif self.phase == _Phase.MOVE_NODE:
-            if len(self.selected_nodes) > 0:
-                self._queue_draw_selected_nodes()
-                self.drag_offset.end(mx, my)
-                self._queue_draw_selected_nodes()
-                self._queue_redraw_curve()
-        elif self.phase in (_Phase.ADJUST_PRESSURE,
-                _Phase.ADJUST_PRESSURE_ONESHOT):
-            self._adjust_pressure_with_motion(dx, dy)
-        elif self.phase == _Phase.CHANGE_PHASE:
-            # DO NOT DO ANYTHING.
-            pass
         else:
-            raise NotImplementedError("Unknown phase %r" % self.phase)
+            super(BezierMode, self).node_drag_update_cb(tdw, event, dx, dy)
 
-    def drag_stop_cb(self, tdw):
-        self._ensure_overlay_for_tdw(tdw)
-        if self.phase == _Phase.CREATE_PATH:
+    def node_drag_stop_cb(self, tdw):
+        if self.phase == _Phase.ADJUST:
             self._reset_adjust_data()
             if len(self.nodes) > 0:
                 self._queue_redraw_curve()
@@ -1126,7 +975,11 @@ class BezierMode (OncanvasEditMixin):
             # Set the handles as symmetry.
             if (self.phase == _Phase.INIT_HANDLE and 
                     len(self.nodes) > 1 and node.curve == False):
+                # Setting curve property twice.
+                # the first one is to create initial symmetry handle.
                 node.curve = True 
+                # after then, set curve property to the desired
+                # initial value = False.
                 node.curve = False
 
             self._queue_redraw_all_nodes()
@@ -1134,34 +987,29 @@ class BezierMode (OncanvasEditMixin):
             if len(self.nodes) > 1:
                 self._queue_draw_buttons()
                 
-            self.phase = _Phase.CREATE_PATH
-        elif self.phase == _Phase.MOVE_NODE:
+            self.phase = _Phase.ADJUST
+        elif self.phase == _Phase.ADJUST_POS:
+            self._queue_draw_selected_nodes() # to ensure erase them
             dx, dy = self.drag_offset.get_model_offset()
-
+        
             for idx in self.selected_nodes:
                 cn = self.nodes[idx]
                 cn.move(cn.x + dx, cn.y + dy)
-
+        
             self.drag_offset.reset()
             self._dragged_node_start_pos = None
             self._queue_redraw_curve()
             self._queue_draw_buttons()
-            self.phase = _Phase.CREATE_PATH
-        elif self.phase in (_Phase.ADJUST_PRESSURE, 
-                _Phase.ADJUST_PRESSURE_ONESHOT):
-            self._queue_draw_buttons()
-        elif self.phase == _Phase.CHANGE_PHASE:
-            pass
+            self._queue_draw_selected_nodes() 
+            self.phase = _Phase.ADJUST
+        else:
+            super(BezierMode, self).node_drag_stop_cb(tdw)
+
 
 
         # Common processing
         if self.current_node_index != None:
             self.options_presenter.target = (self, self.current_node_index)
-
-        if self._returning_phase != None:
-            self.phase = self._returning_phase
-            self._returning_phase = None
-            self._queue_draw_buttons() 
 
     ## Interrogating events
 
@@ -1386,12 +1234,12 @@ class BezierMode (OncanvasEditMixin):
             self._queue_redraw_curve()
             self._queue_redraw_all_nodes()
             self._queue_draw_buttons()
-            self.phase = _Phase.CREATE_PATH
+            self.phase = _Phase.ADJUST
 
     def toggle_current_node_curve(self):
         """ mainly called from Callback of gui.document
         """
-        if (self.phase in (_Phase.CREATE_PATH, ) and
+        if (self.phase in (_Phase.ADJUST, ) and
                 len(self.nodes) > 0 and
                 self.current_node_index != None):
             cn = self.nodes[self.current_node_index]
@@ -1400,17 +1248,15 @@ class BezierMode (OncanvasEditMixin):
                     cn.curve)
 
 
-    ## Generic Oncanvas-editing handler
+    ## Action button handlers
 
-    def accept_edit(self):
-        if (self.phase in (_Phase.ADJUST ,_Phase.ADJUST_PRESSURE) and
-                len(self.nodes) > 1):
+    def accept_button_cb(self, tdw):
+        if (len(self.nodes) > 1):
             self._queue_redraw_curve(BezierMode.FINAL_STEP) # Redraw with hi-fidely curve
             self._start_new_capture_phase(rollback=False)
 
-    def discard_edit(self):
-        if (self.phase in (_Phase.ADJUST ,_Phase.ADJUST_PRESSURE)):
-            self._start_new_capture_phase(rollback=True)
+    def reject_button_cb(self, tdw):
+        self._start_new_capture_phase(rollback=True)
 
 class OverlayBezier (OverlayOncanvasMixin):
     """Overlay for an BezierMode's adjustable points"""
@@ -1427,8 +1273,8 @@ class OverlayBezier (OverlayOncanvasMixin):
         nodes = mode.nodes
         num_nodes = len(nodes)
         if num_nodes == 0:
-            self.button_pos[_EditZone.ACCEPT_BUTTON] = None
-            self.button_pos[_EditZone.REJECT_BUTTON] = None
+            self._button_pos[_ActionButton.REJECT] = None
+            self._button_pos[_ActionButton.ACCEPT] = None
             return False
 
         button_radius = gui.style.FLOATING_BUTTON_RADIUS
@@ -1464,9 +1310,9 @@ class OverlayBezier (OverlayOncanvasMixin):
                 y = area_radius*math.cos(rad)
                 pos_list.append( (x + cx, - y + cy) )
 
-            self._button_pos[_EditZone.ACCEPT_BUTTON] = \
+            self._button_pos[_ActionButton.ACCEPT] = \
                     (pos_list[0][0], pos_list[0][1])
-            self._button_pos[_EditZone.REJECT_BUTTON] = \
+            self._button_pos[_ActionButton.REJECT] = \
                     (pos_list[1][0], pos_list[1][1])
         else:
             # Usually, Bezier tool needs to keep extending control points.
@@ -1501,9 +1347,9 @@ class OverlayBezier (OverlayOncanvasMixin):
                 dx = vy * margin
                 dy = vx * margin
             
-            self._button_pos[_EditZone.ACCEPT_BUTTON] = \
+            self._button_pos[_ActionButton.ACCEPT] = \
                     adjust_button_inside(cx + dx, cy - dy, button_radius * 1.5)
-            self._button_pos[_EditZone.REJECT_BUTTON] = \
+            self._button_pos[_ActionButton.REJECT] = \
                     adjust_button_inside(cx - dx, cy + dy, button_radius * 1.5)
 
         return True
@@ -1556,9 +1402,8 @@ class OverlayBezier (OverlayOncanvasMixin):
             show_handle = False
             color = gui.style.EDITABLE_ITEM_COLOR
 
-            if mode.phase in (_Phase.INITIAL, 
-                    _Phase.MOVE_NODE, 
-                    _Phase.CREATE_PATH, 
+            if mode.phase in (_Phase.ADJUST_POS, 
+                    _Phase.ADJUST, 
                     _Phase.ADJUST_PRESSURE,
                     _Phase.ADJUST_PRESSURE_ONESHOT,
                     _Phase.ADJUST_HANDLE, 
@@ -1588,8 +1433,7 @@ class OverlayBezier (OverlayOncanvasMixin):
                         color = gui.style.PRELIT_ITEM_COLOR
 
                 if (color != gui.style.EDITABLE_ITEM_COLOR and
-                        mode.phase in (_Phase.CREATE_PATH,
-                                       _Phase.MOVE_NODE,
+                        mode.phase in (_Phase.ADJUST_POS,
                                        _Phase.ADJUST)):
                     x += dx
                     y += dy
@@ -1610,20 +1454,7 @@ class OverlayBezier (OverlayOncanvasMixin):
         # Buttons
         if (draw_buttons and 
                 not mode.in_drag and len(self._mode.nodes) > 1):
-            self.update_button_positions()
-            button_info = [
-                (
-                    "mypaint-ok-symbolic",
-                    self._button_pos[_EditZone.ACCEPT_BUTTON],
-                    _EditZone.ACCEPT_BUTTON,
-                ),
-                (
-                    "mypaint-trash-symbolic",
-                    self._button_pos[_EditZone.REJECT_BUTTON],
-                    _EditZone.REJECT_BUTTON,
-                ),
-            ]
-            self._draw_buttons(cr, button_info)
+            self._draw_mode_buttons(cr)
         
 
                 

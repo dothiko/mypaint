@@ -38,7 +38,7 @@ import lib.observable
 from gui.inktool import *
 from gui.linemode import *
 from gui.beziertool import *
-from gui.beziertool import _Control_Handle, _Node_Bezier, _Phase
+from gui.beziertool import _Control_Handle, _Node_Bezier
 from lib.command import Command
 import lib.surface
 import lib.mypaintlib
@@ -120,112 +120,120 @@ def _render_polygon_to_layer(model, target_layer, shape, nodes,
 
 
 ## Class defs
-class _EditZone(EditZone_Mixin):
+class _EditZone(EditZoneMixin):
     """Enumeration of what the pointer is on in the ADJUST phase"""
     CONTROL_HANDLE = 104 
 
-    FILL_ATOP_BUTTON = 201
-    ERASE_BUTTON = 202
-    ERASE_OUTSIDE_BUTTON = 203
+class _ActionButton(ActionButtonMixin):
+    FILL_ATOP = 201
+    ERASE = 202
+    ERASE_OUTSIDE = 203
 
+class _Phase(PhaseMixin):
+    """Enumeration of the states that an BezierCurveMode can be in"""
+    ADJUST_HANDLE = 103     #: change control-handle position
+    INIT_HANDLE = 104       #: initialize control handle,right after create a node
+    PLACE_NODE = 105        #: place a new node into clicked position on current
+                            # stroke,when you click with holding CTRL key
+    CALL_BUTTONS = 106      #: show action buttons around the clicked point. 
 
-class _ButtonInfo(object):
-    """ Buttons infomation management class.
-    In Polyfill tool, Buttons increased and eventually 
-    become difficult to manage.
-    """
-
-    button_info = (
-                ( 0, 'mypaint-ok-symbolic',
-                    _EditZone.ACCEPT_BUTTON ),
-                ( 1, 'mypaint-trash-symbolic',
-                    _EditZone.REJECT_BUTTON ),
-                ( 2, 'mypaint-eraser-symbolic', 
-                    _EditZone.ERASE_BUTTON ),
-                ( 3, 'mypaint-cut-symbolic', 
-                    _EditZone.ERASE_OUTSIDE_BUTTON ),
-                ( 4, 'mypaint-add-symbolic',
-                    _EditZone.FILL_ATOP_BUTTON ),
-            )
-
-    button_zones = {
-        _EditZone.ACCEPT_BUTTON:lib.mypaintlib.CombineNormal,
-        _EditZone.REJECT_BUTTON:None,
-        _EditZone.ERASE_BUTTON:lib.mypaintlib.CombineDestinationOut,
-        _EditZone.ERASE_OUTSIDE_BUTTON:lib.mypaintlib.CombineDestinationIn,
-        _EditZone.FILL_ATOP_BUTTON:lib.mypaintlib.CombineSourceAtop,
-        }
-
-    def __init__(self):
-        self._pos = [None] * len(self.button_info)
-
-    def get_mode_from_zone(self, zone):
-        if zone in self.button_zones:
-            return self.button_zones[zone]
-        else:
-            return None
-
-    def setup_round_position(self, tdw, pos, count=None):
-        """ setup button position,rotating around (x,y)
-        
-        :param pos:   center position,in display coordinate.
-        :param count: maximum button count, if we need 
-                      minimum (only ACCEPT/REJECT buttons),
-                      use this argument as 2
-                      by default,this is None
-        """
-        x, y = pos
-        button_radius = gui.style.FLOATING_BUTTON_RADIUS
-        margin = 1.5 * button_radius
-        alloc = tdw.get_allocation()
-        view_x0, view_y0 = alloc.x, alloc.y
-        view_x1, view_y1 = view_x0+alloc.width, view_y0+alloc.height
-
-        palette_radius = 64 #gui.style.BUTTON_PALETTE_RADIUS
-        area_radius = palette_radius + margin 
-
-        if x + area_radius > view_x1:
-            x = view_x1 - area_radius
-        elif x - area_radius < view_x0:
-            x = view_x0 + area_radius
-        
-        if y + area_radius > view_y1:
-            y = view_y1 - area_radius
-        elif y - area_radius < view_y0:
-            y = view_y0 + area_radius
-
-        if count == None:
-            self._valid_count = len(self.button_info)
-        else:
-            self._valid_count = count
-
-        for i in xrange(self._valid_count):
-            rad = (math.pi / self._valid_count) * 2.0 * i
-            dx = - palette_radius * math.sin(rad)
-            dy = palette_radius * math.cos(rad)
-            self._pos[i] = (x + dx, y - dy) 
-
-
-    def set_position(self, *positions):
-        """ setup button position 
-        :param positions: positions of buttons,according to self.button_info.
-        each of this argument can be 'None', when button is hidden.
-        NOTE: valid button is limited to count of this variable argument.
-        """
-        for i, pos in enumerate(positions):
-            self._pos[i] = pos
-        self._valid_count = len(positions)
-
-    def get_position(self, idx):
-        return self._pos[idx]
-
-    def buttons_iter(self):
-        for i in xrange(self._valid_count):
-            yield (self._pos[i], self.button_info[i])
-
-    def buttons_iter_draw(self):
-        for i in xrange(self._valid_count):
-            yield (self.button_info[i][1], self._pos[i], self.button_info[i][2])
+#lass _ButtonInfo(object):
+#   """ Buttons infomation management class.
+#   In Polyfill tool, Buttons increased and eventually 
+#   become difficult to manage.
+#   """
+#
+#   button_info = (
+#               ( 0, 'mypaint-ok-symbolic',
+#                   _ActionButton.ACCEPT ),
+#               ( 1, 'mypaint-trash-symbolic',
+#                   _ActionButton.REJECT ),
+#               ( 2, 'mypaint-eraser-symbolic', 
+#                   _ActionButton.ERASE ),
+#               ( 3, 'mypaint-cut-symbolic', 
+#                   _ActionButton.ERASE_OUTSIDE ),
+#               ( 4, 'mypaint-add-symbolic',
+#                   _ActionButton.FILL_ATOP ),
+#           )
+#
+#   button_zones = {
+#       _ActionButton.ACCEPT:lib.mypaintlib.CombineNormal,
+#       _ActionButton.REJECT:None,
+#       _ActionButton.ERASE:lib.mypaintlib.CombineDestinationOut,
+#       _ActionButton.ERASE_OUTSIDE:lib.mypaintlib.CombineDestinationIn,
+#       _ActionButton.FILL_ATOP:lib.mypaintlib.CombineSourceAtop,
+#       }
+#
+#   def __init__(self):
+#       self._pos = [None] * len(self.button_info)
+#
+#   def get_mode_from_zone(self, zone):
+#       if zone in self.button_zones:
+#           return self.button_zones[zone]
+#       else:
+#           return None
+#
+#   def setup_round_position(self, tdw, pos, count=None):
+#       """ setup button position,rotating around (x,y)
+#       
+#       :param pos:   center position,in display coordinate.
+#       :param count: maximum button count, if we need 
+#                     minimum (only ACCEPT/REJECT buttons),
+#                     use this argument as 2
+#                     by default,this is None
+#       """
+#       x, y = pos
+#       button_radius = gui.style.FLOATING_BUTTON_RADIUS
+#       margin = 1.5 * button_radius
+#       alloc = tdw.get_allocation()
+#       view_x0, view_y0 = alloc.x, alloc.y
+#       view_x1, view_y1 = view_x0+alloc.width, view_y0+alloc.height
+#
+#       palette_radius = 64 #gui.style.BUTTON_PALETTE_RADIUS
+#       area_radius = palette_radius + margin 
+#
+#       if x + area_radius > view_x1:
+#           x = view_x1 - area_radius
+#       elif x - area_radius < view_x0:
+#           x = view_x0 + area_radius
+#       
+#       if y + area_radius > view_y1:
+#           y = view_y1 - area_radius
+#       elif y - area_radius < view_y0:
+#           y = view_y0 + area_radius
+#
+#       if count == None:
+#           self._valid_count = len(self.button_info)
+#       else:
+#           self._valid_count = count
+#
+#       for i in xrange(self._valid_count):
+#           rad = (math.pi / self._valid_count) * 2.0 * i
+#           dx = - palette_radius * math.sin(rad)
+#           dy = palette_radius * math.cos(rad)
+#           self._pos[i] = (x + dx, y - dy) 
+#
+#
+#   def set_position(self, *positions):
+#       """ setup button position 
+#       :param positions: positions of buttons,according to self.button_info.
+#       each of this argument can be 'None', when button is hidden.
+#       NOTE: valid button is limited to count of this variable argument.
+#       """
+#       for i, pos in enumerate(positions):
+#           self._pos[i] = pos
+#       self._valid_count = len(positions)
+#
+#   def get_position(self, idx):
+#       return self._pos[idx]
+#
+#   def buttons_iter(self):
+#       for i in xrange(self._valid_count):
+#           yield (self._pos[i], self.button_info[i])
+#
+#   def buttons_iter_draw(self):
+#       for i in xrange(self._valid_count):
+#           yield (self.button_info[i][1], self._pos[i], self.button_info[i][2])
 
 
 class PolyFill(Command):
@@ -312,7 +320,6 @@ class _Shape(object):
         cr.set_source_rgb(0,0,0)
         cr.set_dash((dot, ) )
         cr.stroke()
-
 
 
 class _Shape_Bezier(_Shape):
@@ -479,14 +486,14 @@ class _Shape_Bezier(_Shape):
 
     def button_press_cb(self, mode, tdw, event):
 
-        if mode.phase in (_Phase.CREATE_PATH,):
+        if mode.phase in (_Phase.ADJUST,):
             if mode.zone == _EditZone.CONTROL_NODE:
                 # Grabbing a node...
                 button = event.button
-                if mode.phase == _Phase.CREATE_PATH:
+                if mode.phase == _Phase.ADJUST:
 
                     # normal move node start
-                    mode.phase = _Phase.MOVE_NODE
+                    mode.phase = _Phase.ADJUST_POS
 
                     if button == 1 and mode.current_node_index != None:
                         if self.ctrl_state:
@@ -514,7 +521,7 @@ class _Shape_Bezier(_Shape):
 
             elif mode.zone == _EditZone.EMPTY_CANVAS:
                 
-                if mode.phase == _Phase.CREATE_PATH:
+                if mode.phase == _Phase.ADJUST:
                     if (len(mode.nodes) > 0): 
                        #if shift_state and ctrl_state:
                         if self.ctrl_state:
@@ -537,20 +544,11 @@ class _Shape_Bezier(_Shape):
 
 
             elif mode.zone == _EditZone.CONTROL_HANDLE:
-                if mode.phase == _Phase.CREATE_PATH:
+                if mode.phase == _Phase.ADJUST:
                     mode.phase = _Phase.ADJUST_HANDLE
 
 
             # FALLTHRU: *do* start a drag 
-
-        elif mode.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
-            pass
-        elif mode.phase in (_Phase.MOVE_NODE, _Phase.CHANGE_PHASE):
-            # THIS CANNOT BE HAPPEN...might be an evdev dropout.through it.
-            pass
-        else:
-            raise NotImplementedError("Unrecognized phase %r", mode.phase)
-
 
 
 
@@ -562,7 +560,7 @@ class _Shape_Bezier(_Shape):
         # is very special case. 
         if mode.phase == _Phase.PLACE_NODE:
             mode._queue_redraw_curve(tdw) 
-            mode.phase = _Phase.CREATE_PATH
+            mode.phase = _Phase.ADJUST
 
 
 
@@ -570,7 +568,7 @@ class _Shape_Bezier(_Shape):
         # Basically,all sections should do fall-through.
         mx, my = tdw.display_to_model(event.x, event.y)
 
-        if mode.phase == _Phase.CREATE_PATH:
+        if mode.phase == _Phase.ADJUST:
 
             if mode.zone == _EditZone.EMPTY_CANVAS:
                 if event.state != 0:
@@ -592,23 +590,20 @@ class _Shape_Bezier(_Shape):
 
                     mode._queue_draw_node(mode.current_node_index)
 
-        elif mode.phase == _Phase.MOVE_NODE:
+        elif mode.phase == _Phase.ADJUST_POS:
             if len(mode.selected_nodes) > 0:
                 mode.drag_offset.start(mx, my)
         elif mode.phase == _Phase.ADJUST_HANDLE:
-            mode._last_event_node = mode.nodes[mode.target_node_index]
-        elif mode.phase == _Phase.CHANGE_PHASE:
-            # DO NOT DO ANYTHING.
-            pass
-        else:
-            raise NotImplementedError("Unknown phase %r" % mode.phase)
+           #mode._last_event_node = mode.nodes[mode.target_node_index]
+            assert mode.current_node_index != None
+            mode._last_event_node = mode.nodes[mode.current_node_index]
 
 
     def drag_update_cb(self, mode, tdw, event, dx, dy):
 
         mx, my = tdw.display_to_model(event.x, event.y)
 
-        if mode.phase == _Phase.CREATE_PATH:
+        if mode.phase == _Phase.ADJUST:
             pass
             
         elif mode.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
@@ -623,25 +618,21 @@ class _Shape_Bezier(_Shape):
                 mode._queue_draw_node(mode.current_node_index)
             mode._queue_redraw_curve(tdw)
                 
-        elif mode.phase == _Phase.MOVE_NODE:
+        elif mode.phase == _Phase.ADJUST_POS:
             if len(mode.selected_nodes) > 0:
                 mode._queue_redraw_curve(tdw)  
                 mode._queue_draw_selected_nodes()
                 mode.drag_offset.end(mx, my)
                 mode._queue_draw_selected_nodes()
                 mode._queue_redraw_curve(tdw)
-        elif mode.phase == _Phase.CHANGE_PHASE:
-            # DO NOT DO ANYTHING.
-            pass
-        else:
-            raise NotImplementedError("Unknown phase %r" % mode.phase)
 
     def drag_stop_cb(self, mode, tdw):
-        if mode.phase == _Phase.CREATE_PATH:
+        if mode.phase == _Phase.ADJUST:
+            mode._queue_redraw_all_nodes()
             mode._reset_adjust_data()
             if len(mode.nodes) > 0:
                 mode._queue_redraw_curve(tdw)
-                mode._queue_redraw_all_nodes()
+               #mode._queue_redraw_all_nodes()
                 if len(mode.nodes) > 1:
                     mode._queue_draw_buttons()
                 
@@ -658,9 +649,11 @@ class _Shape_Bezier(_Shape):
             mode._queue_redraw_curve(tdw)
             if len(mode.nodes) > 1:
                 mode._queue_draw_buttons()
+
+            print(mode.current_node_index)
                 
-            mode.phase = _Phase.CREATE_PATH
-        elif mode.phase == _Phase.MOVE_NODE:
+            mode.phase = _Phase.ADJUST
+        elif mode.phase == _Phase.ADJUST_POS:
             dx, dy = mode.drag_offset.get_model_offset()
 
             for idx in mode.selected_nodes:
@@ -671,10 +664,7 @@ class _Shape_Bezier(_Shape):
             mode._dragged_node_start_pos = None
             mode._queue_redraw_curve(tdw)
             mode._queue_draw_buttons()
-            mode.phase = _Phase.CREATE_PATH
-
-        elif mode.phase == _Phase.CHANGE_PHASE:
-            pass
+            mode.phase = _Phase.ADJUST
 
 
 class _Shape_Polyline(_Shape_Bezier):
@@ -750,7 +740,7 @@ class _Shape_Polyline(_Shape_Bezier):
         # Basically,all sections should do fall-through.
         mx, my = tdw.display_to_model(event.x, event.y)
 
-        if mode.phase == _Phase.CREATE_PATH:
+        if mode.phase == _Phase.ADJUST:
 
             if mode.zone == _EditZone.EMPTY_CANVAS:
                 if event.state != 0:
@@ -765,11 +755,12 @@ class _Shape_Polyline(_Shape_Bezier):
                     mode.current_node_index = len(mode.nodes)-1
                     mode._reset_selected_nodes(mode.current_node_index)
                     mode._queue_draw_node(mode.current_node_index)
-                    mode.phase = _Phase.MOVE_NODE
+                    mode.phase = _Phase.ADJUST_POS
                     mode.drag_offset.start(mx, my)
         else:
             return super(_Shape_Polyline, self).drag_start_cb(
                     mode, tdw, event)
+
 
 class _Shape_Rectangle(_Shape):
 
@@ -955,12 +946,12 @@ class _Shape_Rectangle(_Shape):
     def button_press_cb(self, mode, tdw, event):
         mx, my = tdw.display_to_model(event.x, event.y)
 
-        if mode.phase in (_Phase.CREATE_PATH,):
+        if mode.phase in (_Phase.ADJUST,):
             if mode.zone == _EditZone.CONTROL_NODE:
                 # Grabbing a node...
                 button = event.button
                 # normal move node start
-                mode.phase = _Phase.MOVE_NODE
+                mode.phase = _Phase.ADJUST_POS
                 mode.selected_nodes = (mode.current_node_index, )
 
                 # FALLTHRU: *do* start a drag 
@@ -970,12 +961,6 @@ class _Shape_Rectangle(_Shape):
 
 
             # FALLTHRU: *do* start a drag 
-
-        elif mode.phase in (_Phase.MOVE_NODE, _Phase.CHANGE_PHASE):
-            # THIS CANNOT BE HAPPEN...might be an evdev dropout.through it.
-            pass
-        else:
-            raise NotImplementedError("Unrecognized phase %r", mode.phase)
 
 
 
@@ -987,7 +972,7 @@ class _Shape_Rectangle(_Shape):
         # is very special case. 
         if mode.phase == _Phase.PLACE_NODE:
             mode._queue_redraw_curve(tdw) 
-            mode.phase = _Phase.CREATE_PATH
+            mode.phase = _Phase.ADJUST
 
 
 
@@ -995,7 +980,7 @@ class _Shape_Rectangle(_Shape):
         # Basically,all sections should do fall-through.
         mx, my = tdw.display_to_model(event.x, event.y)
 
-        if mode.phase == _Phase.CREATE_PATH:
+        if mode.phase == _Phase.ADJUST:
 
             if mode.zone == _EditZone.EMPTY_CANVAS:
                 if event.state != 0:
@@ -1010,40 +995,31 @@ class _Shape_Rectangle(_Shape):
                     mode._queue_redraw_curve(tdw)  
                     mode._queue_redraw_all_nodes()
 
-        elif mode.phase == _Phase.MOVE_NODE:
+        elif mode.phase == _Phase.ADJUST_POS:
             if len(mode.selected_nodes) > 0:
                 mode.drag_offset.start(mx, my)
-        elif mode.phase == _Phase.CHANGE_PHASE:
-            pass
-        else:
-            raise NotImplementedError("Unknown phase %r" % mode.phase)
 
 
     def drag_update_cb(self, mode, tdw, event, dx, dy):
 
         mx, my = tdw.display_to_model(event.x, event.y)
 
-        if mode.phase == _Phase.CREATE_PATH:
+        if mode.phase == _Phase.ADJUST:
             self.queue_redraw_nodes(tdw, mode)
             mode._queue_redraw_curve(tdw)  
             mode.drag_offset.end(mx, my)
             self.queue_redraw_nodes(tdw, mode)
             mode._queue_redraw_curve(tdw)  
-        elif mode.phase == _Phase.MOVE_NODE:
+        elif mode.phase == _Phase.ADJUST_POS:
             if len(mode.selected_nodes) > 0:
                 mode._queue_redraw_curve(tdw)  
                 mode._queue_redraw_all_nodes()
                 mode.drag_offset.end(mx, my)
                 mode._queue_redraw_all_nodes()
                 mode._queue_redraw_curve(tdw)
-        elif mode.phase == _Phase.CHANGE_PHASE:
-            # DO NOT DO ANYTHING.
-            pass
-        else:
-            raise NotImplementedError("Unknown phase %r" % mode.phase)
 
     def drag_stop_cb(self, mode, tdw):
-        if mode.phase == _Phase.CREATE_PATH:
+        if mode.phase == _Phase.ADJUST:
             sx, sy = tdw.display_to_model(
                     mode.start_x, mode.start_y)
             dx, dy = mode.drag_offset.get_model_offset()
@@ -1058,7 +1034,7 @@ class _Shape_Rectangle(_Shape):
             mode._queue_draw_buttons()
             mode._reset_adjust_data()
             
-        elif mode.phase == _Phase.MOVE_NODE:
+        elif mode.phase == _Phase.ADJUST_POS:
             dx, dy = mode.drag_offset.get_model_offset()
 
             # Move entire rectangle, when 4 nodes selected. 
@@ -1088,7 +1064,7 @@ class _Shape_Rectangle(_Shape):
             mode._queue_redraw_curve(tdw)
             mode._queue_draw_buttons()
             mode._queue_redraw_all_nodes()
-            mode.phase = _Phase.CREATE_PATH
+            mode.phase = _Phase.ADJUST
             mode._reset_adjust_data()
 
 
@@ -1185,10 +1161,19 @@ class _Shape_Ellipse(_Shape_Rectangle):
 
 ## The Polyfill Mode Class
 
-class PolyfillMode (BezierMode):
+class PolyfillMode (OncanvasEditMixin):
+    """ Polygon fill mode
+
+    This class can handle multiple types of shape,
+    such as polygon, curved polygon, rectangle and ellipse.
+
+    In order to deal with such a shape, 
+    Polyfillmode holds the dedicated proxy class (defined above)
+    therein.
+    """
 
     ## Metadata properties
-    ACTION_NAME = "PolyFillMode"
+    ACTION_NAME = "PolyfillMode"
 
     ## Metadata methods
 
@@ -1214,15 +1199,40 @@ class PolyfillMode (BezierMode):
     DEFAULT_POINT_CORNER = True       # default point is corner,not curve
 
     ## Other class vars
-    _OPTIONS_PRESENTER_POLY = None 
 
-    button_info = _ButtonInfo()       # button infomation class
+   #button_info = _ButtonInfo()       # button infomation class
     _shape_pool = { _Shape.TYPE_BEZIER : _Shape_Bezier() ,
                     _Shape.TYPE_POLYLINE : _Shape_Polyline() ,
                     _Shape.TYPE_RECTANGLE : _Shape_Rectangle() ,
                     _Shape.TYPE_ELLIPSE : _Shape_Ellipse() }
     _shape = None
 
+    @property
+    def buttons(self):
+        cls = self.__class__
+        if cls._buttons == None:
+            cls._buttons = {
+                    _ActionButton.ACCEPT : ('mypaint-ok-symbolic', 
+                        self.accept_button_cb),
+                    _ActionButton.REJECT : ('mypaint-trash-symbolic', 
+                        self.reject_button_cb), 
+                    _ActionButton.ERASE : ('mypaint-eraser-symbolic', 
+                        self.erase_button_cb),
+                    _ActionButton.ERASE_OUTSIDE : ('mypaint-cut-symbolic', 
+                        self.erase_outside_button_cb),
+                    _ActionButton.FILL_ATOP : ('mypaint-add-symbolic', 
+                        self.fill_atop_button_cb)
+                    }
+
+        return cls._buttons
+
+    BUTTON_OPERATIONS = {
+        _ActionButton.ACCEPT:lib.mypaintlib.CombineNormal,
+        _ActionButton.REJECT:None,
+        _ActionButton.ERASE:lib.mypaintlib.CombineDestinationOut,
+        _ActionButton.ERASE_OUTSIDE:lib.mypaintlib.CombineDestinationIn,
+        _ActionButton.FILL_ATOP:lib.mypaintlib.CombineSourceAtop,
+        }
 
     ## Initialization & lifecycle methods
 
@@ -1230,18 +1240,34 @@ class PolyfillMode (BezierMode):
         super(PolyfillMode, self).__init__(**kwargs)
         self._polygon_preview_fill = False
         self.options_presenter.target = (self, None)
-        self.phase = _Phase.CREATE_PATH
+        self.phase = _Phase.ADJUST
         if PolyfillMode._shape == None:
             self.shape_type = _Shape.TYPE_BEZIER
+        self.forced_button_pos = None
 
+    def _reset_capture_data(self):
+        super(PolyfillMode, self)._reset_capture_data()
+        self.phase = _Phase.ADJUST
+        pass
 
+    def _reset_adjust_data(self):
+        super(PolyfillMode, self)._reset_adjust_data()
+        self.current_handle_index = None
+        self._stroke_from_history = False
+
+    def can_delete_node(self, idx):
+        """ differed from InkingMode,
+        BezierMode can delete the last node.
+        """ 
+        return 1 <= idx < len(self.nodes)
 
     ## Update inner states methods
-    def _ensure_overlay_for_tdw(self, tdw):
-        super(PolyfillMode, self)._ensure_overlay_for_tdw(tdw)
-        assert self._overlays.get(tdw)
-        if len(self.nodes) > 0:
-            self._queue_redraw_curve()
+   #def _ensure_overlay_for_tdw(self, tdw):
+   #    overlay = super(PolyfillMode, self)._ensure_overlay_for_tdw(tdw)
+   #    assert self._overlays.get(tdw)
+   #    if len(self.nodes) > 0:
+   #        self._queue_redraw_curve()
+   #    return overlay
 
     def _generate_overlay(self, tdw):
         return OverlayPolyfill(self, tdw)
@@ -1252,101 +1278,164 @@ class PolyfillMode (BezierMode):
     def _update_zone_and_target(self, tdw, x, y, ignore_handle=False):
         """Update the zone and target node under a cursor position"""
 
-        self._ensure_overlay_for_tdw(tdw)
-        new_zone = _EditZone.EMPTY_CANVAS
-        if not self.in_drag and len(self.nodes) > 0:
-            if self.phase in (_Phase.MOVE_NODE, 
-                    _Phase.CREATE_PATH):
+        super(PolyfillMode, self)._update_zone_and_target(
+                tdw, x, y)
 
+        if self.phase in (_Phase.ADJUST, 
+                          _Phase.ADJUST_POS):
+
+            # Checking Control handles first:
+            # because when you missed setting control handle 
+            # at node creation stage,if node zone detection
+            # is prior to control handle, they are unoperatable.
+            if (self.current_node_index is not None and 
+                    ignore_handle == False):
+                c_node = self.nodes[self.current_node_index]
+                new_zone = None
                 new_target_node_index = None
-                
-                # Test buttons for hits
                 hit_dist = gui.style.FLOATING_BUTTON_RADIUS
+                self.current_handle_index = None
+                if self.current_node_index == 0:
+                    seq = (1,)
+                else:
+                    seq = (0, 1)
+                for i in seq:
+                    handle = c_node.get_control_handle(i)
+                    hx, hy = tdw.model_to_display(handle.x, handle.y)
+                    d = math.hypot(hx - x, hy - y)
+                    if d > hit_dist:
+                        continue
+                    new_target_node_index = self.current_node_index
+                    self.current_handle_index = i
+                    new_zone = _EditZone.CONTROL_HANDLE
+                    break         
 
-                if len(self.nodes) > 1:
-                    for pos, info in self.button_info.buttons_iter():
-                        if pos is None:
-                            continue
-                        btn_x, btn_y = pos
-                        d = math.hypot(btn_x - x, btn_y - y)
-                        if d <= hit_dist:
-                            new_target_node_index = None
-                            new_zone = info[2]
-                            break
-
-                if (new_zone == _EditZone.EMPTY_CANVAS):
-
-                    # Checking Control handles first:
-                    # because when you missed setting control handle 
-                    # at node creation stage,if node zone detection
-                    # is prior to control handle, they are unoperatable.
-                    if (self.current_node_index is not None and 
-                            ignore_handle == False):
-                        c_node = self.nodes[self.current_node_index]
-                        self.current_handle_index = None
-                        for i in (0,1):
-                            handle = c_node.get_control_handle(i)
-                            hx, hy = tdw.model_to_display(handle.x, handle.y)
-                            d = math.hypot(hx - x, hy - y)
-                            if d > hit_dist:
-                                continue
-                            new_target_node_index = self.current_node_index
-                            self.current_handle_index = i
-                            new_zone = _EditZone.CONTROL_HANDLE
-                            break         
-
-                    # Test nodes for a hit, in reverse draw order
-                    if new_target_node_index == None:
-                        new_target_node_index = self._search_target_node(tdw, x, y)
-                        if new_target_node_index != None:
-                            new_zone = _EditZone.CONTROL_NODE
-
-                    
-                # Update the prelit node, and draw changes to it
-                if new_target_node_index != self.target_node_index:
-                    if self.target_node_index is not None:
-                        self._queue_draw_node(self.target_node_index)
-                    self.target_node_index = new_target_node_index
-                    if self.target_node_index is not None:
+                if new_target_node_index is not None:
+                    if self.target_node_index:
                         self._queue_draw_node(self.target_node_index)
 
-                ## Fallthru below
+                    if new_target_node_index != self.target_node_index:
+                        self.target_node_index = new_target_node_index
+                        self._queue_draw_node(self.target_node_index)
 
+                    self.zone = new_zone
+                    if len(self.nodes) > 1:
+                        self._queue_draw_buttons()
 
-        # Update the zone, and assume any change implies a button state
-        # change as well (for now...)
-        if self.zone != new_zone:
-            self.zone = new_zone
-            self._ensure_overlay_for_tdw(tdw)
-            if len(self.nodes) > 1:
-                self._queue_previous_draw_buttons()
+                    if not self.in_drag:
+                        self.update_cursor(tdw) 
 
+    def update_cursor(self, tdw): 
         # Update the "real" inactive cursor too:
         # these codes also a little changed from inktool.
-        if not self.in_drag:
-            cursor = None
-            if self.phase in (_Phase.INITIAL, _Phase.CREATE_PATH,
-                    _Phase.MOVE_NODE):
-                if self.zone == _EditZone.CONTROL_NODE:
-                    cursor = self._crosshair_cursor
-                elif self.zone in self.button_info.button_zones:
-                    cursor = self._crosshair_cursor
-                else:
-                    cursor = self._arrow_cursor
-            if cursor is not self._current_override_cursor:
-                tdw.set_override_cursor(cursor)
-                self._current_override_cursor = cursor
+        cursor = None
+        if self.phase in (_Phase.ADJUST,
+                _Phase.ADJUST_POS):
+            if self.zone == _EditZone.CONTROL_NODE:
+                cursor = self._crosshair_cursor
+            elif self.zone == _EditZone.ACTION_BUTTON:
+                cursor = self._crosshair_cursor
+            else:
+                cursor = self._arrow_cursor
+        if cursor is not self._current_override_cursor:
+            tdw.set_override_cursor(cursor)
+            self._current_override_cursor = cursor
+
+       #self._ensure_overlay_for_tdw(tdw)
+       #new_zone = _EditZone.EMPTY_CANVAS
+       #if not self.in_drag and len(self.nodes) > 0:
+       #    if self.phase in (_Phase.ADJUST_POS, 
+       #            _Phase.ADJUST):
+       #
+       #        new_target_node_index = None
+       #        
+       #        # Test buttons for hits
+       #        hit_dist = gui.style.FLOATING_BUTTON_RADIUS
+       #
+       #        if len(self.nodes) > 1:
+       #            for pos, info in self.button_info.buttons_iter():
+       #                if pos is None:
+       #                    continue
+       #                btn_x, btn_y = pos
+       #                d = math.hypot(btn_x - x, btn_y - y)
+       #                if d <= hit_dist:
+       #                    new_target_node_index = None
+       #                    new_zone = info[2]
+       #                    break
+       #
+       #        if (new_zone == _EditZone.EMPTY_CANVAS):
+       #
+       #            # Checking Control handles first:
+       #            # because when you missed setting control handle 
+       #            # at node creation stage,if node zone detection
+       #            # is prior to control handle, they are unoperatable.
+       #            if (self.current_node_index is not None and 
+       #                    ignore_handle == False):
+       #                c_node = self.nodes[self.current_node_index]
+       #                self.current_handle_index = None
+       #                for i in (0,1):
+       #                    handle = c_node.get_control_handle(i)
+       #                    hx, hy = tdw.model_to_display(handle.x, handle.y)
+       #                    d = math.hypot(hx - x, hy - y)
+       #                    if d > hit_dist:
+       #                        continue
+       #                    new_target_node_index = self.current_node_index
+       #                    self.current_handle_index = i
+       #                    new_zone = _EditZone.CONTROL_HANDLE
+       #                    break         
+       #
+       #            # Test nodes for a hit, in reverse draw order
+       #            if new_target_node_index == None:
+       #                new_target_node_index = self._search_target_node(tdw, x, y)
+       #                if new_target_node_index != None:
+       #                    new_zone = _EditZone.CONTROL_NODE
+       #
+       #            
+       #        # Update the prelit node, and draw changes to it
+       #        if new_target_node_index != self.target_node_index:
+       #            if self.target_node_index is not None:
+       #                self._queue_draw_node(self.target_node_index)
+       #            self.target_node_index = new_target_node_index
+       #            if self.target_node_index is not None:
+       #                self._queue_draw_node(self.target_node_index)
+       #
+       #        ## Fallthru below
+       #
+       #
+       ## Update the zone, and assume any change implies a button state
+       ## change as well (for now...)
+       #if self.zone != new_zone:
+       #    self.zone = new_zone
+       #    self._ensure_overlay_for_tdw(tdw)
+       #    if len(self.nodes) > 1:
+       #        self._queue_previous_draw_buttons()
+       #
+       ## Update the "real" inactive cursor too:
+       ## these codes also a little changed from inktool.
+       #if not self.in_drag:
+       #    cursor = None
+       #    if self.phase in (_Phase.ADJUST,
+       #            _Phase.ADJUST_POS):
+       #        if self.zone == _EditZone.CONTROL_NODE:
+       #            cursor = self._crosshair_cursor
+       #        elif self.zone in self.button_info.button_zones:
+       #            cursor = self._crosshair_cursor
+       #        else:
+       #            cursor = self._arrow_cursor
+       #    if cursor is not self._current_override_cursor:
+       #        tdw.set_override_cursor(cursor)
+       #        self._current_override_cursor = cursor
+       #
 
 
-
-    def _reset_all_internal_state(self):
-        self._queue_draw_buttons()
-        self._queue_redraw_all_nodes()
-        self._queue_redraw_curve() 
-        self._reset_nodes()
-        self._reset_adjust_data()
-        self._stroke_from_history = False
-        self.forced_button_pos = None
+   #def _reset_all_internal_state(self):
+   #    self._queue_draw_buttons()
+   #    self._queue_redraw_all_nodes()
+   #    self._queue_redraw_curve() 
+   #    self._reset_nodes()
+   #    self._reset_adjust_data()
+   #    self._stroke_from_history = False
+   #    self.forced_button_pos = None
 
     ## Properties
     @property
@@ -1381,54 +1470,94 @@ class PolyfillMode (BezierMode):
                     *self._shape.get_maximum_rect(tdw, self, sdx, sdy))
 
 
-    def _queue_draw_buttons(self):
-        for tdw, overlay in self._overlays.items():
-            overlay.update_button_positions()
-            for pos, info in self.button_info.buttons_iter():
-           #for idx, pos in enumerate(overlay.button_pos):
-                if pos is None:
-                    continue
-                r = gui.style.FLOATING_BUTTON_ICON_SIZE
-                r += max(
-                    gui.style.DROP_SHADOW_X_OFFSET,
-                    gui.style.DROP_SHADOW_Y_OFFSET,
-                )
-                r += gui.style.DROP_SHADOW_BLUR
-                x, y = pos
-                tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
+    def _queue_draw_node(self, i, dx=0, dy=0):
+        """Redraws a specific control node on all known view TDWs
+        """
+        node = self.nodes[i]
+        
+        def get_area(node_idx, nx, ny, radius, area=None):
+            x, y = tdw.model_to_display(nx, ny)
+
+            x = math.ceil(x)
+            y = math.ceil(y)
+            sx = x-radius-2
+            sy = y-radius-2
+            ex = x+radius+2
+            ey = y+radius+2
+            if not area:
+                return (sx, sy, ex, ey)
+            else:
+                return (min(area[0], sx),
+                        min(area[1], sy),
+                        max(area[2], ex),
+                        max(area[3], ey))
+
+        radius = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
+        for tdw in self._overlays:
+            area = get_area(i, node.x, node.y, radius)
+
+            if self.current_node_index == i:
+                # Active control handles also should be queued.
+                for hi in (0,1):
+                    # But,the first node only shows 2nd(index 1) handle.
+                    if self.is_drawn_handle(i, hi):
+                        handle = node.get_control_handle(hi)
+                        area = get_area(i, 
+                            handle.x, handle.y,
+                            radius, area)
+
+            tdw.queue_draw_area(area[0], area[1], 
+                    area[2] - area[0] + 1, 
+                    area[3] - area[1] + 1)
+
+    def _queue_draw_selected_nodes(self):
+        if self.zone == _EditZone.CONTROL_NODE:
+            dx, dy = self.drag_offset.get_model_offset()
+            for i in self.selected_nodes:
+                self._queue_draw_node(i, dx, dy)
+        else:
+            for i in self.selected_nodes:
+                self._queue_draw_node(i)
+            
 
     def is_drawn_handle(self, i, hi):
-        return True # All handle should be drawn, in Polyfill tool
+        return self._shape.accept_handle
 
-    def _start_new_capture_phase_polyfill(self, mode, rollback=False):
+    ## Drawing Phase related
+
+    def _start_new_capture_phase(self, mode, rollback=False):
+        self._queue_draw_buttons()
+        self._queue_redraw_all_nodes()
+
         if rollback:
             self._stop_task_queue_runner(complete=False)
-            self._reset_all_internal_state()
         else:
             self._stop_task_queue_runner(complete=True)
             self.execute_draw_polygon(mode=mode)
 
+        self._reset_capture_data()
         self._reset_adjust_data()
+        self.forced_button_pos = None
 
 
-    def leave(self):
-        if not self._is_active():
-            
-            if len(self.nodes) > 1:
-                # There is still uncommited pending work.
-                # so commit it.
-                #
-                # Within this _start_new_capture_phase_polyfill method,
-                # _stop_task_queue_runner is called,
-                # so there is no needs to invoke superclass leave() method.
-                self._start_new_capture_phase_polyfill(None, rollback=False)
-
-            self._discard_overlays()
-        
-        self.enable_switch_actions(False)
-
-        # Super-super class call.
-        super(BezierMode, self).leave()
+   #def leave(self):
+   #    if not self._is_active():
+   #        
+   #        if len(self.nodes) > 1:
+   #            # There is still uncommited pending work.
+   #            # so commit it.
+   #            #
+   #            # Within this _start_new_capture_phase_polyfill method,
+   #            # _stop_task_queue_runner is called,
+   #            # so there is no needs to invoke superclass leave() method.
+   #            self._start_new_capture_phase_polyfill(None, rollback=False)
+   #
+   #        self._discard_overlays()
+   #    
+   #    self.enable_switch_actions(False)
+   #
+   #    # Super-super class call.
+   #    super(BezierMode, self).leave()
 
     def checkpoint(self, flush=True, **kwargs):
         """Sync pending changes from (and to) the model
@@ -1448,92 +1577,57 @@ class PolyfillMode (BezierMode):
 
 
     ### Event handling
-    def scroll_cb(self, tdw, event):
-        # to cancelling scroll-wheel pressure modification.
-        return super(BezierMode, self).scroll_cb(tdw, event) # simply call super-superclass!
 
     ## Raw event handling (prelight & zone selection in adjust phase)
-    def button_press_cb(self, tdw, event):
-        self._ensure_overlay_for_tdw(tdw)
-        current_layer = tdw.doc._layers.current
-        if not (tdw.is_sensitive and current_layer.get_paintable()):
-            return False
+    def mode_button_press_cb(self, tdw, event):
         shape = self._shape
         shape.update_event(event)
 
-        self._update_zone_and_target(tdw, event.x, event.y,
-                shape.alt_state or not shape.accept_handle)
-        self._update_current_node_index()
-
-
+        if self.phase == _Phase.CAPTURE:
+            self.phase = _Phase.ADJUST
 
         # common processing for all shape type.
-        if self.phase in (_Phase.CREATE_PATH,):
+        if self.phase in (_Phase.ADJUST,):
             # Initial state - everything starts here!
        
-            if (self.zone in self.button_info.button_zones): 
-                if (event.button == 1 and 
-                        event.type == Gdk.EventType.BUTTON_PRESS):
-
-                        # To avoid some of visual glitches,
-                        # we need to process button here.
-                        if self.zone == _EditZone.REJECT_BUTTON:
-                            self.discard_edit()
-                        else:
-                            self.accept_edit()
-                        
-                        return False
-
-            elif self.zone == _EditZone.EMPTY_CANVAS:
+            if self.zone == _EditZone.EMPTY_CANVAS:
                 
-                if self.phase == _Phase.CREATE_PATH:
+                if self.phase == _Phase.ADJUST:
                     if (len(self.nodes) > 0): 
                        #if shift_state and ctrl_state:
                         if shape.alt_state:
                             self._queue_draw_buttons() 
                             self.forced_button_pos = (event.x, event.y)
                             self.phase = _Phase.CHANGE_PHASE 
-                            self._returning_phase = _Phase.CREATE_PATH
+                            self._returning_phase = _Phase.ADJUST
                             self._queue_draw_buttons() 
-                            return False
+                            return 
 
         
         ret = shape.button_press_cb(self, tdw, event)
         if ret == _Shape.CANCEL_EVENT:
-            return False
-        elif ret == _Shape.CALL_BASECLASS_HANDLER:
-            return super(PolyFillMode, self).button_press_cb(tdw, event) 
-        elif ret == _Shape.CALL_ANCESTER_HANDLER:
-            return super(BezierMode, self).button_press_cb(tdw, event) 
+            return True
+       #elif ret == _Shape.CALL_BASECLASS_HANDLER:
+       #    return super(PolyfillMode, self).button_press_cb(tdw, event) 
+       #elif ret == _Shape.CALL_ANCESTER_HANDLER:
+       #    return super(BezierMode, self).button_press_cb(tdw, event) 
 
-        # Update workaround state for evdev dropouts
-        self._button_down = event.button
 
-        # Super-Supercall(not supercall) would invoke drag-related callbacks.
-        return super(BezierMode, self).button_press_cb(tdw, event) 
-
-    def button_release_cb(self, tdw, event):
-        self._ensure_overlay_for_tdw(tdw)
-        current_layer = tdw.doc._layers.current
-        if not (tdw.is_sensitive and current_layer.get_paintable()):
-            return False
-
+    def mode_button_release_cb(self, tdw, event):
         shape = self._shape
         ret = shape.button_release_cb(self, tdw, event)
+
         if ret == _Shape.CANCEL_EVENT:
-            return False
-        elif ret == _Shape.CALL_BASECLASS_HANDLER:
-            return super(PolyFillMode, self).button_release_cb(tdw, event) 
-        elif ret == _Shape.CALL_ANCESTER_HANDLER:
-            return super(BezierMode, self).button_release_cb(tdw, event) 
-
-        # Update workaround state for evdev dropouts
-        self._button_down = None
-
-        # Super-Supercall(not supercall) would invoke drag_stop_cb signal.
-        return super(BezierMode, self).button_release_cb(tdw, event)
+            return True
+       #elif ret == _Shape.CALL_BASECLASS_HANDLER:
+       #    return super(PolyfillMode, self).button_release_cb(tdw, event) 
+       #elif ret == _Shape.CALL_ANCESTER_HANDLER:
+       #    return super(BezierMode, self).button_release_cb(tdw, event) 
 
     def motion_notify_cb(self, tdw, event):
+        """ Override raw handler, to ignore handle according to
+        whether current shape supports it or not.
+        """
         self._ensure_overlay_for_tdw(tdw)
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
@@ -1548,60 +1642,67 @@ class PolyfillMode (BezierMode):
         
 
     ## Drag handling (both capture and adjust phases)
-    def drag_start_cb(self, tdw, event):
-        self._ensure_overlay_for_tdw(tdw)
+    def node_drag_start_cb(self, tdw, event):
 
-        self._queue_previous_draw_buttons() # To erase button,and avoid glitch
+        self._queue_draw_buttons() # To erase button,and avoid glitch
         shape = self._shape
 
         ret = shape.drag_start_cb(self, tdw, event)
         if ret == _Shape.CANCEL_EVENT:
-            return False
-        elif ret == _Shape.CALL_BASECLASS_HANDLER:
-            return super(PolyFillMode, self).drag_start_cb(tdw, event) 
-        elif ret == _Shape.CALL_ANCESTER_HANDLER:
-            return super(BezierMode, self).drag_start_cb(tdw, event) 
+            return True
+       #elif ret == _Shape.CALL_BASECLASS_HANDLER:
+       #    return super(PolyfillMode, self).drag_start_cb(tdw, event) 
+       #elif ret == _Shape.CALL_ANCESTER_HANDLER:
+       #    return super(BezierMode, self).drag_start_cb(tdw, event) 
 
-    def drag_update_cb(self, tdw, event, dx, dy):
-        self._ensure_overlay_for_tdw(tdw)
+    def node_drag_update_cb(self, tdw, event, dx, dy):
         shape = self._shape
 
         ret = shape.drag_update_cb(self, tdw, event, dx, dy)
         if ret == _Shape.CANCEL_EVENT:
-            return False
-        elif ret == _Shape.CALL_BASECLASS_HANDLER:
-            return super(PolyFillMode, self).drag_update_cb(tdw, event) 
-        elif ret == _Shape.CALL_ANCESTER_HANDLER:
-            return super(BezierMode, self).drag_update_cb(tdw, event) 
+            return True
+       #elif ret == _Shape.CALL_BASECLASS_HANDLER:
+       #    return super(PolyfillMode, self).drag_update_cb(tdw, event) 
+       #elif ret == _Shape.CALL_ANCESTER_HANDLER:
+       #    return super(BezierMode, self).drag_update_cb(tdw, event) 
         
 
-    def drag_stop_cb(self, tdw):
-        self._ensure_overlay_for_tdw(tdw)
+    def node_drag_stop_cb(self, tdw):
         shape = self._shape
         try:
 
             ret = shape.drag_stop_cb(self, tdw)
             if ret == _Shape.CANCEL_EVENT:
                 return False
-            elif ret == _Shape.CALL_BASECLASS_HANDLER:
-                return super(PolyFillMode, self).drag_stop_cb(tdw)
-            elif ret == _Shape.CALL_ANCESTER_HANDLER:
-                return super(BezierMode, self).drag_stop_cb(tdw)
+           #elif ret == _Shape.CALL_BASECLASS_HANDLER:
+           #    return super(PolyfillMode, self).drag_stop_cb(tdw)
+           #elif ret == _Shape.CALL_ANCESTER_HANDLER:
+           #    return super(BezierMode, self).drag_stop_cb(tdw)
 
             # Common processing
             if self.current_node_index != None:
                 self.options_presenter.target = (self, self.current_node_index)
-
-            if self._returning_phase != None:
-                self.phase = self._returning_phase
-                self._returning_phase = None
-                self._queue_draw_buttons() 
 
         finally:
             shape.clear_event()
 
 
     ## Interrogating events
+    def _get_event_data(self, tdw, event):
+        """ Overriding mixin method.
+        
+        almost same as inktool,but we needs generate _Node_Bezier object
+        not _Node object
+        """
+        x, y = tdw.display_to_model(event.x, event.y)
+        xtilt, ytilt = self._get_event_tilt(tdw, event)
+        # Using _Node_Bezier, ignoring pressure & dtime
+        return _Node_Bezier(
+            x=x, y=y,
+            pressure=1.0,
+            xtilt=xtilt, ytilt=ytilt,
+            dtime=0.0
+            )
 
     
     ## Interface methods which call from callbacks
@@ -1640,24 +1741,24 @@ class PolyfillMode (BezierMode):
         else:
             logger.debug("Polyfilltool: target is not fillable layer.nothing done.")
 
-        self._reset_all_internal_state()
+       #self._reset_all_internal_state()
 
     ## Node editing
 
-    @property
-    def options_presenter(self):
-        """MVP presenter object for the node editor panel"""
-        cls = self.__class__
-        if cls._OPTIONS_PRESENTER_POLY is None:
-            cls._OPTIONS_PRESENTER_POLY = OptionsPresenter_Polyfill()
-        return cls._OPTIONS_PRESENTER_POLY
-
-                                                
-    def apply_pressure_from_curve_widget(self):
-        """ apply pressure reprenting points
-        from StrokeCurveWidget.
-        """
-        return # do nothing
+   #@property
+   #def options_presenter(self):
+   #    """MVP presenter object for the node editor panel"""
+   #    cls = self.__class__
+   #    if cls._OPTIONS_PRESENTER_POLY is None:
+   #        cls._OPTIONS_PRESENTER_POLY = OptionsPresenter_Polyfill()
+   #    return cls._OPTIONS_PRESENTER_POLY
+   #
+   #                                            
+   #def apply_pressure_from_curve_widget(self):
+   #    """ apply pressure reprenting points
+   #    from StrokeCurveWidget.
+   #    """
+   #    return # do nothing
 
     ## properties
 
@@ -1670,22 +1771,35 @@ class PolyfillMode (BezierMode):
         self._polygon_preview_fill = flag
         self._queue_redraw_curve()
     
-    ## Generic Oncanvas-editing handler
-    def accept_edit(self):
-        if (self.phase in (_Phase.CREATE_PATH, ) and
+    ## Action button handlers
+    def _do_action(self, key):
+        if (self.phase in (_Phase.ADJUST, _Phase.ACTION) and
                 len(self.nodes) > 1):
-            self._start_new_capture_phase_polyfill(
-                self.button_info.get_mode_from_zone(self.zone),
+            self._start_new_capture_phase(
+                self.BUTTON_OPERATIONS[_ActionButton.ACCEPT],
                 rollback=False)
 
-    def discard_edit(self):
-        if (self.phase in (_Phase.CREATE_PATH, )):
-            self._start_new_capture_phase_polyfill(
+    def accept_button_cb(self, tdw):
+        self._do_action(_ActionButton.ACCEPT)
+
+    def reject_button_cb(self, tdw):
+        if (self.phase in (_Phase.ADJUST, _Phase.ACTION)):
+            self._start_new_capture_phase(
                 None, rollback=True)
 
+    def erase_button_cb(self, tdw):
+        self._do_action(_ActionButton.ERASE)
+
+    def erase_outside_button_cb(self, tdw):
+        self._do_action(_ActionButton.ERASE_OUTSIDE)
+
+    def fill_atop_button_cb(self, tdw):
+        self._do_action(_ActionButton.FILL_ATOP)
 
 class OverlayPolyfill (OverlayBezier):
     """Overlay for an BezierMode's adjustable points"""
+
+    BUTTON_PALETTE_RADIUS = 64
 
 
     def __init__(self, mode, tdw):
@@ -1696,19 +1810,25 @@ class OverlayPolyfill (OverlayBezier):
     def update_button_positions(self):
         mode = self._mode
         if mode.forced_button_pos:
-            mode.button_info.setup_round_position(
-                    self._tdw, mode.forced_button_pos)
+            pos = gui.ui_utils.setup_round_position(
+                    self._tdw, mode.forced_button_pos,
+                    len(mode.buttons),
+                    self.BUTTON_PALETTE_RADIUS), 
+            for i, key in enumerate(mode.buttons):
+                id, junk = mode.buttons[i]
+                self._button_pos[id] = pos[i]
+           #mode.button_info.setup_round_position(
+           #        self._tdw, mode.forced_button_pos)
         else:
             super(OverlayPolyfill, self).update_button_positions(
                     not mode.shape.accept_handle)
-            # FIXME:: Copy basic 2 buttons position
-            # from base class codes.
-            # Actually, copied values used when drawing
-            # and self._button_pos[] values are ignored.
-            # This code is unefficient, needs to be rewritten.
-            mode.button_info.set_position(
-                    self.get_button_pos(_EditZone.ACCEPT_BUTTON), 
-                    self.get_button_pos(_EditZone.REJECT_BUTTON))
+            # Disable extended buttons by assigning None.
+            # It is not sufficient to capture the Keyerror exception 
+            # at enumeration loop. Because, the position has been 
+            # recorded when you expand a button even once. 
+            self._button_pos[_ActionButton.ERASE] = None
+            self._button_pos[_ActionButton.ERASE_OUTSIDE] = None
+            self._button_pos[_ActionButton.FILL_ATOP] = None
 
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
@@ -1732,26 +1852,8 @@ class OverlayPolyfill (OverlayBezier):
             super(OverlayPolyfill, self).paint(cr, draw_buttons=False)
                 
         if (not mode.in_drag and len(mode.nodes) > 1):
-            self.update_button_positions()
-           #radius = gui.style.FLOATING_BUTTON_RADIUS
-            self._draw_buttons(cr, mode.button_info.buttons_iter_draw())
+            self._draw_mode_buttons(cr)
 
-           #for pos, info in mode.button_info.buttons_iter():
-           #    if pos is None:
-           #        continue
-           #    x, y = pos
-           #    id, icon_name, zone = info
-           #    if mode.zone == zone:
-           #        color = gui.style.ACTIVE_ITEM_COLOR
-           #    else:
-           #        color = gui.style.EDITABLE_ITEM_COLOR
-           #    icon_pixbuf = self._get_button_pixbuf(icon_name)
-           #    gui.drawutils.render_round_floating_button(
-           #        cr=cr, x=x, y=y,
-           #        color=color,
-           #        pixbuf=icon_pixbuf,
-           #        radius=radius,
-           #    )
 
 class GradientStore(object):
 
