@@ -966,7 +966,8 @@ class LayerStamp(_DynamicSourceMixin, _StampMixin):
                     rejected_layers.append(layer)
 
 class VisibleStamp(LayerStamp):
-    """ A Stamp which sources the currently visible area.
+    """ A Stamp which sources the currently visible area
+    = currently canvas contents, not single layer contents.
     """
 
     def __init__(self, name, desc):
@@ -1093,7 +1094,9 @@ class StampPresetManager(object):
     """
 
     # Class constants
-    STAMP_DIR_NAME = u'stamps' # Stamp stored dir name, it is under the app.user_data dir.
+    STAMP_DIR_NAME = u'stamps' # The name of directory 
+                               # where user defined Stamps are stored. 
+                               # it is under the app.user_data dir.
 
     def __init__(self, app):
         self._app = app
@@ -1150,27 +1153,6 @@ class StampPresetManager(object):
         else:
             return filepath
 
-    def initialize_icon_store(self):
-        """ Initialize iconview store which is used in
-        stamptool's OptionPresenter.
-        i.e. This method is actually application-unique 
-        stamp preset initialize handler.
-        """
-        liststore = Gtk.ListStore(GdkPixbuf.Pixbuf, str, object)
-
-        for stamp in self._stamps:
-            iter = liststore.append([stamp.thumbnail, stamp.name, stamp])
-            self._stamp_store[iter] = stamp
-
-       #for cs in BUILT_IN_STAMPS:
-       #    stamp = self.create_stamp_from_json(cs)
-       #    liststore.append([stamp.thumbnail, stamp.name, stamp])
-       #
-       #for cf in glob.glob(self._get_adjusted_path("*.mys")):
-       #    stamp = self.load_from_file(cf)
-       #    liststore.append([stamp.thumbnail, stamp.name, stamp])
-
-        return liststore
 
     def load_thumbnail(self, name):
         if name != None:
@@ -1197,6 +1179,46 @@ class StampPresetManager(object):
             jo = json.load(ifp)
             return self.create_stamp_from_json(jo)
 
+    ## Utility Methods.
+
+    def initialize_icon_store(self):
+        """ Initialize iconview store which is used in
+        stamptool's OptionPresenter.
+        i.e. This method is actually application-unique 
+        stamp preset initialize handler.
+        """
+        liststore = Gtk.ListStore(GdkPixbuf.Pixbuf, str, object)
+
+        for stamp in self._stamps:
+            iter = liststore.append([stamp.thumbnail, stamp.name, stamp])
+            self._stamp_store[iter] = stamp
+
+        return liststore
+
+    def save_to_file(self, stamp, filename):
+        """ To save (or export) a stamp to file.
+        """
+        pass
+
+    def get_stamp_type(self, target):
+        """ Get stamp type as string, for json file."""
+        if isinstance(Stamp, target):
+            return "file"
+        elif isinstance(TiledStamp, target):
+            return "tiled-file"
+        elif isinstance(LayerStamp, target):
+            return "layer"
+        elif isinstance(ClipboardStamp, target):
+            return "clipboard"
+        elif isinstance(ForegroundStamp, target):
+            return "foreground"
+        elif isinstance(VisibleStamp, target):
+            return "current-visible"
+        elif isinstance(ForegroundLayerStamp, target):
+            return "foreground-layermask"
+        else:
+            raise TypeError("undefined stamp type")
+
     def create_stamp_from_json(self, jo):
         """ Create a stamp from json-generated dictionary object.
         :param jo: dictionary object, mostly created with json.load()/loads()
@@ -1221,7 +1243,7 @@ class StampPresetManager(object):
                        "tiled-file" - Stamp from a file, divided with tile setting.
                        "clipboard" - Use run-time clipboard image for stamp.
                        "layer" - Stamp from layer image of user defined area.
-                       "current_visible"  - Stamp from currently visible image
+                       "current-visible"  - Stamp from currently visible image
                                             of user defined area.
                        "foreground" - foreground color rectangle as source.
                                       This type of stamp needs mask setting.
@@ -1338,9 +1360,26 @@ class StampPresetManager(object):
 
 
     def save_to_file(self, filename, json_src):
+        """ Save a json object to 'user-data' path.
+        (But if the filename parameter is absolute path,
+         use that path, not the user-data path.)
+        """
         filename = self._get_adjusted_path(filename)
         with open(filename, 'w') as ofp:
             json.dump(json_src, ofp)
+
+    ## Notification callbacks
+
+    def stamp_deleted_cb(self, stamp):
+        """ a stamp deleted from GUI operation.
+        """
+        if stamp in self.stamps:
+            self.stamps.remove(stamp)
+            for key, val in  self._stamp_store.iteritems():
+                if val == stamp:
+                    del self._stamp_store[key]
+                    break
+        pass
 
 ## Built-in stamps
 #  These stamps are built-in, automatically registered at OptionPresenter.
