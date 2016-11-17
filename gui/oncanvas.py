@@ -125,7 +125,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     """
 
 
-
     ## Metadata properties
     pointer_behavior = gui.mode.Behavior.PAINT_FREEHAND
     scroll_behavior = gui.mode.Behavior.CHANGE_VIEW
@@ -284,15 +283,12 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 
     ## Buttons property 
     
-    @property
-    def buttons(self):
-        cls = self.__class__
-        if cls._buttons == None:
-            cls._buttons = {
-                    ActionButtonMixin.ACCEPT : ('mypaint-ok-symbolic', self.accept_button_cb),
-                    ActionButtonMixin.REJECT : ('mypaint-trash-symbolic', self.reject_button_cb) 
-                    }
-        return cls._buttons
+    buttons = {
+        ActionButtonMixin.ACCEPT : ('mypaint-ok-symbolic', 
+            'accept_button_cb'), 
+        ActionButtonMixin.REJECT : ('mypaint-trash-symbolic', 
+            'reject_button_cb') 
+    }
 
  
     ## Overlay related
@@ -643,8 +639,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             if self.phase == PhaseMixin.ACTION:
                 assert self._button_down >= 1
                 assert self._clicked_button_id != None
-                junk, handler = self.buttons[self._clicked_button_id]
-                handler(tdw)
+                self._call_action_button(self._clicked_button_id, tdw)
                 # Inside action button handler, self.phase would be set as 
                 # PhaseMixin.CAPTURE in many case
                 # (by calling _start_new_capture_phase).
@@ -805,6 +800,9 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
  
     def _get_event_pressure(self, event):
         # FIXME: CODE DUPLICATION: copied from freehand.py
+        # However, this class has no parent-child relationship 
+        # with freehand. so I copied this from it.
+        # (or we need to create something mixin...?)
         pressure = event.get_axis(Gdk.AxisUse.PRESSURE)
         if pressure is not None:
             if not np.isfinite(pressure):
@@ -936,6 +934,23 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     def can_delete_node(self, i):
         pass
 
+    ## Action button related
+
+    def _call_action_button(self, id, tdw):
+        """ Call action button, from a name 
+        which is defined as class attribute string.
+        """
+        try:
+            junk, handler_name = self.buttons[id]
+            method = getattr(self, handler_name)
+            method(tdw)
+        except KeyError:
+            logger.error("Action button %d does not exist" % id)
+        except AttributeError:
+            logger.error("Action button %d handler named %s, but it does not exist" % (id, handler_name))
+
+
+
 
 class PressPhase(PhaseMixin):
     ADJUST_PRESSURE = 4
@@ -960,6 +975,11 @@ class PressureEditableMixin(OncanvasEditMixin,
     def is_pressure_modifying(self):
         return self.phase in (PressPhase.ADJUST_PRESSURE,
                     PressPhase.ADJUST_PRESSURE_ONESHOT)
+
+    def __init__(self, **kwargs):
+        super(PressureEditableMixin, self).__init__(**kwargs)
+        self._sshot_before = None
+        self.__active_brushwork = self._BrushworkModeMixin__active_brushwork 
 
     def mode_button_press_cb(self, tdw, event):
         if self.is_adjusting_phase:
@@ -1189,6 +1209,83 @@ class PressureEditableMixin(OncanvasEditMixin,
         elif self.phase == PressPhase.ADJUST:
             self.phase = PressPhase.ADJUST_PRESSURE
         self._queue_redraw_all_nodes()
+
+    ## Brushwork related, to enable undo node operations.
+
+    def brushwork_begin(self, model, description=None, abrupt=False):
+        """Begins a new segment of active brushwork for a model
+    
+        :param lib.document.Document model: The model to begin work on
+        :param unicode description: Optional description of the work
+        :param bool abrupt: Tail out/in abruptly with faked zero pressure.
+    
+        Any current segment of brushwork is committed, and a new segment
+        is begun.
+    
+        Passing ``None`` for the description is suitable for freehand
+        drawing modes.  This method will be called automatically with
+        the default options by `stroke_to()` if needed, so not all
+        subclasses need to use it.
+    
+        The first segment of brushwork begin by a newly created
+        BrushworkMode objects always starts abruptly.
+        The second and subsequent segments are assumed to be
+        continuations by default. Set abrupt=True to break off any
+        existing segment cleanly, and start the new segment cleanly.
+    
+        """
+        # Commit any previous work for this model
+        cmd = self.__active_brushwork.get(model)
+        if cmd is not None:
+            self.brushwork_commit(model, abrupt=abrupt)
+    
+        # New segment of brushwork
+        layer_path = model.layer_stack.current_path
+        cmd = lib.command.Nodework(
+            model, layer_path,
+            self.doc, self.nodes,
+            self.__class__,
+            override_sshot_before=self._sshot_before,
+            description=description,
+            abrupt_start=(abrupt or self.__first_begin),
+        )
+        self._sshot_before = None
+        self.__first_begin = False
+        cmd.__last_pos = None
+        self.__active_brushwork[model] = cmd
+
+    def brushwork_commit(self, model, abrupt=False):
+        super(PressureEditableMixin, self).brushwork_commit(model, abrupt)
+        self._sshot_before = None
+
+    def undo_nodes_cb(self, cmd, nodes, sshot_before):
+        """ called from lib.command.Inkwork.undo().
+        
+        This callback would be called when inkingmode work
+        is undone.
+        Inkwork command detects current operation mode and only when
+        current mode is InkingMode, call this callback.
+        """
+        self.nodes = nodes
+        self.phase = PhaseMixin.ADJUST
+        self._queue_redraw_all_nodes()
+        self._queue_draw_buttons()
+        self._sshot_before = sshot_before
+
+        # Inserting 'node edit' command,
+        # which does nothing except for erase background
+        # (loading snapshot).
+        # Without this, undo stack will undo entire previous
+        # paint work
+        model = self.doc.model
+        layer_path = model.layer_stack.current_path
+
+        cmd_stack = model.command_stack
+        cmd = lib.command.Nodeedit(model, layer_path, sshot_before)
+        # Important: DO NOT CALL 'model.do()'
+        # It callbacks brushwork_commit again.
+        # So directly call do() method of command stack.
+        cmd_stack.do(cmd)
 
 class HandleNodeMixin(OncanvasEditMixin):
 

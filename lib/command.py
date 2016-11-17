@@ -27,7 +27,7 @@ import weakref
 from gettext import gettext as _
 from logging import getLogger
 logger = getLogger(__name__)
-
+import gui.inktool
 
 ## Command stack and action interface
 
@@ -468,6 +468,157 @@ class Brushwork (Command):
 
 
 ## Concrete command classes
+
+class Nodeedit(Command):
+    """ Entered inktool, and node editing.
+    This command is executed only when 
+     * Inkwork command has been undone.
+     * Current operation tool(mode) is InkingMode
+    """
+
+    def __init__(self, doc, layer_path, sshot_before, **kwds):
+        super(Nodeedit, self).__init__(doc, **kwds)
+
+        model = self.doc
+        self._layer_path = layer_path
+        layer = model.layer_stack.deepget(self._layer_path)
+        self._sshot_before = sshot_before
+        self._sshot_after_applied = False
+
+    @property
+    def display_name(self):
+        return _("Node editing")
+
+    def redo(self):
+        """Performs, or re-performs after undo"""
+        model = self.doc
+        layer = model.layer_stack.deepget(self._layer_path)
+        if not self._sshot_after_applied:
+            layer.load_snapshot(self._sshot_before)
+            self._sshot_after_applied = True
+        # Painting does not started yet. 
+        # so do not update painting time
+
+
+    def undo(self):
+        """Undoes the effects of redo()"""
+        model = self.doc
+        layer = model.layer_stack.deepget(self._layer_path)
+        assert self._sshot_before is not None
+        layer.load_snapshot(self._sshot_before)
+        # Painting does not started yet. 
+        # so do not update painting time
+       #model.unsaved_painting_time = self._time_before
+        self._sshot_after_applied = False
+
+
+
+class Nodework (Brushwork):
+    """ node based stroke drawing command, 
+    to enable undo into node editing phase.
+    """
+
+
+    def __init__(self, model, layer_path, gui_doc, nodes, 
+                 operation_mode = None,
+                 override_sshot_before = None,
+                 description=None, abrupt_start=False,
+                 **kwds):
+        """Initializes as an active brushwork command
+
+        :param doc: document(lib.document) being updated
+        :type doc: lib.document.Document
+        :param tuple layer_path: path of the layer to affect within doc
+        :param gui_doc: gui.document, to get current operation mode.
+        :param nodes: the nodes 
+        :param operation_mode: the operating mode which used for drawing stroke
+        :param override_sshot_before: the injected snapshot, to override 'previous
+        snapshot'
+        :param unicode description: Descriptive name for this brushwork
+        :param bool abrupt_start: Reset brush & dwell before starting
+
+        The Brushwork command is created as an active command which can
+        be used for capturing brushstrokes. Recording must be stopped
+        before the command is added to the CommandStack.
+
+        """
+        super(Nodework, self).__init__(model, 
+                layer_path, description, abrupt_start, **kwds)
+
+        self.gui_doc = gui_doc
+        self.nodes = nodes
+        self._override_before = override_sshot_before
+        self._operation_mode = operation_mode
+
+    @property
+    def display_name(self):
+        """Dynamic property: string used for displaying the command"""
+        if self.description is not None:
+            return self.description
+        if self._stroke_seq is None:
+            time = 0.0
+            brush_name = _("Undefined (command not started yet)")
+        else:
+            time = self._stroke_seq.total_painting_time
+            brush_name = unicode(self._stroke_seq.brush_name)
+        return _(u"{seconds:.01f}s of {mode_name} stroke with {brush_name}").format(
+            seconds=time,
+            mode_name=self._operation_mode.get_name(),
+            brush_name=brush_name,
+        )
+
+    def undo(self):
+        """Undoes the effects of redo()"""
+        super(Nodework, self).undo()
+        # Notifying undo of nodes, when current mode is
+        # Inkingmode.
+        curmode = self.gui_doc.modes.top
+        if isinstance(curmode, self._operation_mode): 
+            curmode.undo_nodes_cb(self, self.nodes, self._sshot_before)
+            if self._sshot_after:
+                # Redrawing previous stroke, with loading
+                # redo snapshot.
+                model = self.doc
+                layer = model.layer_stack.deepget(self._layer_path)
+                layer.load_snapshot(self._sshot_after)
+                self._sshot_after_applied = True
+
+
+    def _check_recording_started(self):
+        """Ensure command is in the recording phase"""
+        assert not self._recording_finished
+        if self._recording_started:
+            return
+        # Cache the layer being painted to. This is accessed frequently
+        # during the painting phase.
+        model = self.doc
+        layer = model.layer_stack.deepget(self._layer_path)
+        assert layer is not None, \
+            "Layer with path %r not available" % (self._layer_path,)
+        if not layer.get_paintable():
+            logger.warning(
+                "Brushwork: skipped non-paintable layer %r",
+                layer,
+            )
+            return
+        self._stroke_target_layer = layer
+
+        assert self._time_before is None
+        assert self._stroke_seq is None
+        # Overriding sshot_before, to preserve previous
+        # layer
+        if not self._override_before:
+            self._sshot_before = layer.save_snapshot()
+        else:
+            self._sshot_before = self._override_before
+            self._override_before = None
+        self._time_before = model.unsaved_painting_time
+        self._stroke_seq = lib.stroke.Stroke()
+        self._stroke_seq.start_recording(model.brush)
+        assert self._sshot_after is None
+        self._recording_started = True
+
+
 
 
 class FloodFill (Command):

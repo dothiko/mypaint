@@ -1207,24 +1207,19 @@ class PolyfillMode (OncanvasEditMixin):
                     _Shape.TYPE_ELLIPSE : _Shape_Ellipse() }
     _shape = None
 
-    @property
-    def buttons(self):
-        cls = self.__class__
-        if cls._buttons == None:
-            cls._buttons = {
-                    _ActionButton.ACCEPT : ('mypaint-ok-symbolic', 
-                        self.accept_button_cb),
-                    _ActionButton.REJECT : ('mypaint-trash-symbolic', 
-                        self.reject_button_cb), 
-                    _ActionButton.ERASE : ('mypaint-eraser-symbolic', 
-                        self.erase_button_cb),
-                    _ActionButton.ERASE_OUTSIDE : ('mypaint-cut-symbolic', 
-                        self.erase_outside_button_cb),
-                    _ActionButton.FILL_ATOP : ('mypaint-add-symbolic', 
-                        self.fill_atop_button_cb)
-                    }
+    buttons = {
+            _ActionButton.ACCEPT : ('mypaint-ok-symbolic', 
+                'accept_button_cb'),
+            _ActionButton.REJECT : ('mypaint-trash-symbolic', 
+                'reject_button_cb'), 
+            _ActionButton.ERASE : ('mypaint-eraser-symbolic', 
+                'erase_button_cb'),
+            _ActionButton.ERASE_OUTSIDE : ('mypaint-cut-symbolic', 
+                'erase_outside_button_cb'),
+            _ActionButton.FILL_ATOP : ('mypaint-add-symbolic', 
+                'fill_atop_button_cb')
+            }
 
-        return cls._buttons
 
     BUTTON_OPERATIONS = {
         _ActionButton.ACCEPT:lib.mypaintlib.CombineNormal,

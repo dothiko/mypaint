@@ -176,6 +176,11 @@ class InkingMode (PressureEditableMixin):
         self._range_radius = None # Invalid values, set later inside property.
         self._range_factor = None
 
+        # We need to copy the original __active_brushwork
+       #self.__active_brushwork = self._BrushworkModeMixin__active_brushwork 
+        self._sshot_before = None
+        self._entered_cmd = None
+
     def _reset_capture_data(self):
         super(InkingMode,self)._reset_capture_data()
         self._last_event_node = None  # node for the last event
@@ -365,6 +370,7 @@ class InkingMode (PressureEditableMixin):
                 model, dtime, x, y, pressure, xtilt, ytilt,
                 auto_split=False,
             )
+
             last_t_abs = t_abs
         state["t_abs"] = last_t_abs
 
@@ -1002,6 +1008,7 @@ class InkingMode (PressureEditableMixin):
                 x, y = pos
 
             yield (i, node, x, y)
+
 
 
 
