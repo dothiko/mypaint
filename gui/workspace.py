@@ -987,18 +987,18 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
         notebook = page.get_parent()
         notebook.update_tool_widget_ui(widget)
 
-    ## My local method
-    def mylocal_save_dock_info(self):
-        layouts = []
-        for stack in self._get_tool_stacks():
-            layouts.append(stack.get_paned_layout())
-        self.mylocal_saved_layouts = layouts
-
-    def mylocal_reset_dock_size(self):
-        for stack_info in self.mylocal_saved_layouts:
-            for pane_desc in stack_info:
-                cw = pane_desc['paned']
-                cw.set_position(pane_desc['pos'])
+   ### My local method
+   #def mylocal_save_dock_info(self):
+   #    layouts = []
+   #    for stack in self._get_tool_stacks():
+   #        layouts.append(stack.get_paned_layout())
+   #    self.mylocal_saved_layouts = layouts
+   #
+   #def mylocal_reset_dock_size(self):
+   #    for stack_info in self.mylocal_saved_layouts:
+   #        for pane_desc in stack_info:
+   #            cw = pane_desc['paned']
+   #            cw.set_position(pane_desc['pos'])
 
 
 class ToolStack (Gtk.EventBox):

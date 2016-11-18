@@ -1754,15 +1754,6 @@ Vocabulary
         </object>
       </child>
       <!-- }}} -->
-      <!-- {{{ My local menu -->
-      <child>
-        <object class="GtkAction" id="ResetDockSizes">
-          <property name="label" translatable="yes" context="Menu→Window (labels), Accel Editor (labels)">Reset dock sizes</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Reset dock panels sizes,as workaround for gtk3 glitch.</property>
-          <signal name="activate" handler="mylocal_resetdocksizes_cb"/>
-        </object>
-      </child>
-      <!-- My local menu }}} -->
     </object>
   </child>
   <!-- }}} -->

@@ -433,7 +433,6 @@ class Application (object):
             autosave_recovery.run(startup=True)
 
         # XXX my local codes --------------------
-        self.workspace.mylocal_save_dock_info()
 
         # for Recent project 
         menu_orp = self.ui_manager.get_widget('/Menubar/FileMenu/ProjectMenu/OpenRecentProject')
@@ -860,10 +859,6 @@ class Application (object):
             self._assistmanager = assistmanager.AssistManager(self)
             return self._assistmanager
 
-
-    ## Menu callbacks
-    def mylocal_resetdocksizes_cb(self,action):
-        self.workspace.mylocal_reset_dock_size()
 
 
     ## Layer Alpha-lock feature
