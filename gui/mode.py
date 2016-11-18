@@ -660,7 +660,9 @@ class BrushworkModeMixin (InteractionMode):
         """
         super(BrushworkModeMixin, self).__init__(**kwds)
         self.__first_begin = True
-        self.__active_brushwork = {}  # {model: Brushwork}
+        self._active_brushwork = {}  # {model: Brushwork}
+        # Renamed __active_brushwork to _active_brushwork,
+        # to ease accessing from subclasses.
 
     def brushwork_begin(self, model, description=None, abrupt=False):
         """Begins a new segment of active brushwork for a model
@@ -685,7 +687,7 @@ class BrushworkModeMixin (InteractionMode):
 
         """
         # Commit any previous work for this model
-        cmd = self.__active_brushwork.get(model)
+        cmd = self._active_brushwork.get(model)
         if cmd is not None:
             self.brushwork_commit(model, abrupt=abrupt)
         # New segment of brushwork
@@ -697,7 +699,7 @@ class BrushworkModeMixin (InteractionMode):
         )
         self.__first_begin = False
         cmd.__last_pos = None
-        self.__active_brushwork[model] = cmd
+        self._active_brushwork[model] = cmd
 
     def brushwork_commit(self, model, abrupt=False):
         """Commits any active brushwork for a model to the command stack
@@ -711,7 +713,7 @@ class BrushworkModeMixin (InteractionMode):
 
         See also `brushwork_rollback()`.
         """
-        cmd = self.__active_brushwork.pop(model, None)
+        cmd = self._active_brushwork.pop(model, None)
         if cmd is None:
             return
         if abrupt and cmd.__last_pos is not None:
@@ -735,19 +737,19 @@ class BrushworkModeMixin (InteractionMode):
 
         See also `brushwork_commit()`.
         """
-        cmd = self.__active_brushwork.pop(model, None)
+        cmd = self._active_brushwork.pop(model, None)
         if cmd is None:
             return
         cmd.stop_recording(revert=True)
 
     def brushwork_commit_all(self, abrupt=False):
         """Commits all active brushwork"""
-        for model in list(self.__active_brushwork.keys()):
+        for model in list(self._active_brushwork.keys()):
             self.brushwork_commit(model, abrupt=abrupt)
 
     def brushwork_rollback_all(self):
         """Rolls back all active brushwork"""
-        for model in list(self.__active_brushwork.keys()):
+        for model in list(self._active_brushwork.keys()):
             self.brushwork_rollback(model)
 
     def stroke_to(self, model, dtime, x, y, pressure, xtilt, ytilt,
@@ -768,16 +770,16 @@ class BrushworkModeMixin (InteractionMode):
         undo stack, stopping and committing the currently recording
         command when it becomes due.
         """
-        cmd = self.__active_brushwork.get(model, None)
+        cmd = self._active_brushwork.get(model, None)
         desc0 = None
         if auto_split and cmd and cmd.split_due:
             desc0 = cmd.description  # retain for the next cmd
             self.brushwork_commit(model, abrupt=False)
-            assert model not in self.__active_brushwork
+            assert model not in self._active_brushwork
             cmd = None
         if not cmd:
             self.brushwork_begin(model, description=desc0, abrupt=False)
-            cmd = self.__active_brushwork[model]
+            cmd = self._active_brushwork[model]
         cmd.stroke_to(dtime, x, y, pressure, xtilt, ytilt)
         cmd.__last_pos = (x, y, xtilt, ytilt)
 

@@ -245,7 +245,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         # This is a index list of node from self.nodes
         self._reset_selected_nodes()
  
-        self.hide_nodes = False
+        self._hide_nodes = False
 
         self._click_info = None
 
@@ -934,6 +934,22 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     def can_delete_node(self, i):
         pass
 
+    @property
+    def hide_nodes(self):
+        return self._hide_nodes
+
+    @hide_nodes.setter
+    def hide_nodes(self, flag):
+        if self._hide_nodes != flag:
+            if not self._hide_nodes:
+                self._queue_redraw_all_nodes()
+
+            self._hide_nodes = flag
+
+            if not self._hide_nodes:
+                self._queue_redraw_all_nodes()
+
+
     ## Action button related
 
     def _call_action_button(self, id, tdw):
@@ -944,10 +960,12 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             junk, handler_name = self.buttons[id]
             method = getattr(self, handler_name)
             method(tdw)
-        except KeyError:
+        except KeyError as e:
             logger.error("Action button %d does not exist" % id)
-        except AttributeError:
+        except AttributeError as e:
             logger.error("Action button %d handler named %s, but it does not exist" % (id, handler_name))
+            print(str(e))
+
 
 
 
@@ -979,7 +997,7 @@ class PressureEditableMixin(OncanvasEditMixin,
     def __init__(self, **kwargs):
         super(PressureEditableMixin, self).__init__(**kwargs)
         self._sshot_before = None
-        self.__active_brushwork = self._BrushworkModeMixin__active_brushwork 
+        self._pending_cmd = None
 
     def mode_button_press_cb(self, tdw, event):
         if self.is_adjusting_phase:
@@ -1235,7 +1253,7 @@ class PressureEditableMixin(OncanvasEditMixin,
     
         """
         # Commit any previous work for this model
-        cmd = self.__active_brushwork.get(model)
+        cmd = self._active_brushwork.get(model)
         if cmd is not None:
             self.brushwork_commit(model, abrupt=abrupt)
     
@@ -1252,40 +1270,87 @@ class PressureEditableMixin(OncanvasEditMixin,
         self._sshot_before = None
         self.__first_begin = False
         cmd.__last_pos = None
-        self.__active_brushwork[model] = cmd
+        self._active_brushwork[model] = cmd
 
     def brushwork_commit(self, model, abrupt=False):
-        super(PressureEditableMixin, self).brushwork_commit(model, abrupt)
-        self._sshot_before = None
+        """Commits any active brushwork for a model to the command stack
+
+        :param lib.document.Document model: The model to commit work to
+        :param bool abrupt: End with a faked zero pressure "stroke_to()"
+
+        This only makes a new entry on the command stack if
+        the currently active brushwork segment made
+        any changes to the model.
+
+        See also `brushwork_rollback()`.
+        """
+        cmd = self._active_brushwork.pop(model, None)
+        if cmd is None:
+            return
+        if abrupt and cmd.__last_pos is not None:
+            x, y, xtilt, ytilt = cmd.__last_pos
+            pressure = 0.0
+            dtime = 0.0
+            cmd.stroke_to(dtime, x, y, pressure, xtilt, ytilt)
+        changed = cmd.stop_recording(revert=False)
+        if changed:
+            if self._pending_cmd:
+                model.command_stack.remove_command(self._pending_cmd)
+                self._pending_cmd = None
+            model.do(cmd)
+
+
+   #def brushwork_commit_all(self, abrupt=False):
+   #    """Override, to detect 
+   #    'accept-button pressed right after undo 
+   #    = 'no commands actually executed' 
+   #    """
+   #   #if len(self._active_brushwork) == 0:
+   #   #    model = self.doc.model
+   #   #    cmd = model.command_stack.get_last_redo_command()
+   #   #    if isinstance(cmd, lib.command.Nodework):
+   #   #        print('---from brushwork_commit_all')
+   #   #        cmd.redo()
+   #   #        print('---')
+   #   #        return
+   #   #
+   #    super(PressureEditableMixin, self).brushwork_commit_all(abrupt)
+
 
     def undo_nodes_cb(self, cmd, nodes, sshot_before):
-        """ called from lib.command.Inkwork.undo().
+        """ called from lib.command.Nodework.undo().
         
-        This callback would be called when inkingmode work
+        This callback is called when a work using this mode
         is undone.
-        Inkwork command detects current operation mode and only when
-        current mode is InkingMode, call this callback.
+        Nodework command detects current operation mode and only when
+        current mode is this mode, call this callback.
         """
         self.nodes = nodes
         self.phase = PhaseMixin.ADJUST
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
         self._sshot_before = sshot_before
+        self._pending_cmd = cmd
+        
+    def redo_nodes_cb(self, cmd, nodes):
+        """ called from lib.command.Nodework.redo().
+        
+        This callback is called when a command which using this mode
+        is redone.
+        Nodework command detects current operation mode and only when
+        current mode is this mode, call this callback.
+        """
 
-        # Inserting 'node edit' command,
-        # which does nothing except for erase background
-        # (loading snapshot).
-        # Without this, undo stack will undo entire previous
-        # paint work
-        model = self.doc.model
-        layer_path = model.layer_stack.current_path
+        if len(nodes) >= 2:
+            self.nodes = nodes
+            self.phase = PhaseMixin.ADJUST
+            self._queue_redraw_all_nodes()
+            self._queue_draw_buttons()
+            self._pending_cmd = cmd
+        else:
+            logger.warning('redo notified, but node count is %d' % len(nodes))
 
-        cmd_stack = model.command_stack
-        cmd = lib.command.Nodeedit(model, layer_path, sshot_before)
-        # Important: DO NOT CALL 'model.do()'
-        # It callbacks brushwork_commit again.
-        # So directly call do() method of command stack.
-        cmd_stack.do(cmd)
+
 
 class HandleNodeMixin(OncanvasEditMixin):
 

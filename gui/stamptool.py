@@ -80,7 +80,10 @@ class _EditZone(EditZoneMixin):
     SOURCE_AREA_HANDLE = 111
     SOURCE_TRASH_BUTTON = 112
 
-_ActionButton = ActionButtonMixin
+class _ActionButton(ActionButtonMixin):
+    IMPORT_LAYER = 3
+    REJECT_SELECTION = 4
+    IMPORT_CANVAS = 5
 
 
 class DrawStamp(Command):
@@ -170,6 +173,18 @@ class StampMode (OncanvasEditMixin):
 
     ## Class config vars
 
+    buttons = {
+        _ActionButton.ACCEPT : ('mypaint-ok-symbolic', 
+            'accept_button_cb'), 
+        _ActionButton.REJECT : ('mypaint-trash-symbolic', 
+            'reject_button_cb'), 
+        _ActionButton.IMPORT_LAYER : ('mypaint-ok-symbolic', 
+            'import_selection_layer_cb'), 
+        _ActionButton.REJECT_SELECTION: ('mypaint-trash-symbolic', 
+            'reject_selection_cb'), 
+        _ActionButton.IMPORT_CANVAS: ('mypaint-about-symbolic', 
+            'import_selection_canvas_cb'), 
+    }                 
 
     ## Class variable & objects
 
@@ -279,17 +294,16 @@ class StampMode (OncanvasEditMixin):
                     ex = max(ex, tsx + tw)
                     ey = max(ey, tsy + th)
 
-                if hasattr(self._stamp, 'pixbuf'):
-                    # This means 'Current stamp is dynamic'. 
-                    # Therefore we need save its current content 
-                    # during draw command exist.
-                    stamp = ProxyStamp('', self._stamp.pixbuf)
-                else:
-                    stamp = self._stamp
-
+               #if hasattr(self._stamp, 'pixbuf'):
+               #    # This means 'Current stamp is dynamic'. 
+               #    # Therefore we need save its current content 
+               #    # during draw command exist.
+               #    stamp = ProxyStamp('', self._stamp.pixbuf)
+               #else:
+               #    stamp = self._stamp
 
                 cmd = DrawStamp(self.doc.model,
-                        stamp,
+                        self._stamp,
                         self.nodes,
                         (sx, sy, abs(ex-sx)+1, abs(ey-sy)+1))
                 # Important: without this, stamps drawn twice.
@@ -305,6 +319,8 @@ class StampMode (OncanvasEditMixin):
     def _start_new_capture_phase(self, rollback=False):
         """Let the user capture a new ink stroke"""
         self._queue_redraw_all_nodes()
+        self._queue_draw_buttons()
+        self._queue_redraw_curve(force_margin=True)  # call this before reset node
 
         if rollback:
             self._stop_task_queue_runner(complete=False)
@@ -319,9 +335,9 @@ class StampMode (OncanvasEditMixin):
             self.stamp.finalize_phase(self)
             
         self.options_presenter.target = (self, None)
-        self._queue_redraw_curve(force_margin=True)  # call this before reset node
-        self._queue_draw_buttons()
-        self._queue_redraw_all_nodes()
+       #self._queue_redraw_curve(force_margin=True)  # call this before reset node
+       #self._queue_draw_buttons()
+       #self._queue_redraw_all_nodes()
         self._reset_adjust_data()
         self.phase = _Phase.CAPTURE
 
@@ -391,46 +407,47 @@ class StampMode (OncanvasEditMixin):
                         self.target_area_handle = None
 
                     elif stamp.is_support_selection:
-                        margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE 
-                        for i, area in stamp.enum_visible_selection_areas(tdw):
-                            for  t, tx, ty in enum_area_point(*area):
-                                if (tx-margin <= x <= tx+margin and 
-                                        ty-margin <= y <= ty+margin):
-                                    new_zone = _EditZone.SOURCE_AREA_HANDLE
-                                    new_target_area_handle = t
-                                    new_target_area_index = i
-                                    break
-
-                            # If 'handle-check' failed, but cursor might be 
-                            # on the source-targetting rect.
-                            if new_zone == _EditZone.EMPTY_CANVAS:
-                                sx, sy, ex, ey = area
-                                hit_dist = gui.style.FLOATING_BUTTON_RADIUS / 2
-
-                                if sx <= x <= ex and sy <= y <= ey:
-                                    new_zone = _EditZone.SOURCE_AREA
-                                    new_target_area_index = i
-
-                                    if self.show_area_trash_button:
-                                        btn_x = sx + (ex - sx) / 2
-                                        btn_y = sy + (ey - sy) / 2
-                                        d = math.hypot(btn_x - x, btn_y - y)
-                                        if d <= hit_dist:
-                                            new_zone = _EditZone.SOURCE_TRASH_BUTTON
-
-                            # Check zone again.
-                            # Either cursor is on handle or on rect,
-                            # loop should be broken.
-                            if new_zone != _EditZone.EMPTY_CANVAS:
-                                break
-
-                        if (new_target_area_index != self.target_area_index or
-                                new_target_area_handle != self.target_area_handle):
-                            self._queue_selection_area(tdw, 
-                                    indexes=(new_target_area_index, 
-                                        self.target_area_index))
-                            self.target_area_index = new_target_area_index
-                            self.target_area_handle = new_target_area_handle
+                        pass
+                       #margin = gui.style.DRAGGABLE_POINT_HANDLE_SIZE 
+                       #for i, area in stamp.enum_visible_selection_areas(tdw):
+                       #    for  t, tx, ty in enum_area_point(*area):
+                       #        if (tx-margin <= x <= tx+margin and 
+                       #                ty-margin <= y <= ty+margin):
+                       #            new_zone = _EditZone.SOURCE_AREA_HANDLE
+                       #            new_target_area_handle = t
+                       #            new_target_area_index = i
+                       #            break
+                       #
+                       #    # If 'handle-check' failed, but cursor might be 
+                       #    # on the source-targetting rect.
+                       #    if new_zone == _EditZone.EMPTY_CANVAS:
+                       #        sx, sy, ex, ey = area
+                       #        hit_dist = gui.style.FLOATING_BUTTON_RADIUS / 2
+                       #
+                       #        if sx <= x <= ex and sy <= y <= ey:
+                       #            new_zone = _EditZone.SOURCE_AREA
+                       #            new_target_area_index = i
+                       #
+                       #            if self.show_area_trash_button:
+                       #                btn_x = sx + (ex - sx) / 2
+                       #                btn_y = sy + (ey - sy) / 2
+                       #                d = math.hypot(btn_x - x, btn_y - y)
+                       #                if d <= hit_dist:
+                       #                    new_zone = _EditZone.SOURCE_TRASH_BUTTON
+                       #
+                       #    # Check zone again.
+                       #    # Either cursor is on handle or on rect,
+                       #    # loop should be broken.
+                       #    if new_zone != _EditZone.EMPTY_CANVAS:
+                       #        break
+                       #
+                       #if (new_target_area_index != self.target_area_index or
+                       #        new_target_area_handle != self.target_area_handle):
+                       #    self._queue_selection_area(tdw, 
+                       #            indexes=(new_target_area_index, 
+                       #                self.target_area_index))
+                       #    self.target_area_index = new_target_area_index
+                       #    self.target_area_handle = new_target_area_handle
 
 
                 # Update the prelit node, and draw changes to it
@@ -485,24 +502,32 @@ class StampMode (OncanvasEditMixin):
         (it is disabled as None, with modestack facility)
         so you must use 'selection_mode.doc', instead of it.
         """
-        if self.phase in (_Phase.CAPTURE, _Phase.ADJUST):
-            if self.stamp and self.stamp.is_support_selection:
-                self.stamp.set_selection_area(-1,
-                        selection_mode.get_min_max_pos_model(margin=0),
-                        selection_mode.doc.model.layer_stack.current)
+        if self.stamp:
+            if self.stamp.is_support_selection:
+                if self.phase in (_Phase.CAPTURE, _Phase.ADJUST):
+                    sx, sy, ex, ey = [int(x) for x in selection_mode.get_min_max_pos_model(margin=0)]
+                    layer = selection_mode.doc.model.layer_stack.current
+                    pixbuf = layer.render_as_pixbuf(sx, sy, 
+                            abs(ex-sx)+1, abs(ey-sy)+1, alpha=True)
 
-                self.stamp.initialize_phase(self)
-                self._notify_stamp_changed()
-        else:
-            # Ordinary selection, which means 'node selection'
-            modified = False
-            for idx,cn in enumerate(self.nodes):
-                if selection_mode.is_inside_model(cn.x, cn.y):
-                    if not idx in self.selected_nodes:
-                        self.selected_nodes.append(idx)
-                        modified = True
-            if modified:
-                self._queue_redraw_all_nodes()
+                    self.stamp.set_surface_from_pixbuf(-1, pixbuf)
+                    
+                   #self.stamp.set_selection_area(-1,
+                   #        selection_mode.get_min_max_pos_model(margin=0),
+                   #        selection_mode.doc.model.layer_stack.current)
+                   #
+                   #self.stamp.initialize_phase(self)
+                   #self._notify_stamp_changed()
+            else:
+                # Ordinary selection, which means 'node selection'
+                modified = False
+                for idx,cn in enumerate(self.nodes):
+                    if selection_mode.is_inside_model(cn.x, cn.y):
+                        if not idx in self.selected_nodes:
+                            self.selected_nodes.append(idx)
+                            modified = True
+                if modified:
+                    self._queue_redraw_all_nodes()
 
     ## Redraws
 
@@ -570,16 +595,16 @@ class StampMode (OncanvasEditMixin):
 
     def _queue_selection_area(self, tdw, indexes=None):
         dx, dy = self.drag_offset.get_model_offset()
-        stamp = self.stamp
-
-        if stamp and stamp.is_support_selection:
-            for i, junk in stamp.enum_visible_selection_areas(tdw, indexes=indexes):
-                area = stamp.get_selection_area(i)
-                area = self.adjust_selection_area(i, area)
-                sx, sy, ex, ey = gui.ui_utils.get_outmost_area(tdw, *area, 
-                        margin=gui.style.DRAGGABLE_POINT_HANDLE_SIZE+4)
-                tdw.queue_draw_area(sx, sy, 
-                        abs(ex - sx) + 1, abs(ey - sy) + 1)
+       #stamp = self.stamp
+       #
+       #if stamp and stamp.is_support_selection:
+       #    for i, junk in stamp.enum_visible_selection_areas(tdw, indexes=indexes):
+       #        area = stamp.get_selection_area(i)
+       #        area = self.adjust_selection_area(i, area)
+       #        sx, sy, ex, ey = gui.ui_utils.get_outmost_area(tdw, *area, 
+       #                margin=gui.style.DRAGGABLE_POINT_HANDLE_SIZE+4)
+       #        tdw.queue_draw_area(sx, sy, 
+       #                abs(ex - sx) + 1, abs(ey - sy) + 1)
 
     ## Raw event handling (prelight & zone selection in adjust phase)
 
@@ -1154,7 +1179,14 @@ class StampMode (OncanvasEditMixin):
         if len(self.nodes) > 0:
             self._start_new_capture_phase(rollback=True)
 
+    def import_selection_layer_cb(self, tdw):
+        pass
 
+    def reject_selection_cb(self, tdw):
+        pass
+
+    def import_selection_canvas_cb(self, tdw):
+        pass
 
 class Overlay_Stamp (OverlayOncanvasMixin):
     """Overlay for an StampMode's adjustable points"""
@@ -1414,7 +1446,7 @@ class Overlay_Stamp (OverlayOncanvasMixin):
         alloc = self._tdw.get_allocation()
         dx,dy = mode.drag_offset.get_display_offset(self._tdw)
         fill_flag = True
-        mode.stamp.initialize_draw(cr)
+       #mode.stamp.initialize_draw(cr)
 
         colors = ( (1, 1, 1), self.SELECTED_COLOR)
 
@@ -1427,16 +1459,16 @@ class Overlay_Stamp (OverlayOncanvasMixin):
             else:
                 self.draw_stamp_rect(cr, i, node, dx, dy, colors)
 
-        mode.stamp.finalize_draw(cr)
+       #mode.stamp.finalize_draw(cr)
 
         # Selection areas
-        if mode.stamp.is_support_selection:
-            # TODO right_color and other_color should be
-            # correctly configured at gui/style.py
-            if mode.stamp.tile_count > 0:
-                self.draw_selection_area(cr, 
-                        dx, dy,
-                        self.SELECTED_AREA_COLOR, (1, 0 ,0) )
+       #if mode.stamp.is_support_selection:
+       #    # TODO this is for stamp manager shows source area
+       #    # or right after selection tool activated.
+       #    if mode.stamp.tile_count > 0:
+       #        self.draw_selection_area(cr, 
+       #                dx, dy,
+       #                self.SELECTED_AREA_COLOR, (1, 0 ,0) )
 
         # Buttons
         if (mode.phase in (_Phase.ADJUST,)
@@ -1659,9 +1691,9 @@ class OptionsPresenter_Stamp (object):
                 path = iconview.get_selected_items()[0]
                 iter = self._stamps_store.get_iter(path)
                 manager = self._app.stamp_manager
-                manager.set_current_iter(iter)
-               #mode.set_stamp(self._stamps_store.get(iter, 2)[0])
-                mode.set_stamp(manager.current)
+               #manager.set_current_iter(iter)
+                mode.set_stamp(self._stamps_store.get(iter, 2)[0])
+               #mode.set_stamp(manager.current)
 
 
 

@@ -82,8 +82,11 @@ class CommandStack (object):
         if not self.undo_stack:
             return
         command = self.undo_stack.pop()
-        command.undo()
-        self.redo_stack.append(command)
+        if not command.undo():
+            self.redo_stack.append(command)
+        else:
+            # append same command to undo stack again
+            self.undo_stack.append(command)
         self.stack_updated()
         return command
 
@@ -97,8 +100,11 @@ class CommandStack (object):
         if not self.redo_stack:
             return
         command = self.redo_stack.pop()
-        command.redo()
-        self.undo_stack.append(command)
+        if not command.redo():
+            self.undo_stack.append(command)
+        else:
+            # append same command to redo stack again
+            self.redo_stack.append(command)
         self.stack_updated()
         return command
 
@@ -133,6 +139,17 @@ class CommandStack (object):
     def stack_updated(self):
         """Event: command stack was updated"""
         pass
+
+    def remove_command(self, cmd):
+        """Remove(discard) last command from undo stack
+        without moving it to redo stack.
+        """
+        if len(self.undo_stack) > 0 and self.undo_stack[-1] == cmd:
+            self.undo_stack.pop()
+        if len(self.redo_stack) > 0 and self.redo_stack[-1] == cmd:
+            self.redo_stack.pop()
+
+        self.stack_updated()
 
 
 class Command (object):
@@ -183,6 +200,9 @@ class Command (object):
 
     def redo(self):
         """Callback used to perform, or re-perform the work
+        :return : True if this stack should not be removed from redo stack.
+                  Otherwise, return False or None.
+        :rtype boolean:
 
         Initially, this is essentially a commit to the in-memory
         document. It should finalize any changes made at construction or
@@ -194,6 +214,9 @@ class Command (object):
 
     def undo(self):
         """Callback used to roll back work
+        :return : True if this stack should not be removed from undo stack.
+                  Otherwise, return False or None.
+        :rtype boolean:
 
         This is the rollback to `redo()`'s commit action.
         """
@@ -469,49 +492,10 @@ class Brushwork (Command):
 
 ## Concrete command classes
 
-class Nodeedit(Command):
-    """ Entered inktool, and node editing.
-    This command is executed only when 
-     * Inkwork command has been undone.
-     * Current operation tool(mode) is InkingMode
-    """
-
-    def __init__(self, doc, layer_path, sshot_before, **kwds):
-        super(Nodeedit, self).__init__(doc, **kwds)
-
-        model = self.doc
-        self._layer_path = layer_path
-        layer = model.layer_stack.deepget(self._layer_path)
-        self._sshot_before = sshot_before
-        self._sshot_after_applied = False
-
-    @property
-    def display_name(self):
-        return _("Node editing")
-
-    def redo(self):
-        """Performs, or re-performs after undo"""
-        model = self.doc
-        layer = model.layer_stack.deepget(self._layer_path)
-        if not self._sshot_after_applied:
-            layer.load_snapshot(self._sshot_before)
-            self._sshot_after_applied = True
-        # Painting does not started yet. 
-        # so do not update painting time
-
-
-    def undo(self):
-        """Undoes the effects of redo()"""
-        model = self.doc
-        layer = model.layer_stack.deepget(self._layer_path)
-        assert self._sshot_before is not None
-        layer.load_snapshot(self._sshot_before)
-        # Painting does not started yet. 
-        # so do not update painting time
-       #model.unsaved_painting_time = self._time_before
-        self._sshot_after_applied = False
-
-
+class _Phase_Nodework:
+    INIT = -1
+    EDIT = 0
+    DRAW = 1
 
 class Nodework (Brushwork):
     """ node based stroke drawing command, 
@@ -549,39 +533,89 @@ class Nodework (Brushwork):
         self.nodes = nodes
         self._override_before = override_sshot_before
         self._operation_mode = operation_mode
+        self._phase = _Phase_Nodework.INIT
+
+    @property
+    def phase(self):
+        return self._phase
+
+    @phase.setter
+    def phase(self, phase_value):
+        if self._phase != phase_value:
+            self._phase = phase_value
+            self.doc.command_stack.stack_updated()
 
     @property
     def display_name(self):
         """Dynamic property: string used for displaying the command"""
-        if self.description is not None:
-            return self.description
-        if self._stroke_seq is None:
-            time = 0.0
-            brush_name = _("Undefined (command not started yet)")
+        if self.phase == _Phase_Nodework.DRAW:
+            if self.description is not None:
+                return self.description
+            if self._stroke_seq is None:
+                time = 0.0
+                brush_name = _("Undefined (command not started yet)")
+            else:
+                time = self._stroke_seq.total_painting_time
+                brush_name = unicode(self._stroke_seq.brush_name)
+            return _(u"{seconds:.01f}s of {mode_name} stroke with {brush_name}").format(
+                seconds=time,
+                mode_name=self._operation_mode.get_name(),
+                brush_name=brush_name,
+            )
+        elif self.phase == _Phase_Nodework.EDIT:
+            return _("Node editing")
         else:
-            time = self._stroke_seq.total_painting_time
-            brush_name = unicode(self._stroke_seq.brush_name)
-        return _(u"{seconds:.01f}s of {mode_name} stroke with {brush_name}").format(
-            seconds=time,
-            mode_name=self._operation_mode.get_name(),
-            brush_name=brush_name,
-        )
+            raise Exception("Unknown phase of Nodework")
+
+
+    def redo(self):
+        """Performs, or re-performs after undo"""
+
+        if self.phase == _Phase_Nodework.INIT:
+            self.phase = _Phase_Nodework.DRAW
+        else:
+            # Ensure Phase is in DRAW
+            self.phase = _Phase_Nodework.DRAW 
+            curmode = self.gui_doc.modes.top
+            if isinstance(curmode, self._operation_mode):
+                if curmode.phase == 0:
+                    if self.nodes != None and len(self.nodes) > 1:
+                        self.phase = _Phase_Nodework.EDIT
+                        curmode.redo_nodes_cb(self, self.nodes)
+
+        super(Nodework, self).redo()
+
 
     def undo(self):
         """Undoes the effects of redo()"""
         super(Nodework, self).undo()
         # Notifying undo of nodes, when current mode is
-        # Inkingmode.
+        # the instance of editing mode.
         curmode = self.gui_doc.modes.top
-        if isinstance(curmode, self._operation_mode): 
-            curmode.undo_nodes_cb(self, self.nodes, self._sshot_before)
-            if self._sshot_after:
-                # Redrawing previous stroke, with loading
-                # redo snapshot.
-                model = self.doc
-                layer = model.layer_stack.deepget(self._layer_path)
-                layer.load_snapshot(self._sshot_after)
-                self._sshot_after_applied = True
+        if isinstance(curmode, self._operation_mode):
+            assert hasattr(curmode, 'phase')
+            if curmode.phase == 0:
+                if self.phase == _Phase_Nodework.DRAW:
+                    self.phase = _Phase_Nodework.EDIT
+                    curmode.undo_nodes_cb(self, self.nodes, self._sshot_before)
+
+                    if self._sshot_after:
+                        # Redrawing previous stroke, with loading
+                        # redo snapshot.
+                        model = self.doc
+                        layer = model.layer_stack.deepget(self._layer_path)
+                        layer.load_snapshot(self._sshot_after)
+                        self._sshot_after_applied = True
+                    
+                    return True
+
+        # For any case except for node-editing. 
+
+        if self.phase == _Phase_Nodework.EDIT:
+            # Undo from Editing phase - it means 
+            # 'further undoing - go previous command' 
+            # so entering DRAW phase.  
+            self.phase = _Phase_Nodework.DRAW
 
 
     def _check_recording_started(self):
@@ -617,8 +651,6 @@ class Nodework (Brushwork):
         self._stroke_seq.start_recording(model.brush)
         assert self._sshot_after is None
         self._recording_started = True
-
-
 
 
 class FloodFill (Command):
