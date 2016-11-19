@@ -1335,102 +1335,6 @@ class PolyfillMode (OncanvasEditMixin):
 
         return cursor
 
-       #self._ensure_overlay_for_tdw(tdw)
-       #new_zone = _EditZone.EMPTY_CANVAS
-       #if not self.in_drag and len(self.nodes) > 0:
-       #    if self.phase in (_Phase.ADJUST_POS, 
-       #            _Phase.ADJUST):
-       #
-       #        new_target_node_index = None
-       #        
-       #        # Test buttons for hits
-       #        hit_dist = gui.style.FLOATING_BUTTON_RADIUS
-       #
-       #        if len(self.nodes) > 1:
-       #            for pos, info in self.button_info.buttons_iter():
-       #                if pos is None:
-       #                    continue
-       #                btn_x, btn_y = pos
-       #                d = math.hypot(btn_x - x, btn_y - y)
-       #                if d <= hit_dist:
-       #                    new_target_node_index = None
-       #                    new_zone = info[2]
-       #                    break
-       #
-       #        if (new_zone == _EditZone.EMPTY_CANVAS):
-       #
-       #            # Checking Control handles first:
-       #            # because when you missed setting control handle 
-       #            # at node creation stage,if node zone detection
-       #            # is prior to control handle, they are unoperatable.
-       #            if (self.current_node_index is not None and 
-       #                    ignore_handle == False):
-       #                c_node = self.nodes[self.current_node_index]
-       #                self.current_handle_index = None
-       #                for i in (0,1):
-       #                    handle = c_node.get_control_handle(i)
-       #                    hx, hy = tdw.model_to_display(handle.x, handle.y)
-       #                    d = math.hypot(hx - x, hy - y)
-       #                    if d > hit_dist:
-       #                        continue
-       #                    new_target_node_index = self.current_node_index
-       #                    self.current_handle_index = i
-       #                    new_zone = _EditZone.CONTROL_HANDLE
-       #                    break         
-       #
-       #            # Test nodes for a hit, in reverse draw order
-       #            if new_target_node_index == None:
-       #                new_target_node_index = self._search_target_node(tdw, x, y)
-       #                if new_target_node_index != None:
-       #                    new_zone = _EditZone.CONTROL_NODE
-       #
-       #            
-       #        # Update the prelit node, and draw changes to it
-       #        if new_target_node_index != self.target_node_index:
-       #            if self.target_node_index is not None:
-       #                self._queue_draw_node(self.target_node_index)
-       #            self.target_node_index = new_target_node_index
-       #            if self.target_node_index is not None:
-       #                self._queue_draw_node(self.target_node_index)
-       #
-       #        ## Fallthru below
-       #
-       #
-       ## Update the zone, and assume any change implies a button state
-       ## change as well (for now...)
-       #if self.zone != new_zone:
-       #    self.zone = new_zone
-       #    self._ensure_overlay_for_tdw(tdw)
-       #    if len(self.nodes) > 1:
-       #        self._queue_previous_draw_buttons()
-       #
-       ## Update the "real" inactive cursor too:
-       ## these codes also a little changed from inktool.
-       #if not self.in_drag:
-       #    cursor = None
-       #    if self.phase in (_Phase.ADJUST,
-       #            _Phase.ADJUST_POS):
-       #        if self.zone == _EditZone.CONTROL_NODE:
-       #            cursor = self._crosshair_cursor
-       #        elif self.zone in self.button_info.button_zones:
-       #            cursor = self._crosshair_cursor
-       #        else:
-       #            cursor = self._arrow_cursor
-       #    if cursor is not self._current_override_cursor:
-       #        tdw.set_override_cursor(cursor)
-       #        self._current_override_cursor = cursor
-       #
-
-
-   #def _reset_all_internal_state(self):
-   #    self._queue_draw_buttons()
-   #    self._queue_redraw_all_nodes()
-   #    self._queue_redraw_curve() 
-   #    self._reset_nodes()
-   #    self._reset_adjust_data()
-   #    self._stroke_from_history = False
-   #    self.forced_button_pos = None
-
     ## Properties
     @property
     def shape_type(self):
@@ -1522,6 +1426,7 @@ class PolyfillMode (OncanvasEditMixin):
     def _start_new_capture_phase(self, mode, rollback=False):
         self._queue_draw_buttons()
         self._queue_redraw_all_nodes()
+        self._queue_redraw_curve()
 
         if rollback:
             self._stop_task_queue_runner(complete=False)
@@ -1601,11 +1506,6 @@ class PolyfillMode (OncanvasEditMixin):
         ret = shape.button_press_cb(self, tdw, event)
         if ret == _Shape.CANCEL_EVENT:
             return True
-       #elif ret == _Shape.CALL_BASECLASS_HANDLER:
-       #    return super(PolyfillMode, self).button_press_cb(tdw, event) 
-       #elif ret == _Shape.CALL_ANCESTER_HANDLER:
-       #    return super(BezierMode, self).button_press_cb(tdw, event) 
-
 
     def mode_button_release_cb(self, tdw, event):
         shape = self._shape
@@ -1613,10 +1513,6 @@ class PolyfillMode (OncanvasEditMixin):
 
         if ret == _Shape.CANCEL_EVENT:
             return True
-       #elif ret == _Shape.CALL_BASECLASS_HANDLER:
-       #    return super(PolyfillMode, self).button_release_cb(tdw, event) 
-       #elif ret == _Shape.CALL_ANCESTER_HANDLER:
-       #    return super(BezierMode, self).button_release_cb(tdw, event) 
 
     def motion_notify_cb(self, tdw, event):
         """ Override raw handler, to ignore handle according to
@@ -1644,10 +1540,6 @@ class PolyfillMode (OncanvasEditMixin):
         ret = shape.drag_start_cb(self, tdw, event)
         if ret == _Shape.CANCEL_EVENT:
             return True
-       #elif ret == _Shape.CALL_BASECLASS_HANDLER:
-       #    return super(PolyfillMode, self).drag_start_cb(tdw, event) 
-       #elif ret == _Shape.CALL_ANCESTER_HANDLER:
-       #    return super(BezierMode, self).drag_start_cb(tdw, event) 
 
     def node_drag_update_cb(self, tdw, event, dx, dy):
         shape = self._shape
@@ -1655,10 +1547,6 @@ class PolyfillMode (OncanvasEditMixin):
         ret = shape.drag_update_cb(self, tdw, event, dx, dy)
         if ret == _Shape.CANCEL_EVENT:
             return True
-       #elif ret == _Shape.CALL_BASECLASS_HANDLER:
-       #    return super(PolyfillMode, self).drag_update_cb(tdw, event) 
-       #elif ret == _Shape.CALL_ANCESTER_HANDLER:
-       #    return super(BezierMode, self).drag_update_cb(tdw, event) 
         
 
     def node_drag_stop_cb(self, tdw):
@@ -1668,10 +1556,6 @@ class PolyfillMode (OncanvasEditMixin):
             ret = shape.drag_stop_cb(self, tdw)
             if ret == _Shape.CANCEL_EVENT:
                 return False
-           #elif ret == _Shape.CALL_BASECLASS_HANDLER:
-           #    return super(PolyfillMode, self).drag_stop_cb(tdw)
-           #elif ret == _Shape.CALL_ANCESTER_HANDLER:
-           #    return super(BezierMode, self).drag_stop_cb(tdw)
 
             # Common processing
             if self.current_node_index != None:
@@ -1737,22 +1621,6 @@ class PolyfillMode (OncanvasEditMixin):
 
        #self._reset_all_internal_state()
 
-    ## Node editing
-
-   #@property
-   #def options_presenter(self):
-   #    """MVP presenter object for the node editor panel"""
-   #    cls = self.__class__
-   #    if cls._OPTIONS_PRESENTER_POLY is None:
-   #        cls._OPTIONS_PRESENTER_POLY = OptionsPresenter_Polyfill()
-   #    return cls._OPTIONS_PRESENTER_POLY
-   #
-   #                                            
-   #def apply_pressure_from_curve_widget(self):
-   #    """ apply pressure reprenting points
-   #    from StrokeCurveWidget.
-   #    """
-   #    return # do nothing
 
     ## properties
 
