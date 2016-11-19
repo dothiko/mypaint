@@ -1318,9 +1318,9 @@ class PolyfillMode (OncanvasEditMixin):
                         self._queue_draw_buttons()
 
                     if not self.in_drag:
-                        self.update_cursor(tdw) 
+                        self._update_cursor(tdw)
 
-    def update_cursor(self, tdw): 
+    def update_cursor_cb(self, tdw): 
         # Update the "real" inactive cursor too:
         # these codes also a little changed from inktool.
         cursor = None
@@ -1332,9 +1332,8 @@ class PolyfillMode (OncanvasEditMixin):
                 cursor = self._crosshair_cursor
             else:
                 cursor = self._arrow_cursor
-        if cursor is not self._current_override_cursor:
-            tdw.set_override_cursor(cursor)
-            self._current_override_cursor = cursor
+
+        return cursor
 
        #self._ensure_overlay_for_tdw(tdw)
        #new_zone = _EditZone.EMPTY_CANVAS

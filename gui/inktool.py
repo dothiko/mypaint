@@ -209,16 +209,18 @@ class InkingMode (PressureEditableMixin):
         return OptionsPresenter()
 
 
-    def update_cursor(self, tdw):
+    def update_cursor_cb(self, tdw):
+        """ Called from _update_zone_and_target()
+        to update cursors
+        """
         cursor = None
         if self.is_adjusting_phase:
             if self.zone == _EditZone.CONTROL_NODE:
                 cursor = self._crosshair_cursor
             elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
                 cursor = self._arrow_cursor
-        if cursor is not self._current_override_cursor:
-            tdw.set_override_cursor(cursor)
-            self._current_override_cursor = cursor
+
+        return cursor
 
 
     ## Redraws

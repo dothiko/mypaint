@@ -406,17 +406,16 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     def _update_zone_and_target(self, tdw, x, y):
         """Update the zone and target node under a cursor position"""
  
-        self._ensure_overlay_for_tdw(tdw)
+        overlay = self._ensure_overlay_for_tdw(tdw)
         new_zone = EditZoneMixin.EMPTY_CANVAS
  
         if not self.in_drag:
-           #if self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
-            if self.phase == PhaseMixin.ADJUST:
+            if self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
+           #if self.phase == PhaseMixin.ADJUST:
  
                 new_target_node_index = None
                 self.current_button_id = None
                 # Test buttons for hits
-                overlay = self._ensure_overlay_for_tdw(tdw)
                 hit_dist = gui.style.FLOATING_BUTTON_RADIUS
 
                 for btn_id in self.buttons.keys():
@@ -458,12 +457,27 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             self._queue_draw_buttons()
 
         if not self.in_drag:
-            self.update_cursor(tdw)
+            self._update_cursor(tdw)
 
+    def _update_cursor(self, tdw): 
+        """ Call update_cursor_cb() of subclass
+        and decide current cursor,according to zone and phase.
 
-    def update_cursor(self, tdw): 
-        # Update the "real" inactive cursor too:
-        pass
+        The callback is 
+
+        def update_cursor_cb(self, tdw)
+
+        It should return a cursor object, or None.
+        """
+
+        cursor = self.update_cursor_cb(tdw)
+
+        if cursor == None:
+            cursor = self._blank_cursor
+
+        if cursor is not self._current_override_cursor:
+            tdw.set_override_cursor(cursor)
+            self._current_override_cursor = cursor
 
     def _bypass_phase(self, next_phase):
         """ Bypass(cancel) follwing processing of current phase 
@@ -585,7 +599,8 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         # Update workaround state for evdev dropouts
         self._button_down = event.button
 
-        if self.phase == PhaseMixin.ADJUST:
+       #if self.phase == PhaseMixin.ADJUST:
+        if self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
             button = event.button
             if button == 1:
                 if self.zone == EditZoneMixin.ACTION_BUTTON:
@@ -609,6 +624,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                     # clicked a node.
                     mx, my = tdw.display_to_model(event.x, event.y)
                     self.drag_offset.start(mx, my)
+                    self.phase = PhaseMixin.ADJUST
 
                 else:
                     pass
@@ -953,8 +969,11 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     ## Action button related
 
     def _call_action_button(self, id, tdw):
-        """ Call action button, from a name 
-        which is defined as class attribute string.
+        """ Call action button, from id (i.e. _ActionButton constants)
+
+        Internally, this method get method from string 
+        which is defined as class attribute of button structure
+        and call it.
         """
         try:
             junk, handler_name = self.buttons[id]
@@ -1492,9 +1511,10 @@ class OverlayOncanvasMixin(gui.overlays.Overlay):
         radius = gui.style.FLOATING_BUTTON_RADIUS
         for id in mode.buttons:
             resource, junk = mode.buttons[id]
-            self._draw_button(cr, 
-                    self._button_pos[id], resource, radius, 
-                    mode.current_button_id == id)
+            if id in self._button_pos and self._button_pos[id] != None:
+                self._draw_button(cr, 
+                        self._button_pos[id], resource, radius, 
+                        mode.current_button_id == id)
  
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""

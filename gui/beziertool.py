@@ -472,9 +472,10 @@ class BezierMode (PressureEditableMixin):
                         self._queue_draw_buttons()
 
                     if not self.in_drag:
-                        self.update_cursor(tdw) 
+                        self._update_cursor(tdw) 
 
-    def update_cursor(self, tdw): 
+
+    def update_cursor_cb(self, tdw): 
         # Update the "real" inactive cursor too:
         # these codes also a little changed from inktool.
         cursor = None
@@ -484,9 +485,8 @@ class BezierMode (PressureEditableMixin):
             elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
                 cursor = self._arrow_cursor
 
-        if cursor is not self._current_override_cursor:
-            tdw.set_override_cursor(cursor)
-            self._current_override_cursor = cursor
+        return cursor
+
 
     def _start_new_capture_phase(self, rollback=False):
         if rollback:
