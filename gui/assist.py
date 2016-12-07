@@ -14,6 +14,7 @@ import logging
 from collections import deque
 logger = logging.getLogger(__name__)
 from gettext import gettext as _
+import weakref
 
 from gi.repository import Gtk, Gdk
 
@@ -37,7 +38,7 @@ class Assistbase(object):
 
 
     def __init__(self, app):
-        self.app = app
+        self.app = weakref.proxy(app)
         self._presenter = None
 
     def reset(self):
@@ -243,16 +244,23 @@ class Stabilizer(Assistbase):
     MODE_DRAW = 1
     MODE_FINALIZE = 2
 
+    _AVERAGE_PREF_KEY = "assistant.stabilizer.average_previous"
+    _STABILIZE_RANGE_KEY = "assistant.stabilizer.range"
+    _RANGE_SWITCHER_KEY = "assistant.stabilizer.range_switcher"
+
 
     def __init__(self, app):
         super(Stabilizer, self).__init__(app)
         self._rx = 0.0
         self._ry = 0.0
-        self._average_previous = True
-        self._stabilize_range = 48
+
+        pref = self.app.preferences
+        self._average_previous = pref.get(self._AVERAGE_PREF_KEY, True)
+        self._stabilize_range = pref.get(self._STABILIZE_RANGE_KEY,48)
+        self._range_switcher = pref.get(self._RANGE_SWITCHER_KEY,True)
+
         self._current_range = self._stabilize_range
         self._last_time = None
-        self._range_switcher = True # Auto stabilizer range adjust flag
         self._cycle = 0L
         self.reset()
 
@@ -260,6 +268,35 @@ class Stabilizer(Assistbase):
     def _ready(self):
         return (self._mode == self.MODE_DRAW and
                 self._current_range > 0)
+
+    @property
+    def average_previous(self):
+        return self._average_previous
+    
+    @average_previous.setter
+    def average_previous(self, flag):
+        self._average_previous = flag
+        self.app.preferences[self._AVERAGE_PREF_KEY] = flag
+
+    @property
+    def stabilize_range(self):
+        return self._stabilize_range
+    
+    @stabilize_range.setter
+    def stabilize_range(self, value):
+        self._stabilize_range = value
+        if self._current_range > value:
+            self._current_range = value
+        self.app.preferences[self._STABILIZE_RANGE_KEY] = value
+
+    @property
+    def range_switcher(self):
+        return self._range_switcher
+    
+    @range_switcher.setter
+    def range_switcher(self, flag):
+        self._range_switcher = flag
+        self.app.preferences[self._RANGE_SWITCHER_KEY] = flag
                 
     def button_press_cb(self, tdw, x, y, pressure, time, button):
         self._last_button = button
@@ -821,19 +858,19 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
 
         # Scale slider for range circle setting.
         create_slider(_("Range:"), self._range_changed_cb,
-                32, 64, assistant._stabilize_range)
+                32, 64, assistant.stabilize_range)
 
         # Checkbox for average direction.
         checkbox = Gtk.CheckButton(_("Average direction"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
-        checkbox.set_active(assistant._average_previous)
+        checkbox.set_active(assistant.average_previous)
         checkbox.connect('toggled', self._average_toggled_cb)
         self._attach_grid(checkbox)
 
         # Checkbox for use 'range switcher' feature.
         checkbox = Gtk.CheckButton(_("Range switcher"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
-        checkbox.set_active(assistant._range_switcher) 
+        checkbox.set_active(assistant.range_switcher) 
         checkbox.connect('toggled', self._range_switcher_toggled_cb)
         self._attach_grid(checkbox)
 
@@ -843,16 +880,16 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
     # Handlers
     def _average_toggled_cb(self, checkbox):
         if not self._updating_ui:
-            self.assistant._average_previous = checkbox.get_active()
+            self.assistant.average_previous = checkbox.get_active()
 
     def _range_changed_cb(self, adj):
         if not self._updating_ui:
-            self.assistant._stabilize_range = adj.get_value()
+            self.assistant.stabilize_range = adj.get_value()
 
     def _range_switcher_toggled_cb(self, checkbox):
         if not self._updating_ui:
             flag = checkbox.get_active()
-            self.assistant._range_switcher = flag
+            self.assistant.range_switcher = flag
 
 class Optionpresenter_ParallelRuler(_Presenter_Mixin):
     """ Optionpresenter for ParallelRuler assistant.

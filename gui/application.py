@@ -98,6 +98,7 @@ import polyfilltool
 import inktool
 import stamptool
 import selectionmode
+import stampeditor
 
 ## Utility methods
 
@@ -372,6 +373,7 @@ class Application (object):
             "PreferencesWindow": preferenceswindow.PreferencesWindow,
             "InputTestWindow": inputtestwindow.InputTestWindow,
             "BrushIconEditorWindow": brushiconeditor.BrushIconEditorWindow,
+            "StampEditorWindow": stampeditor.StampEditorWindow,
             }
         self._subwindows = {}
 
@@ -755,6 +757,11 @@ class Application (object):
     def input_test_window(self):
         """The input test window."""
         return self.get_subwindow("InputTestWindow")
+
+    @property
+    def stamp_editor_window(self):
+        """The stamp editor window."""
+        return self.get_subwindow("StampEditorWindow")
 
     def get_subwindow(self, name):
         """Get a subwindow by its name."""

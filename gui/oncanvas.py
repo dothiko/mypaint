@@ -354,15 +354,16 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         if not self._is_active():
             self._discard_overlays()
         self._ensure_overlay_for_tdw(self.doc.tdw)
-        self._arrow_cursor = self.doc.app.cursors.get_action_cursor(
+        cursors = self.doc.app.cursors
+        self._arrow_cursor = cursors.get_action_cursor(
             self.ACTION_NAME,
             gui.cursor.Name.ARROW,
         )
-        self._crosshair_cursor = self.doc.app.cursors.get_action_cursor(
+        self._crosshair_cursor = cursors.get_action_cursor(
             self.ACTION_NAME,
             gui.cursor.Name.CROSSHAIR_OPEN_PRECISE,
         )
-        self._cursor_move_nw_se = self.doc.app.cursors.get_action_cursor(
+        self._cursor_move_nw_se = cursors.get_action_cursor(
             self.ACTION_NAME,
             gui.cursor.Name.MOVE_NORTHWEST_OR_SOUTHEAST,
         )
@@ -472,10 +473,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 
         cursor = self.update_cursor_cb(tdw)
 
-        if cursor == None:
-            cursor = self._blank_cursor
-
-        if cursor is not self._current_override_cursor:
+        if cursor is not None and cursor is not self._current_override_cursor:
             tdw.set_override_cursor(cursor)
             self._current_override_cursor = cursor
 
@@ -563,20 +561,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             callback(*args, **kwargs)
             return True
  
-#   ## Editing result commit/cancel callbacks
-#
-#   def finalize_editing_cb(self, commited):
-#       """ Finalize(commit) editing or discard it.
-#       This callback is called from `self._start_new_capture_phase()`
-#
-#       Clearing node, or resetting overlay, should be done automatically
-#       from mixin method, so no need to do them.
-#
-#       :param committed: The editting nodes should be commited(=True) 
-#                           or cancelled(=False).
-#       """
-#       pass
-#
     ## Raw event handling (prelight & zone selection in adjust phase)
 
     def motion_notify_cb(self, tdw, event):
@@ -615,10 +599,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                     self.phase = PhaseMixin.ACTION
 
                     return False
-
-               #elif self.zone == EditZoneMixin.EMPTY_CANVAS:
-               #    self._start_new_capture_phase(rollback=False)
-               #    assert self.phase == PhaseMixin.CAPTURE
 
                 elif self.zone == EditZoneMixin.CONTROL_NODE:
                     # clicked a node.
@@ -1319,23 +1299,6 @@ class PressureEditableMixin(OncanvasEditMixin,
             model.do(cmd)
 
 
-   #def brushwork_commit_all(self, abrupt=False):
-   #    """Override, to detect 
-   #    'accept-button pressed right after undo 
-   #    = 'no commands actually executed' 
-   #    """
-   #   #if len(self._active_brushwork) == 0:
-   #   #    model = self.doc.model
-   #   #    cmd = model.command_stack.get_last_redo_command()
-   #   #    if isinstance(cmd, lib.command.Nodework):
-   #   #        print('---from brushwork_commit_all')
-   #   #        cmd.redo()
-   #   #        print('---')
-   #   #        return
-   #   #
-   #    super(PressureEditableMixin, self).brushwork_commit_all(abrupt)
-
-
     def undo_nodes_cb(self, cmd, nodes, sshot_before):
         """ called from lib.command.Nodework.undo().
         
@@ -1367,7 +1330,7 @@ class PressureEditableMixin(OncanvasEditMixin,
             self._queue_draw_buttons()
             self._pending_cmd = cmd
         else:
-            logger.warning('redo notified, but node count is %d' % len(nodes))
+            logger.warning('redo notified, but node count %d is not suffcient.' % len(nodes))
 
 
 

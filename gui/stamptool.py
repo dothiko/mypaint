@@ -17,7 +17,7 @@ import logging
 from collections import deque
 logger = logging.getLogger(__name__)
 import random
-import json
+import weakref
 
 from gettext import gettext as _
 from lib import brushsettings
@@ -37,6 +37,7 @@ from gui.stamps import *
 from lib.color import HCYColor, RGBColor
 import lib.helpers
 from gui.oncanvas import *
+import gui.stampeditor
 
 ## Module settings
 
@@ -46,7 +47,7 @@ from gui.oncanvas import *
 
 ## Class defs
 
-_NODE_FIELDS = ("x", "y", "angle", "scale_x", "scale_y", "tile_index")
+_NODE_FIELDS = ("x", "y", "angle", "scale_x", "scale_y", "picture_index")
 
 class _StampNode (collections.namedtuple("_StampNode", _NODE_FIELDS)):
     """Recorded control point, as a namedtuple.
@@ -58,6 +59,7 @@ class _StampNode (collections.namedtuple("_StampNode", _NODE_FIELDS)):
     * scale_w: float in [0.0, 3.0]
     * scale_h: float in [0.0, 3.0]
     """
+
 class _Phase(PhaseMixin):
     """Enumeration of the states that an BezierCurveMode can be in"""
     MOVE   = 100         #: Moving stamp
@@ -173,7 +175,6 @@ class StampMode (OncanvasEditMixin):
 
     ## Class variable & objects
 
-    _stamp = None
 
     ## Initialization & lifecycle methods
 
@@ -184,39 +185,48 @@ class StampMode (OncanvasEditMixin):
 
         self.scaleval=1.0
 
+        # _current_picture_id is the picture index within current stamp.
+        # 
+        # This is used when a new node created, nothing to do with
+        # the picture index of currently active(already editing) node.
+        self._current_picture_id = -1
+
     def _reset_adjust_data(self):
         super(StampMode, self)._reset_adjust_data()
         self._selection_area = None
 
     @property
     def stamp(self):
-        return StampMode._stamp
+        return self._app.stamp_manager.get_current()
 
     @property
-    def target_area_index(self):
-        return self._target_area_index
+    def current_picture_id(self):
+        return self._current_picture_id
 
-    @target_area_index.setter
-    def target_area_index(self, index):
-        self._target_area_index = index
-
+    @current_picture_id.setter
+    def current_picture_id(self, new_id):
+        self._current_picture_id = new_id
 
 
     def set_stamp(self, stamp):
         """ Called from OptionPresenter, 
         This is to make stamp property as if it is read-only.
         """
-        old_stamp = StampMode._stamp
+        old_stamp = self.stamp
         if old_stamp:
             old_stamp.leave(self.doc)
-        StampMode._stamp = stamp
+
+        self._app.stamp_manager.set_current(stamp)
+
         stamp.enter(self.doc)
         stamp.initialize_phase(self)
+
 
     ## Status methods
 
     def enter(self, doc, **kwds):
         """Enters the mode: called by `ModeStack.push()` etc."""
+        self._app = doc.app
         self._blank_cursor = doc.app.cursors.get_action_cursor(
             self.ACTION_NAME,
             gui.cursor.Name.ADD
@@ -262,21 +272,21 @@ class StampMode (OncanvasEditMixin):
         # We need that the target layer(current layer)
         # has surface and not locked. 
         if len(self.nodes) > 0:
-            bbox = self._stamp.get_bbox(None, self.nodes[0])
+            bbox = self.stamp.get_bbox(None, self.nodes[0])
             if bbox:
                 sx, sy, w, h = bbox
 
                 ex = sx + w
                 ey = sy + h
                 for cn in self.nodes[1:]:
-                    tsx, tsy, tw, th = self._stamp.get_bbox(None, cn)
+                    tsx, tsy, tw, th = self.stamp.get_bbox(None, cn)
                     sx = min(sx, tsx)
                     sy = min(sy, tsy)
                     ex = max(ex, tsx + tw)
                     ey = max(ey, tsy + th)
 
                 cmd = DrawStamp(self.doc.model,
-                        self._stamp,
+                        self.stamp,
                         self.nodes,
                         (sx, sy, abs(ex-sx)+1, abs(ey-sy)+1))
                 # Important: without this, stamps drawn twice.
@@ -305,14 +315,14 @@ class StampMode (OncanvasEditMixin):
             self.stampwork_commit_all()
 
         if self.stamp:
-            self.stamp.finalize_phase(self)
+            self.stamp.finalize_phase(self, rollback)
             
         self.options_presenter.target = (self, None)
         self._reset_adjust_data()
         self.phase = _Phase.CAPTURE
 
-        if self.stamp:
-            self.stamp.initialize_phase(self)
+       #if self.stamp:
+       #    self.stamp.initialize_phase(self)
 
 
     def _generate_overlay(self, tdw):
@@ -324,10 +334,10 @@ class StampMode (OncanvasEditMixin):
     def _update_zone_and_target(self, tdw, x, y):
         """ Update the zone and target node under a cursor position 
         """
-        if not self._stamp:
+        if not self.stamp:
             return
         else:
-            stamp = self._stamp
+            stamp = self.stamp
 
 
         new_zone = _EditZone.EMPTY_CANVAS
@@ -379,7 +389,7 @@ class StampMode (OncanvasEditMixin):
         Common processing stamp changed,
         or target area added/removed
         """
-        self.options_presenter.refresh_tile_count()
+        pass
 
     def select_area_cb(self, selection_mode):
         """ Selection handler called from SelectionMode.
@@ -389,14 +399,22 @@ class StampMode (OncanvasEditMixin):
         (it is disabled as None, with modestack facility)
         so you must use 'selection_mode.doc', instead of it.
         """
+        app = selection_mode.doc.app
         if self.stamp:
             if self.phase in (_Phase.CAPTURE, _Phase.ADJUST):
+               #if isinstance(self.stamp, gui.stamps.ClipboardStamp):
+               #    app.show_transient_message(
+               #        _("Clipboard stamp cannot accept layer image."))
+               #else:
                 self._selection_area = selection_mode.get_min_max_pos_model(margin=0)
 
                 # Important:Action buttons are operational in ADJUST phase only. 
                 self.phase = _Phase.ADJUST 
 
                 self._queue_draw_buttons()
+        else:
+            app.show_transient_message(
+                _("There is no any stamp activated."))
 
                 
 
@@ -406,23 +424,23 @@ class StampMode (OncanvasEditMixin):
         """ utility method: to commonize 'search target node' processing,
         even in inherited classes.
         """
-        index, junk = self._search_target_tile(tdw, x, y)
+        index, junk = self._search_target_picture(tdw, x, y)
         return index
 
-    def _search_target_tile(self, tdw, x, y):
-        """Search a tile which placed at (x, y) of screen. 
-        If (x, y) is on a transformation handle of the tile,
+    def _search_target_picture(self, tdw, x, y):
+        """Search a picture which placed at (x, y) of screen. 
+        If (x, y) is on a transformation handle of the picture,
         return index of that handle too.
-        Otherwise (pointer hovers only on the tile, not handle), 
+        Otherwise (pointer hovers only on the picture, not handle), 
         return -1 as handle index.
 
-        :return : a index of tile, with its handle index.
+        :return : a index of picture, with its handle index.
         :rtype tuple:
         """
         hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + 12
         new_target_node_index = None
         handle_idx = -1
-        stamp = self._stamp
+        stamp = self.stamp
         for i, node in reversed(list(enumerate(self.nodes))):
             handle_idx = stamp.get_handle_index(tdw, x, y, node,
                    gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
@@ -444,7 +462,7 @@ class StampMode (OncanvasEditMixin):
 
 
     def _queue_draw_node_internal(self, tdw, node, dx, dy, add_margin):
-        if not self._stamp:
+        if not self.stamp:
             return
 
         if add_margin:
@@ -452,7 +470,7 @@ class StampMode (OncanvasEditMixin):
         else:
             margin = 4
 
-        bbox = self._stamp.get_bbox(tdw, node, dx, dy, margin=margin)
+        bbox = self.stamp.get_bbox(tdw, node, dx, dy, margin=margin)
 
         if bbox:
             tdw.queue_draw_area(*bbox)
@@ -487,11 +505,14 @@ class StampMode (OncanvasEditMixin):
 
     def mode_button_press_cb(self, tdw, event):
 
-        if not self._stamp or not self._stamp.is_ready:
+        if not self.stamp:
             return 
 
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
         ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
+
+        if self.phase == _Phase.CAPTURE:
+            self.stamp.initialize_phase(self)
 
         if self.phase in (_Phase.ADJUST, _Phase.CAPTURE):
             button = event.button
@@ -522,7 +543,7 @@ class StampMode (OncanvasEditMixin):
 
     def mode_button_release_cb(self, tdw, event):
 
-        if not self._stamp or not self._stamp.is_ready:
+        if not self.stamp:
             return 
 
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
@@ -550,12 +571,12 @@ class StampMode (OncanvasEditMixin):
         if self.phase in (_Phase.CAPTURE, _Phase.ADJUST):
 
             if self.zone == _EditZone.EMPTY_CANVAS:
-                if self.stamp.tile_count > 0:
+                if self.stamp.picture_count > 0:
                     node = _StampNode(mx, my, 
-                            self._stamp.default_angle,
-                            self._stamp.default_scale_x,
-                            self._stamp.default_scale_y,
-                            self._stamp.latest_tile_index)
+                            self.stamp.default_angle,
+                            self.stamp.default_scale_x,
+                            self.stamp.default_scale_y,
+                            self.stamp.validate_picture_id(self.current_picture_id))
                     self.nodes.append(node)
                     self.target_node_index = len(self.nodes) -1
                     self._update_current_node_index()
@@ -576,7 +597,7 @@ class StampMode (OncanvasEditMixin):
 
 
     def drag_update_cb(self, tdw, event, dx, dy):
-        if not self._stamp or not self._stamp.is_ready:
+        if not self.stamp:
             super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
 
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
@@ -638,7 +659,7 @@ class StampMode (OncanvasEditMixin):
             assert self.target_node_index is not None
             self._queue_redraw_curve()
             node = self.nodes[self.target_node_index]
-            pos = self._stamp.get_boundary_points(node)
+            pos = self.stamp.get_boundary_points(node)
 
             # At here, we consider the movement of control handle(i.e. cursor)
             # as a Triangle from origin.
@@ -652,7 +673,7 @@ class StampMode (OncanvasEditMixin):
             bx = mx - node.x 
             by = my - node.y
 
-            orig_pos = self._stamp.get_boundary_points(node, 
+            orig_pos = self.stamp.get_boundary_points(node, 
                     no_scale=True)
 
             ti = self.current_handle_index
@@ -707,7 +728,7 @@ class StampMode (OncanvasEditMixin):
             assert self.target_node_index is not None
             self._queue_redraw_curve()
             node = self.nodes[self.target_node_index]
-            #pos = self._stamp.get_boundary_points(node)
+            #pos = self.stamp.get_boundary_points(node)
             #mx, my = tdw.display_to_model(event.x, event.y)
             ndx, ndy = tdw.model_to_display(node.x, node.y)
             junk, bx, by = length_and_normal(
@@ -736,7 +757,7 @@ class StampMode (OncanvasEditMixin):
 
 
     def drag_stop_cb(self, tdw):
-        if not self._stamp or not self._stamp.is_ready:
+        if not self.stamp:
             return super(StampMode, self).drag_stop_cb(tdw)
         
         if self.phase == _Phase.CAPTURE:
@@ -787,7 +808,7 @@ class StampMode (OncanvasEditMixin):
             return super(StampMode, self).node_drag_stop_cb(tdw)
 
     def node_scroll_cb(self, tdw, event):
-        """Handles scroll-wheel events, to adjust rotation/scale/tile_index."""
+        """Handles scroll-wheel events, to adjust rotation/scale/picture_index."""
 
         if (self.phase in (_Phase.ADJUST,) 
                 and self.zone == _EditZone.CONTROL_NODE
@@ -813,15 +834,15 @@ class StampMode (OncanvasEditMixin):
                     node = node._replace(angle = node.angle + step * (math.pi * 0.05))
                     self.nodes[self.current_node_index] = node
                 else:
-                    if self.stamp and self.stamp.tile_count > 1:
+                    if self.stamp and self.stamp.picture_count > 1:
                         self._queue_draw_node(self.current_node_index) 
 
-                        new_tile_index = lib.helpers.clamp(node.tile_index + int(step),
-                                0, self.stamp.tile_count - 1)
+                        new_picture_index = lib.helpers.clamp(node.picture_index + int(step),
+                                0, self.stamp.picture_count - 1)
 
-                        if new_tile_index != node.tile_index:
+                        if new_picture_index != node.picture_index:
                             self.nodes[self.current_node_index] = \
-                                    node._replace(tile_index = new_tile_index)
+                                    node._replace(picture_index = new_picture_index)
                     else:
                         redraw = False
 
@@ -836,20 +857,20 @@ class StampMode (OncanvasEditMixin):
 
     ## Interrogating events
 
-    def stamp_tile_deleted_cb(self, tile_index):
+    def stamp_picture_deleted_cb(self, picture_index):
         """
-        A notification callback when stamp tile has been changed
+        A notification callback when stamp picture has been changed
         (deleted)
         """
 
         # First of all, queue redraw the nodes to be deleted.
         for i, cn in enumerate(self.nodes):
-            if cn.tile_index == tile_index:
+            if cn.picture_index == picture_index:
                 self._queue_draw_node(i, force_margin=True) 
 
         # After that, delete it.
         for i, cn in enumerate(self.nodes[:]):
-            if cn.tile_index == tile_index:
+            if cn.picture_index == picture_index:
                 self.nodes.remove(cn)
                 if i in self.selected_nodes:
                     self.selected_nodes.remove(i)
@@ -860,7 +881,7 @@ class StampMode (OncanvasEditMixin):
 
         if len(self.nodes) == 0:
             self.phase == _Phase.CAPTURE
-            logger.info('stamp tile deleted, and all nodes deleted')
+            logger.info('stamp picture deleted, and all nodes deleted')
 
     ## Node editing
     def update_node(self, i, **kwargs):
@@ -933,7 +954,11 @@ class StampMode (OncanvasEditMixin):
         sx, sy, ex, ey = [int(x) for x in self._selection_area]
         pixbuf = layer.render_as_pixbuf(sx, sy, 
                 abs(ex-sx)+1, abs(ey-sy)+1, alpha=True)
-        self.stamp.set_surface_from_pixbuf(-1, pixbuf)
+        self.stamp.set_surface_from_pixbuf(-1, pixbuf,
+                (gui.stamps.PictureSource.CAPTURED, 
+                    weakref.proxy(layer))
+                )
+        self.options_presenter.update_picture_store(False)
 
     def import_selection_layer_cb(self, tdw):
         assert self._selection_area != None
@@ -1254,7 +1279,6 @@ class Overlay_Stamp (OverlayOncanvasMixin):
         alloc = self._tdw.get_allocation()
         dx,dy = mode.drag_offset.get_display_offset(self._tdw)
         fill_flag = True
-       #mode.stamp.initialize_draw(cr)
 
         colors = ( (1, 1, 1), self.SELECTED_COLOR)
 
@@ -1267,18 +1291,9 @@ class Overlay_Stamp (OverlayOncanvasMixin):
             else:
                 self.draw_stamp_rect(cr, i, node, dx, dy, colors)
 
-       #mode.stamp.finalize_draw(cr)
-
         # Selection areas
         if mode._selection_area != None:
             self.draw_selection_area(cr)
-       #if mode.stamp.is_support_selection:
-       #    # TODO this is for stamp manager shows source area
-       #    # or right after selection tool activated.
-       #    if mode.stamp.tile_count > 0:
-       #        self.draw_selection_area(cr, 
-       #                dx, dy,
-       #                self.SELECTED_AREA_COLOR, (1, 0 ,0) )
 
         # Buttons
         adjust_phase_flag = (mode.phase == _Phase.ADJUST and
@@ -1294,6 +1309,9 @@ class OptionsPresenter_Stamp (object):
 
     variation_preset_store = None
 
+    PRESET_ICON_SIZE = 40
+    PICTURE_ICON_SIZE = 40
+
     def __init__(self):
         super(OptionsPresenter_Stamp, self).__init__()
         from application import get_app
@@ -1303,11 +1321,9 @@ class OptionsPresenter_Stamp (object):
         self._angle_adj = None
         self._xscale_adj = None
         self._yscale_adj = None
-        self._tile_adj = None
-        self._tile_label = None
-        self._tile_scale = None
-        self._random_tile_button = None
         self._stamp_preset_view = None
+        self._stamp_picture_view = None
+        self._current_stamp = None
 
         self._updating_ui = False
         self._target = (None, None)
@@ -1330,47 +1346,88 @@ class OptionsPresenter_Stamp (object):
         self._angle_adj = builder.get_object("angle_adj")
         self._xscale_adj = builder.get_object("xscale_adj")
         self._yscale_adj = builder.get_object("yscale_adj")
-        self._tile_adj = builder.get_object("tile_adj")
-        self._tile_scale = builder.get_object("tile_scale")
-       #self._random_tile_button = builder.get_object("random_tile_button")
-       #self._random_tile_button.set_sensitive(False)
 
-        base_grid = builder.get_object("preset_editing_grid")
-        self._init_stamp_preset_view(2, base_grid)
+        base_window = builder.get_object("stamp_scrolledwindow")
+        self._init_stamp_preset_view(base_window)
+
+        base_window = builder.get_object("picture_scrolledwindow")
+        self._init_picture_view(base_window)
 
         base_grid = builder.get_object("additional_button_grid")
         self._init_toolbar(0, base_grid)
 
-    def _init_stamp_preset_view(self, row, box):
+    def _init_stamp_preset_view(self, sw):
         # XXX we'll need reconsider fixed value 
         # such as item width of 48 or icon size of 32 
-        # in hidpi environment
-        liststore = self._app.stamp_manager.initialize_icon_store()
+        # in high-dpi environment
+       #liststore = self._app.stamp_manager.initialize_icon_store()
+        manager = self._app.stamp_manager
+        liststore = Gtk.ListStore(GdkPixbuf.Pixbuf, str, object)
+        for id in manager.stamps:
+            stamp = manager.stamps[id]
+            iter = liststore.append(
+                    (stamp.thumbnail, stamp.name, stamp))
+
         iconview = Gtk.IconView.new()
         iconview.set_model(liststore)
         iconview.set_pixbuf_column(0)
         iconview.set_text_column(1)
-        iconview.set_item_width(48) 
-        iconview.connect('selection-changed', self._iconview_item_changed_cb)
+        iconview.set_item_width(self.PRESET_ICON_SIZE) 
+        iconview.connect('selection-changed', self._stamp_preset_changed_cb)
         self._stamps_store = liststore
 
-        sw = Gtk.ScrolledWindow()
-        sw.set_margin_top(4)
-        sw.set_shadow_type(Gtk.ShadowType.ETCHED_IN)
-        sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)            
-        sw.set_hexpand(True)
-        sw.set_vexpand(True)
-        sw.set_halign(Gtk.Align.FILL)
-        sw.set_valign(Gtk.Align.FILL)
         sw.add(iconview)
-        box.attach(sw, 0, row, 2, 1)
-        self.preset_view = iconview
+        self._stamp_preset_view = iconview
+
+    def _init_picture_view(self, sw):
+        # The contents of picture liststore is , (picture, picture-id)
+        liststore = Gtk.ListStore(GdkPixbuf.Pixbuf, int)
+        iconview = Gtk.IconView.new()
+        iconview.set_model(liststore)
+        iconview.set_pixbuf_column(0)
+        iconview.set_item_width(self.PICTURE_ICON_SIZE) 
+        iconview.connect('selection-changed', self._stamp_picture_changed_cb)
+        iconview.connect('button-release-event', self._stamp_picture_button_release_cb)
+        self._pictures_store = liststore
+        # _pictures_store should be updated when a stamp is selected.
+
+        sw.add(iconview)
+        self._stamp_picture_view = iconview
+
+        # Creating Popup menu for normal stamp.
+        menu = Gtk.Menu()
+        menu_item1 = Gtk.MenuItem(_("Edit pictures with Stamp Editor"))
+        menu_item1.connect("activate", self.popup_edit_stamp_cb)
+        menu_item1.id=0
+        menu.append(menu_item1)
+        menu.show_all()
+        menu.set_sensitive(True)
+        self.popup_stamp = menu
+
+        # Creating Popup menu for clipboard stamp.
+        menu = Gtk.Menu()
+        menu_item1 = Gtk.MenuItem(_("Refresh from clipboard"))
+        menu_item2 = Gtk.MenuItem(_("Add from clipboard"))
+        menu_item3 = Gtk.MenuItem(_("Edit pictures with Stamp Editor"))
+        menu_item1.connect("activate", self.popup_refresh_from_cp_cb)
+        menu_item2.connect("activate", self.popup_add_from_cp_cb)
+        menu_item3.connect("activate", self.popup_edit_stamp_cb)
+        menu_item1.id=0
+        menu_item2.id=1
+        menu_item3.id=2
+        menu.append(menu_item1)
+        menu.append(menu_item2)
+        menu.append(menu_item3)
+        menu.show_all()
+        menu.set_sensitive(True)
+        self._clipboard_menus = (menu_item1, menu_item2)
+        self.popup_clipboard = menu
+
 
     def _init_toolbar(self, row, box):
         toolbar = gui.widgets.inline_toolbar(
             self._app,
             [
-                ("StampRandomize", "mypaint-up-symbolic"),
                 ("DeleteItem", "mypaint-remove-symbolic"),
                 ("AcceptEdit", "mypaint-ok-symbolic"),
                 ("DiscardEdit", "mypaint-trash-symbolic"),
@@ -1380,6 +1437,47 @@ class OptionsPresenter_Stamp (object):
         style.set_junction_sides(Gtk.JunctionSides.TOP)
         box.attach(toolbar, 0, row, 1, 1)
 
+    def update_picture_store(self, force_update):
+        """Update picture store (and picture view)
+        with current stamp.
+
+        CAUTION: This method update only store.
+        does not update iconview.
+        """
+        mode, node_idx = self.target
+        if mode:
+            assert mode.stamp is not None
+            store = self._pictures_store
+            if force_update or mode.stamp != self._current_stamp:
+                store.clear()
+                for id, icon in mode.stamp.picture_icon_iter():
+                    store.append( (icon, id) )
+                self._current_stamp = mode.stamp
+            else:
+                # Refresh current _pictures_store
+                for id, icon in mode.stamp.picture_icon_iter():
+                    iter = store.get_iter_first()
+                    while iter:
+                        old_icon = store.get_value(iter, 0) 
+                        store_id = store.get_value(iter, 1)
+                        if id == store_id:
+                            # Already this stamp exist.
+                            if old_icon != icon:
+                                # Already this stamp exist, but icon changed.
+                                # so update it, and exit loop.
+                                store.set_value(iter, 0, icon)
+
+                            # Clear 'id' variable to notify 
+                            # 'current icon is already registered in the store'
+                            id = None
+                            break
+                        else:
+                            iter = store.iter_next(iter)
+                            continue
+
+                    if id != None:
+                        # current icon is not registered into picture store
+                        store.append( (icon, id) )
 
     @property
     def widget(self):
@@ -1426,30 +1524,16 @@ class OptionsPresenter_Stamp (object):
                 self._yscale_adj.set_value(cn.scale_y)
                 self._point_values_grid.set_sensitive(True)
 
-                if self.refresh_tile_count():
-                   #self._random_tile_button.set_sensitive(True)
-                    ti = mode.stamp.get_rawindex_from_tileindex(cn.tile_index)
-                    self._tile_adj.set_value(ti)
-                else:
-                   #self._random_tile_button.set_sensitive(False)
-                    pass
             else:
                 self._point_values_grid.set_sensitive(False)
 
-           #self._delete_button.set_sensitive(len(mode.nodes) > 0)
         finally:
             self._updating_ui = False
 
-    def refresh_tile_count(self):
-        mode, node_idx = self.target
+    def _enable_clipboard_menus(self, flag):
+        for cm in self._clipboard_menus:
+            cm.set_sensitive(flag)
 
-        if mode.stamp:
-            if mode.stamp.tile_count > 1:
-                self._tile_adj.set_upper(mode.stamp.tile_count-1)
-                return True
-            else:
-                self._tile_adj.set_upper(0)
-        return False
 
     ## Widgets Handlers
 
@@ -1458,13 +1542,6 @@ class OptionsPresenter_Stamp (object):
             return
         mode, node_idx = self.target
         mode.update_node(node_idx, angle=math.radians(adj.get_value()))
-
-    def _tile_adj_value_changed_cb(self, adj):
-        if self._updating_ui:
-            return
-        mode, node_idx = self.target
-        ti = mode.stamp.get_tileindex_from_rawindex(int(adj.get_value()))
-        mode.update_node(node_idx, tile_index=ti)
 
     def _xscale_adj_value_changed_cb(self, adj):
         if self._updating_ui:
@@ -1484,27 +1561,86 @@ class OptionsPresenter_Stamp (object):
             value = 0.001
         mode.update_node(node_idx, scale_y=value)
 
-    def _random_tile_button_clicked_cb(self, button):
-        mode, node_idx = self.target
-        if mode.stamp.get_tile_count() > 1:
-            mode.update_node(node_idx, 
-                    tile_index=random.randint(0, mode.stamp.get_tile_count()))
-
     def _delete_point_button_clicked_cb(self, button):
         mode, node_idx = self.target
         if mode.can_delete_node(node_idx):
             mode.delete_node(node_idx)
 
-    def _iconview_item_changed_cb(self, iconview):
+    def _stamp_preset_changed_cb(self, iconview):
         mode, node_idx = self.target
         if mode:
             if len(iconview.get_selected_items()) > 0:
                 path = iconview.get_selected_items()[0]
                 iter = self._stamps_store.get_iter(path)
-                manager = self._app.stamp_manager
-               #manager.set_current_iter(iter)
                 mode.set_stamp(self._stamps_store.get(iter, 2)[0])
-               #mode.set_stamp(manager.current)
+                self.update_picture_store(False)
+
+    def _stamp_picture_changed_cb(self, iconview):
+        if not self._updating_ui:
+            mode, node_idx = self.target
+            if mode and mode.stamp is not None:
+                if len(iconview.get_selected_items()) > 0:
+                    path = iconview.get_selected_items()[0]
+                    store = self._pictures_store
+                    iter = store.get_iter(path)
+                    picture_id = store.get(iter, 1)[0]
+                    mode.current_picture_id = picture_id
+
+    def _stamp_picture_unselect_all_cb(self, iconview):
+        mode, node_idx = self.target
+        if mode and mode.stamp is not None:
+            mode.current_picture_id = -1
+
+    def _stamp_picture_button_release_cb(self, iconview, event):
+        if event.button == Gdk.BUTTON_SECONDARY:
+            mode, node_idx = self.target
+            if mode and mode.stamp is not None:
+                if isinstance(mode.stamp, gui.stamps.ClipboardStamp):
+                    clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+                    self._enable_clipboard_menus(
+                        clipboard.wait_is_image_available())
+                    self.popup_clipboard.popup(None, None, None, None,
+                            event.button, event.time)
+                else:
+                    self.popup_stamp.popup(None, None, None, None,
+                            event.button, event.time)
+
+    def notebook_stamp_change_current_page_cb(self, note, id):
+        print('notebook id %d' % id)
+        pass
+
+
+    ## Popup menus handler for Stamp picture icon view.
+    def _popup_clipboard_cb_base(self, stamp_id):
+        mode, node_idx = self.target
+        assert mode
+        assert mode.stamp
+
+        img = gui.stamps.load_clipboard_image()
+
+        # Clipboard image might be disabled at this time,
+        # from other process.
+        if img:
+            if isinstance(mode.stamp, gui.stamps.ClipboardStamp):
+                mode.stamp.set_surface_from_pixbuf(stamp_id, img)
+                self.update_picture_store(False)
+        else:
+            self._app.show_transient_message(_("There is no clipboard image available."))
+
+    def popup_refresh_from_cp_cb(self, menuitem):
+        """ Updating clipboard stamp.
+        """
+        self._popup_clipboard_cb_base(0)  
+
+    def popup_add_from_cp_cb(self, menuitem):
+        self._popup_clipboard_cb_base(-1)
+
+    def popup_edit_stamp_cb(self, menuitem):
+        mode, node_idx = self.target
+        assert mode
+        assert mode.stamp
+        editor = self._app.stamp_editor_window
+        editor.show()
 
 
 

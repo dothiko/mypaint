@@ -793,41 +793,82 @@ class InkingMode (PressureEditableMixin):
             # Redraw to erase old nodes
             self._queue_all_visual_redraw()
 
-            new_nodes = [self.nodes[0]]
+           #new_nodes = [self.nodes[0]]
             idx = 1
-            pn = self.nodes[0]
-            cn = self.nodes[idx]
-            while idx < len(self.nodes) - 1:
-                nn = self.nodes[idx+1]
-                # Limit affected nodes with selection list.
-                # if only one node is selected,
-                # entire nodes are averaged.
-                if (len(self.selected_nodes) == 0 or
-                        idx in self.selected_nodes):
-                    try:
-                        # avx, avy is identity vector of current-prev node
-                        # bvx, bvy is identity vector of next-prev node
-                        avx, avy = normal(pn.x, pn.y, cn.x, cn.y)
-                        bvx, bvy = normal(pn.x, pn.y, nn.x, nn.y)
-                        avx=(avx + bvx) / 2.0
-                        avy=(avy + bvy) / 2.0
-                        s = math.hypot(cn.x - pn.x, cn.y - pn.y)
-                        avx*=s
-                        avy*=s
-                        new_nodes.append(cn._replace(x=avx+pn.x, y=avy+pn.y))
-                    except ZeroDivisionError:
-                        # This means 'two nodes at same place'.
-                        # abort averaging for this node.
-                        new_nodes.append(cn)
-                else:
-                    new_nodes.append(cn)
+           #pn = self.nodes[0]
+           #cn = self.nodes[idx]
+           #while idx < len(self.nodes) - 1:
+           #    nn = self.nodes[idx+1]
+           #    # Limit affected nodes with selection list.
+           #    # if only one node is selected,
+           #    # entire nodes are averaged.
+           #    if (len(self.selected_nodes) == 0 or
+           #            idx in self.selected_nodes):
+           #        try:
+           #            # avx, avy is identity vector of current-prev node
+           #            # bvx, bvy is identity vector of next-prev node
+           #            avx, avy = normal(pn.x, pn.y, cn.x, cn.y)
+           #            bvx, bvy = normal(pn.x, pn.y, nn.x, nn.y)
+           #            avx=(avx + bvx) / 2.0
+           #            avy=(avy + bvy) / 2.0
+           #            s = math.hypot(cn.x - pn.x, cn.y - pn.y)
+           #            avx*=s
+           #            avy*=s
+           #            new_nodes.append(cn._replace(x=avx+pn.x, y=avy+pn.y))
+           #        except ZeroDivisionError:
+           #            # This means 'two nodes at same place'.
+           #            # abort averaging for this node.
+           #            new_nodes.append(cn)
+           #    else:
+           #        new_nodes.append(cn)
+           #
+           #    pn = cn
+           #    cn = nn
+           #    idx += 1
+           #
+           #new_nodes.append(self.nodes[-1])
+           #self.nodes = new_nodes
 
-                pn = cn
-                cn = nn
-                idx += 1
+            nodes = self.nodes
 
-            new_nodes.append(self.nodes[-1])
-            self.nodes = new_nodes
+            def _do_average_nodes(idx):
+                while idx < len(self.nodes) - 1:
+                    pn = nodes[idx-1]
+                    cn = nodes[idx]
+                    nn = nodes[idx+1]
+                    # Limit affected nodes with selection list.
+                    # if only one node is selected,
+                    # entire nodes are averaged.
+                    if (len(self.selected_nodes) == 0 or
+                            idx in self.selected_nodes):
+                        try:
+                            s = math.hypot(cn.x - pn.x, cn.y - pn.y)
+                            # avx, avy is identity vector of current-prev node
+                            # bvx, bvy is identity vector of next-prev node
+                            avx, avy = normal(pn.x, pn.y, cn.x, cn.y)
+                            bvx, bvy = normal(pn.x, pn.y, nn.x, nn.y)
+                            avx=(avx + bvx) / 2.0
+                            avy=(avy + bvy) / 2.0
+                            avx*=s
+                            avy*=s
+                            nodes[idx]=(cn._replace(x=avx+pn.x, y=avy+pn.y))
+                        except ZeroDivisionError:
+                            # This means 'two nodes at same place'.
+                            # abort averaging for this node.
+                            pass
+                    else:
+                        pass
+
+                    idx += 2
+
+            # first time, it targets the odd index nodes.
+            _do_average_nodes(1)
+
+            # then next time, it targets the even index nodes.
+            _do_average_nodes(2)
+
+
+
             # redraw new nodes
             self._queue_all_visual_redraw()
 

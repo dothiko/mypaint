@@ -11,7 +11,9 @@ import random
 import json
 import os
 import glob
+import collections
 import weakref
+import sys
 
 from gettext import gettext as _
 from gi.repository import Gdk, Gtk
@@ -24,6 +26,14 @@ import lib
 from gui.ui_utils import *
 from lib.observable import event
 import lib.surface
+import lib.pixbuf
+
+## Constant defs
+
+# The file filter used for opening file dialogs.
+STAMP_PRESET_FILE_FILTER = [
+    (_("Mypaint stamp presets"), ("*.mys",)),
+    ]
 
 ## Function defs
 
@@ -95,15 +105,15 @@ def load_clipboard_image():
 
 ## Class defs
 
-## Source Mixins
-#
-#  These Source Mixins provide some functionality like
-#  'surface pool' or 'cache management' for Stamp classes.
-#
-#  INITIALIZE:
-#  Source mixin has _init_source() initializer,
-#  this must be called from __init__() of Stamp class
-#  as well as _init_stamp(name) of Stamp mixin.
+class PictureSource:
+    """Enumeration of the stamp source"""
+    FILE = 0       # File backed
+    TILED_FILE = 1 # File backed,but it is devided from a picture.
+    CAPTURED = 2   # Captured from Layer or clipboard
+
+    ICON_FILE = 10
+    ICON_GENERATED = 11
+    ICON_STOCK = 12
 
 class Stamp(object):
     """
@@ -116,21 +126,37 @@ class Stamp(object):
     and it is merged into current layer.
     """
     THUMBNAIL_SIZE = 32
-    def __init__(self, name, desc):
+    PICTURE_ICON_SIZE = 40
+    
+    DEFAULT_CAPTURED_SOURCE = (PictureSource.CAPTURED, None)
 
+    def __init__(self, manager, name, desc):
+
+        # Some important attributes initialized at clear_sources()
         self.clear_sources()
-        self._tile_index_base = 0
+
+        self._picture_index_base = -1
         self.name = name
         self.desc = desc
         self._default_scale_x = 1.0
         self._default_scale_y = 1.0
         self._default_angle = 0.0
         self._thumbnail = None
-        self._tile_index_seed = 0
+        self._thumbnail_type = None
+        self._picture_index_seed = 0
         self._use_mask = False
         self._source_info = None
+        self._manager = weakref.proxy(manager)
 
     ## Information methods / properties
+
+    @property
+    def filename(self):
+        return self._filename
+
+    @property
+    def dirty(self):
+        return self._dirty
 
     def set_default_scale(self, scale_x, scale_y):
         if scale_x == 0.0:
@@ -156,26 +182,73 @@ class Stamp(object):
         return self._default_angle
 
 
-    def set_thumbnail(self, pixbuf):
+    ## Thumbnail related
+    def set_thumbnail(self, pixbuf, 
+            thumbnail_type=PictureSource.ICON_FILE):
         self._thumbnail = pixbuf
+        self._thumbnail_type = thumbnail_type
+
+    def set_file_thumbnail(self, filename):
+        assert filename != None
+        if os.path.exists(filename):
+            icon_size = Stamp.THUMBNAIL_SIZE
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(
+                        filename,
+                        icon_size, icon_size)
+            self.set_thumbnail(pixbuf,
+                    PictureSource.ICON_FILE)
+            self._thumbnail_source = filename
+
+    def set_gtk_thumbnail(self, icon_name):
+        pixbuf = Gtk.IconTheme.get_default().load_icon(
+                icon_name, Stamp.THUMBNAIL_SIZE, 0)
+        self.set_thumbnail(pixbuf, PictureSource.ICON_STOCK)
+        self._thumbnail_source = icon_name
+
+    def generate_thumbnail(self, id=-1):
+        """Generate thumbnail from contained tiles.
+
+        :param id: The generating source tile id. If this is -1, the
+                   first tile should be used.
+        """
+        if len(self._surf) > 0:
+            if id == -1:
+                surf = self._surf.values()[id]
+            else:
+                surf = self._surf[id]
+            pixbuf = Gdk.pixbuf_get_from_surface(surf, 0, 0, 
+                    surf.get_width(), surf.get_height())
+            icon = Stamp._create_icon(pixbuf, Stamp.THUMBNAIL_SIZE)
+            self.set_thumbnail(icon,
+                    PictureSource.ICON_GENERATED)
+        else:
+            self._thumbnail = None # Use class default icon
+
 
     @property
     def thumbnail(self):
-        return self._thumbnail
+        if self._thumbnail:
+            return self._thumbnail
+        else:
+            if Stamp.DEFAULT_ICON == None:
+                # XXX mostly copied from gui/application.py _init_icons()
+                icon_theme = Gtk.IconTheme.get_default()
+                if self._manager._app:
+                    icon_theme.append_search_path(
+                            self._manager._app.state_dirs.app_icons)
+
+                try:
+                    Stamp.DEFAULT_ICON = icon_theme.load_icon('mypaint', 
+                            Stamp.THUMBNAIL_SIZE, 0)
+                except GLib.Error:
+                    Stamp.DEFAULT_ICON = icon_theme.load_icon('gtk-paste', 
+                            Stamp.THUMBNAIL_SIZE, 0)
+
+            return Stamp.DEFAULT_ICON
 
 
-   #@property
-   #def is_support_selection(self):
-   #    return False
 
-    @property
-    def is_ready(self):
-        return True
-
-    @property
-    def latest_tile_index(self):
-        return self.tile_count - 1
-
+    ## Mask related
     @property
     def use_mask(self):
         return self._use_mask
@@ -184,12 +257,18 @@ class Stamp(object):
     def use_mask(self, flag):
         self._use_mask = flag
 
-    ## Deprecated property
+    def validate_picture_id(self, tid):
+        """Validate the tid argument as tile index.
+        If it does not found in self._surf,
+        return the last(in the key of _surf dictionary) tile index.
 
-    @property
-    def is_support_selection(self):
-        return True
-
+        Mostly convert id '-1' as the last tile id.
+        """
+        if not tid in self._surfs:
+            assert len(self._surfs) > 0
+            return self._surfs.keys()[-1]
+        else:
+            return tid
 
     ## Static methods
 
@@ -213,30 +292,17 @@ class Stamp(object):
 
     ## Drawing methods
 
-   #def initialize_draw(self, cr):
-   #    """ Initialize draw calls.
-   #    Call this method prior to draw stamps loop.
-   #    """
-   #    pass
-   #
-   #def finalize_draw(self, cr):
-   #    """ Finalize draw calls.
-   #    Call this method after draw stamps loop.
-   #
-   #    This method called from the end of each drawing sequence,
-   #    NOT END OF DRAWING PHASE OF STAMPTOOL! 
-   #    Therefore, source.finalize() MUST not be called here!
-   #    """
-   #    pass
-        
-    
-
     def draw(self, tdw, cr, x, y, node, save_context=False):
         """ Draw this stamp into cairo surface.
         This implementation is as base class,
-        node.tile_index ignored here.
+        node.picture_index ignored here.
+
+        :param tdw: The tiledraw widget. 
+                    CAUTION: when drawing target is off-canvas, 
+                    this is None.
+                    
         """
-        stamp_src = self.get_current_src(node.tile_index)
+        stamp_src = self.get_current_src(node.picture_index)
         if stamp_src:
             if save_context:
                 cr.save()
@@ -269,7 +335,7 @@ class Stamp(object):
 
             if self._use_mask:
                 # Use stamp pixbuf as mask
-                fg_col = tdw.app.brush_color_manager.get_color().get_rgb()
+                fg_col = self._manager._app.brush_color_manager.get_color().get_rgb()
                 cr.set_source_rgb(*fg_col)
                 cr.rectangle(ox, oy, w, h) 
                 cr.clip()
@@ -338,7 +404,7 @@ class Stamp(object):
 
         :rtype: a list of tuple,[ (pt0.x, pt0.y) ... (pt3.x, pt3.y) ]
         """
-        stamp_src = self.get_current_src(node.tile_index)
+        stamp_src = self.get_current_src(node.picture_index)
         if stamp_src:
             w = stamp_src.get_width() 
             h = stamp_src.get_height()
@@ -418,28 +484,16 @@ class Stamp(object):
 
     def initialize_phase(self, mode):
         """ Initializing for start of each drawing phase.
-        :param mode: the stampmode which use this stamp class.
-
-        CAUTION: This method is not called when drawing to
-        layer.
-
-        the code flow around this method should be :
-
-        ACCEPT BUTTON Pressed (end of drawing phase)
-        |
-        +-- render_stamp_to_layer called (from Command object : asynchronously)
-        |
-        self.finalize_phase() called
-        |
-        some stampmode initializing lines called
-        |
-        self.initialize_phase() called
+        i.e. called from StampMode._start_new_capture_phase
         """
         pass
 
-    def finalize_phase(self, mode):
+    def finalize_phase(self, mode, rollback):
         """ This called when stamptool comes to end of
         capture(drawing) phase.
+
+        :param mode: the StampMode instance.
+        :param rollback: True when rollback(cancel) committed. 
         """
         pass
 
@@ -464,138 +518,223 @@ class Stamp(object):
     ## Source information related method
 
     @property
-    def tile_count(self):
+    def picture_count(self):
         return len(self._surfs)
 
     def get_current_src(self, tid):
-       #if self._ensure_current_pixbuf(tile_index):
-       #    return self._surfs[tile_index]
         if tid in self._surfs:
             return self._surfs[tid]
 
-    def fetch_source_info(self, source_type, info):
+    def fetch_source_info(self, info, blacklists):
         """ fetch source info, to prepare later loading.
-
+    
         This is used for stamp preset, to save memory
         and speed up startup time
-        until stamp tool is actually used.
+        until stamps are actually used.
         """
-        self._source_info = (source_type, info)
+        self._source_info = info
+        self._blacklists = blacklists
 
+    def _decode_file_source(self, info):
+        """Decode a late-binding information
+        and load a stamp picture into memory.
 
+        To speed up Mypaint startup, Stamp class do nothing
+        except for caching source information at statup.
+        and when the stamp is actually used by end-user,
+        Stamp class loads stamp picture with the method
+        'ensure_sources()', which calls this method internally.
 
-   #def set_file_sources(self, filenames):
-   #    if type(filenames) == str:
-   #        self._source_files[0] = filenames
-   #    else:
-   #        for i, filename in enumerate(filenames):
-   #            self._source_files[i] = filename
-   #        self._tile_index_base = i
+        :param info: string of filename, or tuple of 
+            (filename, tile width, tile height) 
+        """
+        if isinstance(info, unicode):
+            self.add_file_source(info)
+        elif isinstance(info, tuple):
+            try:
+                fname, tile_h, tile_v = info
+                self.add_file_sources_as_tile(fname, 
+                        tile_h, tile_v,
+                        self._blacklists.get(fname, None))
+            except ValueError as e:
+                logger.error("an error raised at loading tile stamps")
+                sys.stderr.write(str(e))
+        else:
+            logger.warning("Unknown picture source assigned.")
+            sys.stderr.write(str(info))
+            
 
-    def set_surface_from_pixbuf(self, id, pixbuf):
+    def set_surface_from_pixbuf(self, id, pixbuf, 
+            source=None):
+        """ Set (or add) surface from pixbuf.
+        This method actually set the dictionary of 
+        surfaces, so assigning non existent id
+        to this, works as 'add' method, not 'set'.
+
+        :param id: stamp picture id, if this is -1,
+                   this works 'add', not 'set'.
+        :param pixbuf: pixbuf to add
+        :param source: a tuple of source information,
+            (_PixtureSource enumeration, optional information)
+        :return : return the id of stamp picture.if id
+        """
+        assert isinstance(source, tuple)
+
         if id == -1:
-            id = self._generate_tile_index()
+            id = self._generate_picture_index()
         surf = Gdk.cairo_surface_create_from_pixbuf(
                 pixbuf, 1, None)
         self._surfs[id] = surf
+        self._create_picture_icon(id, pixbuf)
+        self._picture_sources[id] = source
+        self._dirty = True
+        return id
 
     def add_file_source(self, filename):
-        tile_index = self._generate_tile_index()
-        junk, ext = os.path.splitext(filename)
-        if ext.lower() == '.png':
-            surf = cairo.ImageSurface.create_from_png(filename)
-        else:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file(filename)
-            surf = Gdk.cairo_surface_create_from_pixbuf(
-                    pixbuf, 1, None)
-        self._surfs[tile_index] = surf
-    
-    def set_file_sources_as_tile(self, filename, tileinfo):
         pixbuf = GdkPixbuf.Pixbuf.new_from_file(filename)
-        tile_w, tile_h = tileinfo
+        id = self.set_surface_from_pixbuf(-1, pixbuf, 
+                (PictureSource.FILE, filename))
+        del pixbuf
+        return id
+
+    
+    def add_file_sources_as_tile(self, filename, tile_w, tile_h, blacklist=None):
+        pixbuf = GdkPixbuf.Pixbuf.new_from_file(filename)
         if tile_w > 0 and tile_h > 0:
-            idx = self._generate_tile_index()
+            self._tileinfo[filename] = (tile_w, tile_h)
+            idx = 0
+            # XXX tile_w is tile width in pixel? or divide count of tile??
+            # if divide count of tile, this code is wrong...?
             for y in xrange(pixbuf.get_height() / tile_h):
                 for x in xrange(pixbuf.get_width() / tile_w):
-                    tpb = pixbuf.new_subpixbuf(x, y, 
-                            tile_w, tile_h)
-                    ox, oy = _SourceMixin.get_offsets(tpb)
-                    self.set_surface_from_pixbuf(idx, tpb)
-                    del tpb 
+                    if blacklist == None or not idx in blacklist:
+                        tpb = pixbuf.new_subpixbuf(x, y, 
+                                tile_w, tile_h)
+                        ox, oy = _SourceMixin.get_offsets(tpb)
+                        self.set_surface_from_pixbuf(-1, tpb,
+                                (PictureSource.TILED_FILE, (filename, idx)))
                     idx+=1
+                    del tpb 
             del pixbuf
 
 
-    def set_pixbuf_sources(self, pixbufs):
-        for cpb in pixbufs:
-            if cpb:
-                idx = self._generate_tile_index()
-                self.set_surface_from_pixbuf(idx, cpb)
+    def add_pixbuf_source(self, pixbuf, name):
+        """ Set stamp picture from a pixbuf.
+        This method used when a tile is imported
+        from Clipboard, or region of a layer.
+
+        :param name: the name of source layer.
+                     If captured from clipboard, this MUST be None.
+        """ 
+        idx = self._generate_picture_index()
+        self.set_surface_from_pixbuf(idx, pixbuf,
+                (PictureSource.CAPTURED, name))
+
+    def remove(self, id):
+        """ remove a tile from stamp.
+        """
+        if id in self._surfs:
+            del self._surfs[id]
+            assert id in self._picture_icons
+            del self._picture_icons[id]
+
+            pictype, info = self._picture_sources[id]
+            if pictype == PictureSource.TILED_FILE:
+                # To detect 'tile-based stamp picture
+                # deleted', leave source information,
+                # but change index as None. 
+                self._picture_sources[id] = (pictype, (info[0], None))
+            else:
+                del self._picture_sources
+
+            self._dirty = True
+
 
     def clear_sources(self):
-        """ clear sources (but _tile_index_base uncleared)
+        """ clear sources (but _picture_index_base uncleared)
         """
-        self._surfs = {}
+        self._surfs = collections.OrderedDict()
+        self._picture_icons = {}
+        self._picture_sources = {}
+        self._tileinfo = {}
+        self._blacklists = None
+        self._dirty = False
+        self._filename = ''
+
+    def source_surface_iter(self):
+        for id in self._surfs:
+            yield (id, self._surfs[id])
+
+    def get_surface(self, id):
+        return self._surfs.get(id, None)
+
+    @staticmethod
+    def _create_icon(pixbuf, icon_size):
+        """ To share icon generating code. 
+        """
+        pw = pixbuf.get_width()
+        ph = pixbuf.get_height()
+        ratio = float(icon_size) / ph
+        
+        icon = GdkPixbuf.Pixbuf.new(
+                GdkPixbuf.Colorspace.RGB,
+                pixbuf.get_has_alpha(),
+                8,
+                icon_size, icon_size)
+        pixbuf.scale(icon, 
+                0, 0,  # dest x, y
+                icon_size, icon_size,
+                0, 0,  # Offset x, y
+                ratio, ratio,
+                GdkPixbuf.InterpType.BILINEAR)
+
+        return icon
+
+    def _create_picture_icon(self, id, pixbuf):
+        """Create tile icon, 
+        for iconview of stamp tiles Options presenter.
+        """
+        self._picture_icons[id] = Stamp._create_icon(pixbuf, 
+                self.PICTURE_ICON_SIZE)
+
+    def picture_icon_iter(self):
+        for id in self._picture_icons:
+            yield (id, self._picture_icons[id])
+
+    def get_icon(self, id):
+        return self._picture_icons.get(id, None)
+
 
     @property
-    def latest_tile_index(self):
+    def latest_picture_index(self):
        #return len(self._source_files) - 1
-        return self._tile_index_base
+        return self._picture_index_base
 
-    def _generate_tile_index(self):
+    def _generate_picture_index(self):
         """ generate unique tile index
 
         Currently, just add 1 for each index.
         """
-        self._tile_index_base += 1
-        return self._tile_index_base 
+        self._picture_index_base += 1
+        return self._picture_index_base 
 
     def ensure_sources(self):
         """ Late-binding of source pictures.
         (this is default behavior of stamp presets)
         """
-        if self._source_info:
-            s_type, info = self._source_info
-            if s_type == 'file':
-                for cf in info:
-                    self.add_file_source(cf)
-            elif s_type == 'tiled-file':
-                self.set_file_sources_as_tile(*info)
-            elif s_type == 'clipboard':
-                self.clear_sources()
-                self.set_pixbuf_sources(self, (load_clipboard_image(),))
-                return # To avoid self._sourceinfo cleared.
-            else:
-                logger.error('unknown stamp source type %s' % s_type)
-            
+        info = self._source_info
+        if info:
+            # dirty flag should not be changed by this method.
+            # this method only 'set stamp to initial(ready) state'
+            saved_flag = self._dirty
+            for cf in info:
+                self._decode_file_source(cf)
+            self._dirty = saved_flag
+
+            # Clear source information, because all stamp pictures already loaded.
             self._source_info = None
 
-
-
     ## Source Pixbuf methods
-
-   #def _ensure_current_pixbuf(self, tile_index):
-   #    """
-   #    To ensure current pixbuf (and cached surface) loaded. 
-   #    Automatically called from get_current_src() method.
-   #
-   #    This facility is completely different at _Dynamic_Source.
-   #    see _Dynamic_source.get_current_src()
-   #    """
-   #    if self._source_files and len(self._source_files) > 0:
-   #        if not tile_index in self._surfs:
-   #            filename = self._source_files[tile_index]
-   #            junk, ext = os.path.splitext(filename)
-   #            if ext.lower() == '.png':
-   #                surf = cairo.ImageSurface.create_from_png(filename)
-   #            else:
-   #                pixbuf = GdkPixbuf.Pixbuf.new_from_file(filename)
-   #                surf = Gdk.cairo_surface_create_from_pixbuf(
-   #                        pixbuf, 1, None)
-   #            self._surfs[tile_index] = surf
-   #        return True
-   #    return False
-
 
     def clear_all_cache(self):
         """
@@ -603,18 +742,247 @@ class Stamp(object):
         """
         self._surfs.clear()
 
-   #def get_current_src(self, tile_index):
-   #    stamp_src = self.get_current_src(tile_index)
-   #    w = stamp_src.get_width() 
-   #    h = stamp_src.get_height()
-   #    return (stamp_src, -(w / 2), -(h / 2))
 
-   #def get_desc(self, tile_index):
-   #    return self._source_files[tile_index]
+    ## Serialize methods
 
-   #def validate_all_tiles(self):
-   #    for ck in self._source_files.keys():
-   #        self._ensure_current_pixbuf(ck)
+    def save_to_file(self, jsonfilename):
+        assert os.path.isabs(jsonfilename)
+        basedir, basename = os.path.split(jsonfilename)
+        basejsonname = os.path.splitext(basename)[0]
+
+        jsondic = {}
+        jsondic['version'] = "1" # Version number must be string.
+        jsondic['name'] = self.name
+        jsondic['desc'] = self.desc
+
+        if self._thumbnail is not None:
+            if self._thumbnail_type == PictureSource.ICON_GENERATED:
+                # Save Icon picture, if it is generated one.
+                basename = "%s_thumbnail.jpg" % self.name
+                filename = os.path.join(basedir, basename) 
+                self._thumbnail.save(filename, 'jpg')
+                jsondic['thumbnail'] = basename
+            elif self._thumbnail_type == PictureSource.ICON_STOCK:
+                assert hasattr(self, '_thumbnail_source')
+                jsondic['gtk-thumbnail'] = self._thumbnail_source
+            elif self._thumbnail_type == PictureSource.ICON_FILE:
+                assert hasattr(self, '_thumbnail_source')
+                jsondic['thumbnail'] = self._thumbnail_source
+
+
+        settings = {}
+
+        # When a stamp saved to file,
+        # every stamp should turn into file-backed stamp.
+        jsondic['type'] = 'file'
+
+        # Enumerate id from self._surfs, because it is ordereddict,
+        # it can reproduce same order in same stamp.
+        filenames = []
+        tile_blacklists = {}
+        for id in self._surfs:
+            source_type, info = self._picture_sources[id]
+            if source_type == PictureSource.FILE:
+                filenames.append(info)
+            elif source_type == PictureSource.TILED_FILE:
+                sourcename, tileidx = info
+                if not sourcename in filenames:
+                    filenames.append(sourcename)
+
+                    # Do not forget to add settings
+                    # the tiled width and height.
+                    assert sourcename in self._tileinfo
+                    tileinfo = self._tileinfo[sourcename]
+                    filenames.append( (sourcename, tileinfo[0], tileinfo[1]) )
+
+                if tileidx == None:
+                    # This picture is a deleted one.
+                    blacklist = tile_blacklists.get(sourcename, [])
+                    blacklist.append(tileidx)
+                    tile_blacklists[sourcename] = blacklist
+
+            elif source_type == PictureSource.CAPTURED:
+                surf = self._surfs[id]
+                pixbuf = Gdk.pixbuf_get_from_surface(surf, 0, 0, 
+                        surf.get_width(), surf.get_height())
+                picfilename = os.path.join(basedir, 
+                        "%s_stamp_%d.png" % (basejsonname, id))
+                lib.pixbuf.save(pixbuf, picfilename, 'png')
+                filenames.append(picfilename)
+               #self._picture_sources[id] = (PictureSource.FILE, filename)
+
+        settings['filenames'] = filenames
+        if len(tile_blacklists):
+            settings['tile-blacklists'] = tile_blacklists
+
+        if self.use_mask:
+            settings['mask'] = True
+
+        if self._default_scale_x != 1.0:
+            settings['scale'] = self._default_scale_x
+
+        if self._default_angle != 0.0:
+            settings['angle'] = math.degrees(self._default_angle)
+
+        jsondic['settings'] = settings
+
+
+        with open(jsonfilename, 'w') as ofp:
+            json.dump(jsondic, ofp)
+
+        self._dirty = False
+        self._filename = jsonfilename
+
+    @staticmethod
+    def load_from_file(filename, manager):
+        with open(filename, 'r') as ifp:
+            jo = json.load(ifp)
+        stamp = Stamp.create_stamp_from_json(jo, manager)
+        stamp._filename = filename
+        return stamp
+
+    @staticmethod
+    def create_stamp_from_json(jo, manager):
+        """Load a stamp from json-generated dictionary object.
+        THIS IS A STATIC METHOD, no instance needed.
+
+        :param jo: dictionary object, mostly created with json.load()/loads()
+
+        :return: Stump class instance.
+
+        ## The specification of mypaint stamp preset file(.mys)
+
+        Stamp preset .mys file is a json file, 
+        which has attributes below:
+
+            "name" : name of preset
+            "settings" : a dictionary to contain 'Stamp setting's.
+            "thumbnail" : a thumbnail .jpg/.png filename
+            "version" : a string, indicates stamp version. currently it is "1"
+            "desc" : the description of this stamp,for iconview item.
+                     this is also used for tooltip message.
+                     this can be empty string.
+
+        Stamp setting:
+            "type" : Initial source of the stamp
+                "file" - Stamp from files.
+                "clipboard" - Use run-time clipboard image for stamp.
+                "empty" - newly created empty stamp.
+
+            "filenames" : LIST of .jpg/png filepaths of stamp source.
+                         An element of this list can be a tuple, if so,
+                         it means "The picture is divided into tiles"
+                         so such tuple MUST be
+                         (filename, horizontal_divide_count,
+                             vertical_divide_count)
+
+            "scale" : A tuple of default scaling ratio, 
+                      (horizontal_ratio, vertical_ratio)
+
+            "angle" : A floating value of default angle,in DEGREEs.
+
+            "mask" : A boolean flag to use stamp's alpha pixel as mask
+                     for foreground color rectangle.
+
+            *** The below 'tile-*' settings are optional. ***
+
+            "tile-blacklists" : dictionary of filename, and it has list of index,
+                               which are 'deleted' - i.e. to be ignored tiles.
+                     
+            "tile-type" : "random" - The next tile index is random value.
+                          "increment" - The next tile index is automatically incremented.
+                          "same" - The next tile index is always default index.
+                                   user will change it manually every time
+                                   he want to use the other one.
+                                   This is default tile-type.
+
+            "tile-default-index" : The default index of tile. by default, it is 0.
+
+            "gtk-thumbnail" : Use thumbnail as Gtk predefined icon for the stamp.
+
+        """
+
+        if jo['version'] == "1":
+            # Decode basic informations.
+            name = jo.get('name', 'unnamed stamp')
+            desc = jo.get('desc', '')
+            stamp_type = jo.get('type', None)
+
+            if stamp_type in ('file', 'empty'):
+                stamp = Stamp(manager, name, desc)
+            elif stamp_type == 'clipboard':
+                stamp = ClipboardStamp(manager, name, desc)
+            else:
+                logger.warning("Unknown stamp type %s" % stamp_type)
+
+            if 'thumbnail' in jo:
+                try:
+                    stamp.set_file_thumbnail(jo['thumbnail'])
+                except:
+                    logger.error('stamp cannot load icon filename %s' % 
+                            icon_fname)
+            elif 'gtk-thumbnail' in jo:
+                try:
+                    stamp.set_gtk_thumbnail(jo['gtk-thumbnail'])
+                except:
+                    logger.error('stamp cannot set gtk icon %s' % 
+                            jo['gtk-thumbnail'])
+            else:
+                stamp.generate_thumbnail()
+
+            # Decode setting parts.
+            settings = jo.get('settings', None)
+
+            if settings:
+                if stamp_type == 'file':
+                    stamp.fetch_source_info(
+                            settings.get('filenames', None),
+                            settings.get('tile-blacklists', None)
+                            )
+                elif stamp_type == 'clipboard':
+                    pass
+                else:
+                    # It would be empty tile.
+                    pass 
+
+                if 'scale' in settings:
+                    stamp.set_default_scale(*settings['scale'])
+
+                if 'angle' in settings:
+                    stamp.set_default_angle(math.radians(settings['angle'] % 360.0))
+
+                if 'mask' in settings and settings['mask'] in (1, True, "1", "True"):
+                    stamp.use_mask = True
+
+
+            stamp._dirty = False
+            return stamp
+
+        else:
+            raise NotImplementedError("Unknown version %r" % jo['version'])
+
+
+class ClipboardStamp(Stamp):
+    """The derived class to specialize to deal with Clipboard.
+    """
+
+    def __init__(self, manager, name, desc):
+        super(ClipboardStamp, self).__init__(manager, name, desc)
+
+    def initialize_phase(self, mode):
+        """ Initializing for start of each drawing phase.
+        i.e. called from StampMode._start_new_capture_phase
+        """
+        self.ensure_sources()
+
+    def ensure_sources(self):
+        """ Late-binding of source pictures.
+        (this is default behavior of stamp presets)
+        """
+        if len(self._surfs) == 0:
+            pixbuf = load_clipboard_image()
+            if pixbuf:
+                self.add_pixbuf_source(pixbuf,'Clipboard')
 
 
 ## Preset Manager classes
@@ -636,46 +1004,45 @@ class StampPresetManager(object):
     def __init__(self, app):
         self._app = app
 
-        # XXX mostly copied from gui/application.py _init_icons()
-        icon_theme = Gtk.IconTheme.get_default()
-        if app:
-            icon_theme.append_search_path(app.state_dirs.app_icons)
+
+        stamplist = {}
+        id = 0
 
         try:
-            self._default_icon = icon_theme.load_icon('mypaint', 32, 0)
-        except GLib.Error:
-            self._default_icon = icon_theme.load_icon('gtk-paste', 32, 0)
 
-        stamplist = []
+            for cs in BUILT_IN_STAMPS:
+                stamp = Stamp.create_stamp_from_json(cs, self)
+                stamplist[id] = stamp
+                id+=1
 
-        for cs in BUILT_IN_STAMPS:
-            stamp = self.create_stamp_from_json(cs)
-            stamplist.append(stamp)
+            for cf in glob.glob(self.get_adjusted_path("*.mys")):
+                stamp = Stamp.load_from_file(cf, self)
+                stamplist[id] = stamp
+                id+=1
 
-        for cf in glob.glob(self._get_adjusted_path("*.mys")):
-            stamp = self.load_from_file(cf)
-            stamplist.append(stamp)
+        except Exception as e:
+            import sys
+            logger.error("an error raised at creating/loading initial stamps")
+            sys.stderr.write(str(e)+'\n')
 
+        self._id_base = id
         self.stamps = stamplist
         self._stamp_store = {}
         self._current = None
 
-    @property
-    def current(self):
-        return self._current
-       #if self._current_index is not None:
-       #    return self_stamps[self._current_index]
-
-    def set_current_iter(self, iter):
-        self._current = self._stamp_store[iter]
+    def get_current(self):
         return self._current
 
-    def set_current_index(self, idx):
-        self._current = self.stamps[idx]
+   #def set_current_iter(self, iter):
+   #    self._current = self._stamp_store[iter]
+   #    return self._current
+
+    def set_current(self, new_current):
+        self._current = new_current
         return self._current
 
 
-    def _get_adjusted_path(self, filepath):
+    def get_adjusted_path(self, filepath):
         """ Return absolute path according to application setting.
         
         This method does not check the modified path exists.
@@ -691,214 +1058,39 @@ class StampPresetManager(object):
 
     def load_thumbnail(self, name):
         if name != None:
-            filepath = self._get_adjusted_path(name)
+            filepath = self.get_adjusted_path(name)
             if os.path.exists(filepath):
                 icon_size = Stamp.THUMBNAIL_SIZE
                 return  GdkPixbuf.Pixbuf.new_from_file_at_size(
-                            self._get_adjusted_path(name),
+                            self.get_adjusted_path(name),
                             icon_size, icon_size)
 
         assert self._default_icon != None
         return self._default_icon
         
     def load_from_file(self, filename):
-        """ Presets saved as json file, just like as brushes.
+        """Load a preset which saved as json file, just like as brushes.
         :rtype: Stump class instance.
         """
         junk, ext = os.path.splitext(filename) 
         assert ext.lower() == '.mys'
 
-        filename = self._get_adjusted_path(filename)
-
-        with open(filename,'r') as ifp:
-            jo = json.load(ifp)
-            return self.create_stamp_from_json(jo)
-
-    ## Utility Methods.
-
-    def initialize_icon_store(self):
-        """ Initialize iconview store which is used in
-        stamptool's OptionPresenter.
-        i.e. This method is actually application-unique 
-        stamp preset initialize handler.
-        """
-        liststore = Gtk.ListStore(GdkPixbuf.Pixbuf, str, object)
-
-        for stamp in self.stamps:
-            iter = liststore.append([stamp.thumbnail, stamp.name, stamp])
-            print(iter)
-            self._stamp_store[iter] = stamp
-
-        return liststore
-
-    def save_to_file(self, stamp, filename):
-        """ To save (or export) a stamp to file.
-        """
-        pass
-
-   #def get_stamp_type(self, target):
-   #    """ Get stamp type as string, for json file."""
-   #    if isinstance(Stamp, target):
-   #        return "file"
-   #    elif isinstance(TiledStamp, target):
-   #        return "tiled-file"
-   #    elif isinstance(LayerStamp, target):
-   #        return "layer"
-   #    elif isinstance(ClipboardStamp, target):
-   #        return "clipboard"
-   #    elif isinstance(ForegroundStamp, target):
-   #        return "foreground"
-   #    elif isinstance(VisibleStamp, target):
-   #        return "current-visible"
-   #    elif isinstance(ForegroundLayerStamp, target):
-   #        return "foreground-layermask"
-   #    else:
-   #        raise TypeError("undefined stamp type")
-
-    def create_stamp_from_json(self, jo):
-        """ Create a stamp from json-generated dictionary object.
-        :param jo: dictionary object, mostly created with json.load()/loads()
-
-        :return: Stump class instance.
-
-        ## The specification of mypaint stamp preset file(.mys)
-
-        Stamp preset .mys file is a json file, 
-        which has attributes below:
-
-            "comment" : comment of preset
-            "name" : name of preset
-            "settings" : a dictionary to contain 'Stamp setting's.
-            "thumbnail" : a thumbnail .jpg/.png filename
-            "version" : 1
-            "desc" : (Optional) description of this stamp,for iconview item.
-                     this is also used for tooltip message.
-
-        Stamp setting:
-            "source" : Initial source of the stamp
-                "file" - Stamp from files.
-                "tiled-file" - Stamp from a file, divided with 'tile' setting.
-                 "clipboard" - Use run-time clipboard image for stamp.
-
-            "filename" : LIST of .jpg/png filepaths of stamp source.
-                         Multiple filepaths mean 'this stamp has
-                         tiles in separeted files'.
-
-                         Otherwise, it will be a single picture stamp.
-
-            "scale" : A tuple of default scaling ratio, 
-                      (horizontal_ratio, vertical_ratio)
-
-            "angle" : A floating value of default angle,in degree. 
-
-            "mask" : A boolean flag to use stamp's alpha pixel as mask
-                     for foreground color rectangle.
-
-            "tile" : A tuple of (width, height),it represents tile size
-                     of a picture. 
-                     Currently this setting use with 'tiled-file' source only.
-                     
-            "tile-type" : "random" - The next tile index is random value.
-                          "increment" - The next tile index is automatically incremented.
-                          "same" - The next tile index is always default index.
-                                   user will change it manually every time
-                                   he want to use the other one.
-                                   This is default tile-type.
-
-            "tile-default-index" : The default index of tile. by default, it is 0.
-
-                     Needless to say, 'tile-*' setting will ignore 
-                     when there is no tile setting.
-
-            "icon" : load a picture file as Gtk predefined icon for the stamp.
-                     when this is not absolute path, 
-                     stampmanager assumes it would be placed at 
-                     self.STAMP_DIR_NAME below of _app.state_dirs.user_data
-
-            "gtk-thumbnail" : Use thumbnail as Gtk predefined icon for the stamp.
-
-        """
-        try:
-
-            if jo['version'] == "1":
-                settings = jo['settings']
-                name = jo.get('name', 'unnamed stamp')
-                desc = jo.get('desc', None)
-                source = settings.get('source', None)
-                fnames = settings.get('filenames', None)
-
-                stamp = Stamp(name, desc)
-
-                if source == 'file' and fnames:
-                    stamp.fetch_source_info(source, fnames)
-                elif source == 'tiled-file' and fnames:
-                    tile_info = settings.get('tile', (1, 1))
-                    stamp.fetch_source_info(source,
-                            (fnames, tile_info))
-                elif source == 'clipboard':
-                    stamp.fetch_source_info(source, None)
-               #elif source == 'layer':
-               #    stamp = LayerStamp(name, desc)
-               #elif source == 'current-visible':
-               #    stamp = VisibleStamp(name, desc)
-               #elif source == 'foreground':
-                   #stamp = ForegroundStamp(name, desc)
-                   #assert 'mask' in settings
-                   #stamp.set_file_sources(settings['mask'])
-               #elif source == 'foreground-layermask':
-               #    stamp = ForegroundLayerStamp(name, desc)
-                else:
-                    # It would be empty tile.
-                    pass 
-
-                # common setting
-                if 'scale' in settings:
-                    stamp.set_default_scale(*settings['scale'])
-
-                if 'angle' in settings:
-                    stamp.set_default_angle(math.radians(settings['angle'] % 360.0))
-                if 'mask' in settings and settings['mask'] in (1, True, "1", "True"):
-                    stamp.use_mask = True
-
-                if 'icon' in settings:
-                    try:
-                        pixbuf = self.load_thumbnail(settings['icon'])
-                        stamp.set_thumbnail(pixbuf)
-                    except:
-                        logger.error('stamp cannot load icon filename %s' % 
-                                icon_fname)
-
-                elif 'gtk-thumbnail' in settings:
-                    try:
-                        pixbuf = Gtk.IconTheme.get_default().load_icon(
-                                settings['gtk-thumbnail'], Stamp.THUMBNAIL_SIZE, 0)
-                        stamp.set_thumbnail(pixbuf)
-                    except:
-                        logger.error('stamp cannot set gtk icon %s' % 
-                                settings['gtk-thumbnail'])
-               #else:
-               #    stamp.set_thumbnail(
-               #            self.load_thumbnail(settings.get('thumbnail', None)))
+        filename = self.get_adjusted_path(filename)
+        return Stamp.load_from_file(filename, self)
 
 
-                return stamp
-
-            else:
-                raise NotImplementedError("Unknown version %r" % jo['version'])
-
-        except Exception as e:
-            import sys
-            logger.error("an error raised at loading stamps")
-            sys.stderr.write(str(e)+'\n')
-
-    def save_to_file(self, filename, json_src):
-        """ Save a json object to 'user-data' path.
-        (But if the filename parameter is absolute path,
-         use that path, not the user-data path.)
-        """
-        filename = self._get_adjusted_path(filename)
-        with open(filename, 'w') as ofp:
-            json.dump(json_src, ofp)
+   #def save_to_file(self, stamp):
+   #    """Save a stamp as a json object file to 'user-data' path.
+   #    This is a utility method, stamp can save itself easily
+   #    but this would be handy.
+   #
+   #    If the filename parameter is absolute path,
+   #    use that path, not the user-data path.
+   #    """
+   #    junk, ext = os.path.splitext(filename) 
+   #    assert ext.lower() == '.mys'
+   #    filename = self.get_adjusted_path(filename)
+   #    stamp.save_to_file(filename)
 
 
     ## Notification callbacks
@@ -920,24 +1112,26 @@ class StampPresetManager(object):
 BUILT_IN_STAMPS = [
             { "version" : "1",
               "name" : "clipboard stamp",
+              "gtk-thumbnail" : "gtk-paste",
+              "type" : "clipboard",
               "settings" : {
-                  "source" : "clipboard",
-                  "gtk-thumbnail" : "gtk-paste"
                   },
               "desc" : _("Stamp of Clipboard Image")
             },
             { "version" : "1",
               "name" : "new stamp",
+              "gtk-thumbnail" : "gtk-paste",
+              "type" : "empty",
               "settings" : {
-                  "gtk-thumbnail" : "gtk-paste"
                   },
               "desc" : _("New empty stamp")
             },
             { "version" : "1",
               "name" : "new colored stamp",
+              "gtk-thumbnail" : "gtk-paste",
+              "type" : "empty",
               "settings" : {
                   "mask" : "1",
-                  "gtk-thumbnail" : "gtk-paste"
                   },
               "desc" : _("new colored stamp")
             },

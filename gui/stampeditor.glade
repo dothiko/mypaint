@@ -5,10 +5,7 @@
   <object class="GtkGrid" id="stamp_editor">
     <property name="visible">True</property>
     <property name="can_focus">False</property>
-    <property name="margin_left">6</property>
-    <property name="margin_right">6</property>
-    <property name="margin_top">6</property>
-    <property name="margin_bottom">6</property>
+    <property name="border_width">12</property>
     <child>
       <object class="GtkBox" id="contents_box">
         <property name="visible">True</property>
@@ -22,8 +19,7 @@
           <object class="GtkBox" id="header_box">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
-            <property name="hexpand">False</property>
-            <property name="vexpand">False</property>
+            <property name="hexpand">True</property>
             <child>
               <object class="GtkImage" id="stamp_icon_image">
                 <property name="visible">True</property>
@@ -72,8 +68,8 @@
             <property name="can_focus">False</property>
             <property name="margin_left">4</property>
             <property name="margin_right">4</property>
-            <property name="hexpand">False</property>
-            <property name="vexpand">False</property>
+            <property name="hexpand">True</property>
+            <property name="vexpand">True</property>
             <child>
               <object class="GtkLabel" id="stamp_type_label">
                 <property name="visible">True</property>
@@ -142,7 +138,7 @@
       <object class="GtkButtonBox" id="stamp_editor_actions">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
-        <property name="margin_left">6</property>
+        <property name="margin_left">12</property>
         <property name="orientation">vertical</property>
         <property name="layout_style">start</property>
         <child>
@@ -188,13 +184,13 @@
           </packing>
         </child>
         <child>
-          <object class="GtkButton" id="insert_button">
-            <property name="label" translatable="yes">Insert
+          <object class="GtkButton" id="append_button">
+            <property name="label" translatable="yes">Append
 </property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">True</property>
-            <signal name="clicked" handler="insert_button_clicked_cb" swapped="no"/>
+            <signal name="clicked" handler="append_button_clicked_cb" swapped="no"/>
           </object>
           <packing>
             <property name="expand">True</property>
@@ -230,38 +226,6 @@
             <property name="expand">True</property>
             <property name="fill">True</property>
             <property name="position">5</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkButton" id="close_button">
-            <property name="label" translatable="yes">Close
-</property>
-            <property name="visible">True</property>
-            <property name="can_focus">True</property>
-            <property name="receives_default">True</property>
-            <property name="xalign">0.52999997138977051</property>
-            <signal name="clicked" handler="close_button_clicked_cb" swapped="no"/>
-          </object>
-          <packing>
-            <property name="expand">True</property>
-            <property name="fill">True</property>
-            <property name="position">6</property>
-            <property name="secondary">True</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkButton" id="refresh_all_button">
-            <property name="label" translatable="yes">Refresh All
-</property>
-            <property name="visible">True</property>
-            <property name="can_focus">True</property>
-            <property name="receives_default">True</property>
-            <signal name="clicked" handler="refresh_all_button_clicked_cb" swapped="no"/>
-          </object>
-          <packing>
-            <property name="expand">True</property>
-            <property name="fill">True</property>
-            <property name="position">7</property>
           </packing>
         </child>
       </object>

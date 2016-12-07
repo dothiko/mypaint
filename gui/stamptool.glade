@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.16.1 -->
+<!-- Generated with glade 3.18.3 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
   <object class="GtkAdjustment" id="angle_adj">
@@ -8,12 +8,6 @@
     <property name="step_increment">1</property>
     <property name="page_increment">12</property>
     <signal name="value-changed" handler="_angle_adj_value_changed_cb" swapped="no"/>
-  </object>
-  <object class="GtkAdjustment" id="tile_adj">
-    <property name="upper">1</property>
-    <property name="step_increment">1</property>
-    <property name="page_increment">1</property>
-    <signal name="value-changed" handler="_tile_adj_value_changed_cb" swapped="no"/>
   </object>
   <object class="GtkAdjustment" id="xscale_adj">
     <property name="lower">-3</property>
@@ -46,14 +40,12 @@
             <property name="valign">baseline</property>
             <property name="hexpand">False</property>
             <property name="vexpand">False</property>
-            <property name="xalign">0</property>
             <property name="label" translatable="yes" context="Inking tool options: point value sliders: labels">Angle:</property>
+            <property name="xalign">0</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">0</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -72,8 +64,6 @@
           <packing>
             <property name="left_attach">1</property>
             <property name="top_attach">0</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -86,14 +76,12 @@ Negative values mean leftwards tilts.</property>
             <property name="valign">baseline</property>
             <property name="hexpand">False</property>
             <property name="vexpand">False</property>
-            <property name="xalign">0</property>
             <property name="label" translatable="yes" context="Inking tool options: point value sliders: labels">X-scale:</property>
+            <property name="xalign">0</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">1</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -106,14 +94,12 @@ Negative values mean leftwards tilts.</property>
             <property name="valign">baseline</property>
             <property name="hexpand">False</property>
             <property name="vexpand">False</property>
-            <property name="xalign">0</property>
             <property name="label" translatable="yes" context="Inking tool options: point value sliders: labels">Y-scale:</property>
+            <property name="xalign">0</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">2</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -133,8 +119,6 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">1</property>
             <property name="top_attach">1</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -156,56 +140,12 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">1</property>
             <property name="top_attach">2</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkLabel" id="tile_label">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="tooltip_text" translatable="yes" context="Inking tool options: point value sliders: labels: tooltips">Time since the previous point, in seconds</property>
-            <property name="valign">baseline</property>
-            <property name="hexpand">False</property>
-            <property name="vexpand">False</property>
-            <property name="xalign">0</property>
-            <property name="label" translatable="yes" context="Inking tool options: point value sliders: labels">Tile:</property>
-          </object>
-          <packing>
-            <property name="left_attach">0</property>
-            <property name="top_attach">3</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkScale" id="tile_scale">
-            <property name="width_request">150</property>
-            <property name="visible">True</property>
-            <property name="can_focus">True</property>
-            <property name="valign">baseline</property>
-            <property name="hexpand">True</property>
-            <property name="vexpand">False</property>
-            <property name="adjustment">tile_adj</property>
-            <property name="restrict_to_fill_level">False</property>
-            <property name="fill_level">0</property>
-            <property name="round_digits">2</property>
-            <property name="digits">0</property>
-            <property name="value_pos">right</property>
-          </object>
-          <packing>
-            <property name="left_attach">1</property>
-            <property name="top_attach">3</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
       </object>
       <packing>
         <property name="left_attach">0</property>
         <property name="top_attach">0</property>
-        <property name="width">1</property>
-        <property name="height">1</property>
       </packing>
     </child>
     <child>
@@ -216,24 +156,17 @@ Negative values mean leftwards tilts.</property>
         <property name="margin_right">4</property>
         <property name="margin_bottom">6</property>
         <child>
-          <object class="GtkLabel" id="preset_label">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="halign">start</property>
-            <property name="label" translatable="yes">Stamp Presets:</property>
-          </object>
-          <packing>
-            <property name="left_attach">0</property>
-            <property name="top_attach">1</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
-          </packing>
-        </child>
-        <child>
           <object class="GtkGrid" id="additional_button_grid">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
+            <property name="hexpand">True</property>
             <property name="column_homogeneous">True</property>
+            <child>
+              <placeholder/>
+            </child>
+            <child>
+              <placeholder/>
+            </child>
             <child>
               <placeholder/>
             </child>
@@ -241,16 +174,78 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">0</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkNotebook" id="notebook_stamp">
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <signal name="change-current-page" handler="notebook_stamp_change_current_page_cb" swapped="no"/>
+            <child>
+              <object class="GtkScrolledWindow" id="stamp_scrolledwindow">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+                <property name="shadow_type">in</property>
+                <property name="kinetic_scrolling">False</property>
+                <child>
+                  <placeholder/>
+                </child>
+              </object>
+            </child>
+            <child type="tab">
+              <object class="GtkLabel" id="label_stamp_select">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">stamp</property>
+              </object>
+              <packing>
+                <property name="tab_fill">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkScrolledWindow" id="picture_scrolledwindow">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+                <property name="shadow_type">in</property>
+                <child>
+                  <placeholder/>
+                </child>
+              </object>
+              <packing>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child type="tab">
+              <object class="GtkLabel" id="label_picture_select">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">picture</property>
+              </object>
+              <packing>
+                <property name="position">1</property>
+                <property name="tab_fill">False</property>
+              </packing>
+            </child>
+            <child>
+              <placeholder/>
+            </child>
+            <child type="tab">
+              <placeholder/>
+            </child>
+          </object>
+          <packing>
+            <property name="left_attach">0</property>
+            <property name="top_attach">1</property>
           </packing>
         </child>
       </object>
       <packing>
         <property name="left_attach">0</property>
         <property name="top_attach">1</property>
-        <property name="width">1</property>
-        <property name="height">1</property>
       </packing>
     </child>
   </object>

@@ -21,13 +21,12 @@ import lib.mypaintlib
 import lib.surface
 import lib.tiledsurface
 
-
 from copy import deepcopy
 import weakref
 from gettext import gettext as _
 from logging import getLogger
 logger = getLogger(__name__)
-import gui.inktool
+
 
 ## Command stack and action interface
 
