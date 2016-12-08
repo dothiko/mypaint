@@ -43,7 +43,18 @@ import gui.stampeditor
 
 ## Functions
 
+def _get_iconview_data(iconview, idx):
+    """A utility method for iconview, to get currently selected item
+    which is contained into current selected icon(store).
 
+    :param iconview: the iconview
+    :param idx: the index in a tuple. that tuple is registered
+        to store instance with append() method.
+    """
+    path = iconview.get_selected_items()[0]
+    store = iconview.get_model()
+    iter = store.get_iter(path)
+    return store.get(iter, idx)[0]
 
 ## Class defs
 
@@ -1353,14 +1364,20 @@ class OptionsPresenter_Stamp (object):
         base_window = builder.get_object("picture_scrolledwindow")
         self._init_picture_view(base_window)
 
+        self._init_popup_menus()
+
         base_grid = builder.get_object("additional_button_grid")
         self._init_toolbar(0, base_grid)
 
     def _init_stamp_preset_view(self, sw):
+        """Initialize stamp preset icon view.
+
+        :param sw: the scroll widget, which contains the stamp preset iconview.
+        """
+
         # XXX we'll need reconsider fixed value 
         # such as item width of 48 or icon size of 32 
         # in high-dpi environment
-       #liststore = self._app.stamp_manager.initialize_icon_store()
         manager = self._app.stamp_manager
         liststore = Gtk.ListStore(GdkPixbuf.Pixbuf, str, object)
         for id in manager.stamps:
@@ -1380,6 +1397,15 @@ class OptionsPresenter_Stamp (object):
         self._stamp_preset_view = iconview
 
     def _init_picture_view(self, sw):
+        """Initialize stamp picture icon view.
+
+        Stamp picture store(and its view) should be updated 
+        until a stamp is selected.
+        So there is no icon registration codes.
+
+        :param sw: the scroll widget, which contains the stamp picture iconview.
+        """
+
         # The contents of picture liststore is , (picture, picture-id)
         liststore = Gtk.ListStore(GdkPixbuf.Pixbuf, int)
         iconview = Gtk.IconView.new()
@@ -1389,38 +1415,52 @@ class OptionsPresenter_Stamp (object):
         iconview.connect('selection-changed', self._stamp_picture_changed_cb)
         iconview.connect('button-release-event', self._stamp_picture_button_release_cb)
         self._pictures_store = liststore
-        # _pictures_store should be updated when a stamp is selected.
 
         sw.add(iconview)
         self._stamp_picture_view = iconview
 
+    def _init_popup_menus(self):
+
+        def _generate_menuitem(label, handler, id=-1):
+            menu_item = Gtk.MenuItem(label)
+            menu_item.connect("activate", handler)
+            if id != -1:
+                _generate_menuitem.id = id
+            menu_item.id = _generate_menuitem.id
+            _generate_menuitem.id+=1
+            menu.append(menu_item)
+            return menu_item
+
+
         # Creating Popup menu for normal stamp.
         menu = Gtk.Menu()
-        menu_item1 = Gtk.MenuItem(_("Edit pictures with Stamp Editor"))
-        menu_item1.connect("activate", self.popup_edit_stamp_cb)
-        menu_item1.id=0
-        menu.append(menu_item1)
+        editor_menu = _generate_menuitem(_("Edit pictures with Stamp Editor"),
+                self.popup_edit_stamp_cb,
+                id=100)
+        icon_menu = _generate_menuitem(_("Make this picture as Stamp Icon"),
+                self.popup_set_stamp_icon_cb)
         menu.show_all()
         menu.set_sensitive(True)
         self.popup_stamp = menu
+        self.stamp_icon_menu_item = icon_menu
 
         # Creating Popup menu for clipboard stamp.
         menu = Gtk.Menu()
-        menu_item1 = Gtk.MenuItem(_("Refresh from clipboard"))
-        menu_item2 = Gtk.MenuItem(_("Add from clipboard"))
-        menu_item3 = Gtk.MenuItem(_("Edit pictures with Stamp Editor"))
-        menu_item1.connect("activate", self.popup_refresh_from_cp_cb)
-        menu_item2.connect("activate", self.popup_add_from_cp_cb)
-        menu_item3.connect("activate", self.popup_edit_stamp_cb)
-        menu_item1.id=0
-        menu_item2.id=1
-        menu_item3.id=2
-        menu.append(menu_item1)
-        menu.append(menu_item2)
-        menu.append(menu_item3)
+
+        item1 = _generate_menuitem(_("Refresh from clipboard"),
+                self.popup_refresh_from_cp_cb,
+                id=0)
+        item2 = _generate_menuitem(_("Add from clipboard"),
+                self.popup_add_from_cp_cb)
+       #_generate_menuitem(_("Edit pictures with Stamp Editor"),
+       #        self.popup_edit_stamp_cb)
+        menu.append(editor_menu)
+       #_generate_menuitem(_("Make this picture as Stamp Icon"),
+       #        self.popup_set_stamp_icon_cb)
+        menu.append(icon_menu)
         menu.show_all()
         menu.set_sensitive(True)
-        self._clipboard_menus = (menu_item1, menu_item2)
+        self._clipboard_menus = (item1, item2)
         self.popup_clipboard = menu
 
 
@@ -1570,9 +1610,12 @@ class OptionsPresenter_Stamp (object):
         mode, node_idx = self.target
         if mode:
             if len(iconview.get_selected_items()) > 0:
-                path = iconview.get_selected_items()[0]
-                iter = self._stamps_store.get_iter(path)
-                mode.set_stamp(self._stamps_store.get(iter, 2)[0])
+               #path = iconview.get_selected_items()[0]
+               #iter = self._stamps_store.get_iter(path)
+               #mode.set_stamp(self._stamps_store.get(iter, 2)[0])
+                mode.set_stamp(
+                        _get_iconview_data(iconview, 2)
+                        )
                 self.update_picture_store(False)
 
     def _stamp_picture_changed_cb(self, iconview):
@@ -1580,14 +1623,15 @@ class OptionsPresenter_Stamp (object):
             mode, node_idx = self.target
             if mode and mode.stamp is not None:
                 if len(iconview.get_selected_items()) > 0:
-                    path = iconview.get_selected_items()[0]
-                    store = self._pictures_store
-                    iter = store.get_iter(path)
-                    picture_id = store.get(iter, 1)[0]
+                   #path = iconview.get_selected_items()[0]
+                   #store = self._pictures_store
+                   #iter = store.get_iter(path)
+                   #picture_id = store.get(iter, 1)[0]
+                    picture_id = _get_iconview_data(iconview, 1)
                     mode.current_picture_id = picture_id
 
     def _stamp_picture_unselect_all_cb(self, iconview):
-        mode, node_idx = self.target
+        mode, junk = self.target
         if mode and mode.stamp is not None:
             mode.current_picture_id = -1
 
@@ -1595,6 +1639,9 @@ class OptionsPresenter_Stamp (object):
         if event.button == Gdk.BUTTON_SECONDARY:
             mode, node_idx = self.target
             if mode and mode.stamp is not None:
+                selected = len(iconview.get_selected_items()) > 0
+                self.stamp_icon_menu_item.set_sensitive(selected)
+
                 if isinstance(mode.stamp, gui.stamps.ClipboardStamp):
                     clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
                     self._enable_clipboard_menus(
@@ -1612,7 +1659,7 @@ class OptionsPresenter_Stamp (object):
 
     ## Popup menus handler for Stamp picture icon view.
     def _popup_clipboard_cb_base(self, stamp_id):
-        mode, node_idx = self.target
+        mode, junk = self.target
         assert mode
         assert mode.stamp
 
@@ -1636,11 +1683,30 @@ class OptionsPresenter_Stamp (object):
         self._popup_clipboard_cb_base(-1)
 
     def popup_edit_stamp_cb(self, menuitem):
-        mode, node_idx = self.target
+        mode, junk = self.target
         assert mode
         assert mode.stamp
         editor = self._app.stamp_editor_window
         editor.show()
+
+    def popup_set_stamp_icon_cb(self, menuitem):
+        mode, junk = self.target
+        assert mode
+        assert mode.stamp
+        picview = self._stamp_picture_view
+        presetview = self._stamp_preset_view
+        assert len(picview.get_selected_items()) > 0
+        assert len(presetview.get_selected_items()) > 0
+
+        # First, change the internal icon(thumbnail) from the picture
+        picture_id = _get_iconview_data(picview, 1)
+        mode.stamp.generate_thumbnail(picture_id)
+
+        # Next, refresh the internal icon to widget icon.
+        path = presetview.get_selected_items()[0]
+        store = presetview.get_model()
+        iter = store.get_iter(path)
+        store.set_value(iter, 0, mode.stamp.thumbnail)
 
 
 

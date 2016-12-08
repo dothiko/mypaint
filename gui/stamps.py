@@ -211,18 +211,22 @@ class Stamp(object):
         :param id: The generating source tile id. If this is -1, the
                    first tile should be used.
         """
-        if len(self._surf) > 0:
+        if len(self._surfs) > 0:
             if id == -1:
-                surf = self._surf.values()[id]
+                # id -1 means 'The last picture(surface)'
+                # self._surfs is not dict but OrderedDict, 
+                # so the last picture is always values()[-1]
+                surf = self._surfs.values()[-1]
             else:
-                surf = self._surf[id]
+                surf = self._surfs[id]
             pixbuf = Gdk.pixbuf_get_from_surface(surf, 0, 0, 
                     surf.get_width(), surf.get_height())
             icon = Stamp._create_icon(pixbuf, Stamp.THUMBNAIL_SIZE)
             self.set_thumbnail(icon,
                     PictureSource.ICON_GENERATED)
         else:
-            self._thumbnail = None # Use class default icon
+            self._thumbnail = None # assigning None means
+                                   # 'Use class default icon'
 
 
     @property
