@@ -1610,9 +1610,6 @@ class OptionsPresenter_Stamp (object):
         mode, node_idx = self.target
         if mode:
             if len(iconview.get_selected_items()) > 0:
-               #path = iconview.get_selected_items()[0]
-               #iter = self._stamps_store.get_iter(path)
-               #mode.set_stamp(self._stamps_store.get(iter, 2)[0])
                 mode.set_stamp(
                         _get_iconview_data(iconview, 2)
                         )
@@ -1623,10 +1620,6 @@ class OptionsPresenter_Stamp (object):
             mode, node_idx = self.target
             if mode and mode.stamp is not None:
                 if len(iconview.get_selected_items()) > 0:
-                   #path = iconview.get_selected_items()[0]
-                   #store = self._pictures_store
-                   #iter = store.get_iter(path)
-                   #picture_id = store.get(iter, 1)[0]
                     picture_id = _get_iconview_data(iconview, 1)
                     mode.current_picture_id = picture_id
 

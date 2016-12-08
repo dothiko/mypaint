@@ -224,6 +224,7 @@ class Stamp(object):
             icon = Stamp._create_icon(pixbuf, Stamp.THUMBNAIL_SIZE)
             self.set_thumbnail(icon,
                     PictureSource.ICON_GENERATED)
+            self._dirty = True
         else:
             self._thumbnail = None # assigning None means
                                    # 'Use class default icon'
