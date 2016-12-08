@@ -742,7 +742,7 @@ class ExInkingMode (PressureEditableMixin):
         """Internal method of cull nodes."""
         curcnt=len(self.nodes)
         idx = 1
-        for i in xrange(len(self.nodes)/2):
+        for i in xrange(len(self.nodes)/2 - 1):
             self._pop_node(idx)
             idx+=1
         return curcnt-len(self.nodes)
