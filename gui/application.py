@@ -99,6 +99,7 @@ import inktool
 import stamptool
 import selectionmode
 import stampeditor
+import exinktool
 
 ## Utility methods
 
@@ -328,7 +329,7 @@ class Application (object):
         self.brushmodifier = brushmodifier.BrushModifier(self)
         signal_callback_objs.append(self.brushmodifier)
         self.line_mode_settings = linemode.LineModeSettings(self)
-        self.stroke_pressure_settings = inktool.StrokePressureSettings(self)
+        self.stroke_pressure_settings = exinktool.StrokePressureSettings(self)
 
         self.modemanager_for_device = {}
 

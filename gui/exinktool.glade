@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.16.1 -->
+<!-- Generated with glade 3.18.3 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
   <object class="GtkAdjustment" id="dtime_adj">
@@ -12,6 +12,19 @@
     <property name="upper">1</property>
     <property name="step_increment">0.050000000000000003</property>
     <signal name="value-changed" handler="_pressure_adj_value_changed_cb" swapped="no"/>
+  </object>
+  <object class="GtkAdjustment" id="range_factor_adj">
+    <property name="lower">-1</property>
+    <property name="upper">1</property>
+    <property name="step_increment">0.01</property>
+    <property name="page_increment">0.050000000000000003</property>
+    <signal name="value-changed" handler="_range_factor_value_changed_cb" swapped="no"/>
+  </object>
+  <object class="GtkAdjustment" id="range_radius_adj">
+    <property name="upper">256</property>
+    <property name="step_increment">1</property>
+    <property name="page_increment">16</property>
+    <signal name="value-changed" handler="_range_radius_value_changed_cb" swapped="no"/>
   </object>
   <object class="GtkAdjustment" id="xtilt_adj">
     <property name="lower">-1</property>
@@ -44,14 +57,12 @@
             <property name="valign">baseline</property>
             <property name="hexpand">False</property>
             <property name="vexpand">False</property>
-            <property name="xalign">0</property>
             <property name="label" translatable="yes" context="Inking tool options: point value sliders: labels">Press:</property>
+            <property name="xalign">0</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">0</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -71,8 +82,6 @@
           <packing>
             <property name="left_attach">1</property>
             <property name="top_attach">0</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -85,14 +94,12 @@ Negative values mean leftwards tilts.</property>
             <property name="valign">baseline</property>
             <property name="hexpand">False</property>
             <property name="vexpand">False</property>
-            <property name="xalign">0</property>
             <property name="label" translatable="yes" context="Inking tool options: point value sliders: labels">X-tilt:</property>
+            <property name="xalign">0</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">1</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -105,14 +112,12 @@ Negative values mean leftwards tilts.</property>
             <property name="valign">baseline</property>
             <property name="hexpand">False</property>
             <property name="vexpand">False</property>
-            <property name="xalign">0</property>
             <property name="label" translatable="yes" context="Inking tool options: point value sliders: labels">Y-tilt:</property>
+            <property name="xalign">0</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">2</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -132,8 +137,6 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">1</property>
             <property name="top_attach">1</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -155,8 +158,6 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">1</property>
             <property name="top_attach">2</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -167,14 +168,12 @@ Negative values mean leftwards tilts.</property>
             <property name="valign">baseline</property>
             <property name="hexpand">False</property>
             <property name="vexpand">False</property>
-            <property name="xalign">0</property>
             <property name="label" translatable="yes" context="Inking tool options: point value sliders: labels">Time:</property>
+            <property name="xalign">0</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">3</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
@@ -195,96 +194,162 @@ Negative values mean leftwards tilts.</property>
           <packing>
             <property name="left_attach">1</property>
             <property name="top_attach">3</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
           </packing>
         </child>
         <child>
-          <object class="GtkButton" id="delete_point_button">
-            <property name="label" translatable="yes" context="Inking tool options: node delete button: label">Delete Point</property>
+          <object class="GtkGrid" id="count_changing_button_grid">
             <property name="visible">True</property>
-            <property name="can_focus">True</property>
-            <property name="receives_default">True</property>
-            <property name="tooltip_text" translatable="yes" context="Inking tool options: node delete button: tooltip">Delete the currently selected point</property>
-            <signal name="clicked" handler="_delete_point_button_clicked_cb" swapped="no"/>
-          </object>
-          <packing>
-            <property name="left_attach">0</property>
-            <property name="top_attach">5</property>
-            <property name="width">2</property>
-            <property name="height">1</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkButton" id="insert_point_button">
-            <property name="label" translatable="yes">Insert Point</property>
-            <property name="visible">True</property>
-            <property name="can_focus">True</property>
-            <property name="receives_default">True</property>
-            <signal name="clicked" handler="_insert_point_button_clicked_cb" swapped="no"/>
+            <property name="can_focus">False</property>
+            <property name="column_homogeneous">True</property>
+            <child>
+              <object class="GtkButton" id="insert_point_button">
+                <property name="label" translatable="yes">Insert Point</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="margin_right">3</property>
+                <signal name="clicked" handler="_insert_point_button_clicked_cb" swapped="no"/>
+              </object>
+              <packing>
+                <property name="left_attach">0</property>
+                <property name="top_attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="delete_point_button">
+                <property name="label" translatable="yes" context="Inking tool options: node delete button: label">Delete Point</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="tooltip_text" translatable="yes" context="Inking tool options: node delete button: tooltip">Delete the currently selected point</property>
+                <property name="margin_left">3</property>
+                <signal name="clicked" handler="_delete_point_button_clicked_cb" swapped="no"/>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="top_attach">0</property>
+              </packing>
+            </child>
           </object>
           <packing>
             <property name="left_attach">0</property>
             <property name="top_attach">4</property>
             <property name="width">2</property>
-            <property name="height">1</property>
           </packing>
         </child>
       </object>
       <packing>
         <property name="left_attach">0</property>
         <property name="top_attach">0</property>
-        <property name="width">1</property>
-        <property name="height">1</property>
       </packing>
     </child>
     <child>
       <object class="GtkGrid" id="points_editing_grid">
         <property name="visible">True</property>
         <property name="can_focus">False</property>
-        <property name="margin_left">6</property>
-        <property name="margin_right">6</property>
+        <property name="margin_left">4</property>
+        <property name="margin_right">4</property>
         <property name="margin_bottom">6</property>
-        <property name="row_homogeneous">True</property>
-        <property name="column_homogeneous">True</property>
         <child>
-          <object class="GtkButton" id="simplify_points_button">
-            <property name="label" translatable="yes">Simplify Points</property>
+          <object class="GtkButton" id="apply_variation_button">
+            <property name="label" translatable="yes">Apply</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">True</property>
-            <property name="tooltip_text" translatable="yes">Simplify the curve using the Reumann-Witkam algorithm.</property>
-            <signal name="clicked" handler="_simplify_points_button_clicked_cb" swapped="no"/>
+            <property name="tooltip_text" translatable="yes">Apply pressure variation to current inking stroke.</property>
+            <property name="margin_top">4</property>
+            <property name="margin_bottom">4</property>
+            <signal name="clicked" handler="_apply_variation_button_cb" swapped="no"/>
           </object>
           <packing>
-            <property name="left_attach">0</property>
-            <property name="top_attach">0</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
+            <property name="left_attach">1</property>
+            <property name="top_attach">2</property>
           </packing>
         </child>
         <child>
-          <object class="GtkButton" id="cull_points_button">
-            <property name="label" translatable="yes">Cull Points</property>
+          <object class="GtkLabel" id="range_factor_label">
             <property name="visible">True</property>
-            <property name="can_focus">True</property>
-            <property name="receives_default">True</property>
-            <property name="tooltip_text" translatable="yes">Cull every other point from the curve.</property>
-            <signal name="clicked" handler="_cull_points_button_clicked_cb" swapped="no"/>
+            <property name="can_focus">False</property>
+            <property name="tooltip_text" translatable="yes">Define the adjusting weight factor as gamma correction. With this scale, you can change how the node adjustment effects directly against far nodes.</property>
+            <property name="halign">start</property>
+            <property name="label" translatable="yes">Editing factor:</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
-            <property name="top_attach">1</property>
-            <property name="width">1</property>
-            <property name="height">1</property>
+            <property name="top_attach">4</property>
           </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="range_radius_label">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="tooltip_text" translatable="yes">Define the effective range radius of node adjustment, in screen pixel. 
+Zero means only one node should be adjusted.</property>
+            <property name="halign">start</property>
+            <property name="label" translatable="yes">Editing range :</property>
+          </object>
+          <packing>
+            <property name="left_attach">0</property>
+            <property name="top_attach">3</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkScale" id="range_radius_scale">
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="valign">baseline</property>
+            <property name="margin_left">6</property>
+            <property name="margin_right">6</property>
+            <property name="hexpand">True</property>
+            <property name="adjustment">range_radius_adj</property>
+            <property name="restrict_to_fill_level">False</property>
+            <property name="fill_level">0</property>
+            <property name="round_digits">1</property>
+            <property name="value_pos">right</property>
+            <signal name="format-value" handler="_range_radius_scale_format_value_cb" swapped="no"/>
+          </object>
+          <packing>
+            <property name="left_attach">1</property>
+            <property name="top_attach">3</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkScale" id="range_factor_scale">
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="valign">baseline</property>
+            <property name="hexpand">True</property>
+            <property name="adjustment">range_factor_adj</property>
+            <property name="restrict_to_fill_level">False</property>
+            <property name="fill_level">0</property>
+            <property name="round_digits">1</property>
+            <property name="value_pos">right</property>
+            <signal name="format-value" handler="_range_factor_scale_format_value_cb" swapped="no"/>
+          </object>
+          <packing>
+            <property name="left_attach">1</property>
+            <property name="top_attach">4</property>
+          </packing>
+        </child>
+        <child>
+          <placeholder/>
+        </child>
+        <child>
+          <placeholder/>
+        </child>
+        <child>
+          <placeholder/>
+        </child>
+        <child>
+          <placeholder/>
+        </child>
+        <child>
+          <placeholder/>
         </child>
       </object>
       <packing>
         <property name="left_attach">0</property>
         <property name="top_attach">1</property>
-        <property name="width">1</property>
-        <property name="height">1</property>
       </packing>
     </child>
   </object>

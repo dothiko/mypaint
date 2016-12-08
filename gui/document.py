@@ -50,6 +50,7 @@ import gui.buttonmap
 import gui.externalapp
 import gui.device
 import gui.backgroundwindow
+import gui.exinktool   # registration only
 from lib.gettext import gettext as _
 from lib.gettext import C_
 

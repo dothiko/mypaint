@@ -42,6 +42,7 @@
       <separator/>
       <menuitem action='FlipFreehandMode'/>
       <menuitem action='FlipInkingMode'/>
+      <menuitem action='FlipExInkingMode'/>
       <menuitem action='FlipBezierCurveMode'/>
       <menuitem action='FlipPolyfillMode'/>
       <menuitem action='FlipFloodFillMode'/>

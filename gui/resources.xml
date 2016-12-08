@@ -2133,6 +2133,26 @@ Vocabulary
         </object>
       </child>
       <!-- }}} -->
+      <!-- {{{ ExInking tool radio and flip actions -->
+      <child>
+        <object class="GtkRadioAction" id="ExInkingMode">
+          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">ExInking</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">ExInk</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Experimantal Inking: draw smooth controlled lines.</property>
+          <property name="icon-name">mypaint-tool-inking-symbolic</property>
+          <property name="group">EllipseMode</property>
+          <property name="value">17</property>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="FlipExInkingMode">
+          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">ExInking</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Draw smooth controlled lines(Experimental version).</property>
+          <property name="icon-name">mypaint-tool-inking-symbolic</property>
+          <signal name="activate" handler="mode_flip_action_activated_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
 
     </object>
   </child>
