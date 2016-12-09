@@ -556,8 +556,12 @@ class BezierMode (PressureEditableMixin):
                 if abs(z) < 0.0000001:
                     break # if already got close enough
 
-                x = x - z / gui.drawutils.get_diff_cubic_bezier(
+                dx = gui.drawutils.get_diff_cubic_bezier(
                       p0, p1, p2, p3, x)
+                if dx == 0.0:
+                    break
+
+                x = x - z / dx
                 i+=1
 
             return x # try any of x

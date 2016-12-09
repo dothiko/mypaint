@@ -643,6 +643,8 @@ class ExInkingMode (PressureEditableMixin):
                     break # if already got close enough
 
                 dx = gui.drawutils.get_diff_spline_4p(x, p_1, p0, p1, p2)
+                if dx == 0.0:
+                    break 
 
                 x = x - z / dx
                 i+=1
