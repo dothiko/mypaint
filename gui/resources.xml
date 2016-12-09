@@ -941,6 +941,13 @@ Vocabulary
           <signal name="activate" handler="enter_pressure_phase_cb"/>
         </object>
       </child>
+      <child>
+        <object class="GtkAction" id="InsertNodePhase">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Enter Insert node phase</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Enter inserting node phase.</property>
+          <signal name="activate" handler="enter_insert_node_phase_cb"/>
+        </object>
+      </child>
       <!-- }}} -->
       <!-- {{{ polygon fill related actions -->
       <child>

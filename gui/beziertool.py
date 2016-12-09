@@ -33,8 +33,8 @@ import gui.drawutils
 import lib.helpers
 import gui.cursor
 import lib.observable
-from gui.inktool import *
-from gui.inktool import _LayoutNode
+from gui.exinktool import *
+from gui.exinktool import _LayoutNode
 from gui.linemode import *
 from gui.oncanvas import *
 
@@ -197,6 +197,7 @@ class _Phase(PressPhase):
                             # stroke,when you click with holding CTRL key
     CALL_BUTTONS = 106      #: show action buttons around the clicked point. 
 
+
 _ActionButton = ActionButtonMixin
 
 class PressureMap(object):
@@ -301,6 +302,8 @@ class BezierMode (PressureEditableMixin):
 
     @property
     def active_cursor(self):
+        """Setting drag-related handler cursor.
+        Called by DragMode._start_drag() method. """
         if self.phase == _Phase.ADJUST:
             if self.zone in (_EditZone.CONTROL_NODE,
                     _EditZone.CONTROL_HANDLE):
@@ -310,11 +313,13 @@ class BezierMode (PressureEditableMixin):
                 return self._crosshair_cursor
             elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
                 return self._arrow_cursor
-
+    
         elif self.phase == _Phase.ADJUST_PRESSURE:
             if self.zone == _EditZone.CONTROL_NODE:
                 return self._cursor_move_nw_se
 
+        # There is no cursor setting for phases which does not support drag.
+        # Such phase will need to setup at self.update_cursor_cb()
         return None  
 
     @property
@@ -328,6 +333,15 @@ class BezierMode (PressureEditableMixin):
        #else:
        #    self.enable_switch_actions(False)
         self._phase = new_phase
+
+    def enter_insert_node_phase(self):
+        if len(self.nodes) > 2:
+            self.phase = _Phase.INSERT_NODE
+            for tdw in self._overlays:
+                self._update_cursor(tdw) 
+            self.doc.app.show_transient_message(_("Entering insert node phase."))
+        else:
+            self.doc.app.show_transient_message(_("There is no stroke.Cannot enter insert phase."))
 
     @property
     def is_editing_phase(self):
@@ -350,6 +364,15 @@ class BezierMode (PressureEditableMixin):
     @classmethod
     def set_default_pressure(cls, new_pressure):
         cls._DEFAULT_PRESSURE = new_pressure
+
+    def enter(self, doc, **kwds):
+        """Enters the mode: called by `ModeStack.push()` etc."""
+        super(BezierMode, self).enter(doc, **kwds)
+        cursors = self.doc.app.cursors
+        self._insert_cursor = cursors.get_action_cursor(
+            self.ACTION_NAME,
+            gui.cursor.Name.ADD,
+        )
 
 
     ## Class config vars
@@ -474,16 +497,21 @@ class BezierMode (PressureEditableMixin):
                     if not self.in_drag:
                         self._update_cursor(tdw) 
 
+        elif self.phase == _Phase.INSERT_NODE:
+            self._update_cursor(tdw) 
+
 
     def update_cursor_cb(self, tdw): 
-        # Update the "real" inactive cursor too:
-        # these codes also a little changed from inktool.
+        """  Update the cursor for not dragging mode.
+        """
         cursor = None
         if self.is_editing_phase:
             if self.zone == _EditZone.CONTROL_NODE:
                 cursor = self._crosshair_cursor
             elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
                 cursor = self._arrow_cursor
+        elif self.phase == _Phase.INSERT_NODE:
+            cursor = self._insert_cursor
 
         return cursor
 
@@ -505,15 +533,36 @@ class BezierMode (PressureEditableMixin):
 
     ## Stroke related
     def _detect_on_stroke(self, x, y, allow_distance = 4.0):
-        """ detect the assigned coordinate is on stroke or not
-        currently implemented very silly way (scan entire
-        bezier segment until find most closer point)
-
-        it must done with newton's method
-
+        """Detecting pressed point is on the stroke currently editing.
+        
         :param x: cursor x position in MODEL coord
         :param y: cursor y position in MODEL coord
+        :param allow_distance: the allowed distance from stroke.
+        :return : a tuple of (the index of 'previous' node, time parameter of stroke)
+        :rtype : a tuple when the pressed point is on stroke, otherwise
+                 None.
+        
         """
+
+        # XXX Transplant from https://gist.github.com/MadRabbit/996893
+        def find_x_for(p0, p1, p2, p3, tx, init):
+            t=init
+            x=t 
+            i=0
+            while i < 5: # making 5 iterations max
+                z = gui.drawutils.get_cubic_bezier(
+                        p0, p1, p2, p3, x) - tx
+
+                if abs(z) < 0.0000001:
+                    break # if already got close enough
+
+                x = x - z / gui.drawutils.get_diff_cubic_bezier(
+                      p0, p1, p2, p3, x)
+                i+=1
+
+            return x # try any of x
+
+
 
         for i,cn in enumerate(self.nodes[:-1]):
             # Get boundary rectangle,to reduce processing segment
@@ -532,69 +581,19 @@ class BezierMode (PressureEditableMixin):
             sy, ey = gui.drawutils.get_minmax_bezier(q0, q1, q2, q3)
             
             if sx <= x <= ex and sy <= y <= ey:
-                # first, detect from 
-                limitDt = 0.001
-                t = 0
-                loop = 0
-                A = (3.0*p1 + p3 - 3.0*p2 - p0)
-                B = 3.0 * (p0 - 2*p1 + p2)
-                C = 3.0 * (p1 - p0)
-                while loop < 2:
-                    cnt = 0
-                    while cnt < 10:
-                        dx = gui.drawutils.get_cubic_bezier(
-                                p0, p1, p2, p3, t) - x
-                                
-                        
-                        if (abs(dx) < limitDt):
-                            break
-                        
-                        slope = 3.0 * A * (t**2) + 2.0 * B * t + C
-                        
-                        if slope != 0.0:
-                            t = (slope*t - dx)/slope;
-                        else:
-                            t += 0.001
+                # cursor is inside the bezier segment.
+                c=0
+                t=1.0
+                while c < 2:
+                    t = find_x_for(p0, p1, p2, p3, x, t)
+                    cy = gui.drawutils.get_cubic_bezier(q0, q1, q2, q3, t)
+                    if abs(y - cy) < allow_distance:
+                        # the timepoint Found!
+                        return (i, t)
+                    t = 0.0
+                    c+=1
 
-                        cnt+=1
-
-                    if (cnt < 10 and 0.0 <= t <= 1.0): 
-                        dy = gui.drawutils.get_cubic_bezier(
-                                q0, q1, q2, q3, t)
-                        if dy - allow_distance < y < dy + allow_distance:
-                            return (i, t)
-
-                    t = 1.0
-                    loop+=1
-
-                ## Failthrogh, and doing full search
-                t = 0
-                candidate_t = None
-                least_diff = None
-                while t < 1.0:
-                    cx = gui.drawutils.get_cubic_bezier(
-                            p0, p1, p2, p3, t) 
-                    cy = gui.drawutils.get_cubic_bezier(
-                            q0, q1, q2, q3, t)
-
-                    cur_diff = math.hypot(cx-x,cy-y)
-                   #if ((cy - allow_distance < y < cy + allow_distance) and
-                   #        (cx - allow_distance < x < cx + allow_distance)):
-                   #    cur_diff = math.hypot(cx-x,cy-y)
-                    if cur_diff < allow_distance:
-                        if least_diff != None:
-                            if (least_diff > cur_diff):
-                                least_diff = cur_diff
-                                candidate_t = t
-                        else:
-                            least_diff = cur_diff
-                            candidate_t = t
-
-                    t += 0.001
-
-                if candidate_t:
-                    return (i, candidate_t)
-
+        # Fallthrough: return None when failed.
 
     ## Redraws
     
@@ -844,23 +843,6 @@ class BezierMode (PressureEditableMixin):
                         self._queue_draw_buttons() 
                         self.forced_button_pos = (event.x, event.y)
                         self._bypass_phase(_Phase.ADJUST)
-                    elif ctrl_state:
-                        mx, my = tdw.display_to_model(event.x, event.y)
-                        pressed_segment = self._detect_on_stroke(mx, my)
-                        if pressed_segment:
-                            # pressed_segment is a tuple which contains
-                            # (node index of start of segment, stroke step)
-
-                            # To erase buttons 
-                            self._queue_draw_buttons() 
-
-                            self._divide_bezier(*pressed_segment)
-
-                            # queue new node here.
-                            self._queue_draw_node(pressed_segment[0] + 1)
-                            
-                            self._bypass_phase(_Phase.ADJUST)
-                            return True # Cancel drag event
 
                     ## Otherwise, after this callback
                     ## a new node created in drag_stop_cb.
@@ -879,6 +861,26 @@ class BezierMode (PressureEditableMixin):
             # without reaching drag_stop_cb.(it might due to pen tablet...)
             # so ignore this for now,or something should be done here?
             pass 
+        elif self.phase == _Phase.INSERT_NODE:
+            mx, my = tdw.display_to_model(event.x, event.y)
+            pressed_segment = self._detect_on_stroke(mx, my)
+            if pressed_segment:
+                # pressed_segment is a tuple which contains
+                # (node index of start of segment, stroke step)
+
+                # To erase buttons 
+                self._queue_draw_buttons() 
+
+                self._divide_bezier(*pressed_segment)
+
+                # queue new node here.
+               #self._queue_draw_node(pressed_segment[0] + 1)
+                
+                self._bypass_phase(_Phase.ADJUST)
+                self.doc.app.show_transient_message(_("Create a new node on stroke"))
+                return True # Cancel drag event
+            else:
+                self.doc.app.show_transient_message(_("There is no stroke on clicked point.Creating node is failed."))
         
         # Supercall : inside inherited class, basic operation (such as
         # moving nodes) would be done.
@@ -1258,6 +1260,7 @@ class BezierMode (PressureEditableMixin):
     def reject_button_cb(self, tdw):
         self._start_new_capture_phase(rollback=True)
 
+
 class OverlayBezier (OverlayOncanvasMixin):
     """Overlay for an BezierMode's adjustable points"""
 
@@ -1460,7 +1463,7 @@ class OverlayBezier (OverlayOncanvasMixin):
                 
 
 
-class OptionsPresenter_Bezier (OptionsPresenter):
+class OptionsPresenter_Bezier (OptionsPresenter_ExInking):
     """Presents UI for directly editing point values etc."""
 
     def __init__(self):

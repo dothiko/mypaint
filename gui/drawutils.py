@@ -82,6 +82,22 @@ def spline_4p(t, p_1, p0, p1, p2):
     ) / 2
 
 
+def get_diff_spline_4p(t, p_1, p0, p1, p2):
+    """Get the differential of spline_4p
+
+    :param float t: Time parameter, between 0.0 and 1.0
+    :param array or float p_1: Point p[-1]
+    :param array or float p0: Point p[0]
+    :param array or float p1: Point p[1]
+    :param array or float p2: Point p[2]
+    :returns: the differential at Time parameter
+    :rtype: array or float (according to type of parameter)
+    """
+    C = -p_1 + p1
+    B = 2*p_1 - 5*p0 + 4*p1 - p2
+    A = -p_1 + 3*p0 - 3*p1 + p2
+    return (3*A*t**2 + 2*B*t + C) * 0.5
+
 def spline_iter(tuples, double_first=True, double_last=True):
     """Converts an list of control point tuples to interpolatable arrays
 
@@ -694,8 +710,30 @@ def get_bezier(p0, p1, p2, t):
     return (dt**2)*p0 + 2.0*t*dt*p1 + (t**2)*p2                       
 
 def get_cubic_bezier(p0, p1, p2, p3, t):
+    """ Get the point of cubic bezier
+
+    :param array or float p0: the starting point 
+    :param array or float p1: control point of starting point
+    :param array or float p2: control point of ending point
+    :param array or float p3: the ending point
+    :returns: the cubic bezier point at Time parameter
+    :rtype: array or float (according to type of parameter)
+    """
     dt = 1-t
     return (dt**3.0)*p0 + 3.0*(dt**2)*t*p1 + 3.0*dt*(t**2)*p2 + (t**3)*p3
+            
+def get_diff_cubic_bezier(p0, p1, p2, p3, t):
+    """ Get the differential of cubic bezier
+
+    :param array or float p0: the starting point 
+    :param array or float p1: control point of starting point
+    :param array or float p2: control point of ending point
+    :param array or float p3: the ending point
+    :returns: the differential at Time parameter
+    :rtype: array or float (according to type of parameter)
+    """
+    dt = 1-t
+    return 3.0*(t**2*(p3-p2)+2*t*(dt)*(p2-p1)+dt**2*(p1-p0))
 
 def get_bezier_raw(p0, p1, p2, t):
     return ( linear_interpolation(p0, p1 , t), 
@@ -742,6 +780,20 @@ def get_minmax_bezier(x1, x2, x3, x4):
 def linear_interpolation(base, dest, step):
     return base + ((dest - base) * step)
 
+def is_inside_segment(pt0, pt1, cx, cy):
+    """To check whether the cursor point is
+    inside assigned line segment of points or not.
+
+    :param pt0: an array object, of starting point of line segment
+    :param pt1: an array object, of ending point of line segment
+    :param cx, cy: cursor point
+    :return : the boolean flag , True when the cursor is inside the section.
+    """
+    seclen = math.hypot(pt0[0] - pt1[0] , pt0[1] - pt1[1])
+    p0_c = math.hypot(pt0[0] - cx , pt0[1] - cy)
+    c_p1 = math.hypot(cx - pt1[0] , cy - pt1[1])
+
+    return p0_c < seclen and c_p1 < seclen
 ## Test code
 
 if __name__ == '__main__':

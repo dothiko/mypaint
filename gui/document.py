@@ -2201,6 +2201,14 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         if hasattr(mode, 'enter_pressure_phase'):
             mode.enter_pressure_phase()
 
+    def enter_insert_node_phase_cb(self, action):
+        """Callback: Enter inserting node phase,in oncanvas
+        editable tools.
+        """
+        mode=self.modes.top
+        if hasattr(mode, 'enter_insert_node_phase'):
+            mode.enter_insert_node_phase()
+
     ##+ Bezier curve related
     def bezier_curve_node_activated_cb(self, action):
         mode=self.modes.top

@@ -140,7 +140,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
  
     ## Override action
     permitted_switch_actions = None
-    _enable_switch_actions = set()   # Any action is permitted,for now.
+    _enable_switch_actions = set()   # This means 'Any action is permitted'
     _disable_switch_actions=set(gui.mode.BUTTON_BINDING_ACTIONS).union([
             'RotateViewMode',
             'ZoomViewMode',
@@ -972,6 +972,10 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 class PressPhase(PhaseMixin):
     ADJUST_PRESSURE = 4
     ADJUST_PRESSURE_ONESHOT = 5
+    INSERT_NODE = 6         #: Inserting node phase, with clicking on stroke,
+                            #  a node inserted at the point of stroke.
+                            #  this phase is one-shot, immidiately return to 
+                            #  _Phase.ADJUST.
 
 class PressureEditableMixin(OncanvasEditMixin,
                             gui.mode.BrushworkModeMixin):
@@ -997,6 +1001,19 @@ class PressureEditableMixin(OncanvasEditMixin,
         super(PressureEditableMixin, self).__init__(**kwargs)
         self._sshot_before = None
         self._pending_cmd = None
+
+    def _detect_on_stroke(self, x, y, allow_distance = 4.0):
+        """Detecting pressed point is on the stroke currently editing.
+        
+        :param x: cursor x position in MODEL coord
+        :param y: cursor y position in MODEL coord
+        :param allow_distance: the allowed distance from stroke.
+        :return : a tuple of (the index of 'previous' node, time parameter of stroke)
+        :rtype : a tuple when the pressed point is on stroke, otherwise
+                 None.
+        
+        """
+        return None
 
     def mode_button_press_cb(self, tdw, event):
         if self.is_adjusting_phase:
@@ -1226,6 +1243,8 @@ class PressureEditableMixin(OncanvasEditMixin,
         elif self.phase == PressPhase.ADJUST:
             self.phase = PressPhase.ADJUST_PRESSURE
         self._queue_redraw_all_nodes()
+        for tdw in self._overlays:
+            self._update_cursor(tdw) 
 
     ## Brushwork related, to enable undo node operations.
 

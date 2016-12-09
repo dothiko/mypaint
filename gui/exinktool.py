@@ -206,7 +206,7 @@ class ExInkingMode (PressureEditableMixin):
         return Overlay(self, tdw)
 
     def _generate_presenter(self):
-        return OptionsPresenter()
+        return OptionsPresenter_ExInking()
 
 
     def update_cursor_cb(self, tdw):
@@ -219,9 +219,28 @@ class ExInkingMode (PressureEditableMixin):
                 cursor = self._crosshair_cursor
             elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
                 cursor = self._arrow_cursor
+        elif self.phase == _Phase.INSERT_NODE:
+            cursor = self._insert_cursor
 
         return cursor
 
+    def enter_insert_node_phase(self):
+        if len(self.nodes) >= 2:
+            self.phase = _Phase.INSERT_NODE
+            for tdw in self._overlays:
+                self._update_cursor(tdw) 
+            self.doc.app.show_transient_message(_("Entering insert node phase."))
+        else:
+            self.doc.app.show_transient_message(_("There is no stroke.Cannot enter insert phase."))
+
+    def enter(self, doc, **kwds):
+        """Enters the mode: called by `ModeStack.push()` etc."""
+        super(ExInkingMode, self).enter(doc, **kwds)
+        cursors = self.doc.app.cursors
+        self._insert_cursor = cursors.get_action_cursor(
+            self.ACTION_NAME,
+            gui.cursor.Name.ADD,
+        )
 
     ## Redraws
 
@@ -394,6 +413,51 @@ class ExInkingMode (PressureEditableMixin):
                 if self.zone == EditZoneMixin.EMPTY_CANVAS:
                     self._start_new_capture_phase(rollback=False)
                     assert self.phase == PhaseMixin.CAPTURE
+        elif self.phase == _Phase.INSERT_NODE:
+            mx, my = tdw.display_to_model(event.x, event.y)
+            detected_info = self._detect_on_stroke(mx, my)
+            if detected_info:
+                # pressed_segment is a tuple which contains
+                # (node index of start of segment, stroke step)
+
+                # To erase buttons 
+                self._queue_draw_buttons() 
+
+                idx, t, x, y = detected_info
+                new_pressure = self.nodes[idx].pressure
+                new_xtilt = self.nodes[idx].xtilt
+                new_ytilt = self.nodes[idx].ytilt
+                new_time = self.nodes[idx].time
+
+                if idx < len(self.nodes) - 1:
+                    new_pressure += self.nodes[idx+1].pressure
+                    new_xtilt += self.nodes[idx+1].xtilt
+                    new_ytilt += self.nodes[idx+1].ytilt
+                    new_time += self.nodes[idx+1].time
+
+                    new_pressure *= 0.5
+                    new_xtilt *= 0.5
+                    new_ytilt *= 0.5
+                    new_time *= 0.5
+
+
+                self.nodes.insert(idx + 1, # insert method requires the inserted position. 
+                                  _Node(
+                                      x=x, y=y,
+                                      pressure=new_pressure,
+                                      xtilt=new_xtilt, ytilt=new_ytilt,
+                                      time=new_time)
+                                  )
+
+
+                # queue new node here.
+               #self._queue_draw_node(pressed_segment[0] + 1)
+                
+                self._bypass_phase(_Phase.ADJUST)
+                self.doc.app.show_transient_message(_("Create a new node on stroke"))
+                return True # Cancel drag event
+            else:
+                self.doc.app.show_transient_message(_("There is no stroke on clicked point.Creating node is failed."))
                 
         super(ExInkingMode, self).mode_button_press_cb(tdw, event)
             
@@ -554,6 +618,68 @@ class ExInkingMode (PressureEditableMixin):
 
 
     ## Node editing
+    def _detect_on_stroke(self, x, y, allow_distance = 4.0):
+        """Detecting pressed point is on the stroke currently editing.
+        
+        :param x: cursor x position in MODEL coord
+        :param y: cursor y position in MODEL coord
+        :param allow_distance: the allowed distance from stroke.
+        :return : a tuple of (the index of 'previous' node, 
+                time parameter of stroke,
+                x of new_node, y of new_node)
+        :rtype : a tuple when the pressed point is on stroke, otherwise
+                 None.
+        
+        """
+
+        # XXX Transplant from https://gist.github.com/MadRabbit/996893
+        def find_x_for(p_1, p0, p1, p2, tx, init):
+            x=init 
+            i=0
+            while i < 5: # making 5 iterations max
+                z = gui.drawutils.spline_4p(x, p_1, p0, p1, p2) - tx
+
+                if abs(z) < 0.0000001:
+                    break # if already got close enough
+
+                dx = gui.drawutils.get_diff_spline_4p(x, p_1, p0, p1, p2)
+
+                x = x - z / dx
+                i+=1
+
+            return x # try any x
+
+        for idx in xrange(len(self.nodes)-1):
+            pt0 = self.nodes[idx]
+            pt1 = self.nodes[idx+1]
+            if gui.drawutils.is_inside_segment(pt0, pt1, x, y):
+
+                if idx == 0:
+                    double_first=True
+                    line_list = [ pt0, pt1 ] 
+                else:
+                    double_first = False
+                    line_list = [ self.nodes[idx-1], pt0, pt1 ] 
+
+                if idx == len(self.nodes) - 1:
+                    double_last = True
+                else:
+                    double_last = False
+                    line_list.append(self.nodes[idx+2])
+
+                for p_1, p0, p1, p2 in gui.drawutils.spline_iter(line_list,
+                        double_first=double_first, double_last=double_last):
+                    c=0
+                    t=1.0
+                    while c < 2:
+                        t = find_x_for(p_1[0], p0[0], p1[0], p2[0], x, t)
+                        cpos = gui.drawutils.spline_4p(t, p_1, p0, p1, p2)
+                        if abs(y - cpos[1]) < allow_distance:
+                            # the timepoint Found!
+                            return (idx, t, cpos[0], cpos[1])
+                        t = 0.0
+                        c+=1
+
 
     def _get_event_data(self, tdw, event):
         x, y = tdw.display_to_model(event.x, event.y)
@@ -742,7 +868,7 @@ class ExInkingMode (PressureEditableMixin):
         """Internal method of cull nodes."""
         curcnt=len(self.nodes)
         idx = 1
-        for i in xrange(len(self.nodes)/2 - 1):
+        while idx < len(self.nodes)-1:
             self._pop_node(idx)
             idx+=1
         return curcnt-len(self.nodes)
@@ -1573,7 +1699,7 @@ class StrokeCurveWidget (gui.curve.CurveWidget):
         junk, value = self._get_curve_value(step)
         return lib.helpers.clamp(1.0 - value, 0.0, 1.0)
 
-class OptionsPresenter (object):
+class OptionsPresenter_ExInking (object):
     """Presents UI for directly editing point values etc."""
 
     variation_preset_store = None
@@ -1589,7 +1715,7 @@ class OptionsPresenter (object):
             cls.variation_preset_store = store
 
     def __init__(self):
-        super(OptionsPresenter, self).__init__()
+        super(OptionsPresenter_ExInking, self).__init__()
         from application import get_app
         self._app = get_app()
         self._options_grid = None
@@ -1608,7 +1734,7 @@ class OptionsPresenter (object):
         self._updating_ui = False
         self._target = (None, None)
 
-        OptionsPresenter.init_variation_preset_store()
+        OptionsPresenter_ExInking.init_variation_preset_store()
         
 
     def _ensure_ui_populated(self):
@@ -1698,7 +1824,7 @@ class OptionsPresenter (object):
 
     def init_variation_preset_combo(self, row, box, ref_button=None):
         combo = Gtk.ComboBox.new_with_model(
-                OptionsPresenter.variation_preset_store)
+                OptionsPresenter_ExInking.variation_preset_store)
         cell = Gtk.CellRendererText()
         combo.pack_start(cell,True)
         combo.add_attribute(cell,'text',0)
