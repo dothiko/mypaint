@@ -215,10 +215,10 @@ class ExInkingMode (PressureEditableMixin):
         """
         cursor = None
         if self.is_adjusting_phase:
-            if self.zone == _EditZone.CONTROL_NODE:
-                cursor = self._crosshair_cursor
-            elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
+            if self.zone != _EditZone.EMPTY_CANVAS: # assume button
                 cursor = self._arrow_cursor
+            else:
+                cursor = self._crosshair_cursor
         elif self.phase == _Phase.INSERT_NODE:
             cursor = self._insert_cursor
 
@@ -226,10 +226,15 @@ class ExInkingMode (PressureEditableMixin):
 
     def enter_insert_node_phase(self):
         if len(self.nodes) >= 2:
-            self.phase = _Phase.INSERT_NODE
+            if self.phase == _Phase.INSERT_NODE:
+                self.phase = _Phase.ADJUST
+                self.doc.app.show_transient_message(_("Toggled to adjust phase."))
+            else:
+                self.phase = _Phase.INSERT_NODE
+                self.doc.app.show_transient_message(_("Entering insert node phase."))
+
             for tdw in self._overlays:
                 self._update_cursor(tdw) 
-            self.doc.app.show_transient_message(_("Entering insert node phase."))
         else:
             self.doc.app.show_transient_message(_("There is no stroke.Cannot enter insert phase."))
 
@@ -663,7 +668,7 @@ class ExInkingMode (PressureEditableMixin):
                     double_first = False
                     line_list = [ self.nodes[idx-1], pt0, pt1 ] 
 
-                if idx == len(self.nodes) - 1:
+                if idx >= len(self.nodes) - 2:
                     double_last = True
                 else:
                     double_last = False
