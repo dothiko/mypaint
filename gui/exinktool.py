@@ -113,7 +113,8 @@ class _Node (collections.namedtuple("_Node", _NODE_FIELDS)):
 _EditZone = EditZoneMixin
 _ActionButton = ActionButtonMixin
 
-class ExInkingMode (PressureEditableMixin):
+class ExInkingMode (PressureEditableMixin, 
+        NodeUserMixin):
 
     ## Metadata properties
 

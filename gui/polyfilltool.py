@@ -120,9 +120,10 @@ def _render_polygon_to_layer(model, target_layer, shape, nodes,
 
 
 ## Class defs
-class _EditZone(EditZoneMixin):
-    """Enumeration of what the pointer is on in the ADJUST phase"""
-    CONTROL_HANDLE = 104 
+#class _EditZone(EditZoneMixin):
+#    """Enumeration of what the pointer is on in the ADJUST phase"""
+#    CONTROL_HANDLE = 104 
+_EditZone = EditZoneMixin
 
 class _ActionButton(ActionButtonMixin):
     FILL_ATOP = 201
@@ -441,8 +442,8 @@ class _Shape_Bezier(_Shape):
                 cx, cy = cn.get_control_handle(h_index)
 
             if n_index in mode.selected_nodes:
-                if (mode.current_handle_index == None or
-                        mode.current_handle_index == h_index):
+                if (mode.current_node_handle == None or
+                        mode.current_node_handle == h_index):
                     cx += dx
                     cy += dy
 
@@ -543,8 +544,9 @@ class _Shape_Bezier(_Shape):
                                 return _Shape.CANCEL_EVENT # Cancel drag event
 
 
-            elif mode.zone == _EditZone.CONTROL_HANDLE:
-                if mode.phase == _Phase.ADJUST:
+            elif mode.zone == _EditZone.CONTROL_NODE:
+                if (mode.phase == _Phase.ADJUST and 
+                        self.current_node_handle != None):
                     mode.phase = _Phase.ADJUST_HANDLE
 
 
@@ -586,7 +588,7 @@ class _Shape_Bezier(_Shape):
                     # Important: with setting initial control handle 
                     # as the 'next' (= index 1) one,it brings us
                     # inkscape-like node creation.
-                    mode.current_handle_index = 1 
+                    mode.current_node_handle = 1 
 
                     mode._queue_draw_node(mode.current_node_index)
 
@@ -611,7 +613,7 @@ class _Shape_Bezier(_Shape):
             node = mode._last_event_node
             if mode._last_event_node:
                 mode._queue_draw_node(mode.current_node_index)# to erase
-                node.set_control_handle(mode.current_handle_index,
+                node.set_control_handle(mode.current_node_handle,
                         mx, my,
                         self.shift_state)
 
@@ -1161,7 +1163,8 @@ class _Shape_Ellipse(_Shape_Rectangle):
 
 ## The Polyfill Mode Class
 
-class PolyfillMode (OncanvasEditMixin):
+class PolyfillMode (OncanvasEditMixin,
+        HandleNodeUserMixin):
     """ Polygon fill mode
 
     This class can handle multiple types of shape,
@@ -1247,7 +1250,7 @@ class PolyfillMode (OncanvasEditMixin):
 
     def _reset_adjust_data(self):
         super(PolyfillMode, self)._reset_adjust_data()
-        self.current_handle_index = None
+        self.current_node_handle = None
         self._stroke_from_history = False
 
     def can_delete_node(self, idx):
@@ -1270,55 +1273,67 @@ class PolyfillMode (OncanvasEditMixin):
     def _generate_presenter(self):
         return OptionsPresenter_Polyfill()
         
-    def _update_zone_and_target(self, tdw, x, y, ignore_handle=False):
-        """Update the zone and target node under a cursor position"""
+   #def _update_zone_and_target(self, tdw, x, y, ignore_handle=False):
+   #    """Update the zone and target node under a cursor position"""
+   #
+   #    super(PolyfillMode, self)._update_zone_and_target(
+   #            tdw, x, y)
 
-        super(PolyfillMode, self)._update_zone_and_target(
-                tdw, x, y)
+       #if self.phase in (_Phase.ADJUST, 
+       #                  _Phase.ADJUST_POS):
+       #
+       #    # Checking Control handles first:
+       #    # because when you missed setting control handle 
+       #    # at node creation stage,if node zone detection
+       #    # is prior to control handle, they are unoperatable.
+       #    if (self.current_node_index is not None and 
+       #            ignore_handle == False):
+       #        c_node = self.nodes[self.current_node_index]
+       #        new_zone = None
+       #        new_target_node_index = None
+       #        hit_dist = gui.style.FLOATING_BUTTON_RADIUS
+       #        self.current_node_handle = None
+       #        if self.current_node_index == 0:
+       #            seq = (1,)
+       #        else:
+       #            seq = (0, 1)
+       #        for i in seq:
+       #            handle = c_node.get_control_handle(i)
+       #            hx, hy = tdw.model_to_display(handle.x, handle.y)
+       #            d = math.hypot(hx - x, hy - y)
+       #            if d > hit_dist:
+       #                continue
+       #            new_target_node_index = self.current_node_index
+       #            self.current_node_handle = i
+       #            new_zone = _EditZone.CONTROL_HANDLE
+       #            break         
+       #
+       #        if new_target_node_index is not None:
+       #            if self.target_node_index:
+       #                self._queue_draw_node(self.target_node_index)
+       #
+       #            if new_target_node_index != self.target_node_index:
+       #                self.target_node_index = new_target_node_index
+       #                self._queue_draw_node(self.target_node_index)
+       #
+       #            self.zone = new_zone
+       #            if len(self.nodes) > 1:
+       #                self._queue_draw_buttons()
+       #
+       #            if not self.in_drag:
+       #                self._update_cursor(tdw)
 
-        if self.phase in (_Phase.ADJUST, 
-                          _Phase.ADJUST_POS):
+    def _search_target_node(self, tdw, x, y, margin=12):
+        shape = self._shape
+        assert shape != None
 
-            # Checking Control handles first:
-            # because when you missed setting control handle 
-            # at node creation stage,if node zone detection
-            # is prior to control handle, they are unoperatable.
-            if (self.current_node_index is not None and 
-                    ignore_handle == False):
-                c_node = self.nodes[self.current_node_index]
-                new_zone = None
-                new_target_node_index = None
-                hit_dist = gui.style.FLOATING_BUTTON_RADIUS
-                self.current_handle_index = None
-                if self.current_node_index == 0:
-                    seq = (1,)
-                else:
-                    seq = (0, 1)
-                for i in seq:
-                    handle = c_node.get_control_handle(i)
-                    hx, hy = tdw.model_to_display(handle.x, handle.y)
-                    d = math.hypot(hx - x, hy - y)
-                    if d > hit_dist:
-                        continue
-                    new_target_node_index = self.current_node_index
-                    self.current_handle_index = i
-                    new_zone = _EditZone.CONTROL_HANDLE
-                    break         
+        if shape.accept_handle:
+            return HandleNodeUserMixin._search_target_node(self,
+                    tdw, x, y, margin)
+        else:
+            return NodeUserMixin._search_target_node(self,
+                    tdw, x, y, margin)
 
-                if new_target_node_index is not None:
-                    if self.target_node_index:
-                        self._queue_draw_node(self.target_node_index)
-
-                    if new_target_node_index != self.target_node_index:
-                        self.target_node_index = new_target_node_index
-                        self._queue_draw_node(self.target_node_index)
-
-                    self.zone = new_zone
-                    if len(self.nodes) > 1:
-                        self._queue_draw_buttons()
-
-                    if not self.in_drag:
-                        self._update_cursor(tdw)
 
     def update_cursor_cb(self, tdw): 
         # Update the "real" inactive cursor too:
@@ -1525,8 +1540,8 @@ class PolyfillMode (OncanvasEditMixin):
 
         shape = self._shape
 
-        self._update_zone_and_target(tdw, event.x, event.y,
-                ignore_handle = not shape.accept_handle)
+        self._update_zone_and_target(tdw, event.x, event.y)
+               #,ignore_handle = not shape.accept_handle)
 
         return super(OncanvasEditMixin, self).motion_notify_cb(tdw, event)
         

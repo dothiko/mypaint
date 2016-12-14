@@ -101,7 +101,10 @@ class EditZoneMixin:
 
     EMPTY_CANVAS = 0  #: Nothing, empty space
     CONTROL_NODE = 1  #: Any control node; see target_node_index
-    ACTION_BUTTON = 2  #: On-canvas action button. Also used when drawing overlay.
+    CONTROL_HANDLE = 2 #: Control handle index to manipulate node onscreen, 
+                       #  not all mixin user use this constant.
+    ACTION_BUTTON = 3  #: On-canvas action button. Also used when drawing overlay.
+
 
 class ActionButtonMixin:
     """Enumeration for the action button definition. """
@@ -409,6 +412,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
  
         overlay = self._ensure_overlay_for_tdw(tdw)
         new_zone = EditZoneMixin.EMPTY_CANVAS
+        new_handle_idx = None
  
         if not self.in_drag:
             if self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
@@ -433,7 +437,8 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
  
                 # Test nodes for a hit, in reverse draw order
                 if new_zone == EditZoneMixin.EMPTY_CANVAS:
-                    new_target_node_index = self._search_target_node(tdw, x, y)
+                    new_target_node_index, new_handle_idx = \
+                            self._search_target_node(tdw, x, y)
                     if new_target_node_index != None:
                         new_zone = EditZoneMixin.CONTROL_NODE
  
@@ -448,7 +453,8 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                     if self.target_node_index is not None:
                         self._queue_draw_node(self.target_node_index)
                         self.node_enter_cb(tdw, self.nodes[self.target_node_index]) 
- 
+
+                self.current_node_handle = new_handle_idx
  
         # Update the zone, and assume any change implies a button state
         # change as well (for now...)
@@ -889,19 +895,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     def current_node_changed(self, index):
         """Event: current_node_index was changed"""
  
-    def _search_target_node(self, tdw, x, y, margin=12):
-        """ utility method: to commonize node searching codes
-        """
-        hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + margin
-        new_target_node_index = None
-        for i, node in reversed(list(enumerate(self.nodes))):
-            node_x, node_y = tdw.model_to_display(node.x, node.y)
-            d = math.hypot(node_x - x, node_y - y)
-            if d > hit_dist:
-                continue
-            new_target_node_index = i
-            break
-        return new_target_node_index
 
     def get_node_dtime(self, i):
         if not (0 < i < len(self.nodes)):
@@ -1352,31 +1345,60 @@ class PressureEditableMixin(OncanvasEditMixin,
             logger.warning('redo notified, but node count %d is not suffcient.' % len(nodes))
 
 
+class NodeUserMixin(object):
+    """ The Mixin which use oncanvas node object.
+    this Mixin is created assuming a node which is made from
+    namedtuple object.
+    """
 
-class HandleNodeMixin(OncanvasEditMixin):
+    def _search_target_node(self, tdw, x, y, margin=12):
+        """ utility method: to commonize node searching codes
+        This class 
+        Since this Mixin is created assuming a node 
+        without a control handle, it always returns -1 for handles.
+        So you might need to override this method.
 
-    def _update_zone_and_target(self, tdw, x, y, ignore_handle=False):
-        """Update the zone and target node under a cursor position"""
+        :return : a tuple of (target-node-index, control-handle-idx)
+                  if no target node found, that index should be None.
+                  also if no control handle found, that index should be None.
+        :rtype tuple:
+        """
+        hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + margin
+        new_target_node_index = None
+        for i, node in reversed(list(enumerate(self.nodes))):
+            node_x, node_y = tdw.model_to_display(node.x, node.y)
+            d = math.hypot(node_x - x, node_y - y)
+            if d > hit_dist:
+                continue
+            new_target_node_index = i
+            break
+        return (new_target_node_index, None)
 
-        super(PolyfillMode, self)._update_zone_and_target(
-                tdw, x, y)
+class HandleNodeUserMixin(NodeUserMixin):
+    """ The mixin which use a sort of node class
+    which has "get_control_handle" method.
+    """
 
-        if self.phase in (_Phase.ADJUST, 
-                          _Phase.ADJUST_POS):
+    INITIAL_NODE_HANDLE_RANGE = (0, 1)
 
-            # Checking Control handles first:
-            # because when you missed setting control handle 
-            # at node creation stage,if node zone detection
-            # is prior to control handle, they are unoperatable.
-            if (self.current_node_index is not None and 
-                    ignore_handle == False):
-                c_node = self.nodes[self.current_node_index]
-                new_zone = None
-                new_target_node_index = None
+    def _search_target_node(self, tdw, x, y, margin=12):
+        """ utility method: to commonize node searching codes
+        This class 
+        Since this Mixin is created assuming a node 
+        without a control handle, it always returns -1 for handles.
+        So you might need to override this method.
+
+        :return : a tuple of (new target node index, new control handle idx)
+        :rtype tuple:
+        """
+        targidx, node_handle = \
+                super(HandleNodeUserMixin, self)._search_target_node(tdw, x, y, margin)
+        if targidx == None:
+            for n in xrange(len(self.nodes)):
+                c_node = self.nodes[n]
                 hit_dist = gui.style.FLOATING_BUTTON_RADIUS
-                self.current_handle_index = None
-                if self.current_node_index == 0:
-                    seq = (1,)
+                if n == 0:
+                    seq = self.INITIAL_NODE_HANDLE_RANGE #(1,)
                 else:
                     seq = (0, 1)
                 for i in seq:
@@ -1385,25 +1407,12 @@ class HandleNodeMixin(OncanvasEditMixin):
                     d = math.hypot(hx - x, hy - y)
                     if d > hit_dist:
                         continue
-                    new_target_node_index = self.current_node_index
-                    self.current_handle_index = i
-                    new_zone = _EditZone.CONTROL_HANDLE
-                    break         
+                    node_handle = i
 
-                if new_target_node_index is not None:
-                    if self.target_node_index:
-                        self._queue_draw_node(self.target_node_index)
+                if node_handle != None:
+                    return (n, node_handle)
 
-                    if new_target_node_index != self.target_node_index:
-                        self.target_node_index = new_target_node_index
-                        self._queue_draw_node(self.target_node_index)
-
-                    self.zone = new_zone
-                    if len(self.nodes) > 1:
-                        self._queue_draw_buttons()
-
-                    if not self.in_drag:
-                        self.update_cursor(tdw) 
+        return (targidx, node_handle)
 
 
 

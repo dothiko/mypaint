@@ -365,8 +365,8 @@ class Stamp(object):
         :param margin: i.e. the half of control handle rectangle
 
         :rtype: integer, whitch is targetted handle index.
-                Normally it should be either one of targetted handle index (0 to 3),
-                or -1 (cursor is not on this node)
+                Normally it should be either one of targetted handle index 
+                within 0 to 3, or None (cursor is not on this node)
                 When 'node is targetted but not on control handle',
                 return 4.
 
@@ -384,7 +384,7 @@ class Stamp(object):
                     is_inside_triangle(x, y, (pos[0], pos[2], pos[3]))):
                 return 4 
 
-        return -1
+        return None
 
     def get_boundary_points(self, node, tdw=None, 
             dx=0.0, dy=0.0, no_rotate=False, no_scale=False):

@@ -185,9 +185,10 @@ class _Node_Bezier (_Control_Handle):
     def __getitem__(self, idx):
         return self._array[idx]
     
-class _EditZone(EditZoneMixin):
-    """Enumeration of what the pointer is on in the ADJUST phase"""
-    CONTROL_HANDLE = 104 #: Control handle of bezier
+#class _EditZone(EditZoneMixin):
+#    """Enumeration of what the pointer is on in the ADJUST phase"""
+#    CONTROL_HANDLE = 104 #: Control handle of bezier
+_EditZone = EditZoneMixin
 
 class _Phase(PressPhase):
     """Enumeration of the states that an BezierCurveMode can be in"""
@@ -285,7 +286,8 @@ class StrokeHistory(object):
 
 
 
-class BezierMode (PressureEditableMixin):
+class BezierMode (PressureEditableMixin,
+                  HandleNodeUserMixin):
 
     ## Metadata properties
     ACTION_NAME = "BezierCurveMode"
@@ -305,8 +307,7 @@ class BezierMode (PressureEditableMixin):
         """Setting drag-related handler cursor.
         Called by DragMode._start_drag() method. """
         if self.phase == _Phase.ADJUST:
-            if self.zone in (_EditZone.CONTROL_NODE,
-                    _EditZone.CONTROL_HANDLE):
+            if self.zone == _EditZone.CONTROL_NODE:
                 return self._crosshair_cursor
         elif self.phase == _Phase.ADJUST_POS:
             if self.zone == _EditZone.CONTROL_NODE:
@@ -395,6 +396,9 @@ class BezierMode (PressureEditableMixin):
 
     DEFAULT_POINT_CORNER = False       # default point is curve,not corner
 
+    INITIAL_NODE_HANDLE_RANGE = (1, ) # Overriding HandleNodeUserMixin class attr
+                                      # to Ignore the first control handle
+
     ## Other class vars
 
     _PRESSURE_MAP = None #: Pressure mapping object singleton
@@ -413,7 +417,7 @@ class BezierMode (PressureEditableMixin):
 
     def _reset_adjust_data(self):
         super(BezierMode, self)._reset_adjust_data()
-        self.current_handle_index = None
+        self.current_node_handle = None
 
     
     def _generate_overlay(self, tdw):
@@ -452,59 +456,88 @@ class BezierMode (PressureEditableMixin):
    #def _update_zone_and_target(self, tdw, x, y, ignore_handle=False):
    # inherit from HandleNodeMixin
         
-    def _update_zone_and_target(self, tdw, x, y, ignore_handle=False):
+    def _update_zone_and_target(self, tdw, x, y):
         """Update the zone and target node under a cursor position"""
 
         super(BezierMode, self)._update_zone_and_target(
                 tdw, x, y)
 
-        if self.phase in (_Phase.ADJUST, 
-                          _Phase.ADJUST_POS):
-
-            # Checking Control handles first:
-            # because when you missed setting control handle 
-            # at node creation stage,if node zone detection
-            # is prior to control handle, they are unoperatable.
-            if (self.current_node_index is not None and 
-                    ignore_handle == False):
-                c_node = self.nodes[self.current_node_index]
-                new_zone = None
-                new_target_node_index = None
-                hit_dist = gui.style.FLOATING_BUTTON_RADIUS
-                self.current_handle_index = None
-                if self.current_node_index == 0:
-                    seq = (1,)
-                else:
-                    seq = (0, 1)
-                for i in seq:
-                    handle = c_node.get_control_handle(i)
-                    hx, hy = tdw.model_to_display(handle.x, handle.y)
-                    d = math.hypot(hx - x, hy - y)
-                    if d > hit_dist:
-                        continue
-                    new_target_node_index = self.current_node_index
-                    self.current_handle_index = i
-                    new_zone = _EditZone.CONTROL_HANDLE
-                    break         
-
-                if new_target_node_index is not None:
-                    if self.target_node_index:
-                        self._queue_draw_node(self.target_node_index)
-
-                    if new_target_node_index != self.target_node_index:
-                        self.target_node_index = new_target_node_index
-                        self._queue_draw_node(self.target_node_index)
-
-                    self.zone = new_zone
-                    if len(self.nodes) > 1:
-                        self._queue_draw_buttons()
-
-                    if not self.in_drag:
-                        self._update_cursor(tdw) 
-
-        elif self.phase == _Phase.INSERT_NODE:
+     #  if self.phase in (_Phase.ADJUST, 
+     #                    _Phase.ADJUST_POS):
+     #
+     #      # Checking Control handles first:
+     #      # because when you missed setting control handle 
+     #      # at node creation stage,if node zone detection
+     #      # is prior to control handle, they are unoperatable.
+     #      if (self.current_node_index is not None and 
+     #              ignore_handle == False):
+     #          c_node = self.nodes[self.current_node_index]
+     #          new_zone = None
+     #          new_target_node_index = None
+     #          hit_dist = gui.style.FLOATING_BUTTON_RADIUS
+     #          self.current_node_handle = None
+     #          if self.current_node_index == 0:
+     #              seq = (1,)
+     #          else:
+     #              seq = (0, 1)
+     #          for i in seq:
+     #              handle = c_node.get_control_handle(i)
+     #              hx, hy = tdw.model_to_display(handle.x, handle.y)
+     #              d = math.hypot(hx - x, hy - y)
+     #              if d > hit_dist:
+     #                  continue
+     #              new_target_node_index = self.current_node_index
+     #              self.current_node_handle = i
+     #              new_zone = _EditZone.CONTROL_HANDLE
+     #              break         
+     #
+     #          if new_target_node_index is not None:
+     #              if self.target_node_index:
+     #                  self._queue_draw_node(self.target_node_index)
+     #
+     #              if new_target_node_index != self.target_node_index:
+     #                  self.target_node_index = new_target_node_index
+     #                  self._queue_draw_node(self.target_node_index)
+     #
+     #              self.zone = new_zone
+     #              if len(self.nodes) > 1:
+     #                  self._queue_draw_buttons()
+     #
+     #              if not self.in_drag:
+     #                  self._update_cursor(tdw) 
+     #
+     #  elif self.phase == _Phase.INSERT_NODE:
+        if self.phase == _Phase.INSERT_NODE:
             self._update_cursor(tdw) 
 
+    def _search_target_node(self, tdw, x, y, margin=12):
+        """ utility method: to commonize node searching codes
+        This class 
+        Since this Mixin is created assuming a node 
+        without a control handle, it always returns -1 for handles.
+        So you might need to override this method.
+
+        :return : a tuple of (new target node index, new control handle idx)
+        :rtype tuple:
+        """
+        targidx, node_handle = \
+                super(BezierMode, self)._search_target_node(tdw, x, y, margin)
+        if targidx != None:
+            c_node = self.nodes[targidx]
+            hit_dist = gui.style.FLOATING_BUTTON_RADIUS
+            if targidx == 0:
+                seq = (1,)
+            else:
+                seq = (0, 1)
+            for i in seq:
+                handle = c_node.get_control_handle(i)
+                hx, hy = tdw.model_to_display(handle.x, handle.y)
+                d = math.hypot(hx - x, hy - y)
+                if d > hit_dist:
+                    continue
+                node_handle = i
+        return (targidx, node_handle)
+      
 
     def update_cursor_cb(self, tdw): 
         """  Update the cursor for not dragging mode.
@@ -856,12 +889,12 @@ class BezierMode (PressureEditableMixin):
                     ## Otherwise, after this callback
                     ## a new node created in drag_stop_cb.
 
-            elif self.zone == _EditZone.CONTROL_HANDLE:
-                
+            elif self.zone == _EditZone.CONTROL_NODE:
                 assert len(self.nodes) > 0 
-                if event.button == 1: 
-                    self.phase = _Phase.ADJUST_HANDLE
-                    return # Do drag,but not supercall
+                if self.current_node_handle != None:
+                    if event.button == 1: 
+                        self.phase = _Phase.ADJUST_HANDLE
+                        return # Do drag,but not supercall
 
             # FALLTHRU: *do* start a drag 
         
@@ -937,7 +970,7 @@ class BezierMode (PressureEditableMixin):
                     # Important: with setting initial control handle 
                     # as the 'next' (= index 1) one,it brings us
                     # inkscape-like node creation.
-                    self.current_handle_index = 1 
+                    self.current_node_handle = 1 
 
                     self._queue_draw_node(self.current_node_index)
 
@@ -959,7 +992,7 @@ class BezierMode (PressureEditableMixin):
             node = self._last_event_node
             if self._last_event_node:
                 self._queue_draw_node(self.current_node_index)# to erase
-                node.set_control_handle(self.current_handle_index,
+                node.set_control_handle(self.current_node_handle,
                         mx, my,
                         shift_state)
 
@@ -1386,7 +1419,7 @@ class OverlayBezier (OverlayOncanvasMixin):
                     cr, hx, hy,
                     gui.style.ACTIVE_ITEM_COLOR, 
                     gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
-                    fill=(hi==self._mode.current_handle_index)) 
+                    fill=(hi==self._mode.current_node_handle)) 
                 if draw_line:
                     cr.set_source_rgb(0,0,0)
                     cr.set_dash((), 0)
@@ -1433,7 +1466,8 @@ class OverlayBezier (OverlayOncanvasMixin):
                 else:
                     if i == mode.current_node_index:
                         # Drawing control handle
-                        if mode.zone == _EditZone.CONTROL_HANDLE:
+                        if (mode.zone == _EditZone.CONTROL_NODE and
+                                mode.current_node_handle != None):
                             show_node = True
                             color = gui.style.ACTIVE_ITEM_COLOR
                                   
