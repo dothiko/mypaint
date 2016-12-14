@@ -28,8 +28,8 @@ import cairo
 import gui.mode
 from drawutils import spline_4p
 from lib import mypaintlib
-from gui.inktool import *
-from gui.inktool import _LayoutNode
+from gui.exinktool import *
+from gui.exinktool import _LayoutNode
 from gui.linemode import *
 from lib.command import Command
 from gui.ui_utils import *
@@ -1338,9 +1338,6 @@ class OptionsPresenter_Stamp (object):
 
         self._updating_ui = False
         self._target = (None, None)
-
-        OptionsPresenter.init_variation_preset_store()
-        
 
     def _ensure_ui_populated(self):
         if self._options_grid is not None:
