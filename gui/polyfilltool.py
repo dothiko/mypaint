@@ -138,105 +138,6 @@ class _Phase(PhaseMixin):
                             # stroke,when you click with holding CTRL key
     CALL_BUTTONS = 106      #: show action buttons around the clicked point. 
 
-#lass _ButtonInfo(object):
-#   """ Buttons infomation management class.
-#   In Polyfill tool, Buttons increased and eventually 
-#   become difficult to manage.
-#   """
-#
-#   button_info = (
-#               ( 0, 'mypaint-ok-symbolic',
-#                   _ActionButton.ACCEPT ),
-#               ( 1, 'mypaint-trash-symbolic',
-#                   _ActionButton.REJECT ),
-#               ( 2, 'mypaint-eraser-symbolic', 
-#                   _ActionButton.ERASE ),
-#               ( 3, 'mypaint-cut-symbolic', 
-#                   _ActionButton.ERASE_OUTSIDE ),
-#               ( 4, 'mypaint-add-symbolic',
-#                   _ActionButton.FILL_ATOP ),
-#           )
-#
-#   button_zones = {
-#       _ActionButton.ACCEPT:lib.mypaintlib.CombineNormal,
-#       _ActionButton.REJECT:None,
-#       _ActionButton.ERASE:lib.mypaintlib.CombineDestinationOut,
-#       _ActionButton.ERASE_OUTSIDE:lib.mypaintlib.CombineDestinationIn,
-#       _ActionButton.FILL_ATOP:lib.mypaintlib.CombineSourceAtop,
-#       }
-#
-#   def __init__(self):
-#       self._pos = [None] * len(self.button_info)
-#
-#   def get_mode_from_zone(self, zone):
-#       if zone in self.button_zones:
-#           return self.button_zones[zone]
-#       else:
-#           return None
-#
-#   def setup_round_position(self, tdw, pos, count=None):
-#       """ setup button position,rotating around (x,y)
-#       
-#       :param pos:   center position,in display coordinate.
-#       :param count: maximum button count, if we need 
-#                     minimum (only ACCEPT/REJECT buttons),
-#                     use this argument as 2
-#                     by default,this is None
-#       """
-#       x, y = pos
-#       button_radius = gui.style.FLOATING_BUTTON_RADIUS
-#       margin = 1.5 * button_radius
-#       alloc = tdw.get_allocation()
-#       view_x0, view_y0 = alloc.x, alloc.y
-#       view_x1, view_y1 = view_x0+alloc.width, view_y0+alloc.height
-#
-#       palette_radius = 64 #gui.style.BUTTON_PALETTE_RADIUS
-#       area_radius = palette_radius + margin 
-#
-#       if x + area_radius > view_x1:
-#           x = view_x1 - area_radius
-#       elif x - area_radius < view_x0:
-#           x = view_x0 + area_radius
-#       
-#       if y + area_radius > view_y1:
-#           y = view_y1 - area_radius
-#       elif y - area_radius < view_y0:
-#           y = view_y0 + area_radius
-#
-#       if count == None:
-#           self._valid_count = len(self.button_info)
-#       else:
-#           self._valid_count = count
-#
-#       for i in xrange(self._valid_count):
-#           rad = (math.pi / self._valid_count) * 2.0 * i
-#           dx = - palette_radius * math.sin(rad)
-#           dy = palette_radius * math.cos(rad)
-#           self._pos[i] = (x + dx, y - dy) 
-#
-#
-#   def set_position(self, *positions):
-#       """ setup button position 
-#       :param positions: positions of buttons,according to self.button_info.
-#       each of this argument can be 'None', when button is hidden.
-#       NOTE: valid button is limited to count of this variable argument.
-#       """
-#       for i, pos in enumerate(positions):
-#           self._pos[i] = pos
-#       self._valid_count = len(positions)
-#
-#   def get_position(self, idx):
-#       return self._pos[idx]
-#
-#   def buttons_iter(self):
-#       for i in xrange(self._valid_count):
-#           yield (self._pos[i], self.button_info[i])
-#
-#   def buttons_iter_draw(self):
-#       for i in xrange(self._valid_count):
-#           yield (self.button_info[i][1], self._pos[i], self.button_info[i][2])
-
-
 class PolyFill(Command):
     """Polygon-fill on the current layer"""
 
@@ -291,7 +192,6 @@ class _Shape(object):
 
     MARGIN = 3
     accept_handle = False
-    has_own_node_painter = False
 
     def generate_node(self):
         return _Node_Bezier(
@@ -487,29 +387,34 @@ class _Shape_Bezier(_Shape):
 
     def button_press_cb(self, mode, tdw, event):
 
-        if mode.phase in (_Phase.ADJUST,):
+
+        if mode.phase in (_Phase.ADJUST, _Phase.ADJUST_POS):
+            # Remember, the base class (of mode instance) might
+            # change Phase automatically into _Phase.ADJUST_POS
+            # when user grab the node(or its handle)
             if mode.zone == _EditZone.CONTROL_NODE:
                 # Grabbing a node...
                 button = event.button
-                if mode.phase == _Phase.ADJUST:
 
-                    # normal move node start
-                    mode.phase = _Phase.ADJUST_POS
-
-                    if button == 1 and mode.current_node_index != None:
-                        if self.ctrl_state:
-                            # Holding CONTROL key = adding or removing a node.
-                            if mode.current_node_index in mode.selected_nodes:
-                                mode.selected_nodes.remove(mode.current_node_index)
-                            else:
-                                mode.selected_nodes.append(mode.current_node_index)
-        
-                            mode._queue_draw_selected_nodes() 
+                if button == 1 and mode.current_node_index != None:
+                    if self.ctrl_state:
+                        # Holding CONTROL key = adding or removing a node.
+                        mode.select_node(mode.current_node_index)
+                       #if mode.current_node_index in mode.selected_nodes:
+                       #    mode.selected_nodes.remove(mode.current_node_index)
+                       #else:
+                       #    mode.selected_nodes.append(mode.current_node_index)
+                       #mode._queue_draw_selected_nodes() 
+                    else:
+                        # no CONTROL Key holded.
+                        # If new solo node clicked without holding 
+                        # CONTROL key,then reset all selected nodes.
+    
+                        if mode.current_node_handle != None:
+                            mode.phase = _Phase.ADJUST_HANDLE
+                            mode._queue_draw_node(mode.current_node_index) 
                         else:
-                            # no CONTROL Key holded.
-                            # If new solo node clicked without holding 
-                            # CONTROL key,then reset all selected nodes.
-        
+                            mode.phase = _Phase.ADJUST_POS
                             do_reset = self.alt_state
                             do_reset |= not (mode.current_node_index in mode.selected_nodes)
         
@@ -544,14 +449,8 @@ class _Shape_Bezier(_Shape):
                                 return _Shape.CANCEL_EVENT # Cancel drag event
 
 
-            elif mode.zone == _EditZone.CONTROL_NODE:
-                if (mode.phase == _Phase.ADJUST and 
-                        self.current_node_handle != None):
-                    mode.phase = _Phase.ADJUST_HANDLE
-
 
             # FALLTHRU: *do* start a drag 
-
 
 
     def button_release_cb(self, mode, tdw, event):
@@ -583,19 +482,23 @@ class _Shape_Bezier(_Shape):
                     mode.nodes.append(node)
                     mode._last_event_node = node
                     mode.phase = _Phase.INIT_HANDLE
-                    mode.current_node_index=len(mode.nodes)-1
-                    mode._reset_selected_nodes(mode.current_node_index)
+                    idx = len(mode.nodes) - 1
+                    mode.select_node(idx, exclusive=True)
                     # Important: with setting initial control handle 
                     # as the 'next' (= index 1) one,it brings us
                     # inkscape-like node creation.
                     mode.current_node_handle = 1 
 
-                    mode._queue_draw_node(mode.current_node_index)
+                    mode.current_node_index=idx
+                    mode._queue_draw_node(idx)
+
+                    # Actually, cancel select node.
+                    mode.drag_offset.start(mx, my)
 
         elif mode.phase == _Phase.ADJUST_POS:
             if len(mode.selected_nodes) > 0:
                 mode.drag_offset.start(mx, my)
-        elif mode.phase == _Phase.ADJUST_HANDLE:
+        elif mode.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
            #mode._last_event_node = mode.nodes[mode.target_node_index]
             assert mode.current_node_index != None
             mode._last_event_node = mode.nodes[mode.current_node_index]
@@ -609,14 +512,13 @@ class _Shape_Bezier(_Shape):
             pass
             
         elif mode.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
-            mode._queue_redraw_item(tdw)  
+            mode._queue_redraw_item(tdw)# to erase item - because it uses overlay.  
             node = mode._last_event_node
-            if mode._last_event_node:
+            if node:
                 mode._queue_draw_node(mode.current_node_index)# to erase
                 node.set_control_handle(mode.current_node_handle,
                         mx, my,
                         self.shift_state)
-
                 mode._queue_draw_node(mode.current_node_index)
             mode._queue_redraw_item(tdw)
                 
@@ -652,8 +554,6 @@ class _Shape_Bezier(_Shape):
             if len(mode.nodes) > 1:
                 mode._queue_draw_buttons()
 
-            print(mode.current_node_index)
-                
             mode.phase = _Phase.ADJUST
         elif mode.phase == _Phase.ADJUST_POS:
             dx, dy = mode.drag_offset.get_model_offset()
@@ -767,7 +667,6 @@ class _Shape_Polyline(_Shape_Bezier):
 class _Shape_Rectangle(_Shape):
 
     name = _("Rectangle")
-    has_own_node_painter = True
 
     def __init__(self):
         pass
@@ -1260,68 +1159,12 @@ class PolyfillMode (OncanvasEditMixin,
         return 1 <= idx < len(self.nodes)
 
     ## Update inner states methods
-   #def _ensure_overlay_for_tdw(self, tdw):
-   #    overlay = super(PolyfillMode, self)._ensure_overlay_for_tdw(tdw)
-   #    assert self._overlays.get(tdw)
-   #    if len(self.nodes) > 0:
-   #        self._queue_redraw_item()
-   #    return overlay
-
     def _generate_overlay(self, tdw):
         return OverlayPolyfill(self, tdw)
 
     def _generate_presenter(self):
         return OptionsPresenter_Polyfill()
         
-   #def _update_zone_and_target(self, tdw, x, y, ignore_handle=False):
-   #    """Update the zone and target node under a cursor position"""
-   #
-   #    super(PolyfillMode, self)._update_zone_and_target(
-   #            tdw, x, y)
-
-       #if self.phase in (_Phase.ADJUST, 
-       #                  _Phase.ADJUST_POS):
-       #
-       #    # Checking Control handles first:
-       #    # because when you missed setting control handle 
-       #    # at node creation stage,if node zone detection
-       #    # is prior to control handle, they are unoperatable.
-       #    if (self.current_node_index is not None and 
-       #            ignore_handle == False):
-       #        c_node = self.nodes[self.current_node_index]
-       #        new_zone = None
-       #        new_target_node_index = None
-       #        hit_dist = gui.style.FLOATING_BUTTON_RADIUS
-       #        self.current_node_handle = None
-       #        if self.current_node_index == 0:
-       #            seq = (1,)
-       #        else:
-       #            seq = (0, 1)
-       #        for i in seq:
-       #            handle = c_node.get_control_handle(i)
-       #            hx, hy = tdw.model_to_display(handle.x, handle.y)
-       #            d = math.hypot(hx - x, hy - y)
-       #            if d > hit_dist:
-       #                continue
-       #            new_target_node_index = self.current_node_index
-       #            self.current_node_handle = i
-       #            new_zone = _EditZone.CONTROL_HANDLE
-       #            break         
-       #
-       #        if new_target_node_index is not None:
-       #            if self.target_node_index:
-       #                self._queue_draw_node(self.target_node_index)
-       #
-       #            if new_target_node_index != self.target_node_index:
-       #                self.target_node_index = new_target_node_index
-       #                self._queue_draw_node(self.target_node_index)
-       #
-       #            self.zone = new_zone
-       #            if len(self.nodes) > 1:
-       #                self._queue_draw_buttons()
-       #
-       #            if not self.in_drag:
-       #                self._update_cursor(tdw)
 
     def _search_target_node(self, tdw, x, y, margin=12):
         shape = self._shape
@@ -1382,56 +1225,12 @@ class PolyfillMode (OncanvasEditMixin,
             tdw.queue_draw_area(
                     *self._shape.get_maximum_rect(tdw, self, sdx, sdy))
 
-
-    def _queue_draw_node(self, i, dx=0, dy=0):
-        """Redraws a specific control node on all known view TDWs
+    def _queue_draw_node(self, i, offsets=None, tdws=None):
+        """This method might called from baseclass,
+        so we need to call HandleNodeUserMixin method explicitly.
         """
-        node = self.nodes[i]
-        
-        def get_area(node_idx, nx, ny, radius, area=None):
-            x, y = tdw.model_to_display(nx, ny)
+        return self._queue_draw_handle_node(i, offsets, tdws)
 
-            x = math.ceil(x)
-            y = math.ceil(y)
-            sx = x-radius-2
-            sy = y-radius-2
-            ex = x+radius+2
-            ey = y+radius+2
-            if not area:
-                return (sx, sy, ex, ey)
-            else:
-                return (min(area[0], sx),
-                        min(area[1], sy),
-                        max(area[2], ex),
-                        max(area[3], ey))
-
-        radius = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
-        for tdw in self._overlays:
-            area = get_area(i, node.x, node.y, radius)
-
-            if self.current_node_index == i:
-                # Active control handles also should be queued.
-                for hi in (0,1):
-                    # But,the first node only shows 2nd(index 1) handle.
-                    if self.is_drawn_handle(i, hi):
-                        handle = node.get_control_handle(hi)
-                        area = get_area(i, 
-                            handle.x, handle.y,
-                            radius, area)
-
-            tdw.queue_draw_area(area[0], area[1], 
-                    area[2] - area[0] + 1, 
-                    area[3] - area[1] + 1)
-
-    def _queue_draw_selected_nodes(self):
-        if self.zone == _EditZone.CONTROL_NODE:
-            dx, dy = self.drag_offset.get_model_offset()
-            for i in self.selected_nodes:
-                self._queue_draw_node(i, dx, dy)
-        else:
-            for i in self.selected_nodes:
-                self._queue_draw_node(i)
-            
 
     def is_drawn_handle(self, i, hi):
         return self._shape.accept_handle
@@ -1501,7 +1300,7 @@ class PolyfillMode (OncanvasEditMixin,
             self.phase = _Phase.ADJUST
 
         # common processing for all shape type.
-        if self.phase in (_Phase.ADJUST,):
+        if self.phase == _Phase.ADJUST:
             # Initial state - everything starts here!
        
             if self.zone == _EditZone.EMPTY_CANVAS:
@@ -1722,7 +1521,7 @@ class OverlayPolyfill (OverlayBezier):
                 fill = mode.polygon_preview_fill)
 
         # drawing control nodes
-        if shape.has_own_node_painter:
+        if hasattr(shape, "paint_nodes"):
             shape.paint_nodes(cr, self._tdw, mode,
                     gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
         else:

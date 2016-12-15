@@ -516,9 +516,13 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 x, y = pos
                 tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
 
-    def _queue_draw_node(self, idx, dx=0, dy=0):
+    def _queue_draw_node(self, idx, offsets=None):
         """ queue an oncanvas item to draw."""
         cn = self.nodes[idx]
+        if offsets == None:
+            dx=dy=0
+        else:
+            dx,dy = offsets
         for tdw in self._overlays:
             x, y = tdw.model_to_display(cn.x + dx, cn.y + dy)
             x = math.floor(x)
@@ -527,14 +531,18 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
 
     def _queue_draw_selected_nodes(self):
-        dx, dy = self.drag_offset.get_model_offset()
+        offsets = self.drag_offset.get_model_offset()
         for i in self.selected_nodes:
-            self._queue_draw_node(i, dx, dy)
+            self._queue_draw_node(i, offsets=offsets) 
 
     def _queue_redraw_all_nodes(self):
         """Redraws all nodes on all known view TDWs"""
+        offsets = self.drag_offset.get_model_offset()
         for i in xrange(len(self.nodes)):
-            self._queue_draw_node(i)
+            if i in self.selected_nodes:
+                self._queue_draw_node(i, offsets=offsets)
+            else:
+                self._queue_draw_node(i)
 
     ## Redrawing task management
 
@@ -1441,6 +1449,72 @@ class HandleNodeUserMixin(NodeUserMixin):
 
         return (targidx, node_handle)
 
+    def _queue_draw_handle_node(self, i, offsets=None, tdws=None):
+        """Redraws a specific control node on all known view TDWs
+
+        You must call this method from your class of _queue_draw_node(),
+        to override OncanvasEditMixin._queue_draw_node()
+
+        Because this mixin has nothing to do with OncanvasEditMixin,
+        Python Multiple inheritance cannot override methods of OncanvasEditMixin
+        with this mixin.
+        """
+
+        def get_area(nx, ny, radius, old_area=None):
+            x, y = tdw.model_to_display(nx, ny)
+
+            x = math.ceil(x)
+            y = math.ceil(y)
+            sx = x-radius-2
+            sy = y-radius-2
+            ex = x+radius+2
+            ey = y+radius+2
+            if not old_area:
+                return (sx, sy, ex, ey)
+            else:
+                return (min(old_area[0], sx),
+                        min(old_area[1], sy),
+                        max(old_area[2], ex),
+                        max(old_area[3], ey))
+
+
+        node = self.nodes[i]
+        radius = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
+        dx = dy = 0
+
+        if i in self.selected_nodes:
+            if offsets == None:
+                dx, dy = self.drag_offset.get_model_offset()
+            else:
+                dx, dy = offsets
+
+        if tdws==None:
+            tdws=self._overlays
+
+        for tdw in tdws:
+            area = get_area(node.x+dx, node.y+dy, radius)
+
+            # Only CURRENT NODE can be manipulated control handles.
+            # NOT SELECTED NODES.
+            if i == self.current_node_index:
+            
+                # Active control handles also should be queued.
+                for hi in (0,1):
+                    # But,the first node only shows 2nd(index 1) handle.
+                    if self.is_drawn_handle(i, hi):
+                        handle = node.get_control_handle(hi)
+                        area = get_area( 
+                            handle.x+dx, handle.y+dy, 
+                            radius, area)
+
+            tdw.queue_draw_area(area[0], area[1], 
+                    area[2] - area[0] + 1, 
+                    area[3] - area[1] + 1)
+
+
+    def is_drawn_handle(self, node_idx, hndl_idx):
+        return ((hndl_idx == 0 and node_idx > 0) or 
+                (hndl_idx == 1 and node_idx <= len(self.nodes)-1))
 
 
 class OverlayOncanvasMixin(gui.overlays.Overlay):
