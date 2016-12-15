@@ -82,11 +82,11 @@ class _Phase(PhaseMixin):
 
 class _EditZone(EditZoneMixin):
     """Enumeration of what the pointer is on in phases"""
-    CONTROL_HANDLE_0 = 100
-    CONTROL_HANDLE_1 = 101
-    CONTROL_HANDLE_2 = 102
-    CONTROL_HANDLE_3 = 103
-    CONTROL_HANDLE_BASE = 100
+   #CONTROL_HANDLE_0 = 100
+   #CONTROL_HANDLE_1 = 101
+   #CONTROL_HANDLE_2 = 102
+   #CONTROL_HANDLE_3 = 103
+   #CONTROL_HANDLE_BASE = 100
     SOURCE_AREA = 110
    #SOURCE_AREA_HANDLE = 111
    #SOURCE_TRASH_BUTTON = 112
