@@ -41,7 +41,6 @@ class AssistManager(object):
         self._blend_modes_action={}
         app.brushmanager.brush_selected += self.brush_selected_cb
         self._current_blend = None
-       #self._internal_update = False
         self._presenter_box = None
         self._empty_box = Gtk.VBox()
         self._brushlookup = {}
@@ -57,25 +56,14 @@ class AssistManager(object):
         self._current = assistant
         combo = self._assistant_combo
 
-       #if not self._internal_update:
         binfo = self.app.doc.model.brush.brushinfo
         brush_name = binfo.get_string_property("parent_brush_name")
-       #else:
-       #    brush_name = None # This means also we are now in _internal_update.
 
         if assistant == None:
             combo.set_active(0)
             self._activate_presenter(None)
-
-         #   if brush_name in self._brushlookup:
-        #   self._brushlookup[brush_name]
-
         else:
             self._current.reset()
-
-           #if brush_name != None:
-         #  self._brushlookup[brush_name] = assistant
-
 
             combo_model = combo.get_model()
             for row in combo_model:
@@ -98,24 +86,6 @@ class AssistManager(object):
                 return item
 
         return (None, None)
-
-   #def _do_action(self, name, flag):
-   #    """The method called from
-   #    """
-   #    if name:
-   #        action = self.app.find_action(name)
-   #        if action:
-   #            self._internal_update = True
-   #            if hasattr(action, "set_active"): # action is Gtk.ToggleAction
-   #                action.set_active(flag)
-   #            elif flag:
-   #                action.activate()
-   #            self._internal_update = False
-   #        else:
-   #            logger.warning('Action %s assigned but not found.' % name)
-   #    else:
-   #        # default action(no assistant)
-   #        pass
 
 
     def enable_assistant(self, action_name):
