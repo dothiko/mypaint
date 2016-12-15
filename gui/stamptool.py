@@ -474,7 +474,7 @@ class StampMode (OncanvasEditMixin,
     def _queue_draw_node(self, i, dx=0, dy=0, force_margin=False):
         """Redraws a specific control node on all known view TDWs"""
 
-        if i == self.target_node_index:
+        if i == self.current_node_index:
             force_margin = True
 
         for tdw in self._overlays:
@@ -545,23 +545,7 @@ class StampMode (OncanvasEditMixin,
             return super(StampMode, self).mode_button_press_cb(tdw, event)
 
    #def mode_button_release_cb(self, tdw, event):
-   #
-   #    if not self.stamp:
-   #        return 
-   #
-   #    shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
-   #    ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
-   #
-   #    if self.phase in (_Phase.ROTATE,
-   #                        _Phase.SCALE,
-   #                        _Phase.ROTATE_BY_HANDLE,
-   #                        _Phase.SCALE_BY_HANDLE):
-   #        # XXX Future use. currently does nothing.
-   #        pass
-   #    else:
-   #        return super(StampMode, self).mode_button_release_cb(tdw, event)
-
-
+   # Currently nothing to do for this.
 
     ## Drag handling (both capture and adjust phases)
 
