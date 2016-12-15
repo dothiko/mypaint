@@ -129,6 +129,7 @@ class Stamp(object):
     PICTURE_ICON_SIZE = 40
     
     DEFAULT_CAPTURED_SOURCE = (PictureSource.CAPTURED, None)
+    DEFAULT_ICON = None
 
     def __init__(self, manager, name, desc):
 
@@ -184,9 +185,11 @@ class Stamp(object):
 
     ## Thumbnail related
     def set_thumbnail(self, pixbuf, 
-            thumbnail_type=PictureSource.ICON_FILE):
+            thumbnail_type=PictureSource.ICON_FILE,
+            icon_name=""):
         self._thumbnail = pixbuf
         self._thumbnail_type = thumbnail_type
+        self._thumbnail_source = icon_name
 
     def set_file_thumbnail(self, filename):
         assert filename != None
@@ -196,14 +199,15 @@ class Stamp(object):
                         filename,
                         icon_size, icon_size)
             self.set_thumbnail(pixbuf,
-                    PictureSource.ICON_FILE)
-            self._thumbnail_source = filename
+                    PictureSource.ICON_FILE,
+                    filename)
+        else:
+            logger.warning('stamp preset icon %s does not found' % filename)
 
     def set_gtk_thumbnail(self, icon_name):
         pixbuf = Gtk.IconTheme.get_default().load_icon(
                 icon_name, Stamp.THUMBNAIL_SIZE, 0)
-        self.set_thumbnail(pixbuf, PictureSource.ICON_STOCK)
-        self._thumbnail_source = icon_name
+        self.set_thumbnail(pixbuf, PictureSource.ICON_STOCK, icon_name)
 
     def generate_thumbnail(self, id=-1):
         """Generate thumbnail from contained tiles.
@@ -223,7 +227,8 @@ class Stamp(object):
                     surf.get_width(), surf.get_height())
             icon = Stamp._create_icon(pixbuf, Stamp.THUMBNAIL_SIZE)
             self.set_thumbnail(icon,
-                    PictureSource.ICON_GENERATED)
+                    PictureSource.ICON_GENERATED,
+                    "")
             self._dirty = True
         else:
             self._thumbnail = None # assigning None means
@@ -765,7 +770,7 @@ class Stamp(object):
                 # Save Icon picture, if it is generated one.
                 basename = "%s_thumbnail.jpg" % self.name
                 filename = os.path.join(basedir, basename) 
-                self._thumbnail.save(filename, 'jpg')
+                lib.pixbuf.save(self._thumbnail, filename, 'jpeg')
                 jsondic['thumbnail'] = basename
             elif self._thumbnail_type == PictureSource.ICON_STOCK:
                 assert hasattr(self, '_thumbnail_source')
@@ -922,7 +927,8 @@ class Stamp(object):
 
             if 'thumbnail' in jo:
                 try:
-                    stamp.set_file_thumbnail(jo['thumbnail'])
+                    thumbfile = manager.get_adjusted_path(jo['thumbnail'])
+                    stamp.set_file_thumbnail(thumbfile)
                 except:
                     logger.error('stamp cannot load icon filename %s' % 
                             icon_fname)
@@ -1012,7 +1018,6 @@ class StampPresetManager(object):
 
         stamplist = {}
         id = 0
-
         try:
 
             for cs in BUILT_IN_STAMPS:

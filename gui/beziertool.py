@@ -694,7 +694,7 @@ class BezierMode (PressureEditableMixin,
                 (hndl_idx == 1 and node_idx <= len(self.nodes)-1))
 
 
-    def redraw_curve_cb(self, erase=False):
+    def redraw_item_cb(self, erase=False):
         """ Frontend method,to redraw curve from outside this class"""
         if erase:
             for tdw in self._overlays:
@@ -706,10 +706,10 @@ class BezierMode (PressureEditableMixin,
                     abrupt=True,
                 )
         else:
-            self._queue_redraw_curve()
+            self._queue_redraw_item()
 
 
-    def _queue_redraw_curve(self, step = 0.05, pressure_obj=None):
+    def _queue_redraw_item(self, step = 0.05, pressure_obj=None):
         """Redraws the entire curve on all known view TDWs
         :param step: rendering step of curve.
         The lower this value is,the higher quality bezier curve rendered.
@@ -747,33 +747,8 @@ class BezierMode (PressureEditableMixin,
         self._start_task_queue_runner()
 
     def _queue_draw_buttons(self):
-        # To surpress exception
         if len(self.nodes) >= 2:
             super(BezierMode, self)._queue_draw_buttons()
-
-   #def _queue_previous_draw_buttons(self):
-   #    """ Queue previous (current) button position to draw.
-   #    It means erase old position buttons.
-   #    BezierCurveMode changes dramatically button position with its 
-   #    node selection state (due to display control handles),
-   #    so we might miss calcurate button location in some case.
-   #    """
-   #
-   #    for tdw, overlay in self._overlays.items():
-   #        for pos in (overlay.get_button_pos(_EditZone.ACCEPT_BUTTON),
-   #                     overlay.get_button_pos(_EditZone.REJECT_BUTTON)):
-   #            # FIXME duplicate code:from gui.inktool.queue_draw_buttons
-   #            if pos is None:
-   #                continue
-   #            r = gui.style.FLOATING_BUTTON_ICON_SIZE
-   #            r += max(
-   #                gui.style.DROP_SHADOW_X_OFFSET,
-   #                gui.style.DROP_SHADOW_Y_OFFSET,
-   #            )
-   #            r += gui.style.DROP_SHADOW_BLUR
-   #            x, y = pos
-   #            tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
-
 
     def _draw_curve_segment(self, model, sidx, eidx, dx, dy, step,
             pressure_src=None, internode_steps=None):
@@ -935,7 +910,7 @@ class BezierMode (PressureEditableMixin,
         # so, in this method, changing self._phase
         # is very special case. 
        #if self.phase == _Phase.PLACE_NODE:
-       #    self._queue_redraw_curve() 
+       #    self._queue_redraw_item() 
        #    self.phase = _Phase.ADJUST
        #    pass
 
@@ -997,7 +972,7 @@ class BezierMode (PressureEditableMixin,
                         shift_state)
 
                 self._queue_draw_node(self.current_node_index)
-            self._queue_redraw_curve()
+            self._queue_redraw_item()
                 
         else:
             super(BezierMode, self).node_drag_update_cb(tdw, event, dx, dy)
@@ -1006,7 +981,7 @@ class BezierMode (PressureEditableMixin,
         if self.phase == _Phase.ADJUST:
             self._reset_adjust_data()
             if len(self.nodes) > 0:
-                self._queue_redraw_curve()
+                self._queue_redraw_item()
                 self._queue_redraw_all_nodes()
                 if len(self.nodes) > 1:
                     self._queue_draw_buttons()
@@ -1027,7 +1002,7 @@ class BezierMode (PressureEditableMixin,
                 node.curve = False
 
             self._queue_redraw_all_nodes()
-            self._queue_redraw_curve()
+            self._queue_redraw_item()
             if len(self.nodes) > 1:
                 self._queue_draw_buttons()
                 
@@ -1042,7 +1017,7 @@ class BezierMode (PressureEditableMixin,
         
             self.drag_offset.reset()
             self._dragged_node_start_pos = None
-            self._queue_redraw_curve()
+            self._queue_redraw_item()
             self._queue_draw_buttons()
             self._queue_draw_selected_nodes() 
             self.phase = _Phase.ADJUST
@@ -1164,7 +1139,7 @@ class BezierMode (PressureEditableMixin,
         self.nodes.insert(i+1,newnode)
 
         # Issue redraws for the changed on-canvas elements
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
@@ -1183,7 +1158,7 @@ class BezierMode (PressureEditableMixin,
         assert hasattr(self.options_presenter,'curve')
         curve = self.options_presenter.curve
 
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
 
         # First of all, get the entire stroke length
         # to normalize stroke.
@@ -1217,7 +1192,7 @@ class BezierMode (PressureEditableMixin,
             cn.pressure = curve.get_curve_value(cur_length / total_length)
             cur_length += node_length[idx]
         
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
 
 
     def delete_selected_nodes(self):
@@ -1230,7 +1205,7 @@ class BezierMode (PressureEditableMixin,
         for idx in self.selected_nodes:
             self._queue_draw_node(idx)
 
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
 
         # after then,delete it.
         new_nodes = []
@@ -1250,9 +1225,9 @@ class BezierMode (PressureEditableMixin,
         if len(self.nodes) <= 1:
             if len(self.nodes) == 0:
                 self.phase = _Phase.INITIAL
-            self.redraw_curve_cb(True)
+            self.redraw_item_cb(True)
         else:
-            self._queue_redraw_curve()
+            self._queue_redraw_item()
 
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
@@ -1263,7 +1238,7 @@ class BezierMode (PressureEditableMixin,
         if 0 < idx < len(self.stroke_history.liststore):
             self._queue_draw_buttons()
             self._queue_redraw_all_nodes()
-            self._queue_redraw_curve()
+            self._queue_redraw_item()
 
             self._stroke_from_history = True
 
@@ -1275,7 +1250,7 @@ class BezierMode (PressureEditableMixin,
             self.nodes = self.stroke_history.get_and_place_nodes(
                     idx, x, y)
 
-            self._queue_redraw_curve()
+            self._queue_redraw_item()
             self._queue_redraw_all_nodes()
             self._queue_draw_buttons()
             self.phase = _Phase.ADJUST
@@ -1296,7 +1271,7 @@ class BezierMode (PressureEditableMixin,
 
     def accept_button_cb(self, tdw):
         if (len(self.nodes) > 1):
-            self._queue_redraw_curve(BezierMode.FINAL_STEP) # Redraw with hi-fidely curve
+            self._queue_redraw_item(BezierMode.FINAL_STEP) # Redraw with hi-fidely curve
             self._start_new_capture_phase(rollback=False)
 
     def reject_button_cb(self, tdw):
@@ -1657,10 +1632,10 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking):
         if beziermode:
             if 0 <= node_idx < len(beziermode.nodes):
                 beziermode._queue_draw_node(node_idx) 
-                beziermode._queue_redraw_curve()
+                beziermode._queue_redraw_item()
                 beziermode.nodes[node_idx].curve = button.get_active()
                 beziermode._queue_draw_node(node_idx) 
-                beziermode._queue_redraw_curve()
+                beziermode._queue_redraw_item()
 
 
     def _variation_preset_combo_changed_cb(self, widget):
@@ -1669,7 +1644,7 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking):
         super(OptionsPresenter_Bezier, self)._variation_preset_combo_changed_cb(widget)
         beziermode, node_idx = self.target
         if beziermode:
-            beziermode.redraw_curve_cb()
+            beziermode.redraw_item_cb()
 
     def _default_dtime_value_changed_cb(self, adj):
         if self._updating_ui:

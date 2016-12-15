@@ -59,7 +59,7 @@ def _nodes_deletion_decorator(method):
     """
     def _decorator(self, *args):
         # To ensure redraw entire overlay,avoiding glitches.
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
@@ -69,7 +69,7 @@ def _nodes_deletion_decorator(method):
 
         if result > 0:
             self.options_presenter.target = (self, self.current_node_index)
-            self._queue_redraw_curve()
+            self._queue_redraw_item()
             self._queue_redraw_all_nodes()
             self._queue_draw_buttons()
         return result
@@ -336,7 +336,7 @@ class ExInkingMode (PressureEditableMixin,
 
 
 
-    def _queue_redraw_curve(self):
+    def _queue_redraw_item(self):
         """Redraws the entire curve on all known view TDWs"""
         self._stop_task_queue_runner(complete=False)
         if self.current_node_index != None:
@@ -543,7 +543,7 @@ class ExInkingMode (PressureEditableMixin,
                 if append_node:
                     self.nodes.append(node)
                     self._queue_draw_node(len(self.nodes)-1)
-                    self._queue_redraw_curve()
+                    self._queue_redraw_item()
                     self._last_node_evdata = evdata
                 self._last_event_node = node
                 return True
@@ -562,7 +562,7 @@ class ExInkingMode (PressureEditableMixin,
                 if self.range_radius > 0:
                     self._queue_range_radius()
 
-                self._queue_redraw_curve()
+                self._queue_redraw_item()
         else:
             super(ExInkingMode, self).node_drag_update_cb(tdw, event, dx, dy)
 
@@ -593,7 +593,7 @@ class ExInkingMode (PressureEditableMixin,
             if len(self.nodes) > 1:
                 self.phase = _Phase.ADJUST
                 self._queue_redraw_all_nodes()
-                self._queue_redraw_curve()
+                self._queue_redraw_item()
                 self._queue_draw_buttons()
             else:
                 # Should enter capture phase again
@@ -710,7 +710,7 @@ class ExInkingMode (PressureEditableMixin,
         #   Perhaps dragging to adjust should only draw an
         #   armature during the drag, leaving the redraw to
         #   the stop handler.
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
         if changing_pos:
             self._queue_draw_node(i)
 
@@ -746,7 +746,7 @@ class ExInkingMode (PressureEditableMixin,
 
         self.options_presenter.target = (self, self.current_node_index)
         # Issue redraws for the changed on-canvas elements
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
@@ -773,7 +773,7 @@ class ExInkingMode (PressureEditableMixin,
         self.target_node_index = None
 
         # Issue redraws for the changed on-canvas elements
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
@@ -798,7 +798,7 @@ class ExInkingMode (PressureEditableMixin,
         self.nodes.insert(i+1,newnode)
 
         # Issue redraws for the changed on-canvas elements
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
@@ -884,7 +884,7 @@ class ExInkingMode (PressureEditableMixin,
 
     def _queue_all_visual_redraw(self):
         """Redraw all overlay objects"""
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
@@ -1098,7 +1098,7 @@ class ExInkingMode (PressureEditableMixin,
                 new_nodes.append(cn)
 
             self.nodes = new_nodes
-            self._queue_redraw_curve()
+            self._queue_redraw_item()
 
 
 
@@ -1588,9 +1588,9 @@ class StrokePressureSettings (object):
         # redraws.
         if self._idle_srcid is not None:
             current_mode = self.app.doc.modes.top
-            if hasattr(current_mode, 'redraw_curve_cb'):
+            if hasattr(current_mode, 'redraw_item_cb'):
                 # Redraw last_line when settings are adjusted in the adjustment Curve
-                GLib.idle_add(current_mode.redraw_curve_cb)
+                GLib.idle_add(current_mode.redraw_item_cb)
             for func in self.observers:
                 func(self._changed_settings)
             self._changed_settings = set()

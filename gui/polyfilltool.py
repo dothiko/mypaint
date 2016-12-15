@@ -561,7 +561,7 @@ class _Shape_Bezier(_Shape):
         # so, in this method, changing mode._phase
         # is very special case. 
         if mode.phase == _Phase.PLACE_NODE:
-            mode._queue_redraw_curve(tdw) 
+            mode._queue_redraw_item(tdw) 
             mode.phase = _Phase.ADJUST
 
 
@@ -609,7 +609,7 @@ class _Shape_Bezier(_Shape):
             pass
             
         elif mode.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
-            mode._queue_redraw_curve(tdw)  
+            mode._queue_redraw_item(tdw)  
             node = mode._last_event_node
             if mode._last_event_node:
                 mode._queue_draw_node(mode.current_node_index)# to erase
@@ -618,22 +618,22 @@ class _Shape_Bezier(_Shape):
                         self.shift_state)
 
                 mode._queue_draw_node(mode.current_node_index)
-            mode._queue_redraw_curve(tdw)
+            mode._queue_redraw_item(tdw)
                 
         elif mode.phase == _Phase.ADJUST_POS:
             if len(mode.selected_nodes) > 0:
-                mode._queue_redraw_curve(tdw)  
+                mode._queue_redraw_item(tdw)  
                 mode._queue_draw_selected_nodes()
                 mode.drag_offset.end(mx, my)
                 mode._queue_draw_selected_nodes()
-                mode._queue_redraw_curve(tdw)
+                mode._queue_redraw_item(tdw)
 
     def drag_stop_cb(self, mode, tdw):
         if mode.phase == _Phase.ADJUST:
             mode._queue_redraw_all_nodes()
             mode._reset_adjust_data()
             if len(mode.nodes) > 0:
-                mode._queue_redraw_curve(tdw)
+                mode._queue_redraw_item(tdw)
                #mode._queue_redraw_all_nodes()
                 if len(mode.nodes) > 1:
                     mode._queue_draw_buttons()
@@ -648,7 +648,7 @@ class _Shape_Bezier(_Shape):
                 node.curve = not mode.DEFAULT_POINT_CORNER
 
             mode._queue_redraw_all_nodes()
-            mode._queue_redraw_curve(tdw)
+            mode._queue_redraw_item(tdw)
             if len(mode.nodes) > 1:
                 mode._queue_draw_buttons()
 
@@ -664,7 +664,7 @@ class _Shape_Bezier(_Shape):
 
             mode.drag_offset.reset()
             mode._dragged_node_start_pos = None
-            mode._queue_redraw_curve(tdw)
+            mode._queue_redraw_item(tdw)
             mode._queue_draw_buttons()
             mode.phase = _Phase.ADJUST
 
@@ -973,7 +973,7 @@ class _Shape_Rectangle(_Shape):
         # so, in this method, changing mode._phase
         # is very special case. 
         if mode.phase == _Phase.PLACE_NODE:
-            mode._queue_redraw_curve(tdw) 
+            mode._queue_redraw_item(tdw) 
             mode.phase = _Phase.ADJUST
 
 
@@ -994,7 +994,7 @@ class _Shape_Rectangle(_Shape):
                     mode.current_node_index=0
                     mode._reset_selected_nodes(mode.current_node_index)
                     mode.drag_offset.start(mx, my)
-                    mode._queue_redraw_curve(tdw)  
+                    mode._queue_redraw_item(tdw)  
                     mode._queue_redraw_all_nodes()
 
         elif mode.phase == _Phase.ADJUST_POS:
@@ -1008,17 +1008,17 @@ class _Shape_Rectangle(_Shape):
 
         if mode.phase == _Phase.ADJUST:
             self.queue_redraw_nodes(tdw, mode)
-            mode._queue_redraw_curve(tdw)  
+            mode._queue_redraw_item(tdw)  
             mode.drag_offset.end(mx, my)
             self.queue_redraw_nodes(tdw, mode)
-            mode._queue_redraw_curve(tdw)  
+            mode._queue_redraw_item(tdw)  
         elif mode.phase == _Phase.ADJUST_POS:
             if len(mode.selected_nodes) > 0:
-                mode._queue_redraw_curve(tdw)  
+                mode._queue_redraw_item(tdw)  
                 mode._queue_redraw_all_nodes()
                 mode.drag_offset.end(mx, my)
                 mode._queue_redraw_all_nodes()
-                mode._queue_redraw_curve(tdw)
+                mode._queue_redraw_item(tdw)
 
     def drag_stop_cb(self, mode, tdw):
         if mode.phase == _Phase.ADJUST:
@@ -1031,7 +1031,7 @@ class _Shape_Rectangle(_Shape):
 
             self.set_area(mode, sx, sy, ex, ey)
 
-            mode._queue_redraw_curve(tdw)
+            mode._queue_redraw_item(tdw)
             mode._queue_redraw_all_nodes()
             mode._queue_draw_buttons()
             mode._reset_adjust_data()
@@ -1063,7 +1063,7 @@ class _Shape_Rectangle(_Shape):
                 
 
             mode.drag_offset.reset()
-            mode._queue_redraw_curve(tdw)
+            mode._queue_redraw_item(tdw)
             mode._queue_draw_buttons()
             mode._queue_redraw_all_nodes()
             mode.phase = _Phase.ADJUST
@@ -1264,7 +1264,7 @@ class PolyfillMode (OncanvasEditMixin,
    #    overlay = super(PolyfillMode, self)._ensure_overlay_for_tdw(tdw)
    #    assert self._overlays.get(tdw)
    #    if len(self.nodes) > 0:
-   #        self._queue_redraw_curve()
+   #        self._queue_redraw_item()
    #    return overlay
 
     def _generate_overlay(self, tdw):
@@ -1367,11 +1367,11 @@ class PolyfillMode (OncanvasEditMixin,
     ## Redraws
     
 
-    def redraw_curve_cb(self, erase=False):
+    def redraw_item_cb(self, erase=False):
         """ Frontend method,to redraw curve from outside this class"""
         pass # do nothing for now
 
-    def _queue_redraw_curve(self, tdw=None):
+    def _queue_redraw_item(self, tdw=None):
 
         for tdw in self._overlays:
             
@@ -1441,7 +1441,7 @@ class PolyfillMode (OncanvasEditMixin,
     def _start_new_capture_phase(self, mode, rollback=False):
         self._queue_draw_buttons()
         self._queue_redraw_all_nodes()
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
 
         if rollback:
             self._stop_task_queue_runner(complete=False)
@@ -1487,7 +1487,7 @@ class PolyfillMode (OncanvasEditMixin,
             self._stop_task_queue_runner(complete=False)
             self._queue_draw_buttons()
             self._queue_redraw_all_nodes()
-            self._queue_redraw_curve()
+            self._queue_redraw_item()
 
 
     ### Event handling
@@ -1646,7 +1646,7 @@ class PolyfillMode (OncanvasEditMixin,
     @polygon_preview_fill.setter
     def polygon_preview_fill(self, flag):
         self._polygon_preview_fill = flag
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
     
     ## Action button handlers
     def _do_action(self, key):

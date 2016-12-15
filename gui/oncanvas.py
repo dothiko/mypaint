@@ -50,7 +50,7 @@ import gui.ui_utils
 #    """
 #    def _decorator(self, *args):
 #        # To ensure redraw entire overlay,avoiding glitches.
-#        self._queue_redraw_curve()
+#        self._queue_redraw_item()
 #        self._queue_redraw_all_nodes()
 #        self._queue_draw_buttons()
 #
@@ -60,7 +60,7 @@ import gui.ui_utils
 #
 #        if result > 0:
 #            self.options_presenter.target = (self, self.current_node_index)
-#            self._queue_redraw_curve()
+#            self._queue_redraw_item()
 #            self._queue_redraw_all_nodes()
 #            self._queue_draw_buttons()
 #        return result
@@ -403,7 +403,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             self._stop_task_queue_runner(complete=False)
             self._queue_draw_buttons()
             self._queue_redraw_all_nodes()
-            self._queue_redraw_curve()
+            self._queue_redraw_item()
  
  
  
@@ -494,6 +494,10 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         self._returning_phase = next_phase
  
     ## Redraws
+    def _queue_redraw_item(self):
+        """ Just a placeholder, to be overridden at child class.
+        """
+        pass
 
     def _queue_draw_buttons(self):
         """Redraws the accept/reject buttons on all known view TDWs"""
@@ -589,7 +593,9 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         # Update workaround state for evdev dropouts
         self._button_down = event.button
 
-       #if self.phase == PhaseMixin.ADJUST:
+        shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
+       #ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
+
         if self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
             button = event.button
             if button == 1:
@@ -610,7 +616,8 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                     # clicked a node.
                     mx, my = tdw.display_to_model(event.x, event.y)
                     self.drag_offset.start(mx, my)
-                    self.phase = PhaseMixin.ADJUST
+                    self.phase = PhaseMixin.ADJUST_POS
+                    self.select_node(self.target_node_index, exclusive=not shift_state)
 
                 else:
                     pass
@@ -744,7 +751,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         """
         if self.phase == PhaseMixin.ADJUST_POS:
             if self._dragged_node_start_pos:
-                self._node_dragged = True
 
                 # To erase old-positioned nodes.
                 self._queue_draw_selected_nodes()
@@ -753,7 +759,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 self.drag_offset.end(x, y)
                 self._queue_draw_selected_nodes()
 
-                self._queue_redraw_curve()
+                self._queue_redraw_item()
 
  
     def node_drag_stop_cb(self, tdw):
@@ -767,7 +773,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         """
         if self.phase == PhaseMixin.ADJUST_POS:
             # Finalize dragging motion to selected nodes.
-            if self._node_dragged:
+            if self._dragged_node_start_pos:
  
                 self._queue_draw_selected_nodes() # to ensure erase them
                 dx, dy = self.drag_offset.get_model_offset()
@@ -780,7 +786,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 self.drag_offset.reset()
 
                 self._queue_draw_selected_nodes() # to ensure erase them
-                self._queue_redraw_curve()
+                self._queue_redraw_item()
                 self._queue_draw_buttons()
  
             self._dragged_node_start_pos = None
@@ -869,6 +875,27 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         return (xtilt, ytilt)
  
     ## Node related
+    def select_node(self, idx, exclusive=False):
+        """Select a node, i.e. add idx of node into selected_nodes list.
+
+        :param exclusive: if this is True, only the 'idx' node is selected.
+        """
+        if exclusive:
+            self.selected_nodes = [idx]
+            self._queue_redraw_all_nodes()
+        else:
+            if idx in self.selected_nodes:
+                self.selected_nodes.remove(idx)
+            else:
+                self.selected_nodes.append(idx)
+
+            self._queue_draw_node(idx)
+
+        if len(self.selected_nodes) == 0:
+            self.target_node_index = None
+            self.current_node_index = None
+        else:
+            self.current_node_index = idx
 
     def _update_current_node_index(self):
         """Updates current_node_index from target_node_index & redraw"""
@@ -1021,34 +1048,34 @@ class PressureEditableMixin(OncanvasEditMixin,
                     
 
                         self.phase = PressPhase.ADJUST_PRESSURE_ONESHOT
-                    elif (event.state & cls._ADD_SELECTION_MASK ==
-                            cls._ADD_SELECTION_MASK):
-
-                        # Holding CTRL key =  1 by 1 Managing selected nodes.
-                        self._queue_draw_selected_nodes()
-
-                        if not self.current_node_index in self.selected_nodes:
-                            self.selected_nodes.append(self.current_node_index)
-                        else:
-                            self.selected_nodes.remove(self.current_node_index)
-                            self.target_node_index = None
-                            self.current_node_index = None
-
-                        self._queue_draw_selected_nodes()
-                        self._bypass_phase(PressPhase.ADJUST)
-                        return 
-
-                    else:
-                        self.phase = PressPhase.ADJUST_POS
+                   #elif (event.state & cls._ADD_SELECTION_MASK ==
+                   #        cls._ADD_SELECTION_MASK):
+                   #
+                   #    # Holding CTRL key =  1 by 1 Managing selected nodes.
+                   #    self._queue_draw_selected_nodes()
+                   #
+                   #    if not self.current_node_index in self.selected_nodes:
+                   #        self.selected_nodes.append(self.current_node_index)
+                   #    else:
+                   #        self.selected_nodes.remove(self.current_node_index)
+                   #        self.target_node_index = None
+                   #        self.current_node_index = None
+                   #
+                   #    self._queue_draw_selected_nodes()
+                   #    self._bypass_phase(PressPhase.ADJUST)
+                   #    return 
+                   #
+                   #else:
+                   #    self.phase = PressPhase.ADJUST_POS
                 
                     # By the way, A new node clicked!
                     # This is safe even CTRL key holded, because already exited 
                     # from this callback in that case.
-                    if not self.current_node_index in self.selected_nodes:
-                        # To avoid old selected nodes still lit.
-                        self._queue_draw_selected_nodes()
-                        self._reset_selected_nodes(self.current_node_index)
-                        self._queue_draw_selected_nodes()
+                   #if not self.current_node_index in self.selected_nodes:
+                   #    # To avoid old selected nodes still lit.
+                   #    self._queue_draw_selected_nodes()
+                   #    self._reset_selected_nodes(self.current_node_index)
+                   #    self._queue_draw_selected_nodes()
             
                 # FALLTHRU: *do* start a drag
         else:
@@ -1103,7 +1130,7 @@ class PressureEditableMixin(OncanvasEditMixin,
                 self._dragged_node_start_pos = None
 
                 self._queue_redraw_all_nodes()
-                self._queue_redraw_curve()
+                self._queue_redraw_item()
                 self._queue_draw_buttons()
         else:
             super(PressureEditableMixin, self).node_drag_stop_cb(tdw)
@@ -1133,7 +1160,7 @@ class PressureEditableMixin(OncanvasEditMixin,
                 if idx == self.target_node_index:
                     self.options_presenter.target = (self, self.target_node_index)
 
-            self._queue_redraw_curve()
+            self._queue_redraw_item()
 
             return True # To suppress invoke superclass handler
 
@@ -1173,7 +1200,7 @@ class PressureEditableMixin(OncanvasEditMixin,
                             cn._replace(pressure = lib.helpers.clamp(
                                 cn.pressure + diff,0.0, 1.0))
 
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
 
     def apply_pressure_from_curve_widget(self):
         """ apply pressure reprenting points
@@ -1195,7 +1222,7 @@ class PressureEditableMixin(OncanvasEditMixin,
         assert hasattr(self.options_presenter,'curve')
         curve = self.options_presenter.curve
 
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
 
         # Getting entire stroke(vector) length
         node_length=[]
@@ -1221,7 +1248,7 @@ class PressureEditableMixin(OncanvasEditMixin,
 
         self.nodes = new_nodes
 
-        self._queue_redraw_curve()
+        self._queue_redraw_item()
 
 
     def enter_pressure_phase(self):

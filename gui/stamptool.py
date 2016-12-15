@@ -283,7 +283,6 @@ class StampMode (OncanvasEditMixin,
    #        self._stop_task_queue_runner(complete=False)
    #        self._queue_draw_buttons()
    #        self._queue_redraw_all_nodes()
-   #        self._queue_redraw_curve()
         
     def stampwork_commit_all(self, abrupt=False):
         """ abrupt is ignored.
@@ -322,7 +321,6 @@ class StampMode (OncanvasEditMixin,
         """Let the user capture a new ink stroke"""
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
-        self._queue_redraw_curve(force_margin=True)  # call this before reset node
 
         if rollback:
             self._stop_task_queue_runner(complete=False)
@@ -457,13 +455,16 @@ class StampMode (OncanvasEditMixin,
         new_target_node_index = None
         handle_idx = None
         stamp = self.stamp
-        # Use reversed array, because "the top covering picture
-        # should manipulate first"
-        for i, node in reversed(list(enumerate(self.nodes))):
+        # Use reversed index, because "the top covering picture
+        # should be manipulated prior to below one"
+        nmax = len(self.nodes) - 1
+        for i in xrange(nmax + 1):
+            ri = nmax - i
+            node = self.nodes[ri]
             handle_idx = stamp.get_handle_index(tdw, x, y, node,
                    gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
             if handle_idx >= 0:
-                new_target_node_index = i
+                new_target_node_index = ri
                 if handle_idx >= 4:
                     handle_idx = None
                 break
@@ -494,19 +495,6 @@ class StampMode (OncanvasEditMixin,
         if bbox:
             tdw.queue_draw_area(*bbox)
 
-    def _queue_redraw_curve(self, force_margin=False):
-        """Redraws the entire curve on all known view TDWs"""
-        dx, dy = self.drag_offset.get_model_offset()
-        
-        for tdw in self._overlays:
-            for i, cn in enumerate(self.nodes):
-                targetted = (i == self.current_node_index)
-                if i in self.selected_nodes:
-                    self._queue_draw_node_internal(tdw, cn, dx, dy, 
-                            targetted or force_margin)
-                else:
-                    self._queue_draw_node_internal(tdw, cn, 0.0, 0.0, 
-                            targetted or force_margin)
 
     def _queue_draw_buttons(self):
 
@@ -520,6 +508,10 @@ class StampMode (OncanvasEditMixin,
                 tdw.queue_draw_area(sx, sy, 
                         abs(ex - sx) + 1, abs(ey - sy) + 1)
 
+   #def _queue_redraw_item(self): this method is ignored,
+   # leave as the placeholder of OncanvasEditMixin.
+   # because, in this class, drawing nodes same as drawing items.
+
     ## Raw event handling (prelight & zone selection in adjust phase)
 
     def mode_button_press_cb(self, tdw, event):
@@ -532,27 +524,22 @@ class StampMode (OncanvasEditMixin,
 
         if self.phase == _Phase.CAPTURE:
             self.stamp.initialize_phase(self)
-
-        if self.phase in (_Phase.ADJUST, _Phase.CAPTURE):
-            button = event.button
-
-            if self.zone == _EditZone.CONTROL_NODE:
-                if button == 1:
-                    self.phase = _Phase.ADJUST
-                    if self.current_node_handle != None:
-                        if ctrl_state:
-                            self.phase = _Phase.ROTATE_BY_HANDLE
-                        else:
-                            self.phase = _Phase.SCALE_BY_HANDLE
-
-            else:
-                return super(StampMode, self).mode_button_press_cb(tdw, event)
-
+        elif self.phase == _Phase.ADJUST_POS:
+            self._queue_draw_buttons()
+            assert event.button == 1
+            retval = super(StampMode, self).mode_button_press_cb(tdw, event)
+            if self.current_node_handle != None:
+                if ctrl_state:
+                    self.phase = _Phase.ROTATE_BY_HANDLE
+                else:
+                    self.phase = _Phase.SCALE_BY_HANDLE
+            return retval
         elif self.phase in (_Phase.ROTATE,
                             _Phase.SCALE,
                             _Phase.ROTATE_BY_HANDLE,
                             _Phase.SCALE_BY_HANDLE):
-            # XXX Not sure what to do here.
+            # XXX Not sure what should be done here yet.
+            # but remained for future use.
             pass
         else:
             return super(StampMode, self).mode_button_press_cb(tdw, event)
@@ -580,6 +567,7 @@ class StampMode (OncanvasEditMixin,
 
     def node_drag_start_cb(self, tdw, event):
 
+        assert self.stamp is not None
         mx, my = tdw.display_to_model(event.x, event.y)
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
         ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
@@ -599,9 +587,7 @@ class StampMode (OncanvasEditMixin,
                     self.selected_nodes = [self.target_node_index, ]
                     self._queue_draw_node(0)
                     self.drag_offset.start(mx, my)
-
-            elif self.zone == _EditZone.CONTROL_NODE:
-                super(StampMode, self).node_drag_start_cb(tdw, event)
+                    self.phase = _Phase.CAPTURE
 
         elif self.phase in (_Phase.ROTATE,
                             _Phase.SCALE,
@@ -612,14 +598,12 @@ class StampMode (OncanvasEditMixin,
             super(StampMode, self).node_drag_start_cb(tdw, event)
 
 
+
     def node_drag_update_cb(self, tdw, event, dx, dy):
-        if not self.stamp:
-            super(StampMode, self).drag_update_cb(tdw, event, dx, dy)
 
-        shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
-        ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
-        mx, my = tdw.display_to_model(event.x ,event.y)
+        assert self.stamp is not None
 
+        # Utility closure definition
         def override_scale_and_rotate():
             if ctrl_state:
                 self.phase = _Phase.ROTATE
@@ -630,6 +614,24 @@ class StampMode (OncanvasEditMixin,
             self.phase = _Phase.CAPTURE
             self._queue_draw_node(self.current_node_index) 
 
+        # local variables setup
+        shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
+        ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
+        mx, my = tdw.display_to_model(event.x ,event.y)
+
+        # Per phase setup
+        if self.phase in (_Phase.ROTATE,
+                            _Phase.SCALE,
+                            _Phase.ROTATE_BY_HANDLE,
+                            _Phase.SCALE_BY_HANDLE):
+            assert self.current_node_index is not None
+            idx = self.current_node_index
+            self._queue_draw_node(idx)
+            node = self.nodes[idx]
+
+
+
+        # Phase processing
         if self.phase == _Phase.CAPTURE:
             if self.current_node_index != None:
                 self._queue_draw_node(self.current_node_index) 
@@ -638,17 +640,15 @@ class StampMode (OncanvasEditMixin,
                 else:
                     self.drag_offset.end(mx, my)
                     self._queue_draw_node(len(self.nodes)-1) 
-        elif self.phase in (_Phase.ADJUST, _Phase.ADJUST_POS):
-            if shift_state:
+
+        elif self.phase == _Phase.ADJUST_POS:
+            if shift_state or ctrl_state:
                 override_scale_and_rotate()
             else:
                 return super(StampMode, self).node_drag_update_cb(tdw, event, dx, dy)
                 
         elif self.phase in (_Phase.SCALE,
                             _Phase.ROTATE):
-            assert self.current_node_index is not None
-            self._queue_redraw_curve()
-            node = self.nodes[self.current_node_index]
             bx, by = tdw.model_to_display(node.x, node.y)
             dir, length = get_drag_direction(
                     self.start_x, self.start_y,
@@ -667,14 +667,11 @@ class StampMode (OncanvasEditMixin,
                     node = node._replace(scale_x = node.scale_x + scale,
                             scale_y = node.scale_y + scale)
 
-                self.nodes[self.current_node_index] = node
-                self._queue_redraw_curve()
+                self.nodes[idx] = node
+                self._queue_draw_node(idx)
                 self.start_x = event.x
                 self.start_y = event.y
         elif self.phase == _Phase.SCALE_BY_HANDLE:
-            assert self.target_node_index is not None
-            self._queue_redraw_curve()
-            node = self.nodes[self.target_node_index]
             pos = self.stamp.get_boundary_points(node)
 
             # At here, we consider the movement of control handle(i.e. cursor)
@@ -734,16 +731,13 @@ class StampMode (OncanvasEditMixin,
                     or (ti in (0, 2) and cp > 0.0)):
                 scale_x = -scale_x
 
-            self.nodes[self.target_node_index] = node._replace(
+            self.nodes[idx] = node._replace(
                     scale_x=scale_x,
                     scale_y=scale_y)
 
-            self._queue_redraw_curve()
+            self._queue_draw_node(idx)
 
         elif self.phase == _Phase.ROTATE_BY_HANDLE:
-            assert self.target_node_index is not None
-            self._queue_redraw_curve()
-            node = self.nodes[self.target_node_index]
             #pos = self.stamp.get_boundary_points(node)
             #mx, my = tdw.display_to_model(event.x, event.y)
             ndx, ndy = tdw.model_to_display(node.x, node.y)
@@ -763,26 +757,26 @@ class StampMode (OncanvasEditMixin,
             if cross_product(cx, cy, bx, by) >= 0.0:
                 rad = -rad
 
-            self.nodes[self.target_node_index] = node._replace(
+            self.nodes[idx] = node._replace(
                     angle = node.angle + rad)
                       
-            self._queue_redraw_curve()
+            self._queue_draw_node(idx)
             
         else:
             super(StampMode, self).node_drag_update_cb(tdw, event, dx, dy)
 
 
     def node_drag_stop_cb(self, tdw):
-        if not self.stamp:
-            return super(StampMode, self).drag_stop_cb(tdw)
-        
+
+        assert self.stamp is not None
+
         if self.phase == _Phase.CAPTURE:
 
             if not self.nodes or self.current_node_index == None:
                 # Cancelled drag event (and current capture phase)
                 # call super-superclass directly to bypass this phase
                 self._reset_adjust_data()
-                return super(StampMode, self).drag_stop_cb(tdw) 
+                return super(StampMode, self).node_drag_stop_cb(tdw) 
 
             node = self.nodes[self.current_node_index]
             dx, dy = self.drag_offset.get_model_offset()
@@ -794,25 +788,10 @@ class StampMode (OncanvasEditMixin,
                 self.phase = _Phase.ADJUST
                 self._update_zone_and_target(tdw, self.last_x, self.last_y)
                 self._queue_redraw_all_nodes()
-                self._queue_redraw_curve()
                 self._queue_draw_buttons()
             else:
                 self._reset_nodes()
                 tdw.queue_draw()
-
-        elif self.phase == _Phase.ADJUST:
-            self._queue_draw_selected_nodes() # to ensure erase them
-
-            ox, oy = self.drag_offset.get_model_offset()
-            for i in self.selected_nodes:
-                cn = self.nodes[i]
-                self.nodes[i] = cn._replace(x=cn.x + ox, 
-                                            y=cn.y + oy)
-            self.drag_offset.reset()
-            
-            self._queue_redraw_all_nodes()
-            self._queue_redraw_curve()
-            self._queue_draw_buttons()
 
         elif self.phase in (_Phase.ROTATE,
                             _Phase.SCALE,
@@ -953,7 +932,6 @@ class StampMode (OncanvasEditMixin,
         self.current_node_index = None
         self.target_node_index = None
 
-        self._queue_redraw_curve()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
@@ -1032,11 +1010,11 @@ class Overlay_Stamp (OverlayOncanvasMixin):
         for i, node in enumerate(mode.nodes):
 
             if i in mode.selected_nodes:
-                tx = dx
-                ty = dy
+                tdx = dx
+                tdy = dy
             else:
-                tx = ty = 0.0
-            bbox = mode.stamp.get_bbox(self._tdw, node, tx, ty)
+                tdx = tdy = 0.0
+            bbox = mode.stamp.get_bbox(self._tdw, node, tdx, tdy)
 
             if bbox:
                 x, y, w, h = bbox
@@ -1048,7 +1026,7 @@ class Overlay_Stamp (OverlayOncanvasMixin):
                 )
 
                 if node_on_screen:
-                    yield (i, node)
+                    yield (i, node, tdx, tdy)
 
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
@@ -1215,10 +1193,9 @@ class Overlay_Stamp (OverlayOncanvasMixin):
         x, y = self._tdw.model_to_display(node.x, node.y)
         normal_color, selected_color = colors
 
+        self.draw_stamp_rect(cr, idx, dx, dy, selected_color, position=pos)
+
         if idx == mode.current_node_index or idx in mode.selected_nodes:
-            self.draw_stamp_rect(cr, idx, dx, dy, selected_color, position=pos)
-            x+=dx
-            y+=dy
             for i, pt in enumerate(pos):
                #handle_idx = _EditZone.CONTROL_HANDLE_BASE + i
                #handle_idx = _EditZone.CONTROL_HANDLE_BASE + i
@@ -1228,10 +1205,8 @@ class Overlay_Stamp (OverlayOncanvasMixin):
                     gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
                     fill=(i==mode.current_node_handle)) 
                    #fill=(handle_idx==mode.zone)) 
-        else:
-            self.draw_stamp_rect(cr, idx, 0, 0, normal_color, position=pos)
 
-        mode.stamp.draw(self._tdw, cr, x, y, node, True)
+        mode.stamp.draw(self._tdw, cr, x+dx, y+dy, node, True)
 
     def draw_stamp_rect(self, cr, idx, dx, dy, color, position=None):
         cr.save()
@@ -1248,6 +1223,7 @@ class Overlay_Stamp (OverlayOncanvasMixin):
                 position[0][1] + dy)
         for lx, ly in position[1:]:
             cr.line_to(lx+dx, ly+dy)
+
         cr.close_path()
         cr.stroke_preserve()
 
@@ -1295,12 +1271,11 @@ class Overlay_Stamp (OverlayOncanvasMixin):
 
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
-        dx,dy = mode.drag_offset.get_display_offset(self._tdw)
         fill_flag = True
 
         colors = ( (1, 1, 1), self.SELECTED_COLOR)
 
-        for i, node in self._get_onscreen_nodes():
+        for i, node, dx, dy in self._get_onscreen_nodes():
            #color = gui.style.EDITABLE_ITEM_COLOR
             show_node = not mode.hide_nodes
 
