@@ -194,6 +194,13 @@ class StampMode (OncanvasEditMixin,
     ## Class variable & objects
 
 
+    # _stamp_param stores scale/angle value for
+    # each picture
+    _stamp_param = {}
+
+    # A flag indicates whether remember stamp parameter or not
+    REMEMBER_PARAM_ENABLED = False
+
     ## Initialization & lifecycle methods
 
     def __init__(self, **kwargs):
@@ -219,7 +226,9 @@ class StampMode (OncanvasEditMixin,
 
     @property
     def current_picture_id(self):
-        return self._current_picture_id
+        if self.stamp != None:
+            return self.stamp.validate_picture_id(self._current_picture_id)
+        return -1
 
     @current_picture_id.setter
     def current_picture_id(self, new_id):
@@ -239,6 +248,44 @@ class StampMode (OncanvasEditMixin,
         stamp.enter(self.doc)
         stamp.initialize_phase(self)
 
+    ## Stamp default parameter related
+    def record_current_stamp_param(self, scale_x, scale_y, angle,
+            picture_id=-1):
+        """ Called from node_drag_stop_cb, 
+        when phase is _Phase.SCALE*/ANGLE*
+        """
+        assert self.stamp is not None
+        if picture_id == -1:
+            picture_id = self.current_picture_id
+
+        cur_dic = StampMode._stamp_param.get(self.stamp, None)
+        if cur_dic == None and StampMode.REMEMBER_PARAM_ENABLED:
+            cur_dic = {}
+            StampMode._stamp_param[self.stamp] = cur_dic
+
+        if cur_dic != None:
+            cur_dic[picture_id] = (scale_x, scale_y, angle)
+        
+
+    def get_default_stamp_param(self):
+        """Get default stamp parameter from
+        current stamp of current picture.
+        
+        This method is called from node_drag_start_cb, 
+        when phase is _Phase.CAPTURE/ADJUST and
+        Editzone is _EditZone.SOURCE_AREA/CONTROL_NODE
+        """
+        assert self.stamp is not None
+        assert self.stamp.picture_count > 0
+
+        cur_id = self.current_picture_id
+        default_param = (1.0, 1.0, 0.0)
+        
+        cur_dic = StampMode._stamp_param.get(self.stamp, None)
+        if cur_dic != None:
+            return cur_dic.get(cur_id, default_param)
+        
+        return default_param
 
     ## Status methods
 
@@ -568,11 +615,17 @@ class StampMode (OncanvasEditMixin,
 
             if self.zone == _EditZone.EMPTY_CANVAS:
                 if self.stamp.picture_count > 0:
+                    new_picture_id = self.current_picture_id
+                    scale_x, scale_y, angle = self.get_default_stamp_param()
+
                     node = _StampNode(mx, my, 
-                            self.stamp.default_angle,
-                            self.stamp.default_scale_x,
-                            self.stamp.default_scale_y,
-                            self.stamp.validate_picture_id(self.current_picture_id))
+                           #self.stamp.default_angle,
+                           #self.stamp.default_scale_x,
+                           #self.stamp.default_scale_y,
+                            angle,
+                            scale_x,
+                            scale_y,
+                            new_picture_id)
                     self.nodes.append(node)
                     idx = len(self.nodes) -1
                     self._queue_draw_node(idx)
@@ -793,6 +846,11 @@ class StampMode (OncanvasEditMixin,
                             _Phase.SCALE,
                             _Phase.ROTATE_BY_HANDLE,
                             _Phase.SCALE_BY_HANDLE):
+            assert self.current_node_index is not None
+            node = self.nodes[self.current_node_index]
+            self.record_current_stamp_param(
+                    node.scale_x, node.scale_y, node.angle,
+                    picture_id = node.picture_index)
             self.phase = _Phase.ADJUST
 
         else:
@@ -1344,6 +1402,10 @@ class OptionsPresenter_Stamp (object):
         base_grid = builder.get_object("additional_button_grid")
         self._init_toolbar(0, base_grid)
 
+        self._remember_check = builder.get_object("remember_checkbutton")
+        self._remember_check.set_active(
+                self._app.preferences.get("StampMode.remember_last_param", False))
+
     def _init_stamp_preset_view(self, sw):
         """Initialize stamp preset icon view.
 
@@ -1624,6 +1686,14 @@ class OptionsPresenter_Stamp (object):
         print('notebook id %d' % id)
         pass
 
+    def remember_checkbutton_toggled_cb(self, button):
+        flag = button.get_active()
+
+        if not self._updating_ui: 
+            self._app.preferences["StampMode.remember_last_param"] = flag
+
+        # This line don't care whether updating ui or not.
+        StampMode.REMEMBER_PARAM_ENABLED = flag
 
     ## Popup menus handler for Stamp picture icon view.
     def _popup_clipboard_cb_base(self, stamp_id):
