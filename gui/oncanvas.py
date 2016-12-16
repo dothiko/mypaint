@@ -173,6 +173,8 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     ## Class attributes
  
     _OPTIONS_PRESENTER = None   #: Options presenter singleton
+
+    _WHEEL_STEP = 0.025 # mouse wheel delta step,for scroll event
  
     drag_offset = gui.ui_utils.DragOffset() #: Dragging management class singleton
 
@@ -714,18 +716,13 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         self.drag_offset.reset()
  
     def scroll_cb(self, tdw, event):
-        if (self.phase == PhaseMixin.ADJUST 
-                and self.target_node_index != None):
- 
-            if self._prev_scroll_time != event.time:
- 
-                dx, dy = gui.ui_utils.get_scroll_delta(event, self._PRESSURE_WHEEL_STEP)
-                if not self.node_scroll_cb(tdw, dx, dy):
-                    return super(OncanvasEditMixin, self).scroll_cb(tdw, event)
- 
-            self._prev_scroll_time = event.time
-        else:
-            return super(OncanvasEditMixin, self).scroll_cb(tdw, event)
+        if self._prev_scroll_time != event.time:
+
+            dx, dy = gui.ui_utils.get_scroll_delta(event, self._WHEEL_STEP)
+            if not self.node_scroll_cb(tdw, dx, dy):
+                return super(OncanvasEditMixin, self).scroll_cb(tdw, event)
+
+        self._prev_scroll_time = event.time
  
     ## Node Editing event callbacks
  
@@ -1016,8 +1013,6 @@ class PressureEditableMixin(OncanvasEditMixin,
     # these can be hard-coded,but we might need some customizability later.
     _PRESSURE_MOD_MASK = Gdk.ModifierType.SHIFT_MASK
     _ADD_SELECTION_MASK = Gdk.ModifierType.CONTROL_MASK
-
-    _PRESSURE_WHEEL_STEP = 0.025 # pressure modifying step,for mouse wheel
 
 
     @property

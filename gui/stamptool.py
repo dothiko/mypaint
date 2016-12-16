@@ -856,7 +856,9 @@ class StampMode (OncanvasEditMixin,
         else:
             return super(StampMode, self).node_drag_stop_cb(tdw)
 
-   #def node_scroll_cb(self, tdw, event):
+    def node_scroll_cb(self, tdw, event):
+        return
+
    #    """Handles scroll-wheel events, to adjust rotation/scale/picture_index."""
    #
    #    if (self.phase in (_Phase.ADJUST,) 
