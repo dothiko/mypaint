@@ -631,7 +631,8 @@ class StampMode (OncanvasEditMixin,
                     self._queue_draw_node(idx)
                     self.drag_offset.start(mx, my)
                     self.phase = _Phase.CAPTURE
-                    self.select_node(idx)
+                    self.select_node(idx, exclusive=True)
+                    self._queue_draw_buttons() # to erase
 
         elif self.phase in (_Phase.ROTATE,
                             _Phase.SCALE,
@@ -676,26 +677,18 @@ class StampMode (OncanvasEditMixin,
 
 
         # Phase processing
-        if self.phase == _Phase.CAPTURE:
-            if self.current_node_index != None:
-                self._queue_draw_node(self.current_node_index) 
-                if shift_state:
-                    override_scale_and_rotate()
-                else:
-                    self.drag_offset.end(mx, my)
-                    self._queue_draw_node(len(self.nodes)-1) 
-
-        elif self.phase == _Phase.ADJUST_POS:
+        if self.phase in (_Phase.ADJUST_POS, _Phase.CAPTURE):
             if shift_state or ctrl_state:
                 override_scale_and_rotate()
             else:
                 # Stamps are drawn by cairo,
-                # so when a stamp which currently dragged by user
-                # pass over other editing phase stamp, 
-                # it might erased.
-                # Therefore We needs to redraw all nodes everytime.
+                # so we must care to redraw overlapped stamps
+                # during dragging current stamp.
+                # Therefore We needs to call _queue_redraw_all_nodes()
+                # instead of _queue_draw_node(idx)
                 self._queue_redraw_all_nodes()
-                return super(StampMode, self).node_drag_update_cb(tdw, event, dx, dy)
+                self.drag_offset.end(mx, my)
+                self._queue_redraw_all_nodes()
                 
         elif self.phase in (_Phase.SCALE,
                             _Phase.ROTATE):
@@ -832,15 +825,14 @@ class StampMode (OncanvasEditMixin,
             self.nodes[idx] = node._replace( x=node.x + dx, y=node.y + dy)
             self.drag_offset.reset()
 
-           #if len(self.nodes) > 0:
             self.phase = _Phase.ADJUST
             self._update_zone_and_target(tdw, self.last_x, self.last_y)
-           #self._queue_redraw_all_nodes()
-            self._queue_draw_node(idx)
+
+            # Use _queue_redraw_all_nodes, not _queue_draw_node(idx)
+            # Because we must redraw all stamps, including overlapped one. 
+            self._queue_redraw_all_nodes()
+
             self._queue_draw_buttons()
-           #else:
-           #    self._reset_nodes()
-           #    tdw.queue_draw()
 
         elif self.phase in (_Phase.ROTATE,
                             _Phase.SCALE,
@@ -855,56 +847,6 @@ class StampMode (OncanvasEditMixin,
 
         else:
             return super(StampMode, self).node_drag_stop_cb(tdw)
-
-    def node_scroll_cb(self, tdw, event):
-        return
-
-   #    """Handles scroll-wheel events, to adjust rotation/scale/picture_index."""
-   #
-   #    if (self.phase in (_Phase.ADJUST,) 
-   #            and self.zone == _EditZone.CONTROL_NODE
-   #            and self.current_node_index != None):
-   #
-   #        if self._prev_scroll_time != event.time:
-   #            shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
-   #            ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
-   #            junk, step = get_scroll_delta(event, 1.0)
-   #            node = self.nodes[self.current_node_index]
-   #            redraw = True
-   #
-   #            if shift_state:
-   #                self._queue_draw_node(self.current_node_index) 
-   #
-   #                scale_step = 0.05
-   #                node = node._replace(scale_x = node.scale_x + step * scale_step,
-   #                        scale_y = node.scale_y + step * scale_step)
-   #                self.nodes[self.current_node_index] = node
-   #            elif ctrl_state:
-   #                self._queue_draw_node(self.current_node_index) 
-   #
-   #                node = node._replace(angle = node.angle + step * (math.pi * 0.05))
-   #                self.nodes[self.current_node_index] = node
-   #            else:
-   #                if self.stamp and self.stamp.picture_count > 1:
-   #                    self._queue_draw_node(self.current_node_index) 
-   #
-   #                    new_picture_index = lib.helpers.clamp(node.picture_index + int(step),
-   #                            0, self.stamp.picture_count - 1)
-   #
-   #                    if new_picture_index != node.picture_index:
-   #                        self.nodes[self.current_node_index] = \
-   #                                node._replace(picture_index = new_picture_index)
-   #                else:
-   #                    redraw = False
-   #
-   #            if redraw:
-   #                self._queue_draw_node(self.current_node_index) 
-   #
-   #        self._prev_scroll_time = event.time
-   #    else:
-   #        # calling super-supreclass handler, to invoke original scroll events.
-   #        return super(StampMode, self).node_scroll_cb(tdw, event)
-
 
     ## Interrogating events
 
