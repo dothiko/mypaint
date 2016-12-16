@@ -320,8 +320,8 @@ class Stamp(object):
             w = stamp_src.get_width() 
             h = stamp_src.get_height()
 
-            ox = -(w / 2)
-            oy = -(h / 2)
+            ox = math.ceil(-(w / 2))
+            oy = math.ceil(-(h / 2))
 
             angle = node.angle
             scale_x = node.scale_x
@@ -476,17 +476,11 @@ class Stamp(object):
         sx, sy = pts[0]
         ex, ey = sx, sy
         for tx, ty in pts[1:]:
-            if tx < sx:
-                sx = tx
-            elif tx > ex:
-                ex = tx
-
-            if ty < sy:
-                sy = ty
-            elif ty > ey:
-                ey = ty
+            sx = min(tx, sx)
+            sy = min(ty, sy)
+            ex = max(tx, ex)
+            ey = max(ty, ey)
         return (sx, sy, ex, ey)
-
 
     ## Phase related methods
     #  these methods should be called from 

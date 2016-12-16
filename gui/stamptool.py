@@ -73,7 +73,6 @@ class _StampNode (collections.namedtuple("_StampNode", _NODE_FIELDS)):
 
 class _Phase(PhaseMixin):
     """Enumeration of the states that an BezierCurveMode can be in"""
-    MOVE   = 100         #: Moving stamp
     ROTATE = 101         #: Rotate with mouse drag 
     SCALE  = 102         #: Scale with mouse drag 
     ROTATE_BY_HANDLE = 103 #: Rotate with handle of GUI
@@ -471,17 +470,26 @@ class StampMode (OncanvasEditMixin,
 
         return (new_target_node_index, handle_idx)
 
-    def _queue_draw_node(self, i, dx=0, dy=0, force_margin=False):
+    def _queue_draw_node(self, i, offsets=None, tdws=None):
         """Redraws a specific control node on all known view TDWs"""
 
-        if i == self.current_node_index:
-            force_margin = True
+        if offsets:
+            dx, dy = offsets
+        else:
+            if i in self.selected_nodes:
+                dx, dy = self.drag_offset.get_model_offset()
+            else:
+                dx = dy = 0
 
-        for tdw in self._overlays:
-            self._queue_draw_node_internal(tdw, self.nodes[i], dx, dy, force_margin)
+        if tdws == None:
+            tdws = self._overlays
+
+        for tdw in tdws:
+            self._queue_draw_stamp_node(tdw, self.nodes[i], dx, dy, 
+                    i in self.selected_nodes)
 
 
-    def _queue_draw_node_internal(self, tdw, node, dx, dy, add_margin):
+    def _queue_draw_stamp_node(self, tdw, node, dx, dy, add_margin):
         if not self.stamp:
             return
 
@@ -566,12 +574,11 @@ class StampMode (OncanvasEditMixin,
                             self.stamp.default_scale_y,
                             self.stamp.validate_picture_id(self.current_picture_id))
                     self.nodes.append(node)
-                    self.target_node_index = len(self.nodes) -1
-                    self._update_current_node_index()
-                    self.selected_nodes = [self.target_node_index, ]
-                    self._queue_draw_node(0)
+                    idx = len(self.nodes) -1
+                    self._queue_draw_node(idx)
                     self.drag_offset.start(mx, my)
                     self.phase = _Phase.CAPTURE
+                    self.select_node(idx)
 
         elif self.phase in (_Phase.ROTATE,
                             _Phase.SCALE,
@@ -629,6 +636,12 @@ class StampMode (OncanvasEditMixin,
             if shift_state or ctrl_state:
                 override_scale_and_rotate()
             else:
+                # Stamps are drawn by cairo,
+                # so when a stamp which currently dragged by user
+                # pass over other editing phase stamp, 
+                # it might erased.
+                # Therefore We needs to redraw all nodes everytime.
+                self._queue_redraw_all_nodes()
                 return super(StampMode, self).node_drag_update_cb(tdw, event, dx, dy)
                 
         elif self.phase in (_Phase.SCALE,
@@ -722,8 +735,6 @@ class StampMode (OncanvasEditMixin,
             self._queue_draw_node(idx)
 
         elif self.phase == _Phase.ROTATE_BY_HANDLE:
-            #pos = self.stamp.get_boundary_points(node)
-            #mx, my = tdw.display_to_model(event.x, event.y)
             ndx, ndy = tdw.model_to_display(node.x, node.y)
             junk, bx, by = length_and_normal(
                     self.last_x, self.last_y,
@@ -762,20 +773,21 @@ class StampMode (OncanvasEditMixin,
                 self._reset_adjust_data()
                 return super(StampMode, self).node_drag_stop_cb(tdw) 
 
-            node = self.nodes[self.current_node_index]
+            idx = self.current_node_index
+            node = self.nodes[idx]
             dx, dy = self.drag_offset.get_model_offset()
-            self.nodes[self.current_node_index] = \
-                    node._replace( x=node.x + dx, y=node.y + dy)
+            self.nodes[idx] = node._replace( x=node.x + dx, y=node.y + dy)
             self.drag_offset.reset()
 
-            if len(self.nodes) > 0:
-                self.phase = _Phase.ADJUST
-                self._update_zone_and_target(tdw, self.last_x, self.last_y)
-                self._queue_redraw_all_nodes()
-                self._queue_draw_buttons()
-            else:
-                self._reset_nodes()
-                tdw.queue_draw()
+           #if len(self.nodes) > 0:
+            self.phase = _Phase.ADJUST
+            self._update_zone_and_target(tdw, self.last_x, self.last_y)
+           #self._queue_redraw_all_nodes()
+            self._queue_draw_node(idx)
+            self._queue_draw_buttons()
+           #else:
+           #    self._reset_nodes()
+           #    tdw.queue_draw()
 
         elif self.phase in (_Phase.ROTATE,
                             _Phase.SCALE,
@@ -786,52 +798,52 @@ class StampMode (OncanvasEditMixin,
         else:
             return super(StampMode, self).node_drag_stop_cb(tdw)
 
-    def node_scroll_cb(self, tdw, event):
-        """Handles scroll-wheel events, to adjust rotation/scale/picture_index."""
-
-        if (self.phase in (_Phase.ADJUST,) 
-                and self.zone == _EditZone.CONTROL_NODE
-                and self.current_node_index != None):
-
-            if self._prev_scroll_time != event.time:
-                shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
-                ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
-                junk, step = get_scroll_delta(event, 1.0)
-                node = self.nodes[self.current_node_index]
-                redraw = True
-
-                if shift_state:
-                    self._queue_draw_node(self.current_node_index) 
-
-                    scale_step = 0.05
-                    node = node._replace(scale_x = node.scale_x + step * scale_step,
-                            scale_y = node.scale_y + step * scale_step)
-                    self.nodes[self.current_node_index] = node
-                elif ctrl_state:
-                    self._queue_draw_node(self.current_node_index) 
-
-                    node = node._replace(angle = node.angle + step * (math.pi * 0.05))
-                    self.nodes[self.current_node_index] = node
-                else:
-                    if self.stamp and self.stamp.picture_count > 1:
-                        self._queue_draw_node(self.current_node_index) 
-
-                        new_picture_index = lib.helpers.clamp(node.picture_index + int(step),
-                                0, self.stamp.picture_count - 1)
-
-                        if new_picture_index != node.picture_index:
-                            self.nodes[self.current_node_index] = \
-                                    node._replace(picture_index = new_picture_index)
-                    else:
-                        redraw = False
-
-                if redraw:
-                    self._queue_draw_node(self.current_node_index) 
-
-            self._prev_scroll_time = event.time
-        else:
-            # calling super-supreclass handler, to invoke original scroll events.
-            return super(StampMode, self).node_scroll_cb(tdw, event)
+   #def node_scroll_cb(self, tdw, event):
+   #    """Handles scroll-wheel events, to adjust rotation/scale/picture_index."""
+   #
+   #    if (self.phase in (_Phase.ADJUST,) 
+   #            and self.zone == _EditZone.CONTROL_NODE
+   #            and self.current_node_index != None):
+   #
+   #        if self._prev_scroll_time != event.time:
+   #            shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
+   #            ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
+   #            junk, step = get_scroll_delta(event, 1.0)
+   #            node = self.nodes[self.current_node_index]
+   #            redraw = True
+   #
+   #            if shift_state:
+   #                self._queue_draw_node(self.current_node_index) 
+   #
+   #                scale_step = 0.05
+   #                node = node._replace(scale_x = node.scale_x + step * scale_step,
+   #                        scale_y = node.scale_y + step * scale_step)
+   #                self.nodes[self.current_node_index] = node
+   #            elif ctrl_state:
+   #                self._queue_draw_node(self.current_node_index) 
+   #
+   #                node = node._replace(angle = node.angle + step * (math.pi * 0.05))
+   #                self.nodes[self.current_node_index] = node
+   #            else:
+   #                if self.stamp and self.stamp.picture_count > 1:
+   #                    self._queue_draw_node(self.current_node_index) 
+   #
+   #                    new_picture_index = lib.helpers.clamp(node.picture_index + int(step),
+   #                            0, self.stamp.picture_count - 1)
+   #
+   #                    if new_picture_index != node.picture_index:
+   #                        self.nodes[self.current_node_index] = \
+   #                                node._replace(picture_index = new_picture_index)
+   #                else:
+   #                    redraw = False
+   #
+   #            if redraw:
+   #                self._queue_draw_node(self.current_node_index) 
+   #
+   #        self._prev_scroll_time = event.time
+   #    else:
+   #        # calling super-supreclass handler, to invoke original scroll events.
+   #        return super(StampMode, self).node_scroll_cb(tdw, event)
 
 
     ## Interrogating events
@@ -845,7 +857,7 @@ class StampMode (OncanvasEditMixin,
         # First of all, queue redraw the nodes to be deleted.
         for i, cn in enumerate(self.nodes):
             if cn.picture_index == picture_index:
-                self._queue_draw_node(i, force_margin=True) 
+                self._queue_draw_node(i)#, force_margin=True) 
 
         # After that, delete it.
         for i, cn in enumerate(self.nodes[:]):
@@ -864,9 +876,9 @@ class StampMode (OncanvasEditMixin,
 
     ## Node editing
     def update_node(self, i, **kwargs):
-        self._queue_draw_node(i, force_margin=True) 
+        self._queue_draw_node(i)#, force_margin=True) 
         self.nodes[i] = self.nodes[i]._replace(**kwargs)
-        self._queue_draw_node(i, force_margin=True) 
+        self._queue_draw_node(i)#, force_margin=True) 
 
     ## Utility methods
     def adjust_selection_area(self, index, area):
