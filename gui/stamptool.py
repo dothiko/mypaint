@@ -1004,14 +1004,19 @@ class Overlay_Stamp (OverlayOncanvasMixin):
         """Iterates across only the on-screen nodes."""
         mode = self._mode
         alloc = self._tdw.get_allocation()
+        sdx,sdy = mode.drag_offset.get_display_offset(self._tdw)
         dx,dy = mode.drag_offset.get_model_offset()
         for i, node in enumerate(mode.nodes):
 
             if i in mode.selected_nodes:
                 tdx = dx
                 tdy = dy
+                tsdx = sdx
+                tsdy = sdy
             else:
                 tdx = tdy = 0.0
+                tsdx = tsdy = 0.0
+
             bbox = mode.stamp.get_bbox(self._tdw, node, tdx, tdy)
 
             if bbox:
@@ -1024,7 +1029,7 @@ class Overlay_Stamp (OverlayOncanvasMixin):
                 )
 
                 if node_on_screen:
-                    yield (i, node, tdx, tdy)
+                    yield (i, node, tsdx, tsdy)
 
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
@@ -1177,7 +1182,7 @@ class Overlay_Stamp (OverlayOncanvasMixin):
             return True
 
 
-    def draw_stamp(self, cr, idx, node, dx, dy, colors):
+    def draw_stamp(self, cr, idx, node, sdx, sdy, colors):
         """ Draw a stamp as overlay preview.
 
         :param idx: index of node in mode.nodes[] 
@@ -1191,22 +1196,22 @@ class Overlay_Stamp (OverlayOncanvasMixin):
         x, y = self._tdw.model_to_display(node.x, node.y)
         normal_color, selected_color = colors
 
-        self.draw_stamp_rect(cr, idx, dx, dy, selected_color, position=pos)
+        self.draw_stamp_rect(cr, idx, sdx, sdy, selected_color, position=pos)
 
         if idx == mode.current_node_index or idx in mode.selected_nodes:
             for i, pt in enumerate(pos):
                #handle_idx = _EditZone.CONTROL_HANDLE_BASE + i
                #handle_idx = _EditZone.CONTROL_HANDLE_BASE + i
                 gui.drawutils.render_square_floating_color_chip(
-                    cr, pt[0] + dx, pt[1] + dy,
+                    cr, pt[0] + sdx, pt[1] + sdy,
                     gui.style.ACTIVE_ITEM_COLOR, 
                     gui.style.DRAGGABLE_POINT_HANDLE_SIZE,
                     fill=(i==mode.current_node_handle)) 
                    #fill=(handle_idx==mode.zone)) 
 
-        mode.stamp.draw(self._tdw, cr, x+dx, y+dy, node, True)
+        mode.stamp.draw(self._tdw, cr, x+sdx, y+sdy, node, True)
 
-    def draw_stamp_rect(self, cr, idx, dx, dy, color, position=None):
+    def draw_stamp_rect(self, cr, idx, sdx, sdy, color, position=None):
         cr.save()
         mode = self._mode
         cr.set_line_width(1)
@@ -1217,10 +1222,10 @@ class Overlay_Stamp (OverlayOncanvasMixin):
             position = mode.stamp.get_boundary_points(
                     mode.nodes[idx], tdw=self._tdw)
 
-        cr.move_to(position[0][0] + dx,
-                position[0][1] + dy)
+        cr.move_to(position[0][0] + sdx,
+                position[0][1] + sdy)
         for lx, ly in position[1:]:
-            cr.line_to(lx+dx, ly+dy)
+            cr.line_to(lx+sdx, ly+sdy)
 
         cr.close_path()
         cr.stroke_preserve()
