@@ -417,9 +417,9 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         new_handle_idx = None
  
         if not self.in_drag:
-            if self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
+           #if self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
            #if self.phase == PhaseMixin.ADJUST:
- 
+            if self.is_actionbutton_ready():
                 new_target_node_index = None
                 self.current_button_id = None
                 # Test buttons for hits
@@ -436,27 +436,27 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                         new_zone = EditZoneMixin.ACTION_BUTTON
                         self.current_button_id = btn_id
                         break
- 
-                # Test nodes for a hit, in reverse draw order
-                if new_zone == EditZoneMixin.EMPTY_CANVAS:
-                    new_target_node_index, new_handle_idx = \
-                            self._search_target_node(tdw, x, y)
-                    if new_target_node_index != None:
-                        new_zone = EditZoneMixin.CONTROL_NODE
- 
-                # Update the prelit node, and draw changes to it
-                if new_target_node_index != self.target_node_index:
-                    # Redrawing old target node.
-                    if self.target_node_index is not None:
-                        self._queue_draw_node(self.target_node_index)
-                        self.node_leave_cb(tdw, self.nodes[self.target_node_index]) 
- 
-                    self.target_node_index = new_target_node_index
-                    if self.target_node_index is not None:
-                        self._queue_draw_node(self.target_node_index)
-                        self.node_enter_cb(tdw, self.nodes[self.target_node_index]) 
 
-                self.current_node_handle = new_handle_idx
+            # Test nodes for a hit, in reverse draw order
+            if new_zone == EditZoneMixin.EMPTY_CANVAS:
+                new_target_node_index, new_handle_idx = \
+                        self._search_target_node(tdw, x, y)
+                if new_target_node_index != None:
+                    new_zone = EditZoneMixin.CONTROL_NODE
+
+            # Update the prelit node, and draw changes to it
+            if new_target_node_index != self.target_node_index:
+                # Redrawing old target node.
+                if self.target_node_index is not None:
+                    self._queue_draw_node(self.target_node_index)
+                    self.node_leave_cb(tdw, self.nodes[self.target_node_index]) 
+
+                self.target_node_index = new_target_node_index
+                if self.target_node_index is not None:
+                    self._queue_draw_node(self.target_node_index)
+                    self.node_enter_cb(tdw, self.nodes[self.target_node_index]) 
+
+            self.current_node_handle = new_handle_idx
  
         # Update the zone, and assume any change implies a button state
         # change as well (for now...)
@@ -606,23 +606,22 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
        #ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
 
-        if self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
+        if self.zone == EditZoneMixin.ACTION_BUTTON:
             button = event.button
             if button == 1:
-                if self.zone == EditZoneMixin.ACTION_BUTTON:
-                    buttons = self.buttons
-                    assert self.current_button_id != None
-                    assert self.current_button_id in buttons
+                buttons = self.buttons
+                assert self.current_button_id != None
+                assert self.current_button_id in buttons
 
-                    # We need the id of 'pressed' button
-                    # current_button_id is the 'focused' button,
-                    # not pressed.
-                    self._clicked_button_id = self.current_button_id
-                    self.phase = PhaseMixin.ACTION
+                # We need the id of 'pressed' button
+                # current_button_id is the 'focused' button,
+                # not pressed.
+                self._clicked_button_id = self.current_button_id
+                self.phase = PhaseMixin.ACTION
 
-                    return False
-
-                elif self.zone == EditZoneMixin.CONTROL_NODE:
+                return False
+        elif self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
+                if self.zone == EditZoneMixin.CONTROL_NODE:
                     # clicked a node.
                     mx, my = tdw.display_to_model(event.x, event.y)
                     self.drag_offset.start(mx, my)
@@ -666,7 +665,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 # do something without changing phase.
                 self._clicked_button_id = None
                 self._update_zone_and_target(tdw, event.x, event.y)
-                self.phase = PhaseMixin.ADJUST
+                self.phase = PhaseMixin.CAPTURE
                 return False  # NO `drag_stop_cb` activated.
 
             elif self.phase == PhaseMixin.CHANGE_PHASE:
@@ -972,6 +971,12 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 
 
     ## Action button related
+
+    def is_actionbutton_ready(self):
+        """To know whether the action buttons are ready to display.
+        """
+        return (len(self.nodes) > 0 and 
+                self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST))
 
     def _call_action_button(self, id, tdw):
         """ Call action button, from id (i.e. _ActionButton constants)

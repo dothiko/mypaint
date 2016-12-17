@@ -78,6 +78,7 @@ class _Phase(PhaseMixin):
     ROTATE_BY_HANDLE = 103 #: Rotate with handle of GUI
     SCALE_BY_HANDLE = 104  #: Scale  with handle of GUI
     CALL_BUTTONS = 106     #: call buttons around clicked point. 
+    CAPTURE_IMAGE = 107    #: capturing layer image(with select tool)
 
 class _EditZone(EditZoneMixin):
     """Enumeration of what the pointer is on in phases"""
@@ -195,7 +196,7 @@ class StampMode (OncanvasEditMixin,
 
 
     # _stamp_param stores scale/angle value for
-    # each picture
+    # each picture. This attribute must be shared in instances.
     _stamp_param = {}
 
     # A flag indicates whether remember stamp parameter or not
@@ -467,15 +468,14 @@ class StampMode (OncanvasEditMixin,
         """
         app = selection_mode.doc.app
         if self.stamp:
-            if self.phase in (_Phase.CAPTURE, _Phase.ADJUST):
-               #if isinstance(self.stamp, gui.stamps.ClipboardStamp):
-               #    app.show_transient_message(
-               #        _("Clipboard stamp cannot accept layer image."))
-               #else:
-                self._selection_area = selection_mode.get_min_max_pos_model(margin=0)
+            if self.phase in (_Phase.CAPTURE, 
+                    _Phase.ADJUST, 
+                    _Phase.CAPTURE_IMAGE):
 
-                # Important:Action buttons are operational in ADJUST phase only. 
-                self.phase = _Phase.ADJUST 
+                self._queue_draw_buttons() # to erase
+
+                self._selection_area = selection_mode.get_min_max_pos_model(margin=0)
+                self.phase = _Phase.CAPTURE_IMAGE
 
                 self._queue_draw_buttons()
         else:
@@ -552,6 +552,9 @@ class StampMode (OncanvasEditMixin,
 
 
     def _queue_draw_buttons(self):
+        """queuing draw buttons, and,
+        if there is selection area, also queue it.
+        """
 
         super(StampMode, self)._queue_draw_buttons()
 
@@ -562,6 +565,8 @@ class StampMode (OncanvasEditMixin,
                         margin=gui.style.DRAGGABLE_POINT_HANDLE_SIZE+4)
                 tdw.queue_draw_area(sx, sy, 
                         abs(ex - sx) + 1, abs(ey - sy) + 1)
+
+
 
    #def _queue_redraw_item(self): this method is ignored,
    # leave as the placeholder of OncanvasEditMixin.
@@ -596,6 +601,15 @@ class StampMode (OncanvasEditMixin,
             # XXX Not sure what should be done here yet.
             # but remained for future use.
             pass
+        elif self.phase == _Phase.CAPTURE_IMAGE:
+            if self.zone in (_EditZone.CONTROL_NODE,
+                             _EditZone.EMPTY_CANVAS):
+                self._queue_draw_buttons() # To Erase
+                if self.zone == _EditZone.EMPTY_CANVAS:
+                    self.phase = _Phase.CAPTURE
+                    self.stamp.initialize_phase(self)
+                else:
+                    self.phase = _Phase.ADJUST_POS
         else:
             return super(StampMode, self).mode_button_press_cb(tdw, event)
 
@@ -649,26 +663,42 @@ class StampMode (OncanvasEditMixin,
         assert self.stamp is not None
 
         # Utility closure definition
-        def override_scale_and_rotate():
+        def override_scale_and_rotate(original_phase):
+            # Return True, if phase is overridden.
+            # and if this closure return True,
+            # immidiately exit from this handler method.
             if ctrl_state:
-                self.phase = _Phase.ROTATE
+                targ_phase = _Phase.ROTATE
+            elif shift_state:
+                targ_phase = _Phase.SCALE
             else:
-                self.phase = _Phase.SCALE
-            # Re-enter drag operation again
-            self.drag_update_cb(tdw, event, dx, dy)
-            self.phase = _Phase.CAPTURE
-            self._queue_draw_node(self.current_node_index) 
+                return False
 
-        # local variables setup
+            if original_phase != targ_phase:
+                # Re-enter drag operation again
+                # as different phase
+                self.phase = targ_phase
+                self.drag_update_cb(tdw, event, dx, dy)
+                self.phase = original_phase #_Phase.CAPTURE
+                self._queue_draw_node(self.current_node_index) 
+                return True
+            return False
+
+        # Local variables setup
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
         ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
         mx, my = tdw.display_to_model(event.x ,event.y)
 
-        # Per phase setup
+        # Setup for specific phases.
         if self.phase in (_Phase.ROTATE,
                             _Phase.SCALE,
                             _Phase.ROTATE_BY_HANDLE,
                             _Phase.SCALE_BY_HANDLE):
+            if (shift_state or ctrl_state):
+                if override_scale_and_rotate(self.phase):
+                    return
+                # Fallthrough
+
             assert self.current_node_index is not None
             idx = self.current_node_index
             self._queue_draw_node(idx)
@@ -678,17 +708,17 @@ class StampMode (OncanvasEditMixin,
 
         # Phase processing
         if self.phase in (_Phase.ADJUST_POS, _Phase.CAPTURE):
-            if shift_state or ctrl_state:
-                override_scale_and_rotate()
-            else:
-                # Stamps are drawn by cairo,
-                # so we must care to redraw overlapped stamps
-                # during dragging current stamp.
-                # Therefore We needs to call _queue_redraw_all_nodes()
-                # instead of _queue_draw_node(idx)
-                self._queue_redraw_all_nodes()
-                self.drag_offset.end(mx, my)
-                self._queue_redraw_all_nodes()
+            if override_scale_and_rotate(self.phase):
+                return 
+
+            # Stamps are drawn by cairo,
+            # so we must care to redraw overlapped stamps
+            # during dragging current stamp.
+            # Therefore We needs to call _queue_redraw_all_nodes()
+            # instead of _queue_draw_node(idx)
+            self._queue_redraw_all_nodes()
+            self.drag_offset.end(mx, my)
+            self._queue_redraw_all_nodes()
                 
         elif self.phase in (_Phase.SCALE,
                             _Phase.ROTATE):
@@ -934,6 +964,12 @@ class StampMode (OncanvasEditMixin,
         self._queue_draw_buttons()
 
     ## Action button related
+    def is_actionbutton_ready(self):
+        """To know whether the action buttons are ready to display.
+        """
+        flag = super(StampMode, self).is_actionbutton_ready()
+        return (flag or self.phase == _Phase.CAPTURE_IMAGE)
+
     def accept_button_cb(self, tdw):
         if len(self.nodes) > 0:
             self._start_new_capture_phase(rollback=False)
@@ -1094,92 +1130,93 @@ class Overlay_Stamp (OverlayOncanvasMixin):
                 self._button_pos[id] = (sx, sy)
                 sx += button_radius * 3
 
+            # Fallthrough
+
+        # also, normal editing buttons are activated.
+
+        def adjust_button_inside(cx, cy, radius):
+            if cx + radius > view_x1:
+                cx = view_x1 - radius
+            elif cx - radius < view_x0:
+                cx = view_x0 + radius
+            
+            if cy + radius > view_y1:
+                cy = view_y1 - radius
+            elif cy - radius < view_y0:
+                cy = view_y0 + radius
+            return cx, cy
+
+
+        nodes = mode.nodes
+        num_nodes = len(nodes)
+        if num_nodes == 0:
+            return False
+
+        button_radius = gui.style.FLOATING_BUTTON_RADIUS
+        margin = 1.5 * button_radius
+
+        if mode.forced_button_pos:
+            # User deceided button position 
+            cx, cy = mode.forced_button_pos
+            area_radius = gui.style.FLOATING_TOOL_RADIUS * 3
+
+            cx, cy = adjust_button_inside(cx, cy, area_radius)
+
+            pos_list = []
+            count = 2
+            # TODO : 
+            #  Although this is 'arranging buttons in a circle', 
+            #  in consideration of increasing the number of buttons, 
+            #  but experience seems to be enough for two buttons for
+            #  normal editing. 
+            #  So it may be unnecessary processing.
+            for i in range(count):
+                rad = (math.pi / count) * 2.0 * i
+                x = - area_radius*math.sin(rad)
+                y = area_radius*math.cos(rad)
+                pos_list.append( (x + cx, - y + cy) )
+
+            self._button_pos[_ActionButton.ACCEPT] = pos_list[0][0], pos_list[0][1]
+            self._button_pos[_ActionButton.REJECT] = pos_list[1][0], pos_list[1][1]
         else:
-            # Otherwise, normal editing buttons are activated.
+            # InkingMode is consisted from two completely different phase, 
+            # to capture and to adjust.
+            # it cannot extend nodes in adjust phase, so no problem.
+            #
+            # But, usually, other oncanvas-editing tools can extend
+            # new nodes in adjust phase.
+            # So when the action button is placed around the last node,
+            # it might be frastrating, because we might not place
+            # a new node at the area where button already occupied.
+            # 
+            # Thus,different from Inktool, place buttons around 
+            # the first(oldest) nodes.
+            
+            node = nodes[0]
+            cx, cy = tdw.model_to_display(node.x, node.y)
 
-            def adjust_button_inside(cx, cy, radius):
-                if cx + radius > view_x1:
-                    cx = view_x1 - radius
-                elif cx - radius < view_x0:
-                    cx = view_x0 + radius
-                
-                if cy + radius > view_y1:
-                    cy = view_y1 - radius
-                elif cy - radius < view_y0:
-                    cy = view_y0 + radius
-                return cx, cy
+            nx = cx + button_radius
+            ny = cx - button_radius
 
-
-            nodes = mode.nodes
-            num_nodes = len(nodes)
-            if num_nodes == 0:
-                return False
-
-            button_radius = gui.style.FLOATING_BUTTON_RADIUS
-            margin = 1.5 * button_radius
-
-            if mode.forced_button_pos:
-                # User deceided button position 
-                cx, cy = mode.forced_button_pos
-                area_radius = gui.style.FLOATING_TOOL_RADIUS * 3
-
-                cx, cy = adjust_button_inside(cx, cy, area_radius)
-
-                pos_list = []
-                count = 2
-                # TODO : 
-                #  Although this is 'arranging buttons in a circle', 
-                #  in consideration of increasing the number of buttons, 
-                #  but experience seems to be enough for two buttons for
-                #  normal editing. 
-                #  So it may be unnecessary processing.
-                for i in range(count):
-                    rad = (math.pi / count) * 2.0 * i
-                    x = - area_radius*math.sin(rad)
-                    y = area_radius*math.cos(rad)
-                    pos_list.append( (x + cx, - y + cy) )
-
-                self._button_pos[_ActionButton.ACCEPT] = pos_list[0][0], pos_list[0][1]
-                self._button_pos[_ActionButton.REJECT] = pos_list[1][0], pos_list[1][1]
+            vx = nx-cx
+            vy = ny-cy
+            s  = math.hypot(vx, vy)
+            if s > 0.0:
+                vx /= s
+                vy /= s
             else:
-                # InkingMode is consisted from two completely different phase, 
-                # to capture and to adjust.
-                # it cannot extend nodes in adjust phase, so no problem.
-                #
-                # But, usually, other oncanvas-editing tools can extend
-                # new nodes in adjust phase.
-                # So when the action button is placed around the last node,
-                # it might be frastrating, because we might not place
-                # a new node at the area where button already occupied.
-                # 
-                # Thus,different from Inktool, place buttons around 
-                # the first(oldest) nodes.
-                
-                node = nodes[0]
-                cx, cy = tdw.model_to_display(node.x, node.y)
+                pass
 
-                nx = cx + button_radius
-                ny = cx - button_radius
+            margin = 4.0 * button_radius
+            dx = vx * margin
+            dy = vy * margin
+            
+            self._button_pos[_ActionButton.ACCEPT] = adjust_button_inside(
+                    cx + dy, cy - dx, button_radius * 1.5)
+            self._button_pos[_ActionButton.REJECT] = adjust_button_inside(
+                    cx - dy, cy + dx, button_radius * 1.5)
 
-                vx = nx-cx
-                vy = ny-cy
-                s  = math.hypot(vx, vy)
-                if s > 0.0:
-                    vx /= s
-                    vy /= s
-                else:
-                    pass
-
-                margin = 4.0 * button_radius
-                dx = vx * margin
-                dy = vy * margin
-                
-                self._button_pos[_ActionButton.ACCEPT] = adjust_button_inside(
-                        cx + dy, cy - dx, button_radius * 1.5)
-                self._button_pos[_ActionButton.REJECT] = adjust_button_inside(
-                        cx - dy, cy + dx, button_radius * 1.5)
-
-            return True
+        return True
 
 
     def draw_stamp(self, cr, idx, node, sdx, sdy, colors):

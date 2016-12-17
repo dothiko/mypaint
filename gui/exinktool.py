@@ -1125,8 +1125,7 @@ class ExInkingMode (PressureEditableMixin,
             self._queue_redraw_all_nodes()
        
 
-    ## Action button handlers
-
+    ## Action button related
     def accept_button_cb(self, tdw):
         if len(self.nodes) > 1:
             self._start_new_capture_phase(rollback=False)
