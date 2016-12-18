@@ -973,7 +973,9 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     ## Action button related
 
     def is_actionbutton_ready(self):
-        """To know whether the action buttons are ready to display.
+        """customize whether the action buttons are ready to display.
+        This method can be overridden from child classes,
+        to change phase detection behavior.
         """
         return (len(self.nodes) > 0 and 
                 self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST))

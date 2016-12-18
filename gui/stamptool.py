@@ -965,7 +965,9 @@ class StampMode (OncanvasEditMixin,
 
     ## Action button related
     def is_actionbutton_ready(self):
-        """To know whether the action buttons are ready to display.
+        """customize whether the action buttons are ready to display.
+        This method called from _update_zone_and_target() of
+        base mixin.
         """
         flag = super(StampMode, self).is_actionbutton_ready()
         return (flag or self.phase == _Phase.CAPTURE_IMAGE)
