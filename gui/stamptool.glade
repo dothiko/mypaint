@@ -9,6 +9,81 @@
     <property name="page_increment">12</property>
     <signal name="value-changed" handler="_angle_adj_value_changed_cb" swapped="no"/>
   </object>
+  <object class="GtkAccelGroup" id="popup_accelgroup"/>
+  <object class="GtkActionGroup" id="popup_actiongroup">
+    <property name="accel_group">popup_accelgroup</property>
+    <child>
+      <object class="GtkAction" id="call_editor_action">
+        <property name="label" translatable="yes">Edit pictures with Stamp Editor</property>
+        <property name="stock_id">gtk-leave-fullscreen</property>
+        <signal name="activate" handler="call_editor_action_activate_cb" swapped="no"/>
+      </object>
+    </child>
+    <child>
+      <object class="GtkAction" id="stampicon_action">
+        <property name="label" translatable="yes">Make this as Stamp Icon</property>
+        <property name="stock_id">gtk-convert</property>
+        <property name="sensitive">False</property>
+        <signal name="activate" handler="stampicon_action_activate_cb" swapped="no"/>
+      </object>
+    </child>
+    <child>
+      <object class="GtkAction" id="delete_picture_action">
+        <property name="label" translatable="yes">Delete this picture</property>
+        <property name="stock_id">gtk-delete</property>
+        <property name="sensitive">False</property>
+        <signal name="activate" handler="delete_picture_action_activate_cb" swapped="no"/>
+      </object>
+    </child>
+    <child>
+      <object class="GtkAction" id="refresh_clipboard_action">
+        <property name="label" translatable="yes">Refresh from clipboard</property>
+        <property name="short_label" translatable="yes">Refresh</property>
+        <property name="stock_id">gtk-refresh</property>
+        <property name="icon_name">view-refresh</property>
+        <property name="always_show_image">True</property>
+        <signal name="activate" handler="refresh_clipboard_action_activate_cb" swapped="no"/>
+      </object>
+      <accelerator key="r" modifiers="GDK_CONTROL_MASK"/>
+    </child>
+    <child>
+      <object class="GtkAction" id="add_from_clipboard_action">
+        <property name="label" translatable="yes">Add from clipboard</property>
+        <property name="short_label" translatable="yes">Add</property>
+        <property name="stock_id">gtk-add</property>
+        <property name="icon_name">list-add</property>
+        <property name="always_show_image">True</property>
+        <signal name="activate" handler="add_from_clipboard_action_activate_cb" swapped="no"/>
+      </object>
+      <accelerator key="v" modifiers="GDK_CONTROL_MASK"/>
+    </child>
+  </object>
+  <object class="GtkMenu" id="clipboard_popup_menu">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="sepbar1_menuitem">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="refresh_clipboard_menuitem">
+        <property name="related_action">refresh_clipboard_action</property>
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="use_underline">True</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="add_clipboard_menuitem">
+        <property name="related_action">add_from_clipboard_action</property>
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="use_underline">True</property>
+      </object>
+    </child>
+  </object>
   <object class="GtkAdjustment" id="xscale_adj">
     <property name="lower">-3</property>
     <property name="upper">3</property>

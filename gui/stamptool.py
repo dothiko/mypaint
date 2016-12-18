@@ -1388,7 +1388,7 @@ class OptionsPresenter_Stamp (object):
         base_window = builder.get_object("picture_scrolledwindow")
         self._init_picture_view(base_window)
 
-        self._init_popup_menus()
+        self._init_popup_menus(builder)
 
         base_grid = builder.get_object("additional_button_grid")
         self._init_toolbar(0, base_grid)
@@ -1451,50 +1451,25 @@ class OptionsPresenter_Stamp (object):
         sw.add(iconview)
         self._stamp_picture_view = iconview
 
-    def _init_popup_menus(self):
+    def _init_popup_menus(self, builder):
+        print('-----')
+        agroup = builder.get_object("popup_actiongroup")
+        clipmenu = builder.get_object("clipboard_popup_menu")
 
-        def _generate_menuitem(label, handler, id=-1):
-            menu_item = Gtk.MenuItem(label)
-            menu_item.connect("activate", handler)
-            if id != -1:
-                _generate_menuitem.id = id
-            menu_item.id = _generate_menuitem.id
-            _generate_menuitem.id+=1
-            menu.append(menu_item)
-            return menu_item
+        self._delete_picture_action = agroup.get_action('delete_picture_action')
+        self._stampicon_action = agroup.get_action('stampicon_action')
 
 
         # Creating Popup menu for normal stamp.
-        menu = Gtk.Menu()
-        editor_menu = _generate_menuitem(_("Edit pictures with Stamp Editor"),
-                self.popup_edit_stamp_cb,
-                id=100)
-        icon_menu = _generate_menuitem(_("Make this picture as Stamp Icon"),
-                self.popup_set_stamp_icon_cb)
-        menu.show_all()
-        menu.set_sensitive(True)
-        self.popup_stamp = menu
-        self.stamp_icon_menu_item = icon_menu
+        basemenu = Gtk.Menu()
+        for i, ca in enumerate(agroup.list_actions()):
+            basemenu.append(ca.create_menu_item())
+            clipmenu.insert(ca.create_menu_item(),i)
 
-        # Creating Popup menu for clipboard stamp.
-        menu = Gtk.Menu()
-
-        item1 = _generate_menuitem(_("Refresh from clipboard"),
-                self.popup_refresh_from_cp_cb,
-                id=0)
-        item2 = _generate_menuitem(_("Add from clipboard"),
-                self.popup_add_from_cp_cb)
-       #_generate_menuitem(_("Edit pictures with Stamp Editor"),
-       #        self.popup_edit_stamp_cb)
-        menu.append(editor_menu)
-       #_generate_menuitem(_("Make this picture as Stamp Icon"),
-       #        self.popup_set_stamp_icon_cb)
-        menu.append(icon_menu)
-        menu.show_all()
-        menu.set_sensitive(True)
-        self._clipboard_menus = (item1, item2)
-        self.popup_clipboard = menu
-
+        basemenu.show_all()
+        clipmenu.show_all()
+        self.popup_stamp = basemenu
+        self.popup_clipboard = clipmenu
 
     def _init_toolbar(self, row, box):
         toolbar = gui.widgets.inline_toolbar(
@@ -1651,7 +1626,11 @@ class OptionsPresenter_Stamp (object):
         if not self._updating_ui:
             mode, node_idx = self.target
             if mode and mode.stamp is not None:
-                if len(iconview.get_selected_items()) > 0:
+                enabled = len(iconview.get_selected_items()) > 0
+                self._delete_picture_action.set_sensitive(enabled)
+                self._stampicon_action.set_sensitive(enabled)
+
+                if enabled:
                     picture_id = _get_iconview_data(iconview, 1)
                     mode.current_picture_id = picture_id
 
@@ -1665,7 +1644,7 @@ class OptionsPresenter_Stamp (object):
             mode, node_idx = self.target
             if mode and mode.stamp is not None:
                 selected = len(iconview.get_selected_items()) > 0
-                self.stamp_icon_menu_item.set_sensitive(selected)
+               #self.stamp_icon_menu_item.set_sensitive(selected)
 
                 if isinstance(mode.stamp, gui.stamps.ClipboardStamp):
                     clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
@@ -1676,6 +1655,7 @@ class OptionsPresenter_Stamp (object):
                 else:
                     self.popup_stamp.popup(None, None, None, None,
                             event.button, event.time)
+
 
     def notebook_stamp_change_current_page_cb(self, note, id):
         print('notebook id %d' % id)
@@ -1711,22 +1691,25 @@ class OptionsPresenter_Stamp (object):
         else:
             self._app.show_transient_message(_("There is no clipboard image available."))
 
-    def popup_refresh_from_cp_cb(self, menuitem):
+    def refresh_clipboard_action_activate_cb(self, menuitem):
         """ Updating clipboard stamp.
         """
+        # Call shared handler between menuitems
         self._popup_clipboard_cb_base(0)  
 
-    def popup_add_from_cp_cb(self, menuitem):
+    def add_from_clipboard_action_activate_cb(self, menuitem):
+
+        # Call shared handler between menuitems
         self._popup_clipboard_cb_base(-1)
 
-    def popup_edit_stamp_cb(self, menuitem):
+    def call_editor_action_activate_cb(self, menuitem):
         mode, junk = self.target
         assert mode
         assert mode.stamp
         editor = self._app.stamp_editor_window
         editor.show()
 
-    def popup_set_stamp_icon_cb(self, menuitem):
+    def stampicon_action_activate_cb(self, menuitem):
         mode, junk = self.target
         assert mode
         assert mode.stamp
@@ -1745,6 +1728,22 @@ class OptionsPresenter_Stamp (object):
         iter = store.get_iter(path)
         store.set_value(iter, 0, mode.stamp.thumbnail)
 
+    def delete_picture_action_activate_cb(self, menuitem):
+        mode, junk = self.target
+        assert mode
+        assert mode.stamp
+        iconview = self._stamp_picture_view
+        model = iconview.get_model()
+        for cpath in iconview.get_selected_items():
+            iter = model.get_iter(cpath)
+            picture_id = model.get(iter, 1)[0]
+            model.remove(iter)
+            # 'row-deleted' signal of Gtk.ListStore(Gtk.TreeModel)
+            # is completely useless for this, because it is called
+            # after the row deleted, there is no way to get
+            # the deleted picture id at signal handler...
+            # So, delete picture here manually.
+            mode.stamp.remove(picture_id)
 
 
 if __name__ == '__main__':

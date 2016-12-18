@@ -649,9 +649,12 @@ class Stamp(object):
                 # but change index as None. 
                 self._picture_sources[id] = (pictype, (info[0], None))
             else:
-                del self._picture_sources
+                del self._picture_sources[id]
+                # [TODO] delete file resources actually, if exists.
 
             self._dirty = True
+        else:
+            logger.warning('there is no such id %d in stamp' % id)
 
 
     def clear_sources(self):
