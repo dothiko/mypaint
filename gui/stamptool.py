@@ -980,8 +980,11 @@ class StampMode (OncanvasEditMixin,
 
     def _capture_layer_to_stamp(self, layer):
         sx, sy, ex, ey = [int(x) for x in self._selection_area]
+
+        render_background = not self._app.preferences.get("StampMode.ignore_bg", False)
         pixbuf = layer.render_as_pixbuf(sx, sy, 
-                abs(ex-sx)+1, abs(ey-sy)+1, alpha=True)
+                abs(ex-sx)+1, abs(ey-sy)+1, alpha=True,
+                render_background=render_background)
         self.stamp.set_surface_from_pixbuf(-1, pixbuf,
                 (gui.stamps.PictureSource.CAPTURED, 
                     weakref.proxy(layer))
@@ -1388,9 +1391,13 @@ class OptionsPresenter_Stamp (object):
         base_grid = builder.get_object("additional_button_grid")
         self._init_toolbar(0, base_grid)
 
-        self._remember_check = builder.get_object("remember_checkbutton")
-        self._remember_check.set_active(
+        remember_check = builder.get_object("remember_checkbutton")
+        remember_check.set_active(
                 self._app.preferences.get("StampMode.remember_last_param", False))
+
+        ignore_bg_check = builder.get_object("ignore_bg_checkbutton")
+        ignore_bg_check.set_active(
+                self._app.preferences.get("StampMode.ignore_bg", False))
 
     def _init_stamp_preset_view(self, sw):
         """Initialize stamp preset icon view.
@@ -1680,6 +1687,10 @@ class OptionsPresenter_Stamp (object):
 
         # This line don't care whether updating ui or not.
         StampMode.REMEMBER_PARAM_ENABLED = flag
+
+    def ignore_bg_checkbutton_toggled_cb(self, button):
+        if not self._updating_ui: 
+            self._app.preferences["StampMode.ignore_bg"] = button.get_active()
 
     ## Popup menus handler for Stamp picture icon view.
     def _popup_clipboard_cb_base(self, stamp_id):

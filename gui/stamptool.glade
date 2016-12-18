@@ -170,10 +170,29 @@ Negative values mean leftwards tilts.</property>
             <child>
               <placeholder/>
             </child>
+            <child>
+              <placeholder/>
+            </child>
+            <child>
+              <placeholder/>
+            </child>
+            <child>
+              <placeholder/>
+            </child>
+            <child>
+              <placeholder/>
+            </child>
+            <child>
+              <placeholder/>
+            </child>
+            <child>
+              <placeholder/>
+            </child>
           </object>
           <packing>
             <property name="left_attach">0</property>
-            <property name="top_attach">0</property>
+            <property name="top_attach">2</property>
+            <property name="width">2</property>
           </packing>
         </child>
         <child>
@@ -239,7 +258,42 @@ Negative values mean leftwards tilts.</property>
           </object>
           <packing>
             <property name="left_attach">0</property>
+            <property name="top_attach">3</property>
+            <property name="width">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkCheckButton" id="remember_checkbutton">
+            <property name="label" translatable="yes">Remember last scale and angle</property>
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="receives_default">False</property>
+            <property name="tooltip_text" translatable="yes">Remember last scale and angle of each stamp picture.</property>
+            <property name="xalign">0</property>
+            <property name="draw_indicator">True</property>
+            <signal name="toggled" handler="remember_checkbutton_toggled_cb" swapped="no"/>
+          </object>
+          <packing>
+            <property name="left_attach">0</property>
+            <property name="top_attach">0</property>
+            <property name="width">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkCheckButton" id="ignore_bg_checkbutton">
+            <property name="label" translatable="yes">Ignore background</property>
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="receives_default">False</property>
+            <property name="tooltip_text" translatable="yes">With this checkbutton is set, and when capture a stamp picture from visible image, the background pixels treated as transparent one.</property>
+            <property name="xalign">0</property>
+            <property name="draw_indicator">True</property>
+            <signal name="toggled" handler="ignore_bg_checkbutton_toggled_cb" swapped="no"/>
+          </object>
+          <packing>
+            <property name="left_attach">0</property>
             <property name="top_attach">1</property>
+            <property name="width">2</property>
           </packing>
         </child>
       </object>
