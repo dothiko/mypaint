@@ -762,24 +762,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
     """Configuration widget for freehand mode"""
 
-   #def __init__(self):
-   #    """ To signal redraw from """
-   #    super(FreehandOptionsWidget, self).__init__()
-   #    self._target = None
-   #
-   #@property
-   #def target(self):
-   #    if self._target is not None:
-   #        return self._target()
-   #
-   #@target.setter
-   #def target(self, freehand_instance):
-   #    self._target = None 
-   #    if freehand_instance is not None:
-   #        self._target = weakref.ref(freehand_instance)
-
-
     def init_specialized_widgets(self, row):
+
         def create_scale_widget(cname, label_text, adj):
             label = Gtk.Label()
             label.set_text(label_text)
@@ -814,22 +798,6 @@ class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
         create_scale_widget("slow_tracking", _("Smooth:"), None)
         row += 1
 
-       #cname = "x_tilt_offset"
-       #label = Gtk.Label()
-       ##TRANSLATORS: Short alias for "Stylus tilt offset of X axis". This is
-       ##TRANSLATORS: used on the options panel.
-       #label.set_text(_("X Tilt offset:"))
-       #label.set_alignment(1.0, 0.5)
-       #label.set_hexpand(False)
-       #self.adjustable_settings.add(cname)
-       #adj = Gtk.Adjustment(value=0.0,lower=-1.0,upper=1.0,step_incr=0.01)
-       #adj.connect("value-changed", self.x_tilt_offset_adj_changed_cb)
-       #scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL, adj)
-       #scale.set_draw_value(False)
-       #scale.set_hexpand(True)
-       #self.attach(label, 0, row, 1, 1)
-       #self.attach(scale, 1, row, 1, 1)
-       #row += 1
         adj = Gtk.Adjustment(value=0.0,lower=-1.0,upper=1.0,step_incr=0.01)
         adj.connect("value-changed", self.x_tilt_offset_adj_changed_cb)
         create_scale_widget(None, _("X Tilt Offset:"), adj)
@@ -849,17 +817,9 @@ class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
 
     def x_tilt_offset_adj_changed_cb(self, adj):
         FreehandMode._X_TILT_OFFSET = adj.get_value()
-       #mode = self.target
-       #if mode:
-       #    mode.x_tilt_offset = adj.get_value()
-       #else:
-       #    print('no mode!!')
 
     def y_tilt_offset_adj_changed_cb(self, adj):
         FreehandMode._Y_TILT_OFFSET = adj.get_value()
-       #mode = self.target
-       #if mode:
-       #    mode.y_tilt_offset = adj.get_value()
 
 class PressureAndTiltInterpolator (object):
     """Interpolates event sequences, filling in null pressure/tilt data
