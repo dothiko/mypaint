@@ -23,6 +23,7 @@ import windowing
 import gui.mode
 import accelmap
 import gui.device
+import gui.stategroup
 
 
 RESPONSE_REVERT = 1
@@ -197,6 +198,12 @@ class PreferencesWindow (windowing.Dialog):
         autosave_interval_adj.set_value(autosave_interval)
         self._autosave_interval_spinbutton.set_sensitive(autosave)
 
+        # Layer/Stroke blink interval
+        blink_interval_adj = getobj("blink_interval_adjustment")
+        default_timeout = gui.stategroup.State.autoleave_timeout
+        blink_interval = p.get("ui.blink_interval", default_timeout) 
+        blink_interval_adj.set_value(blink_interval * 1000.0)
+
         self.in_update_ui = False
 
     ## Callbacks for widgets that manipulate settings
@@ -322,3 +329,10 @@ class PreferencesWindow (windowing.Dialog):
     def _hide_cursor_while_painting_toggled_cb(self, checkbut):
         hide = bool(checkbut.get_active())
         self.app.preferences["ui.hide_cursor_while_painting"] = hide
+
+    def blink_interval_adjustment_value_changed_cb(self, adj):
+        if not self.in_update_ui:
+            interval = round(adj.get_value()) / 1000.0
+            self.app.preferences["ui.blink_interval"] = interval
+            gui.stategroup.State.autoleave_timeout = interval
+

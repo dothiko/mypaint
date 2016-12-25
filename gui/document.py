@@ -460,6 +460,10 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
 
     def _init_stategroups(self):
         """Internal: initializes internal StateGroups"""
+        stategroup.State.autoleave_timeout = self.app.preferences.get(
+                'ui.blink_interval',
+                stategroup.State.autoleave_timeout)
+
         sg = stategroup.StateGroup()
         self.layerblink_state = sg.create_state(self.layerblink_state_enter,
                                                 self.layerblink_state_leave)
