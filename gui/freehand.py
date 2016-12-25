@@ -31,6 +31,7 @@ import gui.mode
 from drawutils import spline_4p
 
 from lib import mypaintlib
+import lib.helpers
 
 
 ## Module settings
@@ -72,6 +73,11 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
     _OPTIONS_WIDGET = None
 
     IS_LIVE_UPDATEABLE = True
+
+    
+    _X_TILT_OFFSET = 0.0    # XXX Class global tilt offsets, to
+    _Y_TILT_OFFSET = 0.0    # enable change tilt parameters for
+                            # non-tilt-sensible pen stylus.
 
     # Motion queue processing (raw data capture)
 
@@ -273,7 +279,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         self._reinstate_drawing_cursor(tdw=None)
         super(FreehandMode, self).leave(**kwds)
         self._discard_overlays()
-    
 
     ## Special cursor state while there's pressure
 
@@ -385,7 +390,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         result = False
         current_layer = tdw.doc.layer_stack.current
 
-
         if (current_layer.get_paintable() and event.button == 1
                 and event.type == Gdk.EventType.BUTTON_PRESS):
             # Single button press
@@ -419,7 +423,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                         event.get_axis(Gdk.AxisUse.PRESSURE),
                         event.time, drawstate.button_down)
 
-
             result = True
         return (super(FreehandMode, self).button_press_cb(tdw, event)
                 or result)
@@ -452,6 +455,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
             result = True
 
+
         return (super(FreehandMode, self).button_release_cb(tdw, event)
                 or result)
 
@@ -475,6 +479,10 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
         def queue_motion(time, x, y, pressure, xtilt, ytilt):
             x, y = tdw.display_to_model(x, y)
+            xtilt = lib.helpers.clamp(xtilt + FreehandMode._X_TILT_OFFSET,
+                    -1.0, 1.0)
+            ytilt = lib.helpers.clamp(ytilt + FreehandMode._Y_TILT_OFFSET,
+                    -1.0, 1.0)
             drawstate.queue_motion((time, x, y, pressure, xtilt, ytilt))
 
         # Do nothing if painting is inactivated
@@ -754,27 +762,82 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
     """Configuration widget for freehand mode"""
 
-   #def __init__(self, mode):
+   #def __init__(self):
    #    """ To signal redraw from """
    #    super(FreehandOptionsWidget, self).__init__()
-   #    self._mode = mode
+   #    self._target = None
+   #
+   #@property
+   #def target(self):
+   #    if self._target is not None:
+   #        return self._target()
+   #
+   #@target.setter
+   #def target(self, freehand_instance):
+   #    self._target = None 
+   #    if freehand_instance is not None:
+   #        self._target = weakref.ref(freehand_instance)
 
 
     def init_specialized_widgets(self, row):
-        cname = "slow_tracking"
-        label = Gtk.Label()
-        #TRANSLATORS: Short alias for "Slow position tracking". This is
-        #TRANSLATORS: used on the options panel.
-        label.set_text(_("Smooth:"))
-        label.set_alignment(1.0, 0.5)
-        label.set_hexpand(False)
-        self.adjustable_settings.add(cname)
-        adj = self.app.brush_adjustment[cname]
-        scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL, adj)
-        scale.set_draw_value(False)
-        scale.set_hexpand(True)
-        self.attach(label, 0, row, 1, 1)
-        self.attach(scale, 1, row, 1, 1)
+        def create_scale_widget(cname, label_text, adj):
+            label = Gtk.Label()
+            label.set_text(label_text)
+            label.set_alignment(1.0, 0.5)
+            label.set_hexpand(False)
+            if cname:
+                self.adjustable_settings.add(cname)
+                adj = self.app.brush_adjustment[cname]
+            else:
+                pass
+            scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL, adj)
+            scale.set_draw_value(False)
+            scale.set_hexpand(True)
+            self.attach(label, 0, row, 1, 1)
+            self.attach(scale, 1, row, 1, 1)
+
+       #cname = "slow_tracking"
+       #label = Gtk.Label()
+       ##TRANSLATORS: Short alias for "Slow position tracking". This is
+       ##TRANSLATORS: used on the options panel.
+       #label.set_text(_("Smooth:"))
+       #label.set_alignment(1.0, 0.5)
+       #label.set_hexpand(False)
+       #self.adjustable_settings.add(cname)
+       #adj = self.app.brush_adjustment[cname]
+       #scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL, adj)
+       #scale.set_draw_value(False)
+       #scale.set_hexpand(True)
+       #self.attach(label, 0, row, 1, 1)
+       #self.attach(scale, 1, row, 1, 1)
+       #row += 1
+        create_scale_widget("slow_tracking", _("Smooth:"), None)
+        row += 1
+
+       #cname = "x_tilt_offset"
+       #label = Gtk.Label()
+       ##TRANSLATORS: Short alias for "Stylus tilt offset of X axis". This is
+       ##TRANSLATORS: used on the options panel.
+       #label.set_text(_("X Tilt offset:"))
+       #label.set_alignment(1.0, 0.5)
+       #label.set_hexpand(False)
+       #self.adjustable_settings.add(cname)
+       #adj = Gtk.Adjustment(value=0.0,lower=-1.0,upper=1.0,step_incr=0.01)
+       #adj.connect("value-changed", self.x_tilt_offset_adj_changed_cb)
+       #scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL, adj)
+       #scale.set_draw_value(False)
+       #scale.set_hexpand(True)
+       #self.attach(label, 0, row, 1, 1)
+       #self.attach(scale, 1, row, 1, 1)
+       #row += 1
+        adj = Gtk.Adjustment(value=0.0,lower=-1.0,upper=1.0,step_incr=0.01)
+        adj.connect("value-changed", self.x_tilt_offset_adj_changed_cb)
+        create_scale_widget(None, _("X Tilt Offset:"), adj)
+        row += 1
+
+        adj = Gtk.Adjustment(value=0.0,lower=-1.0,upper=1.0,step_incr=0.01)
+        adj.connect("value-changed", self.y_tilt_offset_adj_changed_cb)
+        create_scale_widget(None, _("Y Tilt Offset:"), adj)
         row += 1
 
         # Add VBox for Assistant area
@@ -784,6 +847,19 @@ class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
 
         return row
 
+    def x_tilt_offset_adj_changed_cb(self, adj):
+        FreehandMode._X_TILT_OFFSET = adj.get_value()
+       #mode = self.target
+       #if mode:
+       #    mode.x_tilt_offset = adj.get_value()
+       #else:
+       #    print('no mode!!')
+
+    def y_tilt_offset_adj_changed_cb(self, adj):
+        FreehandMode._Y_TILT_OFFSET = adj.get_value()
+       #mode = self.target
+       #if mode:
+       #    mode.y_tilt_offset = adj.get_value()
 
 class PressureAndTiltInterpolator (object):
     """Interpolates event sequences, filling in null pressure/tilt data
