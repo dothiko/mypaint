@@ -63,7 +63,8 @@ class State (object):
 
     #: The state is automatically left after this time (ignored during
     #: press-and-hold)
-   #autoleave_timeout = 0.800
+    #autoleave_timeout = 0.800
+    # XXX Changed by me
     autoleave_timeout = 0.100
 
     # : popups only: how long the cursor is allowed outside before closing
@@ -181,6 +182,7 @@ class State (object):
                 if a.keydown:
                     a.keyup_callback = self._keyup_cb
                     self.keydown = True
+
         self.activated_by_keyboard = self.keydown  # FIXME: should probably be renamed (mouse button possible)
         self.enter(**kwargs)
 
@@ -200,7 +202,9 @@ class State (object):
         if not self.active:
             return
         self.keydown = False
-        if event.time/1000.0 - self._enter_time < self.max_key_hit_duration:
+        duration_time = event.time/1000.0 - self._enter_time 
+        if (duration_time < self.max_key_hit_duration and
+                duration_time < self.autoleave_timeout):
             pass  # accept as one-time hit
         else:
             if self._outside_popup_timeout_id:
