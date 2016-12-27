@@ -416,31 +416,33 @@ class Stabilizer(Assistbase):
         self._ry = y
 
         if self._mode == self.MODE_DRAW:
-            if (self._range_switcher and self._start_time != None):
+            if (self._range_switcher and 
+                    self._start_time != None and
+                    self._current_range < self._stabilize_range):
                 ctime = time - self._start_time
                 self._drawlength += math.hypot(x - self._ox, y - self._oy) 
 
                 if ctime > self.FRAME_PERIOD:
-                    speed = self._drawlength / (ctime / self.FRAME_PERIOD)
+                    speed = self._drawlength / ctime 
                     # When drawing time exceeds the threshold timeperiod, 
                     # then calculate the speed of storke.
-                    # It is stroke length per 'specific time unit = one frame'
-                    # (16.6666..ms = one frame in 60fps), in pixel.
                     #
                     # When the speed below the specfic value,
-                    # (currently, it is 0.00001)
+                    # (currently, it is 0.001 --- i.e. 1px per second)
                     # it is recognized as 'Pointer Stopped'
                     # and the stopping frame count exceeds certain threshold,
                     # then stabilizer range is expanded.
 
-                    if speed <= 0.00001:
-                        # if the style holded over 16 frames,
+                    if speed <= 0.001:
+                        # if the style holded over 8 frames,
                         # stabilizer range should be maxed out.
                         self._stop_cnt += 1
-                        if self._stop_cnt > 24:
-                            self._current_range = self._stabilize_range
-                        elif self._stop_cnt > 8:
+                        if self._stop_cnt == 8:
                             self._current_range = self._stabilize_range / 2
+                        elif self._stop_cnt > 8:
+                            self._stop_cnt += (0.3 * (pressure**2.0))
+                            if self._stop_cnt > 24:
+                                self._current_range = self._stabilize_range
 
                     self._current_range = max(0, min(self._current_range, 
                         self._stabilize_range))
