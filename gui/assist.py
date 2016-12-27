@@ -247,6 +247,9 @@ class Stabilizer(Assistbase):
     _AVERAGE_PREF_KEY = "assistant.stabilizer.average_previous"
     _STABILIZE_RANGE_KEY = "assistant.stabilizer.range"
     _RANGE_SWITCHER_KEY = "assistant.stabilizer.range_switcher"
+    _FORCE_TAPERING_KEY = "assistant.stabilizer.force_tapering"
+
+    _TAPERING_LENGTH = 32.0 
 
 
     def __init__(self, app):
@@ -256,8 +259,9 @@ class Stabilizer(Assistbase):
 
         pref = self.app.preferences
         self._average_previous = pref.get(self._AVERAGE_PREF_KEY, True)
-        self._stabilize_range = pref.get(self._STABILIZE_RANGE_KEY,48)
-        self._range_switcher = pref.get(self._RANGE_SWITCHER_KEY,True)
+        self._stabilize_range = pref.get(self._STABILIZE_RANGE_KEY, 48)
+        self._range_switcher = pref.get(self._RANGE_SWITCHER_KEY, True)
+        self._force_tapering = pref.get(self._FORCE_TAPERING_KEY, False)
 
         self._current_range = self._stabilize_range
         self._last_time = None
@@ -297,25 +301,22 @@ class Stabilizer(Assistbase):
     def range_switcher(self, flag):
         self._range_switcher = flag
         self.app.preferences[self._RANGE_SWITCHER_KEY] = flag
+
+    @property
+    def force_tapering(self):
+        return self._force_tapering
+
+    @force_tapering.setter
+    def force_tapering(self, flag):
+        self._force_tapering = flag
+        self.app.preferences[self._FORCE_TAPERING_KEY] = flag
                 
+    # Signal Handlers
+
     def button_press_cb(self, tdw, x, y, pressure, time, button):
-        self._last_button = button
-        self._latest_pressure = pressure
-        self._cx = x
-        self._cy = y
-        self._cycle = 1L
-        self._start_time = time
-        self._initial_pressure = 0.0
-        self._prev_dx = None
-        self._mode = self.MODE_INIT
-        if self._range_switcher:
-            self._drawlength = 0
-            self._current_range = 1
-            self._ox = x
-            self._oy = y
-        else:
-            self._current_range = self._stabilize_range
-        self._prev_range = 0.0
+        self._initialize_attrs(self.MODE_INIT,
+                x, y,
+                pressure, time, button)
 
     def button_release_cb(self, tdw, x, y, pressure, time, button):
         self._last_button = None
@@ -359,11 +360,18 @@ class Stabilizer(Assistbase):
             move_length = cur_length - self._current_range
             mx = (dx / cur_length) * move_length
             my = (dy / cur_length) * move_length
+
+            self._actual_drawn_length += move_length
             
             self._cx = cx + mx
             self._cy = cy + my
 
-            yield (self._cx , self._cy , self._latest_pressure)
+            if (self._force_tapering and 
+                    self._actual_drawn_length < self._TAPERING_LENGTH):
+                adj = min(1.0, self._actual_drawn_length / self._TAPERING_LENGTH)
+                yield (self._cx , self._cy , self._latest_pressure * adj)
+            else:
+                yield (self._cx , self._cy , self._latest_pressure)
             self._cycle += 1L
 
         elif self._mode == self.MODE_FINALIZE:
@@ -385,16 +393,30 @@ class Stabilizer(Assistbase):
         
     def reset(self):
         super(Stabilizer, self).reset()
-        self._cx = 0.0
-        self._cy = 0.0
-        self._latest_pressure = None
-        self._last_button = None
-        self._start_time = None
-        self._cycle = 0L
+        self._initialize_attrs(self.MODE_INVALID,
+                0.0, 0.0, 0.0,
+                None,
+                0)
+
+    def _initialize_attrs(self, mode, x, y, pressure, time, button):
+        self._last_button = button
+        self._latest_pressure = pressure
+        self._cx = x
+        self._cy = y
+        self._start_time = time
         self._initial_pressure = 0.0
-        self._mode = self.MODE_INVALID
-        self._speed = 0
-        self._stop_cnt = 0
+        self._prev_dx = None
+        self._mode = mode
+        self._actual_drawn_length = 0.0
+        if self._range_switcher:
+            self._drawlength = 0
+            self._current_range = 1
+            self._stop_cnt = 0
+            self._ox = x
+            self._oy = y
+        else:
+            self._current_range = self._stabilize_range
+        self._prev_range = 0.0
 
     def fetch(self, tdw, x, y, pressure, time, button):
         """ Fetch samples(i.e. current stylus input datas) 
@@ -876,6 +898,13 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
         checkbox.connect('toggled', self._range_switcher_toggled_cb)
         self._attach_grid(checkbox)
 
+        # Checkbox for use 'Force start tapering' feature.
+        checkbox = Gtk.CheckButton(_("Force start tapering"),
+            hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
+        checkbox.set_active(assistant.force_tapering) 
+        checkbox.connect('toggled', self._force_tapering_toggled_cb)
+        self._attach_grid(checkbox)
+
         # End of initialize widgets
         self.initialize_end()
 
@@ -890,8 +919,11 @@ class Optionpresenter_Stabilizer(_Presenter_Mixin):
 
     def _range_switcher_toggled_cb(self, checkbox):
         if not self._updating_ui:
-            flag = checkbox.get_active()
-            self.assistant.range_switcher = flag
+            self.assistant.range_switcher = checkbox.get_active()
+
+    def _force_tapering_toggled_cb(self, checkbox):
+        if not self._updating_ui:
+            self.assistant.force_tapering = checkbox.get_active()
 
 class Optionpresenter_ParallelRuler(_Presenter_Mixin):
     """ Optionpresenter for ParallelRuler assistant.
