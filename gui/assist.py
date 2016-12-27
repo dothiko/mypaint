@@ -841,12 +841,375 @@ class FocusRuler(ParallelRuler):
     ## Options presenter for assistant
 
     # For now, Options presenter is same as ParallelRuler.
-   #def get_presenter(self):
-   #    if self._presenter == None:
-   #        self._presenter = Optionpresenter_ParallelRuler(self)
-   #    return self._presenter.get_box_widget()
+
+class EasyLiner(Assistbase): 
+    """ easyliner class, it is easily draw line with hand.
+
+    This assistant simply follows the average of initial motion of
+    cursor.
+    """ 
+
+    name = _("EasyLiner")
+
+    # Mode constants.
+    #
+    # In Stabilizer, self._mode decides how enum_samples()
+    # work. 
+    # Usually, it enumerate nothing (MODE_INVALID)
+    # so no any strokes drawn.
+    # When the device is pressed, self._mode is set as 
+    # MODE_INIT to initialize stroke at enum_samples().
+    # After that, self._mode is set as MODE_DRAW.
+    # and enum_samples() yields some modified device positions,
+    # to draw strokes.
+    # Finally, when the device is released,self._mode is set
+    # as MODE_FINALIZE, to avoid trailing stroke glitches.
+    # And self._mode returns its own normal state, i.e. MODE_INVALID.
+    
+    MODE_INVALID = -1
+    MODE_INIT = 0
+    MODE_DRAW = 1
+    MODE_FINALIZE = 2
+
+    _STABILIZE_RANGE_KEY = "assistant.easyliner.range"
+    _RANGE_SWITCHER_KEY = "assistant.easyliner.range_switcher"
+    _FORCE_TAPERING_KEY = "assistant.easyliner.force_tapering"
+
+    _TIMER_PERIOD = 800.0
 
 
+    def __init__(self, app):
+        super(EasyLiner, self).__init__(app)
+
+        pref = self.app.preferences
+        self._stabilize_range = pref.get(self._STABILIZE_RANGE_KEY, 48)
+        self._range_switcher = pref.get(self._RANGE_SWITCHER_KEY, False)
+        self._force_tapering = pref.get(self._FORCE_TAPERING_KEY, False)
+
+        self.reset()
+
+    @property
+    def _ready(self):
+        return (self._mode in (self.MODE_DRAW, self.MODE_INIT) and
+                self._current_range > 0)
+
+
+    @property
+    def stabilize_range(self):
+        return self._stabilize_range
+    
+    @stabilize_range.setter
+    def stabilize_range(self, value):
+        self._stabilize_range = value
+        if self._current_range > value:
+            self._current_range = value
+       #self.app.preferences[self._STABILIZE_RANGE_KEY] = value
+
+    @property
+    def range_switcher(self):
+        return self._range_switcher
+    
+    @range_switcher.setter
+    def range_switcher(self, flag):
+        self._range_switcher = flag
+       #self.app.preferences[self._RANGE_SWITCHER_KEY] = flag
+
+    @property
+    def force_tapering(self):
+        return self._force_tapering
+
+    @force_tapering.setter
+    def force_tapering(self, flag):
+        self._force_tapering = flag
+   #    self.app.preferences[self._FORCE_TAPERING_KEY] = flag
+
+   #def _update_positions(self, tdw, x, y):
+   #    if self._last_button == 1:
+   #        mx, my = tdw.display_to_model(x, y)
+   #        if self._mode == self.MODE_INIT:
+   #            self._sx, self._sy = mx, my
+   #            self._px, self._py = mx, my
+   #        elif self._mode == self.MODE_SET_BASE:
+   #            self._bx, self._by = mx, my
+   #        elif self._mode == self.MODE_SET_DEST:
+   #            self._dx, self._dy = mx, my
+   #
+   #        self._cx, self._cy = mx, my
+                
+    # Signal Handlers
+
+    def button_press_cb(self, tdw, x, y, pressure, time, button):
+        self._initialize_attrs(tdw,
+                self.MODE_INIT,
+                x, y,
+                pressure, time, button)
+
+        if self._range_switcher:
+            self._start_range_timer(self._TIMER_PERIOD)
+
+    def button_release_cb(self, tdw, x, y, pressure, time, button):
+        self._last_button = None
+        self._mode = self.MODE_FINALIZE
+        if self._range_switcher:
+            self._drawlength = 0
+            self._start_time = None
+            self._cycle = 0L
+
+        self._stop_range_timer()
+        # After stop the timer, invalidate cached tdw.
+        self._tdw = None
+
+    def enum_samples(self, tdw):
+
+        if self._mode == self.MODE_INIT:
+            # Normal stabilize stage.
+
+            cx = self._cx
+            cy = self._cy
+
+            dx = self._rx - cx
+            dy = self._ry - cy
+            cur_length = math.hypot(dx, dy)
+
+            if cur_length <= self._current_range:
+                if self._prev_dx != None:
+                    dx = (dx + self._prev_dx) / 2.0
+                    dy = (dy + self._prev_dy) / 2.0
+                self._prev_dx = dx
+                self._prev_dy = dy
+                self._nx, self._ny = normal(0.0, 0.0,
+                        self._prev_dx, self._prev_dy)
+                # Fallthrough
+            else:
+                self._nx, self._ny = normal(0.0, 0.0,
+                        self._prev_dx, self._prev_dy)
+                self._mode = self.MODE_DRAW
+                # _px, _py is past drawn x & y,
+                # _tx, _ty is past raw input x & y
+                self._px = self._cx + self._nx * cur_length
+                self._py = self._cy + self._ny * cur_length
+                self._tx = self._rx
+                self._ty = self._ry
+
+
+                yield (self._cx , self._cy , self._initial_pressure)        
+                yield (self._tx , self._ty , self._initial_pressure)        
+
+        elif self._mode == self.MODE_DRAW:
+
+           #dx = self._rx - self._tx
+           #dy = self._ry - self._ty
+           #cur_length = math.hypot(dx, dy)
+            cur_length, jx, jy = length_and_normal(self._tx, self._ty,
+                        self._rx, self._ry)
+
+
+            direction = cross_product(self._ny, -self. _nx,
+                   jx, jy)
+
+           #if cur_length > 4:
+           #    cur_length = 4
+           #direction = cross_product(self._vy, -self. _vx,
+           #        nx, ny)
+           #
+            if direction < 0.0:
+                cur_length *= -1.0
+
+            self._px += self._nx * cur_length
+            self._py += self._ny * cur_length
+            self._actual_drawn_length += cur_length
+
+            if (self._force_tapering and 
+                    self._actual_drawn_length < self._TAPERING_LENGTH):
+                adj = min(1.0, self._actual_drawn_length / self._TAPERING_LENGTH)
+                yield (self._px ,self._py ,self._latest_pressure * adj)
+            else:
+                yield (self._px ,self._py ,self._latest_pressure)
+
+
+
+            self._tx = self._rx
+            self._ty = self._ry
+
+        elif self._mode == self.MODE_FINALIZE:
+
+            if self._latest_pressure > 0.0:
+                # button is released but
+                # still remained some pressure...
+                # rare case,but possible.
+                yield (self._px, self._py, self._latest_pressure)
+
+            # We need this for avoid trailing glitch
+            yield (self._px, self._py, 0.0)
+
+            self._mode = self.MODE_INVALID
+        else:
+            # Set empty stroke, as usual.
+            yield (self._rx, self._ry, 0.0)
+
+        raise StopIteration
+        
+    def reset(self):
+        super(EasyLiner, self).reset()
+        self._initialize_attrs(None, self.MODE_INVALID,
+                0.0, 0.0, 0.0,
+                None,
+                0)
+
+    def _initialize_attrs(self, tdw, mode, x, y, pressure, time, button):
+        self._tdw = tdw
+        self._last_button = button
+        self._latest_pressure = pressure
+        self._cx = x
+        self._cy = y
+        self._rx = x
+        self._ry = y
+        self._tx = x
+        self._ty = y
+        self._start_time = time
+        self._initial_pressure = 0.0
+        self._prev_dx = None
+        self._mode = mode
+        self._actual_drawn_length = 0.0
+       #if tdw:
+       #    self._update_positions(tdw, x, y)
+        if self._range_switcher:
+            self._drawlength = 0
+            self._current_range = 0.0
+        else:
+            self._current_range = self._stabilize_range
+        self._timer_id = None
+
+    def fetch(self, tdw, x, y, pressure, time, button):
+        """ Fetch samples(i.e. current stylus input datas) 
+        into attributes.
+        This method would be called each time motion_notify_cb is called.
+
+        Explanation of attributes which are used at here:
+        
+        _rx,_ry == Raw input of pointer, 
+                         the 'current' position of input,
+                         stroke should be drawn TO (not from) this point.
+        _cx, _cy == Current center of drawing stroke radius.
+                    These also represent the previous end point of stroke.
+        """
+
+        self._tdw = tdw
+        self._last_time = time
+        self._latest_pressure = pressure
+        self._rx = x
+        self._ry = y
+
+    ## Overlay drawing related
+
+    def queue_draw_area(self, tdw):
+        """ Queue draw area for overlay """
+        if self._ready:
+            half_rad = int(self._current_range+ 2)
+            full_rad = half_rad * 2
+            tdw.queue_draw_area(self._cx - half_rad, self._cy - half_rad,
+                    full_rad, full_rad)
+
+                    
+    @dashedline_wrapper
+    def _draw_dashed_circle(self, cr, info):
+        x, y, radius = info
+        cr.arc( x, y,
+                int(radius),
+                0.0,
+                2*math.pi)
+
+    @dashedline_wrapper
+    def _draw_dashed_vector(self, cr, info):
+        sx, sy, ex, ey = info
+        cr.move_to(sx, sy)
+        cr.line_to(ex, ey)
+
+    def draw_overlay(self, cr, tdw):
+        """ Drawing overlay """
+        if self._ready:
+            self._draw_dashed_circle(cr, 
+                    (self._cx, self._cy, self._current_range))
+
+            # XXX Drawing actual stroke point.
+            # This should be same size as current brush radius,
+            # but it would be a huge workload when the brush is 
+            # extremely large.
+            # so, currently this is fixed size, only shows the center
+            # point of stroke.
+            self._draw_dashed_circle(cr, 
+                    (self._cx, self._cy, 2))
+
+            self._draw_dashed_vector(cr, 
+                    (self._cx, self._cy, 
+                        self._cx + self._nx * self._current_range,
+                        self._cy + self._ny * self._current_range)
+                    )
+                        
+                    
+    ## Options presenter for assistant
+    def get_presenter(self):
+       #if self._presenter == None:
+       #    self._presenter = Optionpresenter_Stabilizer(self)
+       #return self._presenter.get_box_widget()
+        return None
+
+    ## Stabiliezr Range switcher related
+    def _switcher_timer_cb(self):
+        ctime = self._last_time - self._start_time
+        drawlength = self._actual_drawn_length - self._drawlength
+
+        try:
+            # Even check whether drawlength > 0.0
+            # exception raised, so try-except used.
+            speed = drawlength / ctime 
+        except ZeroDivisionError:
+            speed = 0.0
+
+        # When drawing time exceeds the threshold timeperiod, 
+        # then calculate the speed of storke.
+        #
+        # When the speed below the specfic value,
+        # (currently, it is 0.001 --- i.e. 1px per second)
+        # it is recognized as 'Pointer Stopped'
+        # and the stopping frame count exceeds certain threshold,
+        # then stabilizer range is expanded.
+
+        if speed <= 0.001:
+            half_range = self._stabilize_range / 2
+            if self._current_range < half_range:
+                print('timer comes')
+                self._mode = self.MODE_INIT
+                self._current_range = half_range
+                if self._latest_pressure > 0.7:
+                    self._start_range_timer(self._TIMER_PERIOD * 0.75)
+                else:
+                    self._start_range_timer(self._TIMER_PERIOD)
+            else:
+                self._current_range = self._stabilize_range
+                self._stop_range_timer()
+
+            assert self._tdw is not None
+            self.queue_draw_area(self._tdw)
+        else:
+            self._start_range_timer(self._TIMER_PERIOD)
+
+        self._current_range = max(0, min(self._current_range, 
+            self._stabilize_range))
+
+        # Update current/previous position in every case.
+        self._drawlength = self._actual_drawn_length
+        self._start_time = self._last_time
+
+    def _start_range_timer(self, period):
+        self._stop_range_timer()
+        self._timer_id = GLib.timeout_add(period,
+                self._switcher_timer_cb)
+
+    def _stop_range_timer(self):
+        if self._timer_id:
+            GLib.source_remove(self._timer_id)
+            self._timer_id = None
 ## Option presenters for assistants
 
 class _Presenter_Mixin(object):

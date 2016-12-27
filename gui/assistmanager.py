@@ -33,6 +33,7 @@ class AssistManager(object):
         self._assistants = { "AssistModeStabilizer" : Stabilizer(app),
                              "AssistModeParallelRuler" : ParallelRuler(app),
                              "AssistModeFocusRuler" : FocusRuler(app),
+                             "AssistModeEasyLiner" : EasyLiner(app),
                              None : None # the default, no assistant enabled.
                 }
 
