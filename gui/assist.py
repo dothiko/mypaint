@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 from gettext import gettext as _
 import weakref
 
-from gi.repository import Gtk, Gdk
+from gi.repository import Gtk, Gdk, GLib
 
 import gui.drawutils
 import gui.tileddrawwidget
@@ -250,12 +250,11 @@ class Stabilizer(Assistbase):
     _FORCE_TAPERING_KEY = "assistant.stabilizer.force_tapering"
 
     _TAPERING_LENGTH = 32.0 
+    _TIMER_PERIOD = 800.0
 
 
     def __init__(self, app):
         super(Stabilizer, self).__init__(app)
-        self._rx = 0.0
-        self._ry = 0.0
 
         pref = self.app.preferences
         self._average_previous = pref.get(self._AVERAGE_PREF_KEY, True)
@@ -263,14 +262,11 @@ class Stabilizer(Assistbase):
         self._range_switcher = pref.get(self._RANGE_SWITCHER_KEY, True)
         self._force_tapering = pref.get(self._FORCE_TAPERING_KEY, False)
 
-        self._current_range = self._stabilize_range
-        self._last_time = None
-        self._cycle = 0L
         self.reset()
 
     @property
     def _ready(self):
-        return (self._mode == self.MODE_DRAW and
+        return (self._mode in (self.MODE_DRAW, self.MODE_INIT) and
                 self._current_range > 0)
 
     @property
@@ -314,9 +310,13 @@ class Stabilizer(Assistbase):
     # Signal Handlers
 
     def button_press_cb(self, tdw, x, y, pressure, time, button):
-        self._initialize_attrs(self.MODE_INIT,
+        self._initialize_attrs(tdw,
+                self.MODE_INIT,
                 x, y,
                 pressure, time, button)
+
+        if self._range_switcher:
+            self._start_range_timer(self._TIMER_PERIOD)
 
     def button_release_cb(self, tdw, x, y, pressure, time, button):
         self._last_button = None
@@ -325,6 +325,10 @@ class Stabilizer(Assistbase):
             self._drawlength = 0
             self._start_time = None
             self._cycle = 0L
+
+        self._stop_range_timer()
+        # After stop the timer, invalidate cached tdw.
+        self._tdw = None
 
     def enum_samples(self, tdw):
 
@@ -340,6 +344,7 @@ class Stabilizer(Assistbase):
             yield (self._cx , self._cy , self._initial_pressure)        
         elif self._mode == self.MODE_DRAW:
             # Normal stabilize stage.
+
             cx = self._cx
             cy = self._cy
 
@@ -350,7 +355,8 @@ class Stabilizer(Assistbase):
             if cur_length <= self._current_range:
                 raise StopIteration
 
-            if self._average_previous:
+            if (self._current_range > 0.0 and 
+                    self._average_previous):
                 if self._prev_dx != None:
                     dx = (dx + self._prev_dx) / 2.0
                     dy = (dy + self._prev_dy) / 2.0
@@ -372,7 +378,6 @@ class Stabilizer(Assistbase):
                 yield (self._cx , self._cy , self._latest_pressure * adj)
             else:
                 yield (self._cx , self._cy , self._latest_pressure)
-            self._cycle += 1L
 
         elif self._mode == self.MODE_FINALIZE:
             if self._latest_pressure > 0.0:
@@ -393,16 +398,19 @@ class Stabilizer(Assistbase):
         
     def reset(self):
         super(Stabilizer, self).reset()
-        self._initialize_attrs(self.MODE_INVALID,
+        self._initialize_attrs(None, self.MODE_INVALID,
                 0.0, 0.0, 0.0,
                 None,
                 0)
 
-    def _initialize_attrs(self, mode, x, y, pressure, time, button):
+    def _initialize_attrs(self, tdw, mode, x, y, pressure, time, button):
+        self._tdw = tdw
         self._last_button = button
         self._latest_pressure = pressure
         self._cx = x
         self._cy = y
+        self._rx = x
+        self._ry = y
         self._start_time = time
         self._initial_pressure = 0.0
         self._prev_dx = None
@@ -410,13 +418,10 @@ class Stabilizer(Assistbase):
         self._actual_drawn_length = 0.0
         if self._range_switcher:
             self._drawlength = 0
-            self._current_range = 1
-            self._stop_cnt = 0
-            self._ox = x
-            self._oy = y
+            self._current_range = 0.0
         else:
             self._current_range = self._stabilize_range
-        self._prev_range = 0.0
+        self._timer_id = None
 
     def fetch(self, tdw, x, y, pressure, time, button):
         """ Fetch samples(i.e. current stylus input datas) 
@@ -432,51 +437,11 @@ class Stabilizer(Assistbase):
                     These also represent the previous end point of stroke.
         """
 
+        self._tdw = tdw
         self._last_time = time
         self._latest_pressure = pressure
         self._rx = x
         self._ry = y
-
-        if self._mode == self.MODE_DRAW:
-            if (self._range_switcher and 
-                    self._start_time != None and
-                    self._current_range < self._stabilize_range):
-                ctime = time - self._start_time
-                self._drawlength += math.hypot(x - self._ox, y - self._oy) 
-
-                if ctime > self.FRAME_PERIOD:
-                    speed = self._drawlength / ctime 
-                    # When drawing time exceeds the threshold timeperiod, 
-                    # then calculate the speed of storke.
-                    #
-                    # When the speed below the specfic value,
-                    # (currently, it is 0.001 --- i.e. 1px per second)
-                    # it is recognized as 'Pointer Stopped'
-                    # and the stopping frame count exceeds certain threshold,
-                    # then stabilizer range is expanded.
-
-                    if speed <= 0.001:
-                        # if the style holded over 8 frames,
-                        # stabilizer range should be maxed out.
-                        self._stop_cnt += 1
-                        if self._stop_cnt == 8:
-                            self._current_range = self._stabilize_range / 2
-                        elif self._stop_cnt > 8:
-                            self._stop_cnt += (0.3 * (pressure**2.0))
-                            if self._stop_cnt > 24:
-                                self._current_range = self._stabilize_range
-
-                    self._current_range = max(0, min(self._current_range, 
-                        self._stabilize_range))
-                        
-                    self._speed = speed
-
-                    # Update current/previous position in every case.
-                    self._ox = x
-                    self._oy = y
-                    self._drawlength = 0
-                    self._start_time = time
-
 
     ## Overlay drawing related
 
@@ -517,6 +482,61 @@ class Stabilizer(Assistbase):
             self._presenter = Optionpresenter_Stabilizer(self)
         return self._presenter.get_box_widget()
 
+    ## Stabiliezr Range switcher related
+    def _switcher_timer_cb(self):
+        ctime = self._last_time - self._start_time
+        drawlength = self._actual_drawn_length - self._drawlength
+
+        try:
+            # Even check whether drawlength > 0.0
+            # exception raised, so try-except used.
+            speed = drawlength / ctime 
+        except ZeroDivisionError:
+            speed = 0.0
+
+        # When drawing time exceeds the threshold timeperiod, 
+        # then calculate the speed of storke.
+        #
+        # When the speed below the specfic value,
+        # (currently, it is 0.001 --- i.e. 1px per second)
+        # it is recognized as 'Pointer Stopped'
+        # and the stopping frame count exceeds certain threshold,
+        # then stabilizer range is expanded.
+
+        if speed <= 0.001:
+            half_range = self._stabilize_range / 2
+            if self._current_range < half_range:
+                self._mode = self.MODE_INIT
+                self._current_range = half_range
+                if self._latest_pressure > 0.7:
+                    self._start_range_timer(self._TIMER_PERIOD * 0.75)
+                else:
+                    self._start_range_timer(self._TIMER_PERIOD)
+            else:
+                self._current_range = self._stabilize_range
+                self._stop_range_timer()
+
+            assert self._tdw is not None
+            self.queue_draw_area(self._tdw)
+        else:
+            self._start_range_timer(self._TIMER_PERIOD)
+
+        self._current_range = max(0, min(self._current_range, 
+            self._stabilize_range))
+
+        # Update current/previous position in every case.
+        self._drawlength = self._actual_drawn_length
+        self._start_time = self._last_time
+
+    def _start_range_timer(self, period):
+        self._stop_range_timer()
+        self._timer_id = GLib.timeout_add(period,
+                self._switcher_timer_cb)
+
+    def _stop_range_timer(self):
+        if self._timer_id:
+            GLib.source_remove(self._timer_id)
+            self._timer_id = None
 
 class ParallelRuler(Assistbase): 
     """ Parallel Line Ruler.

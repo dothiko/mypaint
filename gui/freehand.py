@@ -320,6 +320,15 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             tdw.set_override_cursor(None)
             self._cursor_hidden_tdws.remove(tdw)
 
+   #def queue_draw_area(self, x, y, w, h):
+   #    """Set Queue redrawing area.
+   #
+   #    Mostly called from outside of this class,
+   #    to notify need to update screen.
+   #    """
+   #    for tdw in self._overlays:
+   #        tdw.queue_draw_area(x, y, w, h)
+
     ## Work around motion compression in recent GDKs
 
     def _add_event_compression_workaround(self, tdw):
