@@ -250,7 +250,7 @@ class Stabilizer(Assistbase):
     _FORCE_TAPERING_KEY = "assistant.stabilizer.force_tapering"
 
     _TAPERING_LENGTH = 32.0 
-    _TIMER_PERIOD = 800.0
+    _TIMER_PERIOD = 600.0
 
 
     def __init__(self, app):
@@ -508,7 +508,7 @@ class Stabilizer(Assistbase):
             if self._current_range < half_range:
                 self._mode = self.MODE_INIT
                 self._current_range = half_range
-                if self._latest_pressure > 0.7:
+                if self._latest_pressure > 0.9:
                     self._start_range_timer(self._TIMER_PERIOD * 0.75)
                 else:
                     self._start_range_timer(self._TIMER_PERIOD)
