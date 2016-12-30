@@ -197,7 +197,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         self.current_node_index = None  #: Node active in the options ui
         self.target_node_index = None  #: Node that's prelit
         self._overlays = {}  # keyed by tdw
-        self._reset_nodes()
+        self.nodes = []
         self._reset_adjust_data()
         self._task_queue = collections.deque()  # (cb, args, kwargs)
         self._task_queue_runner_id = None
@@ -227,14 +227,10 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         self.current_button_id = None # id of focused button
         self._clicked_buttn_id = None  # id of clicked button
  
- 
-    def _reset_nodes(self):
-        self.nodes = []  # nodes that met the distance+time criteria
-        self._reset_selected_nodes(None)
- 
     def _reset_capture_data(self):
-        self._reset_nodes()
-        pass
+        # XXX To be obsoluted, almost same as _reset_nodes()
+        self.select_node(-1)
+        self.nodes = []
  
     def _reset_adjust_data(self):
         """ Reset all datas about adjusting nodes.
@@ -248,7 +244,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
  
         # Multiple selected nodes.
         # This is a index list of node from self.nodes
-        self._reset_selected_nodes()
+        self.select_node(-1)
  
         self._hide_nodes = False
 
@@ -257,26 +253,26 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         self.subphase = None
  
  
-    def _reset_selected_nodes(self, initial_idx=None):
-        """ Resets selected_nodes list and assign
-        initial index,if needed.
- 
-        :param initial_idx: initial node index.in most case,
-                            node will manipurate by solo.
-                            it might be inefficient to
-                            generate list each time s solo node
-                            is moved,so use this parameter in such case.
-        """
- 
-        if initial_idx == None:
-            if len(self.selected_nodes) > 0:
-                self.selected_nodes=[]
-        elif len(self.selected_nodes) == 0:
-            self.selected_nodes.append(initial_idx)
-        elif len(self.selected_nodes) == 1:
-            self.selected_nodes[0] = initial_idx
-        else:
-            self.selected_nodes = [initial_idx, ]
+   #def _reset_selected_nodes(self, initial_idx=None):
+   #    """ Resets selected_nodes list and assign
+   #    initial index,if needed.
+   #
+   #    :param initial_idx: initial node index.in most case,
+   #                        node will manipurate by solo.
+   #                        it might be inefficient to
+   #                        generate list each time s solo node
+   #                        is moved,so use this parameter in such case.
+   #    """
+   #
+   #    if initial_idx == None:
+   #        if len(self.selected_nodes) > 0:
+   #            self.selected_nodes=[]
+   #    elif len(self.selected_nodes) == 0:
+   #        self.selected_nodes.append(initial_idx)
+   #    elif len(self.selected_nodes) == 1:
+   #        self.selected_nodes[0] = initial_idx
+   #    else:
+   #        self.selected_nodes = [initial_idx, ]
  
     def _is_active(self):
         """ To know whether this mode is active or not. 
@@ -603,8 +599,8 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         # Update workaround state for evdev dropouts
         self._button_down = event.button
 
-        shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
-       #ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
+        shift_state =  event.state & Gdk.ModifierType.SHIFT_MASK != 0
+        ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK != 0
 
         if self.zone == EditZoneMixin.ACTION_BUTTON:
             button = event.button
@@ -626,7 +622,19 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                     mx, my = tdw.display_to_model(event.x, event.y)
                     self.drag_offset.start(mx, my)
                     self.phase = PhaseMixin.ADJUST_POS
-                    self.select_node(self.target_node_index, exclusive=not shift_state)
+                    
+                    targidx = self.target_node_index
+                    if ctrl_state:
+                        # Node selection editing mode.
+                        self.select_node(targidx, not ctrl_state)
+                    else:
+                        # Ordinary selection of a node.
+                        # When the target node is already in selected_nodes list,
+                        # only activate it (i.e. it becomes self.current_node_index).
+                        # Otherwise, only the node is selected, other selected nodes
+                        # should be cleared.
+                        self.select_node(targidx ,targidx)
+
 
                 else:
                     pass
@@ -879,27 +887,55 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         return (xtilt, ytilt)
  
     ## Node related
-    def select_node(self, idx, exclusive=False):
+    def select_node(self, idx, exclusive=False, update_gui=True, ):
         """Select a node, i.e. add idx of node into selected_nodes list.
 
-        :param exclusive: if this is True, only the 'idx' node is selected.
-        """
-        if exclusive:
-            self.selected_nodes = [idx]
-            self._queue_redraw_all_nodes()
-        else:
-            if idx in self.selected_nodes:
-                self.selected_nodes.remove(idx)
-            else:
-                self.selected_nodes.append(idx)
+        :param idx: the selected node index. 
+                    when this is -1, parameter exclusive is ignored, and
+                    all nodes deselected.
+                    
+        :param bool or int exclusive: if this is True, only the 'idx' node is selected,
+                                      all other nodes are removed from selected_nodes list.
 
-            self._queue_draw_node(idx)
+                                      Otherwise, if exclusive is integer and equal to idx,
+                                      this means 'Do not remove this node when the node
+                                      is in self.selected_nodes,only activate it. Otherwise, 
+                                      only the 'idx' node should be in the list.'
+
+        :param update_gui: Assign to update overlay gui.
+                           When many nodes iterated and selected 
+                           over and over again, set False to this flag 
+                           and update overlay after all selection has been done.
+        """
+        if update_gui:
+           #self._queue_draw_selected_nodes() # To erase
+            self._queue_redraw_all_nodes() # To erase
+
+        if idx == -1:
+            self.selected_nodes = []
+        else:
+            if exclusive == True:
+                self.selected_nodes = [idx]
+            elif exclusive == idx:
+                # Special case : do not remove from selection,
+                # Just append the node when it is not in selection.
+                if not idx in self.selected_nodes:
+                    self.selected_nodes = [idx]
+            else:
+                if idx in self.selected_nodes:
+                    self.selected_nodes.remove(idx)
+                else:
+                    self.selected_nodes.append(idx)
+
+            if update_gui:
+                self._queue_draw_node(idx)
 
         if len(self.selected_nodes) == 0:
             self.target_node_index = None
             self.current_node_index = None
         else:
             self.current_node_index = idx
+
 
     def _update_current_node_index(self):
         """Updates current_node_index from target_node_index & redraw"""
@@ -1052,12 +1088,30 @@ class PressureEditableMixin(OncanvasEditMixin,
 
                 cls = self.__class__
 
-                if (button == 1 and self.current_node_index is not None):
-                    if (event.state & cls._PRESSURE_MOD_MASK ==
-                        cls._PRESSURE_MOD_MASK):
-                    
+                if button == 1 and self.zone == EditZoneMixin.CONTROL_NODE:
 
-                        self.phase = PressPhase.ADJUST_PRESSURE_ONESHOT
+                    if self.current_node_index is not None:
+                        if (event.state & cls._PRESSURE_MOD_MASK ==
+                            cls._PRESSURE_MOD_MASK):
+                        
+                            self.phase = PressPhase.ADJUST_PRESSURE_ONESHOT
+                            # Fallthrough
+                        else:
+                            assert self.phase == PressPhase.ADJUST_POS 
+
+                       #if (event.state & cls._ADD_SELECTION_MASK == 
+                       #        cls._ADD_SELECTION_MASK):
+                       #    # This case means 'add current node into select group'
+                       #    if not self.current_node_index in self.selected_nodes:
+                       #        self.select_node(self.current_node_index, False)
+                       #        self._queue_draw_selected_nodes()
+                       #else:
+                       #    # Otherwise, current_node_index is 
+                       #    if (not self.current_node_index in self.selected_nodes or
+                       #            len(self.selected_nodes) > 1):
+                       #        self.select_node(self.current_node_index, True)
+                       #        self._queue_draw_selected_nodes()
+
                    #elif (event.state & cls._ADD_SELECTION_MASK ==
                    #        cls._ADD_SELECTION_MASK):
                    #
@@ -1089,6 +1143,7 @@ class PressureEditableMixin(OncanvasEditMixin,
             
                 # FALLTHRU: *do* start a drag
         else:
+            print('not adjuting phase')
             super(PressureEditableMixin, self).mode_button_press_cb(tdw, event)
 
     def mode_button_release_cb(self, tdw, event):

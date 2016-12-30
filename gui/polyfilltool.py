@@ -421,7 +421,8 @@ class _Shape_Bezier(_Shape):
                             if do_reset:
                                 # To avoid old selected nodes still lit.
                                 mode._queue_draw_selected_nodes() 
-                                mode._reset_selected_nodes(mode.current_node_index)
+                               #mode._reset_selected_nodes(mode.current_node_index)
+                                mode.select_node(mode.current_node_index, True)
 
                 # FALLTHRU: *do* start a drag 
 
@@ -655,7 +656,8 @@ class _Shape_Polyline(_Shape_Bezier):
                     mode.nodes.append(node)
                     mode._last_event_node = node
                     mode.current_node_index = len(mode.nodes)-1
-                    mode._reset_selected_nodes(mode.current_node_index)
+                   #mode._reset_selected_nodes(mode.current_node_index)
+                    mode.selected_node(mode.current_node_index, True)
                     mode._queue_draw_node(mode.current_node_index)
                     mode.phase = _Phase.ADJUST_POS
                     mode.drag_offset.start(mx, my)
@@ -891,7 +893,8 @@ class _Shape_Rectangle(_Shape):
                 else:
                     # New node added!
                     mode.current_node_index=0
-                    mode._reset_selected_nodes(mode.current_node_index)
+                   #mode._reset_selected_nodes(mode.current_node_index)
+                    mode.select_node(mode.current_node_index, True)
                     mode.drag_offset.start(mx, my)
                     mode._queue_redraw_item(tdw)  
                     mode._queue_redraw_all_nodes()

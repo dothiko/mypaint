@@ -1159,7 +1159,7 @@ class BezierMode (PressureEditableMixin,
                 new_nodes.append(cn)
 
         self.nodes = new_nodes
-        self._reset_selected_nodes()
+        self.select_node(-1)
         self._adjust_current_node_index()
         self.target_node_index = None
 

@@ -211,7 +211,6 @@ def setup_round_position(tdw, pos, count, radius):
 
     return buttons
 
-
 ## Decorators
 
 def dashedline_wrapper(callable):

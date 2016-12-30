@@ -354,10 +354,11 @@ class StampMode (OncanvasEditMixin,
                         self.stamp,
                         self.nodes,
                         (sx, sy, abs(ex-sx)+1, abs(ey-sy)+1))
-                # Important: without this, stamps drawn twice.
-                # this _reset_nodes() should called prior to 
+                # Important: clearing nodes.
+                # without this, stamps drawn twice.
+                # this should be done prior to 
                 # do(cmd)
-                self._reset_nodes() 
+                self.nodes = []
 
                 self.doc.model.do(cmd)
             else:
@@ -373,7 +374,7 @@ class StampMode (OncanvasEditMixin,
             self._stop_task_queue_runner(complete=False)
             # Currently, this tool uses overlay(cairo) to preview stamps.
             # so we need no rollback action to the current layer.
-            self._reset_nodes()
+            self.nodes = []
         else:
             self._stop_task_queue_runner(complete=True)
             self.stampwork_commit_all()
@@ -956,7 +957,7 @@ class StampMode (OncanvasEditMixin,
                 new_nodes.append(cn)
 
         self.nodes = new_nodes
-        self._reset_selected_nodes()
+        self.select_node(-1)
         self.current_node_index = None
         self.target_node_index = None
 

@@ -187,8 +187,14 @@ def spline_iter_3(tuples, basept, selected, radius, factor, offset_vec,
     for idx, ctrlpt in enumerate(tuples):
         cint[0:3] = cint[1:4]
         cint[3] = np.array(ctrlpt)   
-        if basept:
-            if (len(selected) <= 1 or idx in selected):
+        if basept and offset_vec:
+            if offset_vec[0] == None:
+                if idx in selected:
+                    cint[3][0] += offset_vec[1]
+                    cint[3][1] += offset_vec[2]
+            elif (len(selected) == 1 or idx in selected):
+                # In Range based editing, current editing
+                # might affected to unselected nodes.
                 new_coord = calc_ranged_offset(basept, ctrlpt,
                                 radius, factor,
                                 offset_vec)
@@ -216,6 +222,7 @@ def calc_ranged_offset(basept, curpt, affect_radius, affect_factor, offset_vec):
     :returns: The editing affected coordinate of curpt, when it is inside affect_radius.
     :rtype tuple: 
     """ 
+    assert offset_vec[0] != None
     
     if basept and offset_vec:
         dist = math.hypot(curpt.x - basept.x, curpt.y - basept.y)
