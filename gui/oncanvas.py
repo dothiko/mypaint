@@ -1143,7 +1143,6 @@ class PressureEditableMixin(OncanvasEditMixin,
             
                 # FALLTHRU: *do* start a drag
         else:
-            print('not adjuting phase')
             super(PressureEditableMixin, self).mode_button_press_cb(tdw, event)
 
     def mode_button_release_cb(self, tdw, event):
