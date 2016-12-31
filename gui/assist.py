@@ -221,8 +221,6 @@ class Stabilizer(Assistbase):
     """ 
 
     name = _("Stabilizer")
-    DRAW_THRESHOLD = 16 # The minimum length of strokes to check auto-enable.
-    FRAME_PERIOD = 16.6666 # one frame is 1/60 = 16.6666...ms, for stabilizer.
 
     # Mode constants.
     #
@@ -250,7 +248,8 @@ class Stabilizer(Assistbase):
     _FORCE_TAPERING_KEY = "assistant.stabilizer.force_tapering"
 
     _TAPERING_LENGTH = 32.0 
-    _TIMER_PERIOD = 600.0
+    _TIMER_PERIOD = 500.0
+    _TIMER_PERIOD_2ND = 700.0
 
 
     def __init__(self, app):
@@ -323,6 +322,8 @@ class Stabilizer(Assistbase):
         self._mode = self.MODE_FINALIZE
         if self._range_switcher:
             self._drawlength = 0
+            self._total_drag_length = 0
+            self._current_range = 0
             self._start_time = None
             self._cycle = 0L
 
@@ -351,6 +352,21 @@ class Stabilizer(Assistbase):
             dx = self._rx - cx
             dy = self._ry - cy
             cur_length = math.hypot(dx, dy)
+
+            # cur_length is the distance from
+            # center (start) point to current cursor.
+            # On the other hand, self._total_drag_length
+            # is total motion length of cursor.
+            # These 2 variables are totally different.
+            if self._ox != None:
+                tx = self._rx - self._ox
+                ty = self._ry - self._oy
+                self._total_drag_length += math.hypot(tx, ty)
+            else:
+                self._total_drag_length += cur_length
+
+            self._ox = self._rx
+            self._oy = self._ry
 
             if cur_length <= self._current_range:
                 raise StopIteration
@@ -411,11 +427,13 @@ class Stabilizer(Assistbase):
         self._cy = y
         self._rx = x
         self._ry = y
+        self._ox = None
         self._start_time = time
         self._initial_pressure = 0.0
         self._prev_dx = None
         self._mode = mode
         self._actual_drawn_length = 0.0
+        self._total_drag_length = 0.0
         if self._range_switcher:
             self._drawlength = 0
             self._current_range = 0.0
@@ -485,7 +503,7 @@ class Stabilizer(Assistbase):
     ## Stabiliezr Range switcher related
     def _switcher_timer_cb(self):
         ctime = self._last_time - self._start_time
-        drawlength = self._actual_drawn_length - self._drawlength
+        drawlength = self._total_drag_length - self._drawlength
 
         try:
             # Even check whether drawlength > 0.0
@@ -498,20 +516,24 @@ class Stabilizer(Assistbase):
         # then calculate the speed of storke.
         #
         # When the speed below the specfic value,
-        # (currently, it is 0.001 --- i.e. 1px per second)
+        # (currently, it is 0.003 --- i.e. 1px per second)
         # it is recognized as 'Pointer Stopped'
         # and the stopping frame count exceeds certain threshold,
         # then stabilizer range is expanded.
 
-        if speed <= 0.001:
+        if speed <= 0.003:
             half_range = self._stabilize_range / 2
             if self._current_range < half_range:
                 self._mode = self.MODE_INIT
                 self._current_range = half_range
-                if self._latest_pressure > 0.9:
-                    self._start_range_timer(self._TIMER_PERIOD * 0.75)
+                if self._latest_pressure > 0.95:
+                    # immidiately enter 2nd stage
+                    self._current_range = self._stabilize_range
+                    self._stop_range_timer()
+                elif self._latest_pressure > 0.9:
+                    self._start_range_timer(self._TIMER_PERIOD_2ND * 0.5)
                 else:
-                    self._start_range_timer(self._TIMER_PERIOD)
+                    self._start_range_timer(self._TIMER_PERIOD_2ND)
             else:
                 self._current_range = self._stabilize_range
                 self._stop_range_timer()
@@ -519,13 +541,14 @@ class Stabilizer(Assistbase):
             assert self._tdw is not None
             self.queue_draw_area(self._tdw)
         else:
+           #print('debug:speed does not slow enough %.5f' % speed)
             self._start_range_timer(self._TIMER_PERIOD)
 
-        self._current_range = max(0, min(self._current_range, 
-            self._stabilize_range))
+        self._current_range = clamp(self._current_range,
+                0, self._stabilize_range)
 
         # Update current/previous position in every case.
-        self._drawlength = self._actual_drawn_length
+        self._drawlength = self._total_drag_length
         self._start_time = self._last_time
 
     def _start_range_timer(self, period):

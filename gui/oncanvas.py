@@ -457,6 +457,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         # Update the zone, and assume any change implies a button state
         # change as well (for now...)
         if self.zone != new_zone:
+           #if not self.in_drag:
             self._enter_zone_cb(new_zone)
             self.zone = new_zone
             self._ensure_overlay_for_tdw(tdw)
@@ -494,10 +495,19 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 
     def _enter_zone_cb(self, new_zone):
         """ Callback to notify entering new zone.
-        This is placeholder, to be implemented in child class
+        Might be overridden in child class
         if needed.
+
+        This callback (and _update_zone_and_target) would not be called
+        when mode instance is in drag state.
         """
-        pass
+        app = self.doc.app
+        if new_zone == EditZoneMixin.ACTION_BUTTON:
+            id = self.current_button_id
+            if id == ActionButtonMixin.ACCEPT:
+                app.show_transient_message(_("Accept Button; Commit current edit."))
+            elif id == ActionButtonMixin.REJECT:
+                app.show_transient_message(_("Reject Button; Discard current edit."))
  
     ## Redraws
     def _queue_redraw_item(self):
@@ -1088,6 +1098,20 @@ class PressureEditableMixin(OncanvasEditMixin,
         
         """
         return None
+
+    def _enter_zone_cb(self, new_zone):
+        """ Entering zone callback
+        """
+        app = self.doc.app
+        if new_zone == EditZoneMixin.EMPTY_CANVAS:
+            pass
+           #app.show_transient_message(_(""))
+        elif new_zone == EditZoneMixin.CONTROL_NODE:
+            app.show_transient_message(_("Node editing; Shift change pressure, Ctrl edit selection group."))
+        else:
+            super(PressureEditableMixin, self)._enter_zone_cb(new_zone)
+
+    ## Event handlers
 
     def mode_button_press_cb(self, tdw, event):
         if self.is_adjusting_phase:
