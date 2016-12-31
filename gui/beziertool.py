@@ -481,46 +481,15 @@ class BezierMode (PressureEditableMixin,
 
         self._queue_draw_buttons()
 
-   #def _update_zone_and_target(self, tdw, x, y, ignore_handle=False):
-   # inherit from HandleNodeMixin
-        
     def _update_zone_and_target(self, tdw, x, y):
-        """Update the zone and target node under a cursor position"""
-
+        """Update the zone and target node under a cursor position
+        """
         super(BezierMode, self)._update_zone_and_target(
                 tdw, x, y)
 
         if self.phase == _Phase.INSERT_NODE:
             self._update_cursor(tdw) 
 
-   #def _search_target_node(self, tdw, x, y, margin=12):
-   #    """ utility method: to commonize node searching codes
-   #    This class 
-   #    Since this Mixin is created assuming a node 
-   #    without a control handle, it always returns -1 for handles.
-   #    So you might need to override this method.
-   #
-   #    :return : a tuple of (new target node index, new control handle idx)
-   #    :rtype tuple:
-   #    """
-   #    targidx, node_handle = \
-   #            super(BezierMode, self)._search_target_node(tdw, x, y, margin)
-   #    if targidx != None:
-   #        c_node = self.nodes[targidx]
-   #        hit_dist = gui.style.FLOATING_BUTTON_RADIUS
-   #        if targidx == 0:
-   #            seq = (1,)
-   #        else:
-   #            seq = (0, 1)
-   #        for i in seq:
-   #            handle = c_node.get_control_handle(i)
-   #            hx, hy = tdw.model_to_display(handle.x, handle.y)
-   #            d = math.hypot(hx - x, hy - y)
-   #            if d > hit_dist:
-   #                continue
-   #            node_handle = i
-   #    return (targidx, node_handle)
-      
 
     def update_cursor_cb(self, tdw): 
         """  Update the cursor for not dragging mode.
@@ -630,7 +599,6 @@ class BezierMode (PressureEditableMixin,
     # def _queue_draw_selected_nodes(self):
     # def _queue_redraw_all_nodes(self):
     # are defined at HandleNodeUserMixin of gui/oncanvas.py.
-    
 
 
     def redraw_item_cb(self, erase=False):

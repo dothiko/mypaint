@@ -457,6 +457,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         # Update the zone, and assume any change implies a button state
         # change as well (for now...)
         if self.zone != new_zone:
+            self._enter_zone_cb(new_zone)
             self.zone = new_zone
             self._ensure_overlay_for_tdw(tdw)
             self._queue_draw_buttons()
@@ -490,6 +491,13 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         """
         self.phase = PhaseMixin.CHANGE_PHASE
         self._returning_phase = next_phase
+
+    def _enter_zone_cb(self, new_zone):
+        """ Callback to notify entering new zone.
+        This is placeholder, to be implemented in child class
+        if needed.
+        """
+        pass
  
     ## Redraws
     def _queue_redraw_item(self):
@@ -1099,47 +1107,6 @@ class PressureEditableMixin(OncanvasEditMixin,
                         else:
                             assert self.phase == PressPhase.ADJUST_POS 
 
-                       #if (event.state & cls._ADD_SELECTION_MASK == 
-                       #        cls._ADD_SELECTION_MASK):
-                       #    # This case means 'add current node into select group'
-                       #    if not self.current_node_index in self.selected_nodes:
-                       #        self.select_node(self.current_node_index, False)
-                       #        self._queue_draw_selected_nodes()
-                       #else:
-                       #    # Otherwise, current_node_index is 
-                       #    if (not self.current_node_index in self.selected_nodes or
-                       #            len(self.selected_nodes) > 1):
-                       #        self.select_node(self.current_node_index, True)
-                       #        self._queue_draw_selected_nodes()
-
-                   #elif (event.state & cls._ADD_SELECTION_MASK ==
-                   #        cls._ADD_SELECTION_MASK):
-                   #
-                   #    # Holding CTRL key =  1 by 1 Managing selected nodes.
-                   #    self._queue_draw_selected_nodes()
-                   #
-                   #    if not self.current_node_index in self.selected_nodes:
-                   #        self.selected_nodes.append(self.current_node_index)
-                   #    else:
-                   #        self.selected_nodes.remove(self.current_node_index)
-                   #        self.target_node_index = None
-                   #        self.current_node_index = None
-                   #
-                   #    self._queue_draw_selected_nodes()
-                   #    self._bypass_phase(PressPhase.ADJUST)
-                   #    return 
-                   #
-                   #else:
-                   #    self.phase = PressPhase.ADJUST_POS
-                
-                    # By the way, A new node clicked!
-                    # This is safe even CTRL key holded, because already exited 
-                    # from this callback in that case.
-                   #if not self.current_node_index in self.selected_nodes:
-                   #    # To avoid old selected nodes still lit.
-                   #    self._queue_draw_selected_nodes()
-                   #    self._reset_selected_nodes(self.current_node_index)
-                   #    self._queue_draw_selected_nodes()
             
                 # FALLTHRU: *do* start a drag
         else:
