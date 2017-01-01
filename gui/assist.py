@@ -500,7 +500,7 @@ class Stabilizer(Assistbase):
             self._presenter = Optionpresenter_Stabilizer(self)
         return self._presenter.get_box_widget()
 
-    ## Stabiliezr Range switcher related
+    ## Stabilizer Range switcher related
     def _switcher_timer_cb(self):
         ctime = self._last_time - self._start_time
         drawlength = self._total_drag_length - self._drawlength
@@ -512,16 +512,12 @@ class Stabilizer(Assistbase):
         except ZeroDivisionError:
             speed = 0.0
 
-        # When drawing time exceeds the threshold timeperiod, 
-        # then calculate the speed of storke.
-        #
-        # When the speed below the specfic value,
-        # (currently, it is 0.003 --- i.e. 1px per second)
-        # it is recognized as 'Pointer Stopped'
-        # and the stopping frame count exceeds certain threshold,
+        # When the drawing speed below the specfic value,
+        # (currently, it is 0.003 --- i.e. 3px per second)
+        # it is recognized as 'Pointer stands still'
         # then stabilizer range is expanded.
 
-        if speed <= 0.003:
+        if speed < 0.003:
             half_range = self._stabilize_range / 2
             if self._current_range < half_range:
                 self._mode = self.MODE_INIT
@@ -541,7 +537,7 @@ class Stabilizer(Assistbase):
             assert self._tdw is not None
             self.queue_draw_area(self._tdw)
         else:
-           #print('debug:speed does not slow enough %.5f' % speed)
+            # Otherwise, interval timer enabled. 
             self._start_range_timer(self._TIMER_PERIOD)
 
         self._current_range = clamp(self._current_range,
@@ -898,7 +894,7 @@ class EasyLiner(Assistbase):
     _RANGE_SWITCHER_KEY = "assistant.easyliner.range_switcher"
     _FORCE_TAPERING_KEY = "assistant.easyliner.force_tapering"
 
-    _TIMER_PERIOD = 800.0
+    _TIMER_PERIOD = 600.0
 
 
     def __init__(self, app):
