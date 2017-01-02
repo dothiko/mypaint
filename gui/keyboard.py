@@ -63,6 +63,9 @@ class KeyboardManager:
         # the window.
         self.window_actions = {}  # GtkWindow -> set(['ActionName1', ...)
 
+        # XXX ongoing
+        self._ongoing_modifier_event = {}
+
     def start_listening(self):
         """Begin listening for changes to the keymap.
         """
@@ -126,6 +129,24 @@ class KeyboardManager:
             & ~consumed_modifiers
         )
 
+        # XXX With some keyboard shortcuts, such as 'CTRL+S'
+        # we likely to press CTRL prior to S.
+        # As default, it would invoke waiting color-picking action
+        # (CTRL + BUTTON 1), but after Gtk.Action invoked, 
+        # key release event ignored, so color-picking action
+        # remained activated.
+        # To avoid this situation, record ongoing keyevent temporally
+        # and force its release event when Gtk.Action is invoked.
+        if ( keyval in (Gdk.KEY_Control_L,
+                        Gdk.KEY_Control_R,
+                        Gdk.KEY_Shift_L,
+                        Gdk.KEY_Shift_R,
+                        Gdk.KEY_Super_L,
+                        Gdk.KEY_Super_R,
+                        Gdk.KEY_Alt_L,
+                        Gdk.KEY_Alt_R) ):
+            self._ongoing_modifier_event[keyval] = (widget, event)
+
         # Except that key bindings are always stored in lowercase.
         keyval_lower = Gdk.keyval_to_lower(keyval)
         if keyval_lower != keyval:
@@ -174,6 +195,13 @@ class KeyboardManager:
             action.activate()
             action.keydown = False
 
+            # XXX cancel all ongoing modifier-only keyevent
+            if len(self._ongoing_modifier_event) > 0:
+                for ck in self._ongoing_modifier_event:
+                    widget, event = self._ongoing_modifier_event[ck]
+                    self._key_release_cb(widget, event)
+
+
         if event.hardware_keycode in self.pressed:
             # allow keyboard autorepeating only if the action
             # handler is not waiting for the key release event
@@ -194,6 +222,10 @@ class KeyboardManager:
             if action.keyup_callback:
                 action.keyup_callback(widget, event)
                 action.keyup_callback = None
+
+        # XXX cancel ongoing modifier keyevent 
+        if len(self._ongoing_modifier_event) > 0:
+            self._ongoing_modifier_keyevent = {}
 
         if event.keyval == Gdk.KEY_Escape:
             # emergency exit in case of bugs
