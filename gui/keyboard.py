@@ -43,6 +43,17 @@ class KeyboardManager:
     This class adds extra state attributes to every Gtk.Action.
     """
 
+    # Class attributes
+    
+    # _mask_table used for invoking dummy released event for 
+    # (mouse)Button + modifier mapping.
+    _mask_table = {Gdk.ModifierType.CONTROL_MASK : Gdk.KEY_Control_L,
+                 Gdk.ModifierType.SHIFT_MASK : Gdk.KEY_Shift_L,
+                 Gdk.ModifierType.SUPER_MASK : Gdk.KEY_Super_L,
+                 Gdk.ModifierType.HYPER_MASK : Gdk.KEY_Hyper_L,
+                 Gdk.ModifierType.META_MASK : Gdk.KEY_Meta_L,
+                 Gdk.ModifierType.MOD1_MASK : Gdk.KEY_Alt_L }
+
     ## Initialization
 
     def __init__(self, app):
@@ -62,9 +73,6 @@ class KeyboardManager:
         # only these actions can be dispatched. Other events fall through to
         # the window.
         self.window_actions = {}  # GtkWindow -> set(['ActionName1', ...)
-
-        # XXX ongoing
-        self._ongoing_modifier_event = {}
 
     def start_listening(self):
         """Begin listening for changes to the keymap.
@@ -129,24 +137,6 @@ class KeyboardManager:
             & ~consumed_modifiers
         )
 
-        # XXX With some keyboard shortcuts, such as 'CTRL+S'
-        # we likely to press CTRL prior to S.
-        # As default, it would invoke waiting color-picking action
-        # (CTRL + BUTTON 1), but after Gtk.Action invoked, 
-        # key release event ignored, so color-picking action
-        # remained activated.
-        # To avoid this situation, record ongoing keyevent temporally
-        # and force its release event when Gtk.Action is invoked.
-        if ( keyval in (Gdk.KEY_Control_L,
-                        Gdk.KEY_Control_R,
-                        Gdk.KEY_Shift_L,
-                        Gdk.KEY_Shift_R,
-                        Gdk.KEY_Super_L,
-                        Gdk.KEY_Super_R,
-                        Gdk.KEY_Alt_L,
-                        Gdk.KEY_Alt_R) ):
-            self._ongoing_modifier_event[keyval] = (widget, event)
-
         # Except that key bindings are always stored in lowercase.
         keyval_lower = Gdk.keyval_to_lower(keyval)
         if keyval_lower != keyval:
@@ -166,16 +156,17 @@ class KeyboardManager:
 
         # If the lookup succeeded, activate the corresponding action.
         if action:
-            return self.activate_keydown_event(action, event)
+            return self.activate_keydown_event(action, event, widget)
 
         # Otherwise, dispatch the event to the active doc.
         return self._dispatch_fallthru_key_press_event(widget, event)
 
-    def activate_keydown_event(self, action, event):
+    def activate_keydown_event(self, action, event, widget):
         """Activate a looked-up action triggered by an event
 
         :param Gtk.Action action: action looked up in some keymap
-        :param Gdk.Event: the triggering event
+        :param Gdk.Event: the triggering event                
+        :param Gdk.Widget widget: needed for invoking dummy event.
         :returns: True if the event should not be propagated further.
         :rtype: bool
 
@@ -195,11 +186,44 @@ class KeyboardManager:
             action.activate()
             action.keydown = False
 
-            # XXX cancel all ongoing modifier-only keyevent
-            if len(self._ongoing_modifier_event) > 0:
-                for ck in self._ongoing_modifier_event:
-                    widget, event = self._ongoing_modifier_event[ck]
-                    self._key_release_cb(widget, event)
+            # XXX With some keyboard shortcuts, such as 'CTRL+S',
+            # we likely press CTRL key prior to S 
+            # and also release CTRL key prior to S.
+            # 
+            # In this example, the event flow should be:
+            # CTRL pressed -> S pressed -> Gtk.Action fired ->
+            # CTRL released -> S released
+            #
+            # But, single CTRL key would invoke OneshotDrag'Mode' 
+            # (not Gtk.Action)
+            # it is 'ColorPickMode' (CTRL + BUTTON 1), as a default. 
+            # 
+            # So,actually, the event flow 
+            # CTRL pressed -> ColorPickMode activated and wait mouse button ->
+            # S pressed -> Gtk.Action fired ->
+            # CTRL released -> S released
+            #
+            # But after Gtk.Action for CTRL+S fired, 
+            # key release event for CTRL key is ignored.
+            # Because release handler process only for CTRL+S binded to Gtk.Action
+            # not OneshotDragMode for single CTRL key.
+            #
+            # As result, ColorPickMode for mouse remained activated 
+            # even CTRL key has already released.
+            # To avoid this situation, invoke release handler with
+            # all binded modifiler keys for Gtk.Action.
+
+            dummy_event = None
+
+            for cm in self._mask_table:
+                if event.state & cm == cm:
+                    if dummy_event == None:
+                        dummy_event = Gdk.EventKey()
+                        dummy_event.time = event.time
+                        dummy_event.window = event.window
+                    dummy_event.keyval = self._mask_table[cm]
+            
+                    self._key_release_cb(widget, dummy_event)
 
 
         if event.hardware_keycode in self.pressed:
@@ -222,10 +246,6 @@ class KeyboardManager:
             if action.keyup_callback:
                 action.keyup_callback(widget, event)
                 action.keyup_callback = None
-
-        # XXX cancel ongoing modifier keyevent 
-        if len(self._ongoing_modifier_event) > 0:
-            self._ongoing_modifier_keyevent = {}
 
         if event.keyval == Gdk.KEY_Escape:
             # emergency exit in case of bugs
