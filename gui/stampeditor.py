@@ -112,9 +112,8 @@ class StampRenderer(Gtk.CellRenderer):
    #id = GObject.property(type=int , default=-1)
    #desc = GObject.property(type=str, default="")
 
-    def __init__(self, store):
+    def __init__(self):
         super(StampRenderer, self).__init__()
-        self._store = store
 
     def do_set_property(self, pspec, value):
         setattr(self, pspec.name, value)
@@ -255,9 +254,7 @@ class StampEditorWindow (SubWindow):
         view = Gtk.TreeView()
         self._stamp_list = view
 
-        wrapper = self._refresh_store_wrapper()
-
-        stamprender = StampRenderer(wrapper)
+        stamprender = StampRenderer()
         col = Gtk.TreeViewColumn(_('Stamp'), stamprender, surface=0)
         col.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
         col.set_resizable(True)
