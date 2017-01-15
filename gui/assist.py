@@ -504,7 +504,6 @@ class Stabilizer(Assistbase):
     def _switcher_timer_cb(self):
         ctime = self._last_time - self._start_time
         drawlength = self._total_drag_length - self._drawlength
-
         try:
             # Even check whether drawlength > 0.0
             # exception raised, so try-except used.
@@ -512,12 +511,20 @@ class Stabilizer(Assistbase):
         except ZeroDivisionError:
             speed = 0.0
 
+        # 'cont_timer' is a flag, used for checking stroke speed and
+        # also returning value of callback,to continue/stop current timer
+        cont_timer = (speed >= 0.003) 
+
         # When the drawing speed below the specfic value,
         # (currently, it is 0.003 --- i.e. 3px per second)
         # it is recognized as 'Pointer stands still'
         # then stabilizer range is expanded.
 
-        if speed < 0.003:
+        if cont_timer == False:
+            #  First of all, current timer  
+            #  so current _timer_id should be invalidated.
+            self._timer_id = None
+
             half_range = self._stabilize_range / 2
             if self._current_range < half_range:
                 self._mode = self.MODE_INIT
@@ -525,20 +532,26 @@ class Stabilizer(Assistbase):
                 if self._latest_pressure > 0.95:
                     # immidiately enter 2nd stage
                     self._current_range = self._stabilize_range
-                    self._stop_range_timer()
                 elif self._latest_pressure > 0.9:
                     self._start_range_timer(self._TIMER_PERIOD_2ND * 0.5)
                 else:
                     self._start_range_timer(self._TIMER_PERIOD_2ND)
             else:
                 self._current_range = self._stabilize_range
-                self._stop_range_timer()
 
             assert self._tdw is not None
             self.queue_draw_area(self._tdw)
         else:
-            # Otherwise, interval timer enabled. 
-            self._start_range_timer(self._TIMER_PERIOD)
+            # When right after entering 2nd stage
+            # and speed is faster than threshold
+            # (i.e. user drawing fast stroke right now),
+            # reset the timer period to ordinary one,of 1st stage.
+            # With this, we can avoid unintentioal stabilizer range
+            # expansion at 2nd stage.
+            if (self._current_range > 0 and
+                    self._timer_period < self._TIMER_PERIOD):
+                self._start_range_timer(self._TIMER_PERIOD)
+                cont_timer = False
 
         self._current_range = clamp(self._current_range,
                 0, self._stabilize_range)
@@ -547,15 +560,19 @@ class Stabilizer(Assistbase):
         self._drawlength = self._total_drag_length
         self._start_time = self._last_time
 
+        return cont_timer
+
     def _start_range_timer(self, period):
         self._stop_range_timer()
         self._timer_id = GLib.timeout_add(period,
                 self._switcher_timer_cb)
+        self._timer_period = period
 
     def _stop_range_timer(self):
         if self._timer_id:
             GLib.source_remove(self._timer_id)
             self._timer_id = None
+            self._timer_period = 0
 
 class ParallelRuler(Assistbase): 
     """ Parallel Line Ruler.
