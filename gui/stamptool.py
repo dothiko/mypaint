@@ -668,10 +668,18 @@ class StampMode (OncanvasEditMixin,
             # Return True, if phase is overridden.
             # and if this closure return True,
             # immidiately exit from this handler method.
-            if ctrl_state:
+
+            # In older code, there were two modifier,
+            # shift for scaling modifier, and ctrl for 
+            # rotation modifiler.
+            #
+            # But currently, ctrl key would conflict
+            # with node selection of baseclass(OncanvasEditMixin), 
+            # so I decided to use shift as rotation modifier.
+            # scaling modifier is obsoluted. Instead of modifier key,
+            # use scaling handle.
+            if shift_state:
                 targ_phase = _Phase.ROTATE
-            elif shift_state:
-                targ_phase = _Phase.SCALE
             else:
                 return False
 
