@@ -6,17 +6,24 @@
 # gui/filehandling.py (for save dialog, menu GUI handling) 
 # gui/application.py (to initilize project-save MRU menu.)
 # lib/document.py  (to invoke load/save project functionality)
-# lib/layer/data.py (to add actual project load/save functinality
-#                   for each layers)
-# lib/layer/tree.py (to add actual project load/save functinality
-#                   for each layer trees)
+# lib/layer/core.py
+# lib/layer/data.py 
+# lib/layer/tree.py
+# lib/layer/group.py 
+# (to add actual project load/save functinality for each layer classes)
+# 
+# basically, project-save functionality for layer classes are
+# implemented as Mixin(Projectsaveable). 
+# But some codes are added to existing methods,
+# such as load_from_openraster_dir()
+
 
 # ABOUT VERSION BACKUP:
 #
 # VERSION BACKUP functionality would work along this flow.
 #
-# 1. 'make new project version' menu action has start.
-# 2. copy old stack.xml with new version number, 
+# 1. 'Save Current Project as New Version' menu action has start.
+# 2. copy current stack.xml into backup directory with new version number, 
 #    such as 'stack.xml.2'.
 # 3. Walk all layers (Versioninfo.queue_backup_layers)
 # 4. if modified timestamp or filesize of png file is not same as
@@ -29,11 +36,6 @@
 # 6. if another project-save action triggered before queued task end, 
 #    mypaint would flush all queued tasks before new project-save executed, 
 #    so no problem.
-#
-# OTHER related modules:
-#
-# gui/filehandling.py, lib/document.py, lib/layer/core.py, lib/layer/data.py 
-# and lib/layer/group.py has changed for project-save.
 
 from __future__ import absolute_import
 
@@ -62,8 +64,7 @@ class Projectsaveable(lib.autosave.Autosaveable):
 
     __metaclass__ = abc.ABCMeta
 
-    ORA_LAYERID_ATTR = "{%s}layer-id" % (
-        lib.xml.OPENRASTER_MYPAINT_NS,)
+    ORA_LAYERID_ATTR = "{%s}layer-id" % (lib.xml.OPENRASTER_MYPAINT_NS,)
 
     @property
     def autosave_dirty(self):
@@ -102,7 +103,7 @@ class Projectsaveable(lib.autosave.Autosaveable):
 
         This is mostly same as (and base on) autosave, 
         the difference is that we can assign arbitrary directory 
-        location and trigger saving at arbitrary timing.
+        location and trigger save action at arbitrary timing.
 
         :param projdir: the project root directory.
         :param path: the filepath.
@@ -146,7 +147,7 @@ class Projectsaveable(lib.autosave.Autosaveable):
     def filename(self):
         """This property shows the 'src' attribute of
         XML attr element.
-        It contains relative directory components.
+        This property contains relative directory components.
 
         If that attribute does not exist (probably it should be
         first save of unsaved layer), self.unique_id used.
@@ -158,8 +159,8 @@ class Projectsaveable(lib.autosave.Autosaveable):
 
     @property
     def unique_id(self):
-        """This property is 'mypaint:layer-id' attribute of
-        XML attr element.
+        """This property is ORA_LAYERID_ATTR('mypaint:layer-id') 
+        attribute of XML attr element.
         """
         if not hasattr(self, '_unique_id') or self._unique_id == None:
             self._unique_id = str(uuid.uuid4())
@@ -216,7 +217,7 @@ class Versionsave(object):
                 cpath = os.path.basename(cpath)
                 # We MUST use shutil.copy here, not copy2.
                 # to record the date of the version
-                # created.
+                # created as file timestamp.
                 shutil.copy(srcpath, 
                             os.path.join(self.backupdir, 
                             "%s.%d" % (cpath, self.version_num))
@@ -339,36 +340,37 @@ class Versionsave(object):
         """Tells whether current document(in data/) is 
         same as last backup version or not.
 
-        Current document(loaded in mypaint) might be different from 
-        storage data of data/ directory as a result of painting work
-        after loading project.
-        This cannot detect by referring disk storage datas,
-        but can be detected as 'unsaved change', so no problem.
-        
-        As other situations, think about the situation that 
-        the current document is not the last backed up one, 
-        but the same as backed up before.
-        This can be happen when current document is reverted
-        from older version.
+        We need not only test 'unsaved_painting_time' property
+        of model document, but also test whether current document
+        on disk storage is different from last backuped one or not.
 
-        But if current document is reverted one, lib.document instance
-        should have project_version property, and it is larger than 0
-        until it is saved into data/ directory.
-        That property would be cleared to 0, when it is saved
-        (into data/ directory).
+        Because, when we revert a document to some other version,
+        we might overwrite data/ directory with that reverted one.
+        If this happen, the document before revert would be lost
+        forever.
+        I think many people would not intend to lost pre-revert work.
+        And it can be done easily and mistakenly.
 
-        Summary,
-         * If lib.document.project_version == 0, the last backup data might
-           be same as current document, or further update might be done
-           from last backup.
-           This method is to check it.
-         * If lib.document.project_version > 0, it is reverted backup version
-           itself. 
-           If reverted document saved, lib.document.version resetted to 0,
-           therefore,the above assumption does not hold.
-           So, it is enough to just check 'unsaved change'.
-           This method nothing to do with it.
+        So we would need automatically save current document as 
+        new version before revert it, but there is a problem.
+        If create new version each time we revert without ask it 
+        to user,there would be excessive number of pre-revert version.
+        It would be annoying,confusing.
         
+        At a glance, it seems to be good to ask the user every time, 
+        but there are apperent cases where it is not necessary to ask. 
+
+        It is, right after backup current document manually
+        or right after reverted.
+
+        but 'right after reverted' can be easily tested by
+        referring model.project_version > 0 or not.
+
+        Therefore, we need this method, to check whether the latest
+        backedup files are same as files of data/ directory.
+
+        see also revert_button_clicked_cb() of 
+        gui.projectmanager.Versionsave.
         """
 
         xmlpath = os.path.join(self.dirbase, 'stack.xml')

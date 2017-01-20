@@ -530,6 +530,19 @@ class ProjectManagerWindow (SubWindow):
 
             save_before_revert = False
 
+            #   If model.project_version == 0, the last backup 
+            #   data might be same as current document, or further update 
+            #   might be done from last backup.That update written in storage
+            #   already.
+            #   This method is to check it.
+            #
+            # * If lib.document.Document.project_version > 0, it is reverted 
+            #   backup version itself, and unsaved yet. 
+            #   If reverted document saved, lib.document.version is reset to 0,
+            #   therefore,the above assumption (project_version > 0) does not hold.
+            #   So, it is enough to just check 'unsaved change' for this case.
+            #   This method nothing to do with it.
+
             if model.unsaved_painting_time > 0: 
                 save_before_revert = gui.dialogs.confirm(
                         self,
@@ -540,6 +553,23 @@ class ProjectManagerWindow (SubWindow):
 
             elif (model.project_version == 0 and 
                     not version_info.is_current_document_backedup()):
+                # If model.project_version == 0, the last backup 
+                # data might be same as current document, or further update 
+                # might be done (and saved to disk) from last backup.
+                #
+                # Otherwise,if model.project_version > 0, 
+                # it is reverted backup version itself.
+                # If there are some unsaved change on document by painting,it would
+                # be detected above 'unsaved_painting_time' check. so no problem.
+                # 
+                # When document saved, model.project_version is reset to 0.
+                # 
+                # So passing unsaved_painting_time test and 
+                # model.project_version > 0 means 'This document is unmodified 
+                # and unsaved from when reverted to some older version'.
+                # If so, we have backedup image in disk same as current document,
+                # we have no need to backup current document as new version.
+
                 save_before_revert = gui.dialogs.confirm(
                         self,
                         _("Current document is not backedup yet.\n"

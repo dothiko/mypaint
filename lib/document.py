@@ -1856,6 +1856,7 @@ class Document (object):
                     force_write = force_write,
                     **kwargs)
 
+            self._version = 0 
 
             if 'create_version' in kwargs:
                 # In this case,
@@ -1873,11 +1874,11 @@ class Document (object):
                         self._projectsave_processor,
                         self.layer_stack)
 
+                self._version = versave.version_num 
 
         finally:
             t1 = time.time()
             logger.debug('projectsave ended in %.3fs', t1-t0)
-            self._version = 0 
             self._is_project = True
 
 
@@ -1968,8 +1969,8 @@ class Document (object):
 
         # Update the initially-selected flag on all layers.
         # Also, get the contents bounding box simultaneously.
-        # And furthermore, remove empty tiles to avoid misconfiguration
-        # of boundary box and layer placement.
+        # And furthermore, remove empty tiles to avoid misplacement
+        # of layer.
         # 
         # Without this 'empty tiles removal'... such problems happen.
         # Usually, mypaint seems to remove transparent area when 
