@@ -1946,7 +1946,7 @@ class RootLayerStack (group.LayerStack):
                 self._no_background = False
 
                 if 'project' in kwargs:
-                    self._unique_id = attrs.get(
+                    self._background_layer._unique_id = attrs.get(
                             Projectsaveable.ORA_LAYERID_ATTR, 
                             None
                             )
