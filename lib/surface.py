@@ -339,10 +339,11 @@ def save_as_png(surface, filename, *rect, **kwargs):
             writer_fp.close()
 
 
-def finalize_surface(dstsurf, tiles):
+def finalize_surface(dstsurf, tiles=None):
+    """Finalize surface processing, to remove empty tiles.
     """
-    Finalize surface processing, to remove empty tiles.
-    """
+    if tiles == None:
+        tiles = dstsurf.get_tiles()
     for pos in tiles:
         dstsurf._mark_mipmap_dirty(*pos)
     bbox = lib.surface.get_tiles_bbox(tiles)

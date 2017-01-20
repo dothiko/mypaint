@@ -54,6 +54,7 @@ import lib.xml
 import lib.glib
 import lib.autosave
 import lib.projectsave
+import lib.surface
 
 
 ## Module constants
@@ -1969,14 +1970,40 @@ class Document (object):
         # Also, get the contents bounding box simultaneously.
         # And furthermore, remove empty tiles to avoid misconfiguration
         # of boundary box and layer placement.
-        # Without this, mypaint rejects transparent area when loading
-        # picture, then layer placement completely go wrong.
+        # 
+        # Without this 'empty tiles removal'... such problems happen.
+        # Usually, mypaint seems to remove transparent area when 
+        # loading picture. (but not every time? I dont know exactly...)
+        # Then layer placement might completely go wrong at projectsave,
+        # after 2nd time project load, when there is unmodified layer 
+        # which has meaningless large transparent area over leftmost canvas. 
+        # 
+        # This is because, actually it modified by removing transparent 
+        # area as memory surface at loading, but dirty flag unchanged,
+        # and of course, source png file still have transparent area.
+        #
+        # project-save functionality does not save layer to file
+        # when a layer is not dirty.
+        # As a result, that source png file does not changed at all
+        # even project-save has been executed.
+        # 
+        # But boundary box is calculated for a layer that has no useless 
+        # transparent tiles.
+        # so that layer placed wrong position after next loading.
+        #
+        # To avoid this, every dirty layer are removed its empty tiles
+        # in this loop.
         data_bbox = helpers.Rect()
         for s_path, s_layer in root_stack.walk():
             selected = (s_path == root_stack.current_path)
             if s_layer.project_dirty or force_write:
                 if hasattr(s_layer, '_surface'):
-                    s_layer._surface.remove_empty_tiles()
+                    # Just call s_layer._surface.remove_empty_tiles
+                    # does not work well.
+                    # It sometimes remove empty tiles well, 
+                    # but sometimes remove no tiles at all. 
+                    # So call finalize_surface function. this works.
+                    lib.surface.finalize_surface(s_layer._surface)
             s_layer.initially_selected = selected
             data_bbox.expandToIncludeRect(s_layer.get_bbox())
         data_bbox = tuple(data_bbox)
