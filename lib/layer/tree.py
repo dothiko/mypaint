@@ -34,6 +34,7 @@ import lib.cache
 from lib.modes import *
 import data
 import group
+from lib.projectsave import Projectsaveable
 
 
 ## Class defs
@@ -1943,6 +1944,12 @@ class RootLayerStack (group.LayerStack):
                 )
                 self.set_background(bg_pixbuf)
                 self._no_background = False
+
+                if 'project' in kwargs:
+                    self._unique_id = attrs.get(
+                            Projectsaveable.ORA_LAYERID_ATTR, 
+                            None
+                            )
                 return
             except tiledsurface.BackgroundError as e:
                 logger.warning('ORA background tile not usable: %r', e)
@@ -1954,6 +1961,7 @@ class RootLayerStack (group.LayerStack):
             x=x, y=y,
             **kwargs
         )
+
 
     ## Saving
 
@@ -1976,25 +1984,24 @@ class RootLayerStack (group.LayerStack):
         stack_elem.append(bg_elem)
         return stack_elem
 
-    def save_to_project(self, projdir, backupdir, path, canvas_bbox,
+    def save_to_project(self, projdir, path, canvas_bbox,
                            frame_bbox, force_write, **kwargs):
         """Saves the stack's data into an project directory"""
         stack_elem = super(RootLayerStack, self).save_to_project(
-            projdir, backupdir, path, canvas_bbox,
+            projdir, path, canvas_bbox,
             frame_bbox, force_write, **kwargs
         )
         # Save background
         bg_layer = self.background_layer
-        if bg_layer.project_dirty or force_write:
-            bg_layer.initially_selected = False
-            bg_path = (len(self),)
-            bg_elem = bg_layer.save_to_project(
-                projdir, backupdir, bg_path,
-                canvas_bbox, frame_bbox,
-                force_write,
-                **kwargs
-            )
-            stack_elem.append(bg_elem)
+        bg_layer.initially_selected = False
+        bg_path = (len(self),)
+        bg_elem = bg_layer.save_to_project(
+            projdir, bg_path,
+            canvas_bbox, frame_bbox,
+            force_write,
+            **kwargs
+        )
+        stack_elem.append(bg_elem)
         return stack_elem
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):

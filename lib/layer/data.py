@@ -204,11 +204,11 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         )
         # Read bitmap content into the surface
         attrs = elem.attrib
+
         src = attrs.get("src", None)
         src_rootname, src_ext = os.path.splitext(src)
         src_rootname = os.path.basename(src_rootname)
         src_ext = src_ext.lower()
-        self._src = src # To refer from project-type save functionality.
         x += int(attrs.get('x', 0))
         y += int(attrs.get('y', 0))
         logger.debug(
@@ -238,7 +238,13 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             x, y,
         )
 
-                            
+        # Postprocess for project loading
+        if 'project' in kwargs:
+            # Ensure self._filename is relative path
+            if os.path.isabs(src):
+                src = os.path.relpath(oradir, src)
+            self._filename = src
+            self._unique_id = attrs.get(self.ORA_LAYERID_ATTR, None)
 
     def _load_surface_from_oradir_member(self, oradir, cache_dir,
                                          src, feedback_cb, x, y):
@@ -306,6 +312,12 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
     def is_empty(self):
         """Tests whether the surface is empty"""
         return self._surface.is_empty()
+
+    def enum_filenames(self):
+        """Enum filenames which consists this layer.
+        This method used for project-save.
+        """
+        yield self.filename
 
     ## Flood fill
 
@@ -394,12 +406,12 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         return self._save_rect_to_ora(orazip, tmpdir, "layer", path,
                                       frame_bbox, rect, **kwargs)
 
-    def save_to_project(self, projdir, backupdir, path,
+    def save_to_project(self, projdir, path,
                            canvas_bbox, frame_bbox, 
                            force_write, **kwargs):
         """Saves the layer's data into an project directory"""
         rect = self.get_bbox()
-        return self._save_rect_to_project(projdir, backupdir, 
+        return self._save_rect_to_project(projdir,  
                                       frame_bbox, rect, force_write, **kwargs)
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
@@ -449,7 +461,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         
     @staticmethod
     def _make_refname(prefix, path, suffix, sep='-'):
-        """Internal: standardized filename for something wiith a path"""
+        """Internal: standardized filename for something with a path"""
         assert "." in suffix
         path_ref = sep.join([("%02d" % (n,)) for n in path])
         if not suffix.startswith("."):
@@ -481,7 +493,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         elem.attrib["src"] = storepath
         return elem
 
-    def _save_rect_to_project(self, projdir, backupdir,
+    def _save_rect_to_project(self, projdir, 
                           frame_bbox, rect, force_write, 
                           only_element = False,
                           **kwargs):
@@ -491,14 +503,10 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         :rtype ET.element: xml element which represents of this layer.
 
         CAUTION: THIS METHOD CLEARS project_dirty FLAG!!
-                 So you'll need to reserve the flag before call this method. 
+                 So you might need to reserve the flag 
+                 before call this method, under some circumstances. 
         """
-
-        pngname = self._get_source_filename()
-        png_relpath = os.path.join('data', pngname)
-        png_path = os.path.join(projdir, png_relpath)
         is_dirty = (self.project_dirty or force_write)
-
 
         # Return details
         png_bbox = tuple(rect)
@@ -508,18 +516,32 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         y = png_y - ref_y
         assert (x == y == 0) or not self._surface.looped
         elem = self._get_stackxml_element("layer", x, y)
+        elem.attrib[self.ORA_LAYERID_ATTR] = self.unique_id
+
+        if is_dirty:
+            # When this layer is dirty, force to save it into data/ dir
+            # of project.
+            # With this,we can avoid overwriting backedup version file.
+            pngname = "%s.png" % self.unique_id
+            png_relpath = os.path.join('data', pngname)
+            png_path = os.path.join(projdir, png_relpath)
+            elem.attrib["src"] = png_relpath
+        else:
+            # Otherwise, just use self.filename.
+            # It might be older version backedup file,
+            # placed below backup/, not data/.
+            png_relpath = self.filename
+
         elem.attrib["src"] = png_relpath
 
         if (not only_element and is_dirty):
             # Write PNG data via a tempfile
             logger.debug('layer %s of surface %r is marked as dirty or forced to write!', self.name , pngname)
-            lib.projectsave.init_backup(png_path, backupdir)
             t0 = time.time()
             self._surface.save_as_png(png_path, *rect, **kwargs)
             t1 = time.time()
             logger.debug('%.3fs surface saving %r', t1-t0, pngname)
             self.clear_project_dirty()
-
 
         return elem
 
@@ -734,6 +756,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         self._x = x
         self._y = y
 
+
     ## Snapshots & cloning
 
     def save_snapshot(self):
@@ -782,7 +805,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         elem.attrib["src"] = unicode(storepath)
         return elem
 
-    def save_to_project(self, projdir, backupdir, path,
+    def save_to_project(self, projdir, path,
                            canvas_bbox, frame_bbox, 
                            force_write, **kwargs):
         """Saves the working file to an project directory"""
@@ -797,22 +820,8 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         src_rootname, src_ext = os.path.splitext(src_path)
         src_ext = src_ext.lower()
 
-        # generate filepaths and copy it like queue_autosave, 
-        # but a bit differently.
-        final_basename = self._get_source_filename(ext=src_ext)
-
-        final_relpath = os.path.join("data", final_basename)
-        final_path = os.path.join(projdir, final_relpath)
-
-        if (self.project_dirty or not os.path.exists(final_path) or
-                force_write):
-            lib.projectsave.init_backup(src_path, backupdir)
-            shutil.copy(src_path, final_path)
-            logger.debug("filebacked layer copied from %s", final_relpath)
-            self.clear_project_dirty()
-
-        # Return details of what was written.
-        elem.attrib["src"] = unicode(final_relpath)
+        elem.attrib["src"] = self.workfilename
+        elem.attrib[self.ORA_LAYERID_ATTR] = self.unique_id
         return elem
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
@@ -859,6 +868,13 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         """
         self._ensure_valid_working_file()
         return unicode(self._workfile)      
+
+        
+    def enum_filenames(self):
+        """Enum filenames which consists this layer.
+        This method used for project-save.
+        """
+        yield self.workfilename
 
     ## Editing via external apps
 
@@ -1121,7 +1137,7 @@ class BackgroundLayer (SurfaceBackedLayer):
         elem.attrib[self.ORA_BGTILE_ATTR] = storename
         return elem
 
-    def save_to_project(self, projdir, backupdir, path,
+    def save_to_project(self, projdir, path,
                            canvas_bbox, frame_bbox, force_write, **kwargs):
         # Save as a regular layer for other apps.
         # Background surfaces repeat, so just the bit filling the frame.
@@ -1133,7 +1149,7 @@ class BackgroundLayer (SurfaceBackedLayer):
         # And, dirty flag cleared in following _save_rect_to_project()
         # so that flag is reserved at above line.
         elem = self._save_rect_to_project(
-            projdir, backupdir,
+            projdir, 
             frame_bbox, frame_bbox, False, 
             only_element=True, **kwargs
         )
@@ -1143,29 +1159,27 @@ class BackgroundLayer (SurfaceBackedLayer):
         x, y, w, h = self.get_bbox()
         rect = (x+x0, y+y0, w, h)
 
-        pngname = self._make_refname("background", path, "tile.png")
-        store_relpath = os.path.join('data', pngname)
-        storename = os.path.join(projdir, store_relpath)
-
         if is_dirty:
-            lib.projectsave.init_backup(storename, backupdir)
+            pngname = "%s.png" % self.unique_id
+            store_relpath = os.path.join('data', pngname)
+            storename = os.path.join(projdir, store_relpath)
             t0 = time.time()
             self._surface.save_as_png(storename, *rect, **kwargs)
             t1 = time.time()
             logger.debug('%.3fs surface saving %s', t1 - t0, store_relpath)
             self.clear_project_dirty()
+        else:
+            store_relpath = self.filename
 
         elem.attrib[self.ORA_BGTILE_LEGACY_ATTR] = store_relpath
         elem.attrib[self.ORA_BGTILE_ATTR] = store_relpath
+        elem.attrib['src'] = store_relpath # For compatibility with other apps.
         return elem
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
         """Queues the layer for auto-saving"""
         # Arrange for the tile PNG to be rewritten, if necessary
-        if self.src != None:
-            tilepng_basename = os.path.basename(self.src)
-        else:
-            tilepng_basename = self.autosave_uuid + "-tile.png"
+        tilepng_basename = self.autosave_uuid + "-tile.png"
         tilepng_relpath = os.path.join("data", tilepng_basename)
         manifest.add(tilepng_relpath)
         x0, y0 = bbox[0:2]
@@ -1406,6 +1420,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         )
         self._load_strokemap_from_ora(elem, x, y, oradir=oradir)
         self._load_expanded_attrs_from_ora(elem)
+
 
     def _load_strokemap_from_ora(self, elem, x, y, orazip=None, oradir=None):
         """Load the strokemap from a layer elem & an ora{zip|dir}."""
@@ -1656,28 +1671,30 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         self._save_expanded_attrs_to_ora(elem)
         return elem
 
-    def save_to_project(self, projdir, backupdir, path,
+    def save_to_project(self, projdir, path,
                            canvas_bbox, frame_bbox, force_write, **kwargs):
         """Save the strokemap too, in addition to the base implementation"""
         # Save the layer normally
 
+        # CAUTION: prefetch dirty flag here, before supercall.
+        # because supercall of save_to_project() might
+        # clear the dirty flag of the layer.
         dirty_flag = self.project_dirty or force_write
 
         elem = super(PaintingLayer, self).save_to_project(
-            projdir, backupdir, path,
+            projdir, path,
             canvas_bbox, frame_bbox, force_write, **kwargs
         )
-        # Store stroke shape data too
-        # TODO we'll need unified version of _get_source_filename()
-        # for here...
-        dat_basename = self._get_source_filename(
-                ext=None,
-                formatstr=u"%s-strokemap.dat")
-        dat_relpath = os.path.join('data', dat_basename)
-        dat_path = os.path.join(projdir, dat_relpath)
 
+        # self.filename should be rewritten at 
+        # prior supercall of save_to_project(),
+        # so _get_strokemap_filename() returns 
+        # the exact (relative)filepath everytime.
+        dat_relpath = self._get_strokemap_filename()
+
+        # Store stroke shape data.
         if dirty_flag:
-            lib.projectsave.init_backup(dat_path, backupdir)
+            dat_path = os.path.join(projdir, dat_relpath)
             x, y, w, h = self.get_bbox()
             t0 = time.time()
             with open(dat_path , 'w') as fp:
@@ -1689,18 +1706,14 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         # See comment above for compatibility strategy.
         elem.attrib[self._ORA_STROKEMAP_ATTR] = dat_relpath
         elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = dat_relpath
+        elem.attrib[self.ORA_LAYERID_ATTR] = self.unique_id
         # Add expanded attributes
         self._save_expanded_attrs_to_ora(elem)
         return elem
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
         """Queues the layer for auto-saving"""
-        if self.src != None:
-            basename, ext = os.path.splitext(os.path.basename(self.src))
-            dat_basename = u"%s-strokemap.dat" % basename
-        else:
-            dat_basename = u"%s-strokemap.dat" % (self.autosave_uuid,)
-            
+        dat_basename = u"%s-strokemap.dat" % (self.autosave_uuid,)
         dat_relpath = os.path.join("data", dat_basename)
         dat_path = os.path.join(oradir, dat_relpath)
         # Have to do this before the supercall because that will clear
@@ -1737,6 +1750,20 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
     def get_icon_name(self):
         return "mypaint-layer-painting-symbolic"
+
+    def enum_filenames(self):
+        """Enum filenames which consists this layer.
+        This method used for project-save.
+        """
+        yield self.filename
+        yield self._get_strokemap_filename()
+
+    def _get_strokemap_filename(self):
+        """Get strokemap filename according to self.filename.
+        """
+        # By splitext, we can get directory component + basename
+        srcbase, junk = os.path.splitext(self.filename)
+        return "%s-strokemap.dat" % srcbase
 
     ## Editing via external apps
 

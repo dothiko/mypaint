@@ -16,7 +16,7 @@
           <menuitem action='SaveAsProject'/>
           <menuitem action='SaveProjectAsNewVersion'/>
           <separator/>
-          <menuitem action='RevertProject'/>
+          <menuitem action='ManageProject'/>
       </menu>
       <separator/>
       <menuitem action='Save'/>

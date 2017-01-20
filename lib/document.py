@@ -1426,36 +1426,6 @@ class Document (object):
             "basename": os.path.basename(filename),
         }
 
-        ext = None
-        self._is_project = False
-        if not os.path.isfile(filename):
-            # Filename is not file.
-            # But it might be oradir(project)...
-            dirname = filename
-            xmlname = os.path.join(dirname, 'stack.xml')
-            thumbpath = os.path.join(dirname, 'Thumbnails')
-            datapath = os.path.join(dirname, 'data')
-            if (os.path.exists(xmlname) and
-                    os.path.exists(thumbpath) and
-                    os.path.exists(datapath) ):
-                # It might be oradir!
-                with open(xmlname, 'rt') as ifp:
-                    elem = ET.fromstring(ifp.read())
-                    # ElementTree cannot get 'xmlns' namespace attr
-                    # so substitute frame-active attribute for it.
-                    # (But 'lxml' can do this..?)
-                    if ('{http://mypaint.org/ns/openraster}frame-active' in 
-                            elem.attrib):
-                        ext = "project"
-                        kwargs['elem'] = elem
-
-            if ext == None:
-                msg = C_(
-                    "Document IO: loading errors",
-                    u"{error_loading_common}\n"
-                    u"The file does not exist."
-                ).format(**error_kwargs)
-                raise FileHandlingError(msg)
 
         if not os.access(filename, os.R_OK):
             msg = C_(
@@ -1466,9 +1436,38 @@ class Document (object):
             ).format(**error_kwargs)
             raise FileHandlingError(msg)
 
-        if not ext:
+        ext = None
+        self._is_project = False
+        if not os.path.isfile(filename):
+            # Filename is not file.
+            # But it might be oradir(project)...
+            dirname = filename
+            xmlname = os.path.join(dirname, 'stack.xml')
+            thumbpath = os.path.join(dirname, 'Thumbnails',
+                    'thumbnail.png')
+            datapath = os.path.join(dirname, 'data')
+            if (os.path.exists(xmlname) and
+                    os.path.exists(thumbpath) and
+                    os.path.exists(datapath) ):
+                # It must be something oradir type directory.
+                # But, currently oradir supported 
+                # autosave and project-save only.
+                # And, autosaved contents should be loaded
+                # from resume_from_autosave(), not from load().
+                # so, It must be 'project' directory.
+                ext = "project"
+
+        elif os.path.exists(filename):
             junk, ext = os.path.splitext(filename)
             ext = ext.lower().replace('.', '')
+
+        if ext == None:
+            msg = C_(
+                "Document IO: loading errors",
+                u"{error_loading_common}\n"
+                u"The file does not exist."
+            ).format(**error_kwargs)
+            raise FileHandlingError(msg)
 
         load_method_name = 'load_' + ext
         load_method = getattr(self, load_method_name, self._unsupported)
@@ -1719,9 +1718,22 @@ class Document (object):
         The oradir folder is treated as read-only during this operation.
 
         """
-        with open(os.path.join(oradir, "mimetype"), "r") as fp:
-            logger.debug('mimetype: %r', fp.read().strip())
-        doc = ET.parse(os.path.join(oradir, "stack.xml"))
+        doc = None
+        if 'project' in kwargs:
+            if 'target_version' in kwargs:
+                targ_ver = kwargs['target_version']
+                verinfo = kwargs['version_info']
+                doc = verinfo.convert_xml_as_version(targ_ver)
+
+            # project directory has no mimetype file.
+            # so no debug output.
+        else:
+            with open(os.path.join(oradir, "mimetype"), "r") as fp:
+                logger.debug('mimetype: %r', fp.read().strip())
+
+        if doc == None:
+            doc = ET.parse(os.path.join(oradir, "stack.xml"))
+
         image_elem = doc.getroot()
         width = max(0, int(image_elem.attrib.get('w', 0)))
         height = max(0, int(image_elem.attrib.get('h', 0)))
@@ -1765,6 +1777,16 @@ class Document (object):
     def is_project(self):
         return self._is_project
 
+    @property
+    def project_version(self):
+        if hasattr(self, "_version"):
+            return self._version
+        return 0
+
+    @project_version.setter
+    def project_version(self, version_num):
+        self._version = version_num
+
     def save_project(self, dirname, **kwargs):
         """ save current document as a project
 
@@ -1775,8 +1797,6 @@ class Document (object):
         """
         t0 = time.time()
         logger.debug("projectsave started")
-        backupdir = None # Disabled backup for new project
-        project_revision = str(int(t0))
         force_write = (not os.path.exists(dirname) or 
                         ('init_project' in kwargs and kwargs['init_project'] == True))
 
@@ -1787,100 +1807,76 @@ class Document (object):
             logger.info('project copy processor still have pending works. it is forced to finish.')
             self._projectsave_processor.finish_all()
 
-        try:
-            
-            if (kwargs != None):
+        try:# Actually, this 'try' is to use 'finally' section.
 
-                if 'source_dir' in kwargs:
-                    # This document is a project and assigned to 'save as 
-                    # another project'
-                    # this means "copy entire project into another directory"
-                    
-                    # so,simply copy all layer images.
-                    # With calling self._queue_autosave_writes() in advance,
-                    # changed layer with stroke maps are already written.
-                    # And file existence is checked in _project_copy_cb(),
-                    # so overwritten with old one does not happen.
+            assert kwargs != None
 
-                    logger.info("copy save of project is initiated.")
+            if 'source_dir' in kwargs:
+                # This document is a project and assigned to 'save as 
+                # another project'
+                # this means "copy entire project into another directory"
+                
+                # so,simply copy all layer images.
+                # With calling self._queue_autosave_writes() in advance,
+                # changed layer with stroke maps are already written.
+                # And file existence is checked in _project_copy_cb(),
+                # so overwritten with old one does not happen.
 
-                    source_dir = kwargs['source_dir']
+                logger.info("copy save of project is initiated.")
 
-                    destdirname = os.path.join(dirname, 'data')
-                                    
-                    for path, cl in self.layer_stack.walk():
-                        if not cl.project_dirty:
-                            cl.backup(destdirname)
-                        else:
-                            logger.info('%s has marked as dirty,so not copied', cl.name)
+                source_dir = kwargs['source_dir']
 
-                    # fallthrough.
+                destdirname = os.path.join(dirname, 'data')
+                                
+                for path, cl in self.layer_stack.walk():
+                    if not cl.project_dirty:
+                        cl.backup(destdirname)
+                    else:
+                        logger.info('%s has marked as dirty,so not copied', cl.name)
 
-                elif 'backup_dir' in kwargs:
-                    # This document is backuped as current state.
-                    # i.e. Entire document files are copied as current state.
+                # fallthrough.
 
-                    # All 'previous' (which are changed,dirty) layers are 
-                    # copied into the backup directory,prior to 
-                    # copying unchanged layers.
-                    #
-                    # Actually, unchanged layers are 'copied' as hard-link, in *nux
-                    # by os.link() function.
-
-                    lt = time.localtime()
-                    backup_base = "%04d-%02d-%02d" % lt[0:3] # YEAR-MONTH-DAY
-                    backup_current = "%02d-%02d-%02d" % lt[3:6] # HOUR-MIN-SEC
-                    backupdir = os.path.join(dirname, 'backup', 
-                            backup_base, backup_current)
-
-                    if not os.path.exists(backupdir):
-                        os.makedirs(backupdir)       
-                        logger.info('backup directory %s created.' % backupdir)
-
-                    # First of all, stack.xml and thumbnails/thumbnail.png
-                    # MUST be copied, prior to project-save.
-                    # Because they are always overwritten.
-                    for cpath in ('stack.xml', 
-                            os.path.join('Thumbnails', 'thumbnail.png')):
-                        cpath = os.path.join(dirname, cpath)
-                        if os.path.exists(cpath):
-                            shutil.copy(cpath, backupdir)
-                        else:
-                            logger.warning('Essential file %s does not exist.' % cpath)
-
-                    backup_layers = []
-
-                    for path, cl in self.layer_stack.walk():
-                        if cl.project_dirty or force_write:
-                            cl.backup(backupdir, dirname, move_file=True) # backup it NOW.
-                        else:
-                            backup_layers.append(cl) # backup it later, asynchronously. 
-
-                    self._projectsave_processor.add_work(
-                        lib.projectsave.do_backup,
-                        backup_layers,
-                        backupdir,
-                        dirname
-                    )
-     
-                    # fallthrough.
 
             # All preprocess has done.
-            # Then do the project writing.
+            # Then write the project into storage.
+            # Currently, this is syncronous processing,
+            # not autosave like asyncronous one.
+            # Because if there are something drawing in layers,
+            # it might change bbox, and might damage entire document.
+            # (such as misplaced layers)
             frame_bbox = None
             if self.frame_enabled:
                 frame_bbox = tuple(self.get_frame())
-            self._project_write(dirname, backupdir,
+            self._project_write(dirname, 
                     xres=self._xres if self._xres else None,
                     yres=self._yres if self._yres else None,
                     bbox=frame_bbox,
                     frame_active = self.frame_enabled,
                     force_write = force_write,
                     **kwargs)
+
+
+            if 'create_version' in kwargs:
+                # In this case,
+                # Writed project should be marked as new version
+                # right after writing is finished.
+
+                versave = lib.projectsave.Versionsave(dirname)
+
+                # Create new version
+                versave.proceed()
+
+                # Inside queue_backup_layers method,
+                # file-copying idle tasks would be added.
+                versave.queue_backup_layers(
+                        self._projectsave_processor,
+                        self.layer_stack)
+
+
         finally:
             t1 = time.time()
             logger.debug('projectsave ended in %.3fs', t1-t0)
-            self._project_revision = project_revision
+            self._version = 0 
             self._is_project = True
 
 
@@ -1896,15 +1892,22 @@ class Document (object):
         self._is_project = True
         self._autosave_dirty = False
 
+
         try:
+
             if not os.path.exists(os.path.join(dirname, 'stack.xml')):
                 raise ValueError
 
-            self._load_from_project_dir(
+            if 'version' in kwargs:
+                self._version = int(kwargs['version'])
+
+            kwargs['project'] = True
+            self._load_from_openraster_dir(
                 dirname,
                 app_cache_dir,
                 feedback_cb=feedback_cb,
                 retain_autosave_info=False,
+                **kwargs
             )
         except Exception as e:
             # Assign a valid *new* cache dir before bailing out.
@@ -1933,69 +1936,7 @@ class Document (object):
             for pos, cl in self.layer_stack.walk():
                 cl.clear_project_dirty()
 
-    def _load_from_project_dir(self, projdir, cache_dir, feedback_cb=None,
-                                  retain_autosave_info=False, **kwargs):
-        """Load from an project folder.
-
-        This method is MOSTLY same as _load_from_openraster_dir(). 
-        the difference is:
-            * call layer_stack.load_from_project_dir(),
-              instead of load_from_openraster_dir()
-
-        :param unicode projdir: Directory with a .ORA-like structure
-        :param unicode cache_dir: Doc cache for storing layer revs etc.
-        :param callable feedback_cb: Called every so often for feedback
-        :param bool retain_autosave_info: Restore unsaved time etc.
-        :param \*\*kwargs: Passed through to layer loader methods.
-
-        The oradir folder is treated as read-only during this operation.
-
-        """
-       #with open(os.path.join(projdir, "mimetype"), "r") as fp:
-       #    logger.debug('mimetype: %r', fp.read().strip())
-        doc = ET.parse(os.path.join(projdir, "stack.xml"))
-        image_elem = doc.getroot()
-        width = max(0, int(image_elem.attrib.get('w', 0)))
-        height = max(0, int(image_elem.attrib.get('h', 0)))
-        xres = max(0, int(image_elem.attrib.get('xres', 0)))
-        yres = max(0, int(image_elem.attrib.get('yres', 0)))
-
-        # Delegate layer loading to the layers tree.
-        root_stack_elem = image_elem.find("stack")
-        self.layer_stack.clear()
-        self.layer_stack.load_from_project_dir(
-            projdir,
-            root_stack_elem,
-            cache_dir,
-            feedback_cb,
-            x=0, y=0,
-            **kwargs
-        )
-        assert len(self.layer_stack) > 0
-        if retain_autosave_info:
-            self.unsaved_painting_time = max(0.0, float(
-                image_elem.attrib.get(_ORA_UNSAVED_PAINTING_TIME_ATTR, 0.0)
-            ))
-        # Resolution information if specified
-        # Before frame to benefit from its observer call
-        if xres and yres:
-            self._xres = xres
-            self._yres = yres
-        else:
-            self._xres = None
-            self._yres = None
-        # Set the frame size to that saved in the image.
-        self.update_frame(x=0, y=0, width=width, height=height,
-                          user_initiated=False)
-        # Enable frame if the image was saved with its frame active.
-        frame_enab = lib.xml.xsd2bool(
-            image_elem.attrib.get(_ORA_FRAME_ACTIVE_ATTR, "false"),
-        )
-        self.set_frame_enabled(frame_enab, user_initiated=False)
-
-
-
-    def _project_write(self, dirname, backupdir,
+    def _project_write(self, dirname, 
             xres=None,yres=None,
             bbox=None,
             frame_active=False, force_write=False, 
@@ -2018,14 +1959,18 @@ class Document (object):
             os.mkdir(dirname)
             force_write = True
 
-        # Creating sub directories
+        # Ensure sub directories
         for subdir in ('Thumbnails', 'data', 'backup'): 
             subpath = os.path.join(dirname, subdir)
             if not os.path.exists(subpath):
                 os.mkdir(subpath)
 
-        # Update the initially-selected flag on all layers
-        # Also get the data bounding box as we go
+        # Update the initially-selected flag on all layers.
+        # Also, get the contents bounding box simultaneously.
+        # And furthermore, remove empty tiles to avoid misconfiguration
+        # of boundary box and layer placement.
+        # Without this, mypaint rejects transparent area when loading
+        # picture, then layer placement completely go wrong.
         data_bbox = helpers.Rect()
         for s_path, s_layer in root_stack.walk():
             selected = (s_path == root_stack.current_path)
@@ -2045,7 +1990,7 @@ class Document (object):
         image.attrib['h'] = str(h0)
         root_stack_path = ()
         root_stack_elem = root_stack.save_to_project(
-            dirname, backupdir, root_stack_path,
+            dirname, root_stack_path,
             data_bbox, bbox, force_write, 
             **kwargs
         )

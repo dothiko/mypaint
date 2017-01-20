@@ -100,6 +100,7 @@ import stamptool
 import selectionmode
 import stampeditor
 import exinktool
+import projectmanager
 
 ## Utility methods
 
@@ -375,6 +376,7 @@ class Application (object):
             "InputTestWindow": inputtestwindow.InputTestWindow,
             "BrushIconEditorWindow": brushiconeditor.BrushIconEditorWindow,
             "StampEditorWindow": stampeditor.StampEditorWindow,
+            "ProjectManagerWindow": projectmanager.ProjectManagerWindow,
             }
         self._subwindows = {}
 
@@ -763,6 +765,11 @@ class Application (object):
     def stamp_editor_window(self):
         """The stamp editor window."""
         return self.get_subwindow("StampEditorWindow")
+
+    @property
+    def project_manager_window(self):
+        """The project manager window."""
+        return self.get_subwindow("ProjectManagerWindow")
 
     def get_subwindow(self, name):
         """Get a subwindow by its name."""

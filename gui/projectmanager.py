@@ -8,10 +8,12 @@
 from __future__ import print_function
 
 import os
-import datetime
+import time
 import xml.etree.ElementTree as ET
 import logging
 logger = logging.getLogger(__name__)
+import glob
+import weakref
 
 from lib.gettext import C_
 from gettext import gettext as _
@@ -26,27 +28,25 @@ import cairo
 
 from windowing import SubWindow
 import gui.stamps
+import gui.dialogs
+import lib.projectsave
 
 ## Class definitions
-class _Visiblity:
-    """Enumeration of visibility state of each version-directory"""
-    NORMAL = 0
-    IGNORE = 1
-    ALWAYS_VISIBLE = 2  
-
 class _Store_index:
     """Enumeration of contents-index at Liststore"""
     SURF=0
     DATE=1
-    IGNORESTATUS=2
+    VISIBLESTATUS=2
     DESC=3
-    PATH=4
-    ID=5
+    VER=4
 
-class _Version_id:
-    """Enumeration of special version-id """
-    CURRENT = -1
-    BASE = 0
+
+_THUMBNAIL_WIDTH = 128
+_THUMBNAIL_HEIGHT = 90
+
+_ICON_COLOR = (0.4, 0.4, 0.4, 1.0)
+
+_CURRENT_VERSION_NUM = 0
 
 class VersionStoreWrapper(object):
     """Version Store wrapper, used from version listview"""
@@ -58,15 +58,17 @@ class VersionStoreWrapper(object):
     # that version would be ignored.
     IGNORE_FILE_NAME = 'ignore-this'
 
-    def __init__(self):
+    def __init__(self, version_info, dirname):
 
-        basestore = Gtk.ListStore(object, str, int, str, str, int)
+        basestore = Gtk.ListStore(object, str, bool, str, int)
         self._basestore = basestore
 
         self._store = basestore.filter_new()
         self._store.set_visible_func(self.visible_func_cb)
-        self._id_seed = _Version_id.BASE
         self._show_all = False
+        self.version_info = weakref.proxy(version_info)
+
+        self._load_from_directory(dirname)
 
     @property
     def liststore(self):
@@ -80,12 +82,24 @@ class VersionStoreWrapper(object):
     def show_all(self, flag):
         self._show_all = flag
 
+    @property
+    def invalid_thumbnail(self):
+        if not hasattr(self, '_invalid_thumbnail'):
+            pixbuf = gui.drawutils.load_symbolic_icon(
+                icon_name="mypaint-layer-fallback-symbolic",
+                size=min(_THUMBNAIL_WIDTH, _THUMBNAIL_HEIGHT),
+                fg=_ICON_COLOR,
+            )
+            surf = Gdk.cairo_surface_create_from_pixbuf(pixbuf, 1, None)
+            self._invalid_thumbnail = surf
+        return self._invalid_thumbnail
+
     def visible_func_cb(self, model, iter, data):
         """ The visible filter callback for Gtk.TreeModelFilter.
         """ 
         retflag = False
-        status = model[iter][_Store_index.IGNORESTATUS]
-        retflag |= (status != _Visiblity.IGNORE or self._show_all)
+        status = model[iter][_Store_index.VISIBLESTATUS]
+        retflag |= (status or self._show_all)
         return retflag
 
     def remove(self, iter, actually_delete=False):
@@ -96,13 +110,13 @@ class VersionStoreWrapper(object):
             ignore when walking backup directory at initialize.
         """
         store = self._store
-        id = store.get_value(iter, _Store_index.ID)
+        ver_num = store.get_value(iter, _Store_index.VER)
         path = store.get_value(iter, _Store_index.PATH)
         store.remove(iter)
 
         # Remove directory...!
         if actually_delete:
-            logger.warning("Deleting version directory is not implemented yet.")
+            logger.warning("Deleting version is not implemented yet.")
         else:
             ignore_flag_file = os.path.join(path, self.IGNORE_FILE_NAME)
             if not os.path.exists(ignore_flag_file):
@@ -112,63 +126,48 @@ class VersionStoreWrapper(object):
     def get_surface(self, iter):
         return self._store[iter]
 
-    def load_from_directory(self, dirname):
+    def _load_from_directory(self, dirname):
         """Load all versions
         """
-        def append_store(fname, datestr, status, desc, dirpath, id=None):
-            assert os.path.exists(fname)
-            surf = cairo.ImageSurface.create_from_png(fname)
-            if id == None:
-                id = self._id_seed
-                self._id_seed += 1
-
-            self._basestore.append((surf, datestr, status, desc, dirpath, id))
+        def append_store(thumbpath, datestr, status, desc, vernum):
+            if os.path.exists(thumbpath):
+                surf = cairo.ImageSurface.create_from_png(thumbpath)
+            else:
+                surf = self.invalid_thumbnail
+            self._basestore.append((surf, datestr, status, 
+                desc, vernum))
 
         thumbnail_path = os.path.join(dirname, 'Thumbnails', 'thumbnail.png')
         append_store(thumbnail_path, _("Current version"), 
-                _Visiblity.ALWAYS_VISIBLE,
-                "", dirname, _Version_id.CURRENT) 
+                True,
+                "", _CURRENT_VERSION_NUM) 
 
+        vinfo = self.version_info
         backupdir = os.path.join(dirname, 'backup')
         if os.path.exists(backupdir):
-            for cdir in os.listdir(backupdir):
+            xmls = glob.glob(os.path.join(backupdir,"stack.xml.*"))
+            xmls.sort(reverse=True)
+            for cxml in xmls:
+                stinfo = os.stat(cxml)
+                mod_date = time.localtime(stinfo.st_mtime)
+                datestr = time.strftime("%c", mod_date)
+
+                # Extract version number as file-extension.
+                junk, ver_num = os.path.splitext(cxml)
                 try:
-                    datebase = [int(x) for x in cdir.split('-')]
-                    if len(datebase) == 0:
-                        raise ValueError
+                    ver_num = int(ver_num[1:])
                 except ValueError:
-                    logger.error("failed to convert directory base to integer array.")
+                    logger.error("%s is not version xml" % cxml)
                     continue
 
-                basedir = os.path.join(backupdir, cdir)
-                for cdir in os.listdir(basedir):
 
-                    status = _Visiblity.NORMAL
+                thumbnail_path = os.path.join(backupdir, 
+                        'thumbnail.png.%d' % ver_num)
 
-                    ignore_flag_file = os.path.join(basedir, cdir, self.IGNORE_FILE_NAME)
-                    if os.path.exists(ignore_flag_file):
-                        status = _Visiblity.IGNORE
+                desc = vinfo.get_description(ver_num)
+                status = vinfo.get_visible_status(ver_num)
+                append_store(thumbnail_path, datestr, status, desc, ver_num) 
 
-                    try:
-                        datetail = [int(x) for x in cdir.split('-')]
-                        if len(datetail) == 0:
-                            raise ValueError
-                    except ValueError:
-                        logger.error("failed to convert directory tail to integer array.")
-                        continue
-
-                    thumbnail_path = os.path.join(basedir, cdir, 'thumbnail.png')
-                    datesrc = [int(x) for x in datebase + datetail]
-                    dateobj = datetime.datetime(*datesrc)
-                    datestr = dateobj.strftime("%c")
-
-                    descpath = os.path.join(basedir, cdir, "desc.txt")
-                    desc = ""
-                    if os.path.exists(descpath):
-                        with open(descpath, 'rt') in ifp:
-                            desc = ifp.read()
-
-                    append_store(thumbnail_path, datestr, status, desc, cdir, status) 
 
 
 
@@ -177,9 +176,6 @@ class ThumbnailRenderer(Gtk.CellRenderer):
     """renderer used from version thumbnail"""
 
     surface = GObject.property(type=GObject.TYPE_PYOBJECT, default=None)
-   #id = GObject.property(type=int , default=-1)
-   #desc = GObject.property(type=str, default="")
-
     def __init__(self):
         super(ThumbnailRenderer, self).__init__()
 
@@ -221,10 +217,6 @@ class ThumbnailRenderer(Gtk.CellRenderer):
         cr.set_source_surface(surf, sx , sy)
         cr.rectangle(sx, sy, sw, sh)
 
-       #cr.rectangle(0, 0,
-       #        cell_area.width, cell_area.height)
-       #
-       #cr.set_source_surface(self.surface)
         cr.fill()
         cr.restore()
 
@@ -245,12 +237,12 @@ class ThumbnailRenderer(Gtk.CellRenderer):
     def do_get_size(self, view_widget, cell_area):
         if cell_area != None:
             print(cell_area)
-        return (0, 0, 128, 80)
+        return (0, 0, _THUMBNAIL_WIDTH, _THUMBNAIL_HEIGHT)
 
 class IgnorestateRenderer(Gtk.CellRenderer):
     """Renderer to be draw Status bitflags """
 
-    status = GObject.property(type=int, default=0)
+    status = GObject.property(type=bool, default=0)
     VISIBLE_ICON = None
     INVISIBLE_ICON = None
     ICON_SIZE = 32
@@ -289,7 +281,7 @@ class IgnorestateRenderer(Gtk.CellRenderer):
             pixbuf = gui.drawutils.load_symbolic_icon(
                 icon_name="mypaint-object-hidden-symbolic",
                 size=cls.ICON_SIZE,
-                fg=(0, 0, 0, 1),
+                fg=_ICON_COLOR,
             )
             cls.INVISIBLE_ICON = Gdk.cairo_surface_create_from_pixbuf(pixbuf, 1, None)
 
@@ -307,13 +299,11 @@ class IgnorestateRenderer(Gtk.CellRenderer):
                 cell_area.width, cell_area.height)
         cr.fill()
 
-        status = self.status
-        if status == _Visiblity.IGNORE:
+        visible = self.status
+        if not visible:
             surf = self.invisible_icon_surface
-        elif status == _Visiblity.NORMAL:
-            surf = self.visible_icon_surface
         else:
-            return # no draw for _Visiblity.ALWAYS_VISIBLE
+            surf = self.visible_icon_surface
 
         cr.save()
         sw = surf.get_width()
@@ -363,7 +353,7 @@ class ProjectManagerWindow (SubWindow):
             "Project Manager",
         ))
         self._buttons = {}
-        self._version_list_store_wrapper = None
+        self._store_wrapper = None
 
         self._builder = Gtk.Builder()
         self._builder.set_translation_domain("mypaint")
@@ -400,18 +390,27 @@ class ProjectManagerWindow (SubWindow):
         self._version_list = view
 
         thumbrender = ThumbnailRenderer()
-        col = Gtk.TreeViewColumn(_('Thumbnail'), thumbrender, surface=0)
+        col = Gtk.TreeViewColumn(_('Thumbnail'), thumbrender, 
+                                 surface=_Store_index.SURF)
         col.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
         col.set_resizable(True)
         view.append_column(col)
 
         renderer = Gtk.CellRendererText()
-        col = Gtk.TreeViewColumn(_('Date'), renderer, text=1)
+        col = Gtk.TreeViewColumn(_('Date'), renderer, 
+                                 text=_Store_index.DATE)
+        col.set_resizable(True)
+        view.append_column(col)
+
+        renderer = Gtk.CellRendererText()
+        col = Gtk.TreeViewColumn(_('Description'), renderer, 
+                                 text=_Store_index.DESC)
         col.set_resizable(True)
         view.append_column(col)
 
         renderer = IgnorestateRenderer()
-        col = Gtk.TreeViewColumn(_('Ignore'), renderer, status=2)
+        col = Gtk.TreeViewColumn(_('Ignore'), renderer, 
+                                 status=_Store_index.VISIBLESTATUS)
         col.set_resizable(True)
         self._status_column = col
         
@@ -452,33 +451,39 @@ class ProjectManagerWindow (SubWindow):
             w.set_sensitive(False)
             self._buttons[b_name] = w
 
-       #self._buttons['revert_button'].set_sensitive(self._stamp.dirty)
-       #self._buttons['delete_button'].set_sensitive(self._stamp.dirty)
-
-        # For unit testing.
-        if __name__ == '__main__':
-            self.connect('hide', self.close_window_cb)
+        self.connect('hide', self.hide_window_cb)
 
         self.set_size_request(self._DEFAULT_WIDTH, self._DEFAULT_HEIGHT)
         self._updating_ui = False
     
 
-    def set_directory(self, projdir):
+    def set_directory(self, projdir, filehandler):
         """ Set target directory, which should contain 
         stack.xml and backuped versions directory.
         """
-        old = None
-        if self._version_list_store_wrapper:
-            old = self._version_list_store_wrapper
+        if self._store_wrapper:
+            del self._store_wrapper
+            self._store_wrapper = None
 
-        wrapper = VersionStoreWrapper()
-        wrapper.load_from_directory(projdir)
-        wrapper.liststore.connect("row-deleted", self.version_store_deleted_cb)
-        wrapper.liststore.connect("row-inserted", self.version_store_inserted_cb)
-        self._version_list_store_wrapper = wrapper
+        if filehandler:
+            self._filehandler = weakref.ref(filehandler)
+        else:
+            self._filehandler = None
 
-        if old:
-            del old
+        self.project_dir = projdir
+
+        if projdir == None:
+            self.version_info = None
+            return
+
+        version_info = lib.projectsave.Versionsave(projdir)
+        wrapper = VersionStoreWrapper(version_info, projdir)
+        wrapper.liststore.connect("row-deleted", 
+                                  self.version_store_deleted_cb)
+        wrapper.liststore.connect("row-inserted", 
+                                  self.version_store_inserted_cb)
+        self._store_wrapper = wrapper
+        self.version_info = version_info
 
         self._modified = False
         self._version_list.set_model(wrapper.liststore)
@@ -491,47 +496,135 @@ class ProjectManagerWindow (SubWindow):
         self.project_name.set_text(projname)
         self.directory_label.set_text(projdir)
 
-        return wrapper
-    
+        # This window is modal, to 
+        self.set_modal(True)
+
     def _post_show_cb(self, widget):
         return
+
+    @property
+    def filehandler(self):
+        if self._filehandler:
+            return self._filehandler()
+        else:
+            return None
 
     ## Main action buttons
 
     def revert_button_clicked_cb(self, button):
         """Revert project to currently selected version
         """
-        pass
+        selection = self._version_list.get_selection()
+        store, iter = selection.get_selected()
+        if not iter:
+            return
+        
+        version_info = self.version_info
+        target_version = store[iter][_Store_index.VER]
+
+        filehandler = self.filehandler
+        if filehandler:
+            model = filehandler.doc.model
+            assert model.is_project
+            assert target_version != model.project_version
+
+            save_before_revert = False
+
+            if model.unsaved_painting_time > 0: 
+                save_before_revert = gui.dialogs.confirm(
+                        self,
+                        _("There is unsaved painting work.\n"
+                        "Backup current unsaved document as new version,"
+                        "before revert?"),
+                        )
+
+            elif (model.project_version == 0 and 
+                    not version_info.is_current_document_backedup()):
+                save_before_revert = gui.dialogs.confirm(
+                        self,
+                        _("Current document is not backedup yet.\n"
+                        "If you overwrite document with reverted one,\n"
+                        "You will lost current document.\n"
+                        "Backup current document as new version,"
+                        "before revert?"),
+                        )
+
+
+            if save_before_revert:
+                filehandler.save_project_as_new_version_cb(None)
+                # Recreate version info, to update new version information
+                version_info = lib.projectsave.Versionsave(
+                        self.project_dir)
+
+                version_info.set_description(
+                        version_info.version_num,
+                        _("Automatically created revision,"
+                          "before revert to version %d." % target_version)
+                        )
+
+                                        
+
+
+            prefs = filehandler.app.preferences
+            display_colorspace_setting = prefs["display.colorspace"]
+            if target_version != _CURRENT_VERSION_NUM:
+                model.load(
+                    filehandler.filename,
+                    feedback_cb=filehandler.gtk_main_tick,
+                    convert_to_srgb=(display_colorspace_setting == "srgb"),
+                    target_version=target_version,
+                    version_info=self.version_info
+                )
+            else:
+                model.load(
+                    filehandler.filename,
+                    feedback_cb=filehandler.gtk_main_tick,
+                    convert_to_srgb=(display_colorspace_setting == "srgb"),
+                )
+            model.project_version = target_version
+                
+            # Do not forget to record version information.
+            version_info.finalize()
+
+            # version_info is basically same as self.version_info
+            # but it might be changed inside this method.
+            # so update it.
+            self.version_info = version_info
+            
+        self.hide()
 
     def delete_button_clicked_cb(self, button):
         """Delete a currently selected version"""
         selection = self._version_list.get_selection()
         store, iter = selection.get_selected()
         if iter != None:
-            self._version_list_store_wrapper.remove(iter)
+            self._store_wrapper.remove(iter)
 
     def ignore_button_clicked_cb(self, button):
         selection = self._version_list.get_selection()
         store, iter = selection.get_selected()
         if iter != None:
-            dstidx = _Store_index.IGNORESTATUS
-            ignore_flag = 1
-            status = store[iter][dstidx]
+            ver_num = store[iter][_Store_index.VER]
+            if ver_num > 0:
+                dstidx = _Store_index.VISIBLESTATUS
+                status = store[iter][dstidx]
+                store[iter][dstidx] = not status
 
-            if status == _Visiblity.IGNORE: 
-                status = _Visiblity.NORMAL
-            elif status == _Visiblity.NORMAL:
-                status = _Visiblity.IGNORE
-
-            store[iter][dstidx] = status
+    def cancel_button_clicked_cb(self, button):
+        self.hide()
 
     ## window handlers
 
-    def close_window_cb(self, widget):
+    def hide_window_cb(self, widget):
         """For unit testing only.
+        Actually this callback is not binded.
         """ 
-        assert __name__ == '__main__'
-        Gtk.main_quit()
+        self.set_modal(False)
+        self.set_directory(None, None)
+
+        if __name__ == '__main__':
+            Gtk.main_quit()
+        
 
     ## Version store(model) handlers
     def version_store_deleted_cb(self, store, path):
@@ -545,9 +638,14 @@ class ProjectManagerWindow (SubWindow):
     def treeview_selection_changed_cb(self, selection):
         store, iter = selection.get_selected()
         if iter:
-            id = store[iter][_Store_index.ID]
+            ver_num = store[iter][_Store_index.VER]
+            current_ver = 0
+            filehandler = self.filehandler
+            if filehandler:
+                model = filehandler.doc.model
+                current_ver = model.project_version
 
-            flag = (id != _Version_id.CURRENT)
+            flag = (ver_num != current_ver)
             self._buttons['delete_button'].set_sensitive(flag)
             self._buttons['revert_button'].set_sensitive(flag)
             self._buttons['ignore_button'].set_sensitive(flag)
@@ -564,9 +662,10 @@ class ProjectManagerWindow (SubWindow):
         else:
             view.append_column(self._status_column)
 
-        wrapper = self._version_list_store_wrapper
+        wrapper = self._store_wrapper
         assert wrapper != None
         wrapper.show_all = widget.get_active()
+        wrapper.liststore.refilter()
 
 def _test_generate_objects():
     """Generate test stamps, for unit test.
@@ -618,7 +717,7 @@ def _test():
     print("### TEST ###")
     win = ProjectManagerWindow()
     # Use your own project-saved directory.
-    win.set_directory("/home/dothiko/workarea/2016/gantan/final_image")
+    win.set_directory("/home/dothiko/workarea/projtest/teste", None)
     win.connect("delete-event", lambda *a: Gtk.main_quit())
     win.show()
     Gtk.main()

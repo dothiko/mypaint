@@ -164,7 +164,7 @@
           </packing>
         </child>
         <child>
-          <object class="GtkLabel" id="label_spacer">
+          <object class="GtkLabel" id="label_spacer1">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
           </object>
@@ -192,16 +192,43 @@
         </child>
         <child>
           <object class="GtkButton" id="ignore_button">
-            <property name="label" translatable="yes">Ignore</property>
+            <property name="label" translatable="yes">Ignore
+</property>
             <property name="visible">True</property>
             <property name="can_focus">True</property>
             <property name="receives_default">True</property>
-            <signal name="clicked" handler="ignore_button_clicked_cb" swapped="no"/>
           </object>
           <packing>
             <property name="expand">True</property>
             <property name="fill">True</property>
             <property name="position">3</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="label_spacer2">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+            <property name="position">4</property>
+            <property name="non_homogeneous">True</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkButton" id="cancel_button">
+            <property name="label" translatable="yes">Cancel
+</property>
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="receives_default">True</property>
+            <signal name="clicked" handler="cancel_button_clicked_cb" swapped="no"/>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+            <property name="position">5</property>
           </packing>
         </child>
       </object>

@@ -156,6 +156,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
                            and (isolated_flag.lower() == "auto"))
         if is_pass_through:
             self.mode = PASS_THROUGH_MODE
+
         # Delegate loading of child layers
         for child_elem in elem.findall("./*"):
             assert child_elem is not elem
@@ -167,7 +168,6 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
                 x=x, y=y,
                 **kwargs
             )
-
 
 
     def _load_child_layer_from_oradir(self, oradir, elem, cache_dir,
@@ -505,7 +505,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
 
         return stack_elem
 
-    def save_to_project(self, projdir, backupdir, path,
+    def save_to_project(self, projdir, path,
                            canvas_bbox, frame_bbox, force_write, **kwargs):
         """Saves the stack's data into an project directory"""
 
@@ -520,7 +520,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
             layer_path = tuple(list(path) + [layer_idx])
             # the layer might not be written when it is not dirty,
             # anyway it returns element.
-            layer_elem = layer.save_to_project(projdir, backupdir, layer_path,
+            layer_elem = layer.save_to_project(projdir, layer_path,
                                                canvas_bbox, frame_bbox,
                                                force_write,
                                                **kwargs)

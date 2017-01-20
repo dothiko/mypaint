@@ -1356,14 +1356,29 @@ class FileHandler (object):
         if self.doc.model.is_project == False:
             self.save_as_project_cb(action)
         else:
-            self.save_file(self.filename, project=True, backup_dir=self.filename)
+            self.save_file(self.filename, project=True, create_version=True)
 
-    def revert_project_cb(self, action):
-        if self.doc.model.is_project == True:
-            raise NotImplementedError("revert project does not implemented yet")
+        # new_version saving use kwargs of "backup_dir",
+        # when this kwarg exists, self.save_file()->_save_doc_to_file()->
+        # doc.model.save()->doc.model.save_project() 
+        # should trigger backupping.
+
+    def manage_project_cb(self, action):
+        if self.doc.model.is_project:
+            filename = self.filename
+            manager = self.app.project_manager_window
+            # set_directory makes this manager window as
+            # modal one.
+            manager.set_directory(filename, self)
+            manager.show()
+            # The revert action should be done when
+            # revert button pressed, self.doc.model.load_project
+            # with special kwargs is executed in manager,
+            # and manager window disappear.
+            
         else:
             self.app.show_transient_message(C_(
-                "file handling: revert project failed (statusbar)",
+                "file handling: manage project failed (statusbar)",
                 u"Current document is not project,you cannot revert it.",
             ))
 

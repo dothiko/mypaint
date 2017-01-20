@@ -208,16 +208,16 @@ Vocabulary
       </child>
       <child>
         <object class="GtkAction" id="SaveProjectAsNewVersion">
-          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save Project as New version</property>
-          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current work,old files are saved into backup directory.</property>
+          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save Current Project as New version</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current project, and mark and backup it as a new version.</property>
           <signal name="activate" handler="save_project_as_new_version_cb"/>
         </object>
       </child>
       <child>
-        <object class="GtkAction" id="RevertProject">
-          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Revert Project</property>
-          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Revert project from older contents,if it exists.</property>
-          <signal name="activate" handler="revert_project_cb"/>
+        <object class="GtkAction" id="ManageProject">
+          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Manage Project Version</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Manage project to revert current drawing to another version.</property>
+          <signal name="activate" handler="manage_project_cb"/>
         </object>
       </child>
       <!-- }}} -->
