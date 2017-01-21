@@ -1240,7 +1240,7 @@ class PolyfillMode (OncanvasEditMixin,
 
     ## Drawing Phase related
 
-    def _start_new_capture_phase(self, mode, rollback=False):
+    def _start_new_capture_phase(self, composite_mode, rollback=False):
         self._queue_draw_buttons()
         self._queue_redraw_all_nodes()
         self._queue_redraw_item()
@@ -1249,7 +1249,7 @@ class PolyfillMode (OncanvasEditMixin,
             self._stop_task_queue_runner(complete=False)
         else:
             self._stop_task_queue_runner(complete=True)
-            self.execute_draw_polygon(mode=mode)
+            self._draw_polygon(composite_mode)
 
         self._reset_capture_data()
         self._reset_adjust_data()
@@ -1401,25 +1401,39 @@ class PolyfillMode (OncanvasEditMixin,
 
     
     ## Interface methods which call from callbacks
+    def execute_draw_polygon(self, action_name): 
+        """Draw polygon interface method"""
 
-    def execute_draw_polygon(self, mode=None, fill=True, fill_atop=False,
-            erase_outside=False):
+        if action_name == "PolygonFill":
+            composite_mode = lib.mypaintlib.CombineNormal
+        elif action_name == "PolygonFillAtop":
+            composite_mode = lib.mypaintlib.CombineSourceAtop
+        elif action_name == "PolygonErase":
+            composite_mode = lib.mypaintlib.CombineDestinationOut
+        elif action_name == "PolygonEraseOutside":
+            composite_mode = lib.mypaintlib.CombineDestinationIn
+        else:
+            return
+       #
+       #
+       #if fill:
+       #    if fill_atop:
+       #        composite_mode = lib.mypaintlib.CombineSourceAtop
+       #    else:
+       #        composite_mode = lib.mypaintlib.CombineNormal
+       #else:
+       #    if erase_outside:
+       #        composite_mode = lib.mypaintlib.CombineDestinationIn
+       #    else:
+       #        composite_mode = lib.mypaintlib.CombineDestinationOut
+
+        self._start_new_capture_phase(composite_mode, rollback=False)
+
+    def _draw_polygon(self, composite_mode):
+        """Draw polygon (inner method)
+        """
 
         if self.doc.model.layer_stack.current.get_fillable():
-            if mode:
-                composite_mode = mode
-            else:
-                if fill:
-                    if fill_atop:
-                        composite_mode = lib.mypaintlib.CombineSourceAtop
-                    else:
-                        composite_mode = lib.mypaintlib.CombineNormal
-                else:
-                    if erase_outside:
-                        composite_mode = lib.mypaintlib.CombineDestinationIn
-                    else:
-                        composite_mode = lib.mypaintlib.CombineDestinationOut
-
                     
             bbox = self._shape.get_maximum_rect(None, self)
             cmd = PolyFill(self.doc.model,
@@ -1433,6 +1447,7 @@ class PolyfillMode (OncanvasEditMixin,
             if not self._stroke_from_history:
                 self.stroke_history.register(self.nodes)
                 self.options_presenter.reset_stroke_history()
+
         else:
             logger.debug("Polyfilltool: target is not fillable layer.nothing done.")
 

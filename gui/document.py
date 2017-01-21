@@ -2227,9 +2227,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         mode=self.modes.top
         if action.get_name().startswith('Polygon'):
             if hasattr(mode, 'execute_draw_polygon'):
-                mode.execute_draw_polygon(
-                        fill=True,
-                        fill_atop=action.get_name().endswith('Atop'))
+                mode.execute_draw_polygon(action.get_name())
         elif action.get_name().startswith('Stamp'):
             if hasattr(mode, 'execute_draw'):
                 mode.execute_draw(
@@ -2245,9 +2243,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         mode=self.modes.top
         if action.get_name().startswith('Polygon'):
             if hasattr(mode, 'execute_draw_polygon'):
-                mode.execute_draw_polygon(
-                        fill=False,
-                        erase_outside=action.get_name().endswith('Outside'))
+                mode.execute_draw_polygon(action.get_name())
 
     ##+ Generic oncanvas item actions
     
