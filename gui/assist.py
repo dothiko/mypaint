@@ -318,16 +318,17 @@ class Stabilizer(Assistbase):
             self._start_range_timer(self._TIMER_PERIOD)
 
     def button_release_cb(self, tdw, x, y, pressure, time, button):
+        self._stop_range_timer() # Call this first, before attributes
+                                 # invalidated.
         self._last_button = None
         self._mode = self.MODE_FINALIZE
+
         if self._range_switcher:
             self._drawlength = 0
             self._total_drag_length = 0
             self._current_range = 0
-            self._start_time = None
             self._cycle = 0L
 
-        self._stop_range_timer()
         # After stop the timer, invalidate cached tdw.
         self._tdw = None
 
@@ -429,6 +430,7 @@ class Stabilizer(Assistbase):
         self._ry = y
         self._ox = None
         self._start_time = time
+        self._last_time = time
         self._initial_pressure = 0.0
         self._prev_dx = None
         self._mode = mode
