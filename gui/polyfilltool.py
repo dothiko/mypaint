@@ -137,9 +137,10 @@ class _Phase(PhaseMixin):
     PLACE_NODE = 105        #: place a new node into clicked position on current
                             # stroke,when you click with holding CTRL key
     CALL_BUTTONS = 106      #: show action buttons around the clicked point. 
+    GRADIENT_CTRL = 107     #: gradient controller
 
 class PolyFill(Command):
-    """Polygon-fill on the current layer"""
+    """Polygon-fill command, on the current layer"""
 
     display_name = _("Polygon Fill")
 
@@ -174,6 +175,82 @@ class PolyFill(Command):
         assert self.snapshot is not None
         layers.current.load_snapshot(self.snapshot)
         self.snapshot = None
+
+## _GradientController class
+
+class _GradientController(object):
+    """GradientController, to manage & show gradient oncanvas.
+    """
+
+    def __init__(self):
+        self._current_point = None
+        self._active = False
+
+    def set_start_pos(self, model_pos):
+        """Set gradient start position, in model coordinate.
+        :param model_pos: start position for cairo.LinearGradient.
+                          if None, used current polygon
+                          center X and minimum Y coordinate.
+        """
+        self._start = model_pos
+        
+    def set_end_pos(self, model_pos):
+        """Set gradient end position, in model coordinate.
+        :param model_pos: end position for cairo.LinearGradient.
+                          if None, used current polygon
+                          center X and maximum Y coordinate.
+        """
+        self._end = model_pos
+
+    def add_center_point(self, model_pos):
+        pass
+
+    def remove_center_point(self, id):
+        pass
+
+    def hittest_point(self, tdw, screen_pos):
+        pass
+
+    @property
+    def current_point(self):
+        return self._current_point
+
+    @property
+    def active(self):
+        return self._active
+
+    @active.setter
+    def active(self, flag):
+        self._active = flag
+
+    # Paint related  
+    def paint(self, cr):
+        """Paint this controller in cairo context.
+        Used from Overlay class.
+        """
+        pass
+
+    def generate_gradient(self):
+        """Generate cairo gradient object from
+        internal datas.
+        """
+        pass
+
+    # signal handlers
+    def button_press_cb(self, mode, tdw, event):
+        pass
+
+    def button_release_cb(self, mode, tdw, event):
+        pass
+
+    def drag_start_cb(self, mode, tdw, event):
+        pass
+
+    def drag_update_cb(self, mode, tdw, event, dx, dy):
+        pass
+
+    def drag_stop_cb(self, mode, tdw):
+        pass
 
 ## Shape classes
 #  By switching these shape classes,
@@ -1635,6 +1712,7 @@ class GradientStore(object):
             return cg
         else:
             return self._cairograd[iter]
+
 
 
 
