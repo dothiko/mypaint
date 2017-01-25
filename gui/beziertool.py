@@ -364,6 +364,8 @@ class BezierMode (PressureEditableMixin,
         self._phase = new_phase
 
     def enter_insert_node_phase(self):
+        """ Entering insert node phase from Gtk.Action.
+        """
         if len(self.nodes) > 2:
             if self.phase == _Phase.INSERT_NODE:
                 self.phase = _Phase.ADJUST

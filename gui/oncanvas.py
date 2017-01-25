@@ -456,6 +456,15 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
  
         # Update the zone, and assume any change implies a button state
         # change as well (for now...)
+        self._enter_new_zone(tdw, new_zone)
+
+    def _enter_new_zone(self, tdw, new_zone):
+        """Entering new zone. This is actually postprocess of 
+        _update_zone_and_target().
+
+        This is useful when customize _update_zone_and_target()
+        in deriving classes.
+        """
         if self.zone != new_zone:
            #if not self.in_drag:
             self._enter_zone_cb(new_zone)
