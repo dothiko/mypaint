@@ -96,10 +96,10 @@ class Shape_Bezier(Shape):
             cr.save()
             cr.set_line_width(1)
             if fill:
-                if color:
-                    cr.set_source_rgb(*color.get_rgb())
-                elif gradient:
+                if gradient:
                     cr.set_source(gradient)
+                elif color:
+                    cr.set_source_rgb(*color.get_rgb())
 
             for i, node in enumerate(nodes):#self._get_onscreen_nodes():
 
@@ -443,10 +443,10 @@ class Shape_Polyline(Shape_Bezier):
             cr.save()
             cr.set_line_width(1)
             if fill:
-                if color:
-                    cr.set_source_rgb(*color.get_rgb())
-                elif gradient:
+                if gradient:
                     cr.set_source(gradient)
+                elif color:
+                    cr.set_source_rgb(*color.get_rgb())
 
             for i, node in enumerate(nodes):
 
@@ -555,10 +555,10 @@ class Shape_Rectangle(Shape):
             cr.save()
             cr.set_line_width(1)
             if fill:
-                if color:
-                    cr.set_source_rgb(*color.get_rgb())
-                elif gradient:
+                if gradient:
                     cr.set_source(gradient)
+                elif color:
+                    cr.set_source_rgb(*color.get_rgb())
                 
             if selidx > -1:
                 if selidx in (0, 3):
@@ -862,10 +862,10 @@ class Shape_Ellipse(Shape_Rectangle):
             cr.save()
             cr.set_line_width(1)
             if fill:
-                if color:
-                    cr.set_source_rgb(*color.get_rgb())
-                elif gradient:
+                if gradient:
                     cr.set_source(gradient)
+                elif color:
+                    cr.set_source_rgb(*color.get_rgb())
                 
             if selidx > -1:
                 if selidx in (0, 3):

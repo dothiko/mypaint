@@ -83,7 +83,7 @@ class GradientController(object):
         self._target_node = None
         self._active = False
         self.nodes = []
-        self._cairo_gradient = None
+        self.invalidate_cairo_gradient()
 
         self._radius = 6.0
         self._phase = _GradientPhase.STAY
@@ -94,32 +94,6 @@ class GradientController(object):
         self._overlay_ref = None
 
 
-   #def setup_gradient(self, colors, pos):
-   #    """Setup gradient colors with a sequence.
-   #
-   #    This method clears all nodes information and 
-   #    controller positions.
-   #
-   #    :param colors: a sequence of color tuple.
-   #    :param pos: a sequence of float number, gradient linear positions.
-   #                This must be same counts as colors sequence.
-   #                if None, linear positions automatically generated.
-   #
-   #    """
-   #    self.nodes = []
-   #    if pos:
-   #        assert len(pos) == len(colors)
-   #        pos.sort()
-   #
-   #    for i, c in enumerate(colors):
-   #        if pos:
-   #            curpos = max(min(pos[i], 1.0), 0.0)
-   #        else:
-   #            curpos = max(min(float(i) / (len(colors)-1), 1.0), 0.0)
-   #
-   #        self.nodes.append(
-   #                _GradientInfo(curpos, c, 1.0)
-   #                )
     def setup_gradient(self, datas):
         """Setup gradient colors with a sequence.
 
@@ -134,7 +108,7 @@ class GradientController(object):
 
         for i, data in enumerate(datas):
             pos, color = data
-            if pos > -1:
+            if pos != None:
                 curpos = max(min(pos, 1.0), 0.0)
             else:
                 curpos = max(min(float(i) / (len(datas)-1), 1.0), 0.0)
@@ -167,6 +141,74 @@ class GradientController(object):
         """
         self._end_pos = tdw.display_to_model(*disp_pos)
 
+
+    @property
+    def active(self):
+        return self._active
+
+    @active.setter
+    def active(self, flag):
+        self._active = flag
+
+    @property
+    def is_ready(self):
+        return (len(self.nodes) > 0 
+                and self._start_pos != None 
+                and self._end_pos != None)
+
+    # Color/gradient related
+
+    def get_current_color(self):
+        return self.app.brush_color_manager.get_color()
+
+    def refresh_current_color(self):
+        if self._current_node != None:
+            pt = self.nodes[self._current_node]
+            pt.set_color(self.get_current_color())
+            self.invalidate_cairo_gradient() 
+
+    def get_cairo_gradient(self, tdw):
+        """Get cairo gradient.
+        This is for Editing gradient.
+        """
+        if self._cairo_gradient == None:
+            self._cairo_gradient = self.generate_gradient(tdw)
+        return self._cairo_gradient
+
+    def generate_gradient(self, tdw=None, offset_x=0, offset_y=0):
+        """Generate cairo gradient object from
+        internal datas.
+        Use this for Final output.
+        """
+        if len(self.nodes) >= 2:
+            if tdw:
+                sx, sy = tdw.model_to_display(*self._start_pos)
+                ex, ey = tdw.model_to_display(*self._end_pos)
+            else:
+                sx, sy = self._start_pos
+                ex, ey = self._end_pos
+
+            sx += offset_x
+            ex += offset_x
+            sy += offset_y
+            ey += offset_y
+
+            g = cairo.LinearGradient(
+                sx, sy,
+                ex, ey
+                )
+            for pt in self.nodes:
+                g.add_color_stop_rgba(
+                        pt.linear_pos, 
+                        *pt.get_rgba())
+            return g
+
+    def invalidate_cairo_gradient(self):
+        self._cairo_gradient = None
+
+
+    # node related method
+
     def add_intermidiate_point(self, linear_pos, color):
         # search target index from linear_pos
         i=0
@@ -188,7 +230,7 @@ class GradientController(object):
         self._current_node = i
 
 
-        self._cairo_gradient = None 
+        self.invalidate_cairo_gradient() 
 
     def add_gradient_point_from_display(self, tdw, x, y):
         tx, ty = tdw.display_to_model(x, y)
@@ -213,25 +255,11 @@ class GradientController(object):
 
         del self.nodes[idx]
         self.set_target_node(None)
-        self._cairo_gradient = None 
+        self.invalidate_cairo_gradient() 
 
     @property
     def current_point(self):
         return self._current_node
-
-    @property
-    def active(self):
-        return self._active
-
-    @active.setter
-    def active(self, flag):
-        self._active = flag
-
-    @property
-    def is_ready(self):
-        return (len(self.nodes) > 0 
-                and self._start_pos != None 
-                and self._end_pos != None)
 
     def set_target_node(self, idx):
         self._target_node = idx
@@ -240,47 +268,8 @@ class GradientController(object):
     def clear_target_node(self):
         self._target_node = None
         # Still remained self._current_node
-
-    def get_current_color(self):
-        return self.app.brush_color_manager.get_color()
-
-    def refresh_current_color(self):
-        if self._current_node != None:
-            pt = self.nodes[self._current_node]
-            pt.set_color(self.get_current_color())
-            self._cairo_gradient = None 
-
-    def get_cairo_gradient(self, tdw):
-        """Get cairo gradient.
-        This is for Editing gradient.
-        """
-        if self._cairo_gradient == None:
-            self._cairo_gradient = self.generate_gradient(tdw)
-        return self._cairo_gradient
-
-    def generate_gradient(self, tdw=None):
-        """Generate cairo gradient object from
-        internal datas.
-        Use this for Final output.
-        """
-        if len(self.nodes) >= 2:
-            if tdw:
-                sx, sy = tdw.model_to_display(*self._start_pos)
-                ex, ey = tdw.model_to_display(*self._end_pos)
-            else:
-                sx, sy = self._start_pos
-                ex, ey = self._end_pos
-            g = cairo.LinearGradient(
-                sx, sy,
-                ex, ey
-                )
-            for pt in self.nodes:
-                g.add_color_stop_rgba(
-                        pt.linear_pos, 
-                        *pt.get_rgba())
-            return g
             
-    def get_hit_point(self, tdw, x, y):
+    def hittest_node(self, tdw, x, y):
         """Get the index of a point which located at target position.
         :param x, y: target position.
         :return : index of point, or -1 when pointing gradiant gauge line.
@@ -324,11 +313,11 @@ class GradientController(object):
                 return -1
         return None
 
-    def set_offsets(self, offset_x, offset_y):
+    def add_offsets(self, offset_x, offset_y):
         if len(self.nodes) >= 2:
-            self._dx = offset_x
-            self._dy = offset_y
-           #self._cairo_gradient = None # To generate new one.
+            self._dx += offset_x
+            self._dy += offset_y
+           #self.invalidate_cairo_gradient() # To generate new one.
 
     def finalize_offsets(self, tdw):
         if len(self.nodes) >= 2 and self.is_ready:
@@ -338,8 +327,48 @@ class GradientController(object):
             self._end_pos = tdw.display_to_model(ex+self._dx, ey+self._dy)
             self._dx = 0
             self._dy = 0
-            self._cairo_gradient = None # To generate new one.
+            self.invalidate_cairo_gradient() # To generate new one.
         
+    def _enum_node_position(self, tdw):
+        """Enumrate nodes position with a tuple
+
+        :yield : a tuple of (node_index, control_point, center_x, center_y,
+                 end_x, end_y)
+                 end_x/y is same as the current coordinate of the control point.
+        """
+        if not self.is_ready:
+            raise StopIteration
+
+        dx = self._dx
+        dy = self._dy
+
+        if self._start_pos != None:
+            sx, sy = tdw.model_to_display(*self._start_pos)
+        if self._end_pos != None:
+            ex, ey = tdw.model_to_display(*self._end_pos)
+            tl, nx, ny = gui.linemode.length_and_normal(
+                    sx, sy,
+                    ex, ey)
+
+        bx, by = sx + dx, sy + dy
+
+
+        ppt = self.nodes[0]
+        yield (0, ppt, 0, 0, bx, by)
+
+        for i in xrange(1, len(self.nodes)):
+            cpt = self.nodes[i]
+            ln = tl * cpt.linear_pos - tl * ppt.linear_pos
+            cx = bx + (nx * (ln * 0.5)) 
+            cy = by + (ny * (ln * 0.5)) 
+            ex = bx + nx * ln 
+            ey = by + ny * ln 
+
+            yield (i, cpt, cx, cy, ex, ey)
+
+            bx, by = ex, ey
+            ppt = cpt
+
 
     # GUI related
 
@@ -494,48 +523,6 @@ class GradientController(object):
                     pt.color,
                     self._radius / 2)
 
-    # node management
-
-    def _enum_node_position(self, tdw):
-        """Enumrate nodes position with a tuple
-
-        :yield : a tuple of (node_index, control_point, center_x, center_y,
-                 end_x, end_y)
-                 end_x/y is same as the current coordinate of the control point.
-        """
-        if not self.is_ready:
-            raise StopIteration
-
-        dx = self._dx
-        dy = self._dy
-
-        if self._start_pos != None:
-            sx, sy = tdw.model_to_display(*self._start_pos)
-        if self._end_pos != None:
-            ex, ey = tdw.model_to_display(*self._end_pos)
-            tl, nx, ny = gui.linemode.length_and_normal(
-                    sx, sy,
-                    ex, ey)
-
-        bx, by = sx + dx, sy + dy
-
-
-        ppt = self.nodes[0]
-        yield (0, ppt, 0, 0, bx, by)
-
-        for i in xrange(1, len(self.nodes)):
-            cpt = self.nodes[i]
-            ln = tl * cpt.linear_pos - tl * ppt.linear_pos
-            cx = bx + (nx * (ln * 0.5)) 
-            cy = by + (ny * (ln * 0.5)) 
-            ex = bx + nx * ln 
-            ey = by + ny * ln 
-
-            yield (i, cpt, cx, cy, ex, ey)
-
-            bx, by = ex, ey
-            ppt = cpt
-
 
     def queue_single_point(self, tdw, x, y, r):
         # -2 is shadow size.
@@ -575,7 +562,7 @@ class GradientController(object):
     def button_press_cb(self, mode, tdw, event):
         x = event.x
         y = event.y
-        idx = self.get_hit_point(tdw, x, y)
+        idx = self.hittest_node(tdw, x, y)
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
 
         if idx >= 0:
@@ -603,6 +590,8 @@ class GradientController(object):
 
     def drag_start_cb(self, mode, tdw, event):
         self._gradient_update = False
+        self._dx = 0
+        self._dy = 0
         pass
 
     def drag_update_cb(self, mode, tdw, event, dx, dy):
@@ -645,7 +634,7 @@ class GradientController(object):
                         self._gradient_update = True
                         self.nodes[idx].set_linear_pos(cl)
         elif self._phase == _GradientPhase.MOVE:
-            self.set_offsets(dx, dy)
+            self.add_offsets(dx, dy)
         self.queue_redraw(tdw)
         pass
 
@@ -658,7 +647,7 @@ class GradientController(object):
             elif self._end_pos == None:
                 self.set_end_pos(tdw, self._target_pos)
 
-            self._cairo_gradient = None
+            self.invalidate_cairo_gradient()
             self._target_pos = None
 
         elif self._phase == _GradientPhase.MOVE_NODE:
@@ -666,7 +655,7 @@ class GradientController(object):
             if self._gradient_update:
                 # Clear cairo gradient cache,
                 # to invoke generation of it in paint() method.
-                self._cairo_gradient = None
+                self.invalidate_cairo_gradient()
 
             self.clear_target_node()
         elif self._phase == _GradientPhase.MOVE:

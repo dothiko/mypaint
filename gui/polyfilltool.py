@@ -76,22 +76,18 @@ def _render_polygon_to_layer(model, target_layer, shape, nodes,
                  * NOT layer composite mode*
     """
     sx, sy, w, h = bbox
-    sx = int(sx)
-    sy = int(sy)
     w = int(w)
     h = int(h)
+
+    # convert to adapt library
+    sx = int(sx)
+    sy = int(sy)
+
     surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, w, h)
     cr = cairo.Context(surf)
 
-   #linpat = cairo.LinearGradient(0, 0, w, h);
-   #linpat.add_color_stop_rgba(0.20,  1, 0, 0, 1);
-   #linpat.add_color_stop_rgba(0.50,  0, 1, 0, 1);
-   #linpat.add_color_stop_rgba( 0.80,  0, 0, 1, 1);
-   #
-   #_draw_node_polygon(cr, None, self.nodes, ox=sx, oy=sy,
-   #        gradient=linpat)
     shape.draw_node_polygon(cr, None, nodes, ox=sx, oy=sy,
-            color=color)
+            color=color, gradient=gradient)
     surf.flush()
     pixbuf = Gdk.pixbuf_get_from_surface(surf, 0, 0, w, h)
     layer = lib.layer.PaintingLayer(name='')
@@ -256,6 +252,7 @@ class PolyfillMode (OncanvasEditMixin,
             self.shape_type = Shape.TYPE_BEZIER
         self.forced_button_pos = None
 
+
     def _reset_capture_data(self):
         super(PolyfillMode, self)._reset_capture_data()
         self.phase = _Phase.ADJUST
@@ -296,7 +293,7 @@ class PolyfillMode (OncanvasEditMixin,
 
         if self.gradient_ctrl.active:
             new_zone = self.zone
-            idx = self.gradient_ctrl.get_hit_point(tdw, x, y)
+            idx = self.gradient_ctrl.hittest_node(tdw, x, y)
             if idx >= -1:
                 new_zone = _EditZone.GRADIENT_BAR
                 self._enter_new_zone(tdw, new_zone)
@@ -385,14 +382,18 @@ class PolyfillMode (OncanvasEditMixin,
         self._reset_adjust_data()
         self.forced_button_pos = None
 
+    def enter(self, doc, **kwds):
+        super(PolyfillMode, self).enter(doc, **kwds)
+        doc.view_changed_observers.append(self.view_changed_cb)
 
-    def leave(self):
+    def leave(self, **kwds):
         if self.gradient_ctrl.active:
             self.gradient_ctrl.active = False
             for tdw in self._overlays:
                 self.gradient_ctrl.queue_redraw(tdw)
 
-        super(PolyfillMode, self).leave()
+        self.doc.view_changed_observers.remove(self.view_changed_cb)
+        super(PolyfillMode, self).leave(**kwds)
 
     def checkpoint(self, flush=True, **kwargs):
         """Sync pending changes from (and to) the model
@@ -455,7 +456,7 @@ class PolyfillMode (OncanvasEditMixin,
         if self.phase == _Phase.GRADIENT_CTRL:
             gctl = self.gradient_ctrl
             assert gctl.active
-            gctl.button_press_cb(self, tdw, event)
+            gctl.button_release_cb(self, tdw, event)
             return False
 
         ret = shape.button_release_cb(self, tdw, event)
@@ -485,13 +486,12 @@ class PolyfillMode (OncanvasEditMixin,
     def node_drag_start_cb(self, tdw, event):
 
         self._queue_draw_buttons() # To erase button,and avoid glitch
-        if self.phase == _Phase.ADJUST:
-            if self.zone == _EditZone.GRADIENT_BAR:
-                gctl = self.gradient_ctrl
-                gctl.queue_redraw(tdw)
-                assert gctl.active
-                gctl.drag_start_cb(self, tdw, event)
-                return False
+        if self.phase == _Phase.GRADIENT_CTRL:
+            gctl = self.gradient_ctrl
+            gctl.queue_redraw(tdw)
+            assert gctl.active
+            gctl.drag_start_cb(self, tdw, event)
+            return False
 
 
         shape = self._shape
@@ -538,6 +538,14 @@ class PolyfillMode (OncanvasEditMixin,
 
         finally:
             shape.clear_event()
+
+    def view_changed_cb(self, doc):
+        """Observer handler for view changing.
+        """
+        if self.gradient_ctrl.active:
+            self.gradient_ctrl.invalidate_cairo_gradient()
+            for tdw in self._overlays:
+                self.gradient_ctrl.queue_redraw(tdw)
 
 
     ## Interrogating events
@@ -594,11 +602,18 @@ class PolyfillMode (OncanvasEditMixin,
         if self.doc.model.layer_stack.current.get_fillable():
                     
             bbox = self._shape.get_maximum_rect(None, self)
-            cmd = PolyFill(self.doc.model,
+            gradient = None
+            if self.gradient_ctrl.active:
+                gradient = self.gradient_ctrl.generate_gradient(None,
+                        offset_x=-bbox[0], offset_y=-bbox[1])
+
+            cmd = PolyFill(
+                    self.doc.model,
                     self.shape,
                     self.nodes,
                     self.foreground_color,
-                    None,bbox,
+                    gradient,
+                    bbox,
                     composite_mode)
             self.doc.model.do(cmd)
 
