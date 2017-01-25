@@ -26,6 +26,11 @@ class _GradientPhase:
     STAY = 10
 
 class _GradientInfo(object):
+    """ This class contains colors as lib.color.RGBColor object.
+    Thats because to keep compatibility to drawutils.py functions.
+    With storing lib.color.RGBColor object, we can use that color
+    directly when drawing overlay graphics with drawutils.
+    """
 
     def __init__(self, linear_pos, color, alpha=1.0): 
         """
@@ -59,6 +64,9 @@ class _GradientInfo(object):
         return (col.r, col.g, col.b, self._alpha)
 
     def set_color(self, color, alpha=1.0):
+        """Use lib.color.RGBColor object 
+        for compatibility to drawutils.py functions. """
+
         if type(color) == tuple:
             if len(color) == 3:
                 self._color = lib.color.RGBColor(rgb=color)
@@ -67,9 +75,10 @@ class _GradientInfo(object):
                 self._alpha = color[3]
             else:
                 raise ValueError
-        else:
+        elif isinstance(color, lib.color.RGBColor):
             self._color = color # assume it as color object 
-
+        else:
+            raise ValueError("only accepts tuple or lib.color.RGBColor.")
 
 class GradientController(object):
     """GradientController, to manage & show gradient oncanvas.
@@ -163,7 +172,10 @@ class GradientController(object):
     # Color/gradient related
 
     def get_current_color(self):
-        return self.app.brush_color_manager.get_color().get_rgb()
+        """Use lib.color.RGBColor object directly
+        for compatibility to drawutils.py functions.
+        """
+        return self.app.brush_color_manager.get_color()
 
     def refresh_current_color(self):
         if self._current_node != None:
