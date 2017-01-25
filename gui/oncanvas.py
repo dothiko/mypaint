@@ -142,6 +142,12 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
  
  
     ## Override action
+    #
+    #  This is mainly use to avoid conflicting shift/ctrl keys.
+    #  Only listed action modes here (or completely empty for all modes)
+    #  are permitted.
+    #  But, these are default setting... if some user change shift/ctrl
+    #  keybinds, this might not work well.
     permitted_switch_actions = None
     _enable_switch_actions = set()   # This means 'Any action is permitted'
     _disable_switch_actions=set(gui.mode.BUTTON_BINDING_ACTIONS).union([

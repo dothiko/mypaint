@@ -108,21 +108,25 @@ class GradientController(object):
 
         for i, data in enumerate(datas):
             pos, color = data
+            alpha = 1.0
             if pos != None:
                 curpos = max(min(pos, 1.0), 0.0)
             else:
                 curpos = max(min(float(i) / (len(datas)-1), 1.0), 0.0)
 
-            if color == -1:
+            assert color[0] != None
+
+            if color[0] == -1:
+                if len(color) == 2:
+                    alpha = color[1]
                 color = self.get_current_color()
-            elif color == -2:
-                assert NotImplementedError("There is no background color for mypaint!")
-               #color = self.get_current_bgcolor()
+            elif color[0] == -2:
+                raise NotImplementedError("There is no background color for mypaint!")
             else:
                 assert len(color) >= 3
 
             self.nodes.append(
-                    _GradientInfo(curpos, color, 1.0)
+                    _GradientInfo(curpos, color, alpha)
                     )
 
     def set_start_pos(self, tdw, disp_pos):
@@ -159,7 +163,7 @@ class GradientController(object):
     # Color/gradient related
 
     def get_current_color(self):
-        return self.app.brush_color_manager.get_color()
+        return self.app.brush_color_manager.get_color().get_rgb()
 
     def refresh_current_color(self):
         if self._current_node != None:

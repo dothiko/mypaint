@@ -208,6 +208,13 @@ class PolyfillMode (OncanvasEditMixin,
 
     DEFAULT_POINT_CORNER = True       # default point is corner,not curve
 
+    _enable_switch_actions=set(gui.mode.BUTTON_BINDING_ACTIONS).union([
+            'RotateViewMode',
+            'ZoomViewMode',
+            'PanViewMode',
+            "SelectionMode",
+        ])
+
     ## Other class vars
 
    #button_info = _ButtonInfo()       # button infomation class
@@ -580,18 +587,6 @@ class PolyfillMode (OncanvasEditMixin,
             composite_mode = lib.mypaintlib.CombineDestinationIn
         else:
             return
-       #
-       #
-       #if fill:
-       #    if fill_atop:
-       #        composite_mode = lib.mypaintlib.CombineSourceAtop
-       #    else:
-       #        composite_mode = lib.mypaintlib.CombineNormal
-       #else:
-       #    if erase_outside:
-       #        composite_mode = lib.mypaintlib.CombineDestinationIn
-       #    else:
-       #        composite_mode = lib.mypaintlib.CombineDestinationOut
 
         self._start_new_capture_phase(composite_mode, rollback=False)
 
@@ -695,16 +690,7 @@ class PolyfillMode (OncanvasEditMixin,
                 gctl.set_start_pos(tdw, (x, sy))
                 gctl.set_end_pos(tdw, (x, ey))
 
-               ## TODO test code . should be removed.
-               #
-               #test_gradient = (
-               #                  (1.0, 0.0, 0.0),
-               #                  (0.0, 1.0, 0.0),
-               #                  (0.0, 0.0, 1.0),
-               #                  (1.0, 0.0, 0.0)
-               #                )
-
-                gctl.setup_gradient(gradient_data)#, None)
+                gctl.setup_gradient(gradient_data)
 
         gctl.queue_redraw(tdw)
 
@@ -731,8 +717,6 @@ class OverlayPolyfill (OverlayBezier):
             for i, key in enumerate(mode.buttons):
                 id, junk = mode.buttons[i]
                 self._button_pos[id] = pos[i]
-           #mode.button_info.setup_round_position(
-           #        self._tdw, mode.forced_button_pos)
         else:
             super(OverlayPolyfill, self).update_button_positions(
                     not mode.shape.accept_handle)
