@@ -192,8 +192,6 @@ class ExInkingMode (PressureEditableMixin,
         super(ExInkingMode, self)._reset_adjust_data()
         self._node_dragged = False
 
-
-    @property
     def is_adjusting_phase(self):
         return self.phase in (_Phase.ADJUST,
                               _Phase.ADJUST_POS,
@@ -216,7 +214,7 @@ class ExInkingMode (PressureEditableMixin,
         to update cursors
         """
         cursor = None
-        if self.is_adjusting_phase:
+        if self.is_adjusting_phase():
             if self.zone != _EditZone.EMPTY_CANVAS: # assume button
                 cursor = self._arrow_cursor
             else:
@@ -1402,7 +1400,7 @@ class Overlay (OverlayOncanvasMixin):
                     radius=radius,
                     fill=fill_flag)
 
-        if mode.is_adjusting_phase:
+        if mode.is_adjusting_phase():
             
             # Drawing Buttons when not in drag.
             if not mode.in_drag:

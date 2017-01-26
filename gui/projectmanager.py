@@ -315,7 +315,7 @@ class IgnorestateRenderer(Gtk.CellRenderer):
         cr.fill()
         cr.restore()
 
-    def do_get_preferred_width(self,view_widget):
+    def do_get_preferred_width(self, view_widget):
         return (self.ICON_SIZE * 2, self.ICON_SIZE * 2) 
 
 class ProjectManagerWindow (SubWindow):

@@ -289,6 +289,13 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
        #        return True
        #return False
 
+    def is_adjusting_phase(self):
+        """To know whether current phase is node adjusting phase.
+        this method should be overriden in deriving classes.
+        """
+        return self.phase in (PhaseMixin.ADJUST,
+                              PhaseMixin.ADJUST_POS)
+
     ## Buttons property 
     
     buttons = {
@@ -1092,7 +1099,6 @@ class PressureEditableMixin(OncanvasEditMixin,
     _ADD_SELECTION_MASK = Gdk.ModifierType.CONTROL_MASK
 
 
-    @property
     def is_pressure_modifying(self):
         return self.phase in (PressPhase.ADJUST_PRESSURE,
                     PressPhase.ADJUST_PRESSURE_ONESHOT)
@@ -1130,7 +1136,7 @@ class PressureEditableMixin(OncanvasEditMixin,
     ## Event handlers
 
     def mode_button_press_cb(self, tdw, event):
-        if self.is_adjusting_phase:
+        if self.is_adjusting_phase():
             button = event.button
             if self.phase != PressPhase.ADJUST_PRESSURE:
 
@@ -1154,9 +1160,9 @@ class PressureEditableMixin(OncanvasEditMixin,
 
     def mode_button_release_cb(self, tdw, event):
 
-        if self.is_adjusting_phase:
+        if self.is_adjusting_phase():
 
-            if self.is_pressure_modifying:
+            if self.is_pressure_modifying():
                 # When pressure has changed on canvas,
                 # refrect it to presenter.
                 self.options_presenter.target = (self, self.current_node_index)
@@ -1191,7 +1197,7 @@ class PressureEditableMixin(OncanvasEditMixin,
 
                 
     def node_drag_stop_cb(self, tdw):
-        if self.is_pressure_modifying:
+        if self.is_pressure_modifying():
             if self._node_dragged:
 
                 ## Pressure editing phase end.

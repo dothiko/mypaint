@@ -290,6 +290,17 @@ class StampMode (OncanvasEditMixin,
 
     ## Status methods
 
+    def is_adjusting_phase(self):
+        """To know whether current phase is node adjusting phase.
+        this method should be overriden in deriving classes.
+        """
+        return self.phase in (_Phase.ADJUST,
+                              _Phase.ADJUST_POS,
+                              _Phase.ROTATE,
+                              _Phase.SCALE,
+                              _Phase.ROTATE_BY_HANDLE,
+                              _Phase.SCALE_BY_HANDLE)
+
     def enter(self, doc, **kwds):
         """Enters the mode: called by `ModeStack.push()` etc."""
         self._app = doc.app
@@ -1461,15 +1472,14 @@ class OptionsPresenter_Stamp (object):
         self._stamp_picture_view = iconview
 
     def _init_popup_menus(self, builder):
-        print('-----')
         agroup = builder.get_object("popup_actiongroup")
         clipmenu = builder.get_object("clipboard_popup_menu")
 
         self._delete_picture_action = agroup.get_action('delete_picture_action')
         self._stampicon_action = agroup.get_action('stampicon_action')
 
-
         # Creating Popup menu for normal stamp.
+        # to share same menu handler between two popup menu.
         basemenu = Gtk.Menu()
         for i, ca in enumerate(agroup.list_actions()):
             basemenu.append(ca.create_menu_item())

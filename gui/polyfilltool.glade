@@ -2,6 +2,66 @@
 <!-- Generated with glade 3.18.3 -->
 <interface>
   <requires lib="gtk+" version="3.10"/>
+  <object class="GtkMenu" id="gradient_popupmenu">
+    <property name="visible">True</property>
+    <property name="can_focus">False</property>
+    <child>
+      <object class="GtkMenuItem" id="add_gradient_menuitem">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="tooltip_text" translatable="yes">Add currently editing gradient as new one.</property>
+        <property name="label" translatable="yes">Add current gradient</property>
+        <property name="use_underline">True</property>
+        <signal name="activate" handler="add_gradient_menuitem_activate_cb" swapped="no"/>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="new_gradient_menuitem">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="tooltip_text" translatable="yes">Create new gradient.the color used for this is current brush.</property>
+        <property name="label" translatable="yes">Create new gradient</property>
+        <property name="use_underline">True</property>
+        <signal name="activate" handler="new_gradient_menuitem_activate_cb" swapped="no"/>
+      </object>
+    </child>
+    <child>
+      <object class="GtkSeparatorMenuItem" id="sep1_menuitem">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="remove_gradient_menuitem">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="tooltip_text" translatable="yes">Remove currently selected gradient. </property>
+        <property name="label" translatable="yes">Remove selected gradient</property>
+        <property name="use_underline">True</property>
+        <signal name="activate" handler="remove_gradient_menuitem_activate_cb" swapped="no"/>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="rename_gradient_menuitem">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="tooltip_text" translatable="yes">Rename currently selected gradient.</property>
+        <property name="label" translatable="yes">Rename current gradient</property>
+        <property name="use_underline">True</property>
+        <signal name="activate" handler="rename_gradient_menuitem_activate_cb" swapped="no"/>
+      </object>
+    </child>
+    <child>
+      <object class="GtkMenuItem" id="replace_gradient_menuitem">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <property name="tooltip_text" translatable="yes">Replace current gradient with the colors editing in controller.</property>
+        <property name="label" translatable="yes">Replace current gradient</property>
+        <property name="use_underline">True</property>
+        <signal name="activate" handler="replace_gradient_menuitem_activate_cb" swapped="no"/>
+      </object>
+    </child>
+  </object>
   <object class="GtkAdjustment" id="opacity_adj">
     <property name="upper">1</property>
     <property name="value">1</property>

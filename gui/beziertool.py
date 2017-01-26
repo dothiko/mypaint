@@ -379,13 +379,12 @@ class BezierMode (PressureEditableMixin,
         else:
             self.doc.app.show_transient_message(_("There is no stroke.Cannot enter insert phase."))
 
-    @property
     def is_editing_phase(self):
         return self.phase in (_Phase.ADJUST,
                               _Phase.ADJUST_POS,
                               _Phase.ADJUST_PRESSURE,
                               _Phase.ADJUST_HANDLE)
-    @property
+
     def is_adjusting_phase(self):
         return self.phase in (_Phase.ADJUST,
                               _Phase.ADJUST_POS,
@@ -497,7 +496,7 @@ class BezierMode (PressureEditableMixin,
         """  Update the cursor for not dragging mode.
         """
         cursor = None
-        if self.is_editing_phase:
+        if self.is_editing_phase():
             if self.zone != _EditZone.EMPTY_CANVAS: # assume button
                 cursor = self._arrow_cursor
             else:

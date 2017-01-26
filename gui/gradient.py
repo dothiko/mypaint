@@ -141,7 +141,7 @@ class GradientController(object):
         self.invalidate_cairo_gradient()
 
     def set_start_pos(self, tdw, disp_pos):
-        """Set gradient start position, in model coordinate.
+        """Set gradient start position, from display coordinate.
         :param disp_pos: start position for cairo.LinearGradient.
                           if None, used current polygon
                           center X and minimum Y coordinate.
@@ -149,12 +149,22 @@ class GradientController(object):
         self._start_pos = tdw.display_to_model(*disp_pos)
 
     def set_end_pos(self, tdw, disp_pos):
-        """Set gradient end position, in model coordinate.
+        """Set gradient end position, from display coordinate.
         :param disp_pos: end position for cairo.LinearGradient.
                           if None, used current polygon
                           center X and maximum Y coordinate.
         """
         self._end_pos = tdw.display_to_model(*disp_pos)
+
+    @property
+    def start_pos(self):
+        """Get start pos, in model coordinate."""
+        return self._start_pos
+
+    @property
+    def end_pos(self):
+        """Get end pos, in model coordinate."""
+        return self._end_pos
 
 
     @property
@@ -165,7 +175,6 @@ class GradientController(object):
     def active(self, flag):
         self._active = flag
 
-    @property
     def is_ready(self):
         return (len(self.nodes) > 0 
                 and self._start_pos != None 
@@ -174,7 +183,10 @@ class GradientController(object):
     # Color/gradient related
 
     def get_current_color(self):
-        """Use lib.color.RGBColor object directly
+        """Utility method.
+        For future change, to add alpha component to color tuple.
+        (yet implemented)
+        Use lib.color.RGBColor object directly
         for compatibility to drawutils.py functions.
         """
         return self.app.brush_color_manager.get_color()
@@ -293,7 +305,7 @@ class GradientController(object):
         :return : index of point, or -1 when pointing gradiant gauge line.
                   otherwise, return None.
         """
-        if not self.is_ready:
+        if not self.is_ready():
             return None
 
         r = self._radius
@@ -338,7 +350,7 @@ class GradientController(object):
            #self.invalidate_cairo_gradient() # To generate new one.
 
     def finalize_offsets(self, tdw):
-        if len(self.nodes) >= 2 and self.is_ready:
+        if len(self.nodes) >= 2 and self.is_ready():
             sx, sy = tdw.model_to_display(*self._start_pos)
             self._start_pos = tdw.display_to_model(sx+self._dx, sy+self._dy)
             ex, ey = tdw.model_to_display(*self._end_pos)
@@ -354,7 +366,7 @@ class GradientController(object):
                  end_x, end_y)
                  end_x/y is same as the current coordinate of the control point.
         """
-        if not self.is_ready:
+        if not self.is_ready():
             raise StopIteration
 
         dx = self._dx
@@ -462,7 +474,7 @@ class GradientController(object):
         dx = self._dx
         dy = self._dy
 
-        if len(self.nodes) >= 2 and self.is_ready:
+        if len(self.nodes) >= 2 and self.is_ready():
             cr.save()
             cr.set_line_width(radius)
 
