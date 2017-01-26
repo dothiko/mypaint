@@ -94,20 +94,20 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         self.app = self.doc.app
         self.base_x = None
         if not self._is_active():
+            # This mode is not in modestack - this means 
+            # XXX never called?
             self._discard_overlays()
 
     def leave(self, **kwds):
         if not self._is_active():
+            # This mode is in modestack - this means 
+            # This is temporary mode.
             self._discard_overlays()
 
         return super(SizechangeMode, self).leave(**kwds)
 
     def _is_active(self):
-        for mode in self.doc.modes:
-            if mode is self:
-                return True
-        return False
-
+        return self in self.doc.modes
 
     def get_cursor_radius(self,tdw):
         #FIXME nearly Code duplication from 
