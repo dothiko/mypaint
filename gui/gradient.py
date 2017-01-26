@@ -138,6 +138,8 @@ class GradientController(object):
                     _GradientInfo(curpos, color, alpha)
                     )
 
+        self.invalidate_cairo_gradient()
+
     def set_start_pos(self, tdw, disp_pos):
         """Set gradient start position, in model coordinate.
         :param disp_pos: start position for cairo.LinearGradient.

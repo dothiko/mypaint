@@ -391,15 +391,22 @@ class PolyfillMode (OncanvasEditMixin,
 
     def enter(self, doc, **kwds):
         super(PolyfillMode, self).enter(doc, **kwds)
-        doc.view_changed_observers.append(self.view_changed_cb)
+
+        # OneshotdragMode might override this mode,
+        # so avoid double-registration to view_changed_observers
+        # (Although, append() method might reject it...)
+        if not self.view_changed_cb in doc.view_changed_observers:
+            doc.view_changed_observers.append(self.view_changed_cb)
 
     def leave(self, **kwds):
-        if self.gradient_ctrl.active:
-            self.gradient_ctrl.active = False
-            for tdw in self._overlays:
-                self.gradient_ctrl.queue_redraw(tdw)
+        if self._is_active() == False:
+            # Mode leave is not temporary.
+            if self.gradient_ctrl.active:
+                self.gradient_ctrl.active = False
+                for tdw in self._overlays:
+                    self.gradient_ctrl.queue_redraw(tdw)
 
-        self.doc.view_changed_observers.remove(self.view_changed_cb)
+            self.doc.view_changed_observers.remove(self.view_changed_cb)
         super(PolyfillMode, self).leave(**kwds)
 
     def checkpoint(self, flush=True, **kwargs):
@@ -659,24 +666,30 @@ class PolyfillMode (OncanvasEditMixin,
         self._do_action(_ActionButton.FILL_ATOP)
 
     # Gradient Controller related
-    def toggle_gradient_controller(self, gradient_data, 
-                                   tdw=None, force_activate=False):
+    def enable_gradient_controller(self, gradient_data, 
+                                   tdw=None, toggle=False):
+        """
+        :param gradient_data: a tuple of (linear_pos, RGBtuple).
+                              if this is None, 
+                              gradient controller would be disabled.
+        :param toggle: toggle controller enable state, if True.
+        """
         gctl = self.gradient_ctrl
 
-        if force_activate:
-            if gradient_data[0] == None:
-                # Force Disable!
-                gctl.active = False
+
+        if gradient_data == None: 
+            gctl.active = False
+        else:
+            if toggle:
+                gctl.active = not gctl.active
             else:
                 gctl.active = True
-        else:
-            gctl.active = not gctl.active
+
+        if tdw == None:
+            if len(self._overlays) > 0:
+                tdw = self._overlays.keys()[0]
 
         if gctl.active:
-
-            if tdw == None:
-                if len(self._overlays) > 0:
-                    tdw = self._overlays.keys()[0]
 
             # Re-check, not else.because tdw can be set
             # in above lines.
@@ -776,7 +789,7 @@ class GradientStore(object):
     DEFAULT_GRADIENTS = [ 
             (
                 'Disabled', 
-                (None,)
+                None,
             ),
             (
                 'Foreground to Transparent', 
@@ -821,17 +834,17 @@ class GradientStore(object):
         """
         return self._gradients[iter][self.IDX_COLORS]
 
-
     def get_cairo_gradient(self, iter, sx, sy, ex, ey, fg, bg):
         """Get cairo gradient object, not the sequence data.
         This is for Optionspresenter.
         """
         data = self.get_gradient_data(iter)
-        return self.get_cairo_gradient_raw(
-                data,
-                sx, sy,
-                ex, ey,
-                fg, bg)
+        if data:
+            return self.get_cairo_gradient_raw(
+                    data,
+                    sx, sy,
+                    ex, ey,
+                    fg, bg)
 
     def get_cairo_gradient_raw(self, graddata, sx, sy, ex, ey, fg, bg):
         cg = None
@@ -905,7 +918,7 @@ class GradientRenderer(Gtk.CellRenderer):
         cr.rectangle(cell_area.x, cell_area.y, 
                 cell_area.width, cell_area.height)
 
-        if self.colors[0] == None:
+        if self.colors == None:
             # Disabled color
             cr.set_source_rgb(0.5, 0.5, 0.5) # invalid color
         else:
@@ -1000,6 +1013,9 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         self._shape_type_combobox = builder.get_object("shape_type_combobox")
         self._shape_type_combobox.set_sensitive(True)
 
+        self._enable_ctrl_button = builder.get_object(
+                "activate_controller_togglebutton")
+
         # Creating toolbar
         base_grid = builder.get_object("polygon_operation_grid")
         toolbar = gui.widgets.inline_toolbar(
@@ -1042,6 +1058,7 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
 
         selection = treeview.get_selection()
         selection.connect('changed', self.gradientview_selection_changed_cb)
+        self._gradient_selection = selection
 
 
         # and it is appended to the treeview
@@ -1092,6 +1109,16 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         finally:
             self._updating_ui = False                               
 
+    ## Utility method
+    def get_current_gradient_data(self, iter=None):
+        if iter == None:
+            store, iter = self._gradient_selection.get_selected()
+
+        # Re-check iter
+        if iter:
+            return self.GRADIENT_STORE.get_gradient_data(iter)
+        else:
+            return None
 
     ## callback handlers
 
@@ -1114,7 +1141,11 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
             return
         polymode, junk = self.target
         if polymode:
-            polymode.toggle_gradient_controller()
+            if button.get_active():
+                data = self.get_current_gradient_data()
+            else:
+                data = None
+            polymode.enable_gradient_controller(data)
 
     def gradientview_selection_changed_cb(self, selection):
         if self._updating_ui:
@@ -1122,9 +1153,19 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         polymode, junk = self.target
         store, iter = selection.get_selected()
         if iter and polymode:
-            gid = store[iter][GradientStore.IDX_ID]
             data = self.GRADIENT_STORE.get_gradient_data(iter)
-            polymode.toggle_gradient_controller(data, force_activate=True)
+            if data:
+                self._enable_ctrl_button.set_active(True)
+            else:
+                self._enable_ctrl_button.set_active(False)
+
+    def mode_leave_notify_cb(self, mode):
+        """ Actually, this is not GTK signal.
+        this is called from PolyfillMode.leave()
+        """
+        self._updating_ui = True
+        self._enable_ctrl_button.set_active(False)
+        self._updating_ui = False
 
 
     ## Other handlers are as implemented in superclass.  

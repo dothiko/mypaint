@@ -283,10 +283,11 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     def _is_active(self):
         """ To know whether this mode is active or not. 
         """
-        for mode in self.doc.modes:
-            if mode is self:
-                return True
-        return False
+        return self in self.doc.modes
+       #for mode in self.doc.modes:
+       #    if mode is self:
+       #        return True
+       #return False
 
     ## Buttons property 
     
