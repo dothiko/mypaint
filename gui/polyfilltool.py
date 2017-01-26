@@ -349,6 +349,10 @@ class PolyfillMode (OncanvasEditMixin,
                 for tdw in self._overlays:
                     if gctl.start_pos and gctl.end_pos:
                         self.call_gradient_controller_center(tdw, visible_check=True)
+        
+            color_manager = doc.app.brush_color_manager
+            if not self.brush_color_changed_cb in color_manager.color_updated:
+                color_manager.color_updated += self.brush_color_changed_cb
                         
     def leave(self, **kwds):
         if self._is_active() == False:
@@ -359,6 +363,9 @@ class PolyfillMode (OncanvasEditMixin,
                 self.gradient_ctrl.queue_redraw(tdw)
 
             self.doc.view_changed_observers.remove(self.view_changed_cb)
+            color_manager = self.doc.app.brush_color_manager
+            color_manager.color_updated -= self.brush_color_changed_cb
+
         super(PolyfillMode, self).leave(**kwds)
 
     ## Properties
@@ -582,6 +589,12 @@ class PolyfillMode (OncanvasEditMixin,
             for tdw in self._overlays:
                 self.gradient_ctrl.queue_redraw(tdw)
 
+    def brush_color_changed_cb(self, manager):
+        if self.gradient_ctrl.active:
+            if self.gradient_ctrl.follow_brushcolor():
+                for tdw in self._overlays:
+                    self.gradient_ctrl.queue_redraw(tdw)
+
 
     ## Interrogating events
     def _get_event_data(self, tdw, event):
@@ -740,6 +753,7 @@ class PolyfillMode (OncanvasEditMixin,
                               visible display area.
         """
         ta = tdw.get_allocation()
+        gctl = self.gradient_ctrl
         sx, sy = tdw.model_to_display(*gctl.start_pos)
         ex, ey = tdw.model_to_display(*gctl.end_pos)
 
@@ -834,17 +848,20 @@ class GradientStore(object):
     # a gradient consists from ( 'name', (color sequence), id )
     #
     # 'color sequence' is a sequence,which consists from color step
-    # (position, (R, G, B)) or (position, (R, G, B, A))
-    # -1 means foreground color, -2 means background color.
+    # (position, (R, G, B)) or (position, (R, G, B, Alpha)) or
+    # (position, (Special_number, Alpha)).
+    # Special number is , -1 means current selected brush color.
+    #
     # if you use RGBA format,every color sequence must have alpha value.
     #
     # 'id' is integer, this should be unique, to distinguish cache.
-    # id should be generated at runtime.
+    # 'id' is generated at runtime.
     
     IDX_NAME = 0
     IDX_COLORS = 1
     IDX_ID = 2
 
+    # Gradients data format is defined in gui/gradient.py
     DEFAULT_GRADIENTS = [ 
             (
                 'Disabled', 
@@ -853,7 +870,7 @@ class GradientStore(object):
             (
                 'Foreground to Transparent', 
                 (
-                    (0.0, (-1,)), (1.0, (-1, 0))
+                    (0.0, (-1, 1.0)), (1.0, (-1, 0.0))
                 ),
             ),
            #(
@@ -958,6 +975,7 @@ class GradientStore(object):
             cg.add_color_stop_rgba(pos, r, g, b, a)
 
         return cg
+
 
 
 class GradientRenderer(Gtk.CellRenderer):
@@ -1069,6 +1087,13 @@ class GradientRenderer(Gtk.CellRenderer):
     def do_get_preferred_width(self, view_widget):
         return (self.SAMPLE_WIDTH, self.SAMPLE_HEIGHT)
 
+    def refresh_gradient_sample(self, id):
+        if id in self.cg:
+            del self.cg[id]
+            # By deleting cached data,
+            # automatically generate new gradient 
+            # in next time rendering.
+
 
 class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
     """Presents UI for directly editing point values etc."""
@@ -1145,10 +1170,12 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
                 cell, 
                 colors=GradientStore.IDX_COLORS, 
                 id=GradientStore.IDX_ID)
+        self._gradient_renderer = cell
 
         selection = treeview.get_selection()
         selection.connect('changed', self.gradientview_selection_changed_cb)
         self._gradient_selection = selection
+        
 
         popup = builder.get_object("gradient_popupmenu")
         popup.show_all()
@@ -1336,7 +1363,7 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
             name = self.ask_newlayer_name()
             brushcolor = self._app.brush_color_manager.get_color().get_rgb()
             colors = ( 
-                        (0.0, brushcolor), 
+                        (1.0, brushcolor), 
                         (1.0, brushcolor)
                      )
             self.GRADIENT_STORE.register_gradient(
@@ -1369,6 +1396,10 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
                 store[iter][GradientStore.IDX_NAME] = name
                 colors = self.get_color_array_from_controller(
                         polymode.gradient_ctrl)
+                store[iter][GradientStore.IDX_COLORS] = colors
+                self._gradient_renderer.refresh_gradient_cache(
+                    store[iter][GradientStore.IDX_ID]
+                    )
 
    #def mode_leave_notify_cb(self, mode):
    #    """ Actually, this is not GTK signal.

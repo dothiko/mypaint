@@ -42,7 +42,8 @@ class _GradientInfo(object):
         self._alpha = alpha  # Place this line here, 
                              # prior to self._color setup
 
-        self.set_color(color, alpha)
+        if color:
+            self.set_color(color, alpha)
 
     def set_linear_pos(self, linear_pos):
         self._lpos = linear_pos # Gradient linear position.
@@ -80,6 +81,26 @@ class _GradientInfo(object):
         else:
             raise ValueError("only accepts tuple or lib.color.RGBColor.")
 
+class _GradientInfo_Brushcolor(_GradientInfo):
+    """ A gradient color class, to Automatically follow current brush color.
+    """
+
+    def __init__(self, app_weakproxy, linear_pos, alpha=1.0):
+        self.app = app_weakproxy # This MUST be weakref.proxy object of 
+                                 # gui.application
+        super(_GradientInfo_Brushcolor, self).__init__(linear_pos, None, alpha)
+
+    @property
+    def color(self):
+        return self.app.brush_color_manager.get_color()
+
+    def get_rgba(self):
+        col = self.color
+        return (col.r, col.g, col.b, self._alpha)
+
+    def set_color(self, color, alpha=1.0):
+        self._alpha = alpha
+
 class GradientController(object):
     """GradientController, to manage & show gradient oncanvas.
     This cannot be Mode object, because we need to show
@@ -102,6 +123,8 @@ class GradientController(object):
         self._target_pos = None
         self._overlay_ref = None
 
+        self._follow_brushcolor = False
+        self._prev_brushcolor = None
 
     def setup_gradient(self, datas):
         """Setup gradient colors with a sequence.
@@ -114,6 +137,8 @@ class GradientController(object):
 
         """
         self.nodes = []
+        self._follow_brushcolor = False
+        self._prev_brushcolor = None
 
         for i, data in enumerate(datas):
             pos, color = data
@@ -126,17 +151,21 @@ class GradientController(object):
             assert color[0] != None
 
             if color[0] == -1:
+                # Current color gradient.
+                self._follow_brushcolor = True
+                self._prev_brushcolor = self.get_current_color()
                 if len(color) == 2:
                     alpha = color[1]
-                color = self.get_current_color()
+                self.nodes.append(
+                        _GradientInfo_Brushcolor(self.app, curpos, alpha)
+                        )
             elif color[0] == -2:
                 raise NotImplementedError("There is no background color for mypaint!")
             else:
                 assert len(color) >= 3
-
-            self.nodes.append(
-                    _GradientInfo(curpos, color, alpha)
-                    )
+                self.nodes.append(
+                        _GradientInfo(curpos, color, alpha)
+                        )
 
         self.invalidate_cairo_gradient()
 
@@ -175,6 +204,7 @@ class GradientController(object):
     def active(self, flag):
         self._active = flag
 
+
     def is_ready(self):
         return (len(self.nodes) > 0 
                 and self._start_pos != None 
@@ -192,10 +222,31 @@ class GradientController(object):
         return self.app.brush_color_manager.get_color()
 
     def refresh_current_color(self):
+        """Refresh selected(current) node with current brushcolor"""
         if self._current_node != None:
             pt = self.nodes[self._current_node]
             pt.set_color(self.get_current_color())
             self.invalidate_cairo_gradient() 
+
+    def follow_brushcolor(self):
+        """This method would be called from brush color change observer
+        of PolyfillMode.
+        If current gradient has setting to follow the brush color change
+        ,do it.
+        
+        :rtype : boolean
+        :return : True when we need update overlay visual.
+                  On the other hand, cairo gradient update notification is 
+                  done internally,so no need to care it.
+                  We need 'tdw' to update overlay, so avoid to write that
+                  code here.
+        """
+        if self._follow_brushcolor:
+            nc = self.get_current_color()
+            oc = self._prev_brushcolor
+            if (oc == None or nc.r != oc.r or nc.g != oc.g or nc.b != oc.b):
+                self.invalidate_cairo_gradient() 
+                return True
 
     def get_cairo_gradient(self, tdw):
         """Get cairo gradient.
