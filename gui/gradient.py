@@ -13,11 +13,7 @@ import gui.drawutils
 import gui.style 
 import gui.linemode
 import lib.color
-
-#class _EditZone_Gradient:
-#    EMPTY_CANVAS = 0
-#    CONTROL_NODE = 1
-#    ACTION_BUTTON = 2
+from gui.polyfillshape import _EditZone
 
 class _GradientPhase:
     INIT_NODE = 0
@@ -68,7 +64,7 @@ class _GradientInfo(object):
         """Use lib.color.RGBColor object 
         for compatibility to drawutils.py functions. """
 
-        if type(color) == tuple:
+        if type(color) == tuple or type(color) == list:
             if len(color) == 3:
                 self._color = lib.color.RGBColor(rgb=color)
             elif len(color) == 4:
@@ -79,7 +75,7 @@ class _GradientInfo(object):
         elif isinstance(color, lib.color.RGBColor):
             self._color = color # assume it as color object 
         else:
-            raise ValueError("only accepts tuple or lib.color.RGBColor.")
+            raise ValueError("only accepts tuple,list or lib.color.RGBColor.")
 
 class _GradientInfo_Brushcolor(_GradientInfo):
     """ A gradient color class, to Automatically follow current brush color.
@@ -107,6 +103,21 @@ class GradientController(object):
     current gradient setting in polyfilltool.
     """
 
+    # Class constants
+    MOVING_CURSOR = 0
+    MOVING_CURSOR_NAME = gui.cursor.Name.HAND_OPEN
+
+    MOVING_NODE_CURSOR = 1
+    MOVING_NODE_CURSOR_NAME = gui.cursor.Name.CROSSHAIR_CLOSED
+
+
+    # Action name (need to get cursor from self.app)
+    #
+    # Actually, this is not 'mode' class object.
+    # And this object should be used only from PolyfillMode.
+    # so, use the name "PolyfillMode"
+    ACTION_NAME = "PolyfillMode"
+
     def __init__(self, app):
         self.app = weakref.proxy(app)
         self._current_node = None
@@ -125,6 +136,9 @@ class GradientController(object):
 
         self._follow_brushcolor = False
         self._prev_brushcolor = None
+
+        self._cursors = {} # GUI cursor cache.
+        self._hit_area_index = None # most recent hit area index.
 
     def setup_gradient(self, datas):
         """Setup gradient colors with a sequence.
@@ -209,6 +223,7 @@ class GradientController(object):
         return (len(self.nodes) > 0 
                 and self._start_pos != None 
                 and self._end_pos != None)
+
 
     # Color/gradient related
 
@@ -372,6 +387,8 @@ class GradientController(object):
         if len(self.nodes) >= 2:
             sx, sy = tdw.model_to_display(*self._start_pos)
             ex, ey = tdw.model_to_display(*self._end_pos)
+            dist_s = math.hypot(x-sx, y-sy)
+            dist_e = math.hypot(x-ex, y-ey)
 
            #h = V * dot_product(Normalize(v), vp) / length - vp
 
@@ -379,6 +396,11 @@ class GradientController(object):
             vy = ey - sy
 
             leng, nx, ny = gui.linemode.length_and_normal(sx, sy, ex, ey)
+
+            if dist_s > leng or dist_e > leng:
+                # XXX Check the cursor location exceeding controller or not
+                # This check is actually not precise, but almost work.
+                return None
 
             vpx = x - sx
             vpy = y - sy
@@ -391,6 +413,7 @@ class GradientController(object):
             height = math.hypot(hx, hy)
 
             if height < r:
+
                 return -1
         return None
 
@@ -453,66 +476,37 @@ class GradientController(object):
 
     # GUI related
 
-   #def _update_zone_and_target(self, mode, tdw, x, y):
-   #    """Update the zone and target node under a cursor position"""
-   #
-   #    
-   #    new_zone = EditZoneMixin.EMPTY_CANVAS
-   #    new_handle_idx = None
-   #
-   #    if not self.in_drag:
-   #       #if self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
-   #       #if self.phase == PhaseMixin.ADJUST:
-   #        if self.is_actionbutton_ready():
-   #            new_target_node_index = None
-   #            self.current_button_id = None
-   #            # Test buttons for hits
-   #            hit_dist = gui.style.FLOATING_BUTTON_RADIUS
-   #
-   #            for btn_id in self.buttons.keys():
-   #                btn_pos = overlay.get_button_pos(btn_id)
-   #                if btn_pos is None:
-   #                    continue
-   #                btn_x, btn_y = btn_pos
-   #                d = math.hypot(btn_x - x, btn_y - y)
-   #                if d <= hit_dist:
-   #                    new_target_node_index = None
-   #                    new_zone = EditZoneMixin.ACTION_BUTTON
-   #                    self.current_button_id = btn_id
-   #                    break
-   #
-   #        # Test nodes for a hit, in reverse draw order
-   #        if new_zone == EditZoneMixin.EMPTY_CANVAS:
-   #            new_target_node_index, new_handle_idx = \
-   #                    self._search_target_node(tdw, x, y)
-   #            if new_target_node_index != None:
-   #                new_zone = EditZoneMixin.CONTROL_NODE
-   #
-   #        # Update the prelit node, and draw changes to it
-   #        if new_target_node_index != self.target_node_index:
-   #            # Redrawing old target node.
-   #            if self.target_node_index is not None:
-   #                self._queue_draw_node(self.target_node_index)
-   #                self.node_leave_cb(tdw, self.nodes[self.target_node_index]) 
-   #
-   #            self.target_node_index = new_target_node_index
-   #            if self.target_node_index is not None:
-   #                self._queue_draw_node(self.target_node_index)
-   #                self.node_enter_cb(tdw, self.nodes[self.target_node_index]) 
-   #
-   #        self.current_node_handle = new_handle_idx
-   #
-   #    # Update the zone, and assume any change implies a button state
-   #    # change as well (for now...)
-   #    if self.zone != new_zone:
-   #       #if not self.in_drag:
-   #        self._enter_zone_cb(new_zone)
-   #        self.zone = new_zone
-   #        self._ensure_overlay_for_tdw(tdw)
-   #        self._queue_draw_buttons()
-   #
-   #    if not self.in_drag:
-   #        self._update_cursor(tdw)
+    def update_zone_index(self, mode, tdw, x, y):
+        """Update the zone and target node under a cursor position
+        Different from ordinary 'Mode' object method,
+        This _update_zone_and_target does not update cursor.
+        """
+        idx = self.hittest_node(tdw, x, y)
+        self._hit_area_index = idx
+        return idx
+
+    def update_cursor_cb(self, tdw):
+        """Mainly called from PolyfillMode.update_cursor_cb
+        :param tdw: not used currently, for future use.
+        """
+        cursor = None
+        if self._hit_area_index == -1:
+            cursor = self._get_cursor(self.MOVING_CURSOR,
+                                      self.MOVING_CURSOR_NAME)
+        elif self._hit_area_index != None:
+            cursor = self._get_cursor(self.MOVING_NODE_CURSOR,
+                                      self.MOVING_NODE_CURSOR_NAME)
+        return cursor
+
+    def _get_cursor(self, id, name):
+        cdict = self._cursors
+        if not id in cdict:
+            cursors = self.app.cursors
+            cdict[id] = cursors.get_action_cursor(
+                    self.ACTION_NAME,
+                    name
+                    )
+        return cdict[id]
 
     # Paint related  
     def paint(self, cr, mode, tdw):

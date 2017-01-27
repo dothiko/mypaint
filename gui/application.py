@@ -101,6 +101,7 @@ import selectionmode
 import stampeditor
 import exinktool
 import projectmanager
+from lib.observable import event
 
 ## Utility methods
 
@@ -394,12 +395,6 @@ class Application (object):
         self.drawWindow.show_all()
         GLib.idle_add(self._at_application_start, filenames, fullscreen)
 
-       ## Create application unique assist object
-       ## This should be placed at least after the 
-       ## gui.blendmodifier.BlendModifier has generated.
-       #self.assistmanager = assistmanager.AssistManager(self) #assist.Stabilizer(self)
-
-
     def _at_application_start(self, filenames, fullscreen):
         col = self.brush_color_manager.get_color()
         self.brushmanager.select_initial_brush()
@@ -437,7 +432,7 @@ class Application (object):
             autosave_recovery = gui.autorecover.Presenter(self)
             autosave_recovery.run(startup=True)
 
-        # XXX my local codes --------------------
+        # XXX my codes --------------------
 
         # for Recent project 
         menu_orp = self.ui_manager.get_widget('/Menubar/FileMenu/ProjectMenu/OpenRecentProject')
@@ -862,8 +857,9 @@ class Application (object):
             if cl.autosave_dirty:
                 print("Layer %s is dirty" % cl.name)
         print('---- dirty state end ----\n')
+
     #--------------------------------------------------
-    ### My local addtion
+    ### My addtion
 
     ## Assistant
     @property
@@ -910,6 +906,17 @@ class Application (object):
                     self.brushmodifier.set_override_setting("lock_alpha", False)
 
             self._alphalock_forced = False
+
+    @event
+    def before_exit(self):
+        """ On Application exit event 
+        This event would be called right before application end.
+        When this event is called, User-confirmation dialog has already been 
+        completed, and user answered 'YES'.
+
+        Actually, called from gui.drawutils.quit_cb()
+        """
+
 
 
 class PixbufDirectory (object):

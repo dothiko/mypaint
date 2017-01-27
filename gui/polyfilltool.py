@@ -18,6 +18,7 @@ from logging import getLogger
 logger = getLogger(__name__)
 import array
 import time
+import json
 
 from gettext import gettext as _
 import gi
@@ -300,12 +301,16 @@ class PolyfillMode (OncanvasEditMixin,
     def _update_zone_and_target(self, tdw, x, y):
 
         if self.gradient_ctrl.active:
-            new_zone = self.zone
-            idx = self.gradient_ctrl.hittest_node(tdw, x, y)
+            idx = self.gradient_ctrl.update_zone_index(
+                    self, tdw, x, y)
             if idx >= -1:
                 new_zone = _EditZone.GRADIENT_BAR
-                self._enter_new_zone(tdw, new_zone)
-                return
+                if new_zone != self.zone:
+                    self.zone = new_zone
+                    self._enter_new_zone(tdw, new_zone)
+                else:
+                    self._update_cursor(tdw)
+                return # avoid supercall
 
         super(PolyfillMode, self)._update_zone_and_target(tdw, x, y)
 
@@ -313,7 +318,10 @@ class PolyfillMode (OncanvasEditMixin,
         # Update the "real" inactive cursor too:
         # these codes also a little changed from inktool.
         cursor = None
-        if self.phase in (_Phase.ADJUST,
+        if self.zone == _EditZone.GRADIENT_BAR:
+            assert self.gradient_ctrl.active
+            cursor = self.gradient_ctrl.update_cursor_cb(tdw)
+        elif self.phase in (_Phase.ADJUST,
                 _Phase.ADJUST_POS):
             if self.zone == _EditZone.CONTROL_NODE:
                 cursor = self._crosshair_cursor
@@ -844,24 +852,29 @@ class OverlayPolyfill (OverlayBezier):
 
 class GradientStore(object):
 
-    # default gradents.
-    # a gradient consists from ( 'name', (color sequence), id )
-    #
-    # 'color sequence' is a sequence,which consists from color step
-    # (position, (R, G, B)) or (position, (R, G, B, Alpha)) or
-    # (position, (Special_number, Alpha)).
-    # Special number is , -1 means current selected brush color.
-    #
-    # if you use RGBA format,every color sequence must have alpha value.
-    #
-    # 'id' is integer, this should be unique, to distinguish cache.
-    # 'id' is generated at runtime.
+    """ A wrapper class of Gtk.Liststore, for managing gradents.
+    """
     
+    # Index constants for ListStore.
     IDX_NAME = 0
     IDX_COLORS = 1
     IDX_ID = 2
+    IDX_FLAG = 3
 
-    # Gradients data format is defined in gui/gradient.py
+    # Default Gradient presets:
+    #
+    # a gradient consists from ( 'name', (color tuple) )
+    #
+    # 'color tuple' is a sequence,which consists from color step
+    # (position, (R, G, B)) or (position, (R, G, B, Alpha)) or
+    # (position, (Special_number, Alpha)).
+    # Special number is , -1 means current selected brush color.
+    # 
+    # This ListStore provides gradient data to not only renderer of Optionpresenter,
+    # also GradientController (defined in gui/gradient.py). 
+    # That controller object is used as class attribute of PolyfillMode.
+    # GradientController copys color tuples from this Liststore, and
+    # end-user would place or edit that colors on canvas with that controller.
     DEFAULT_GRADIENTS = [ 
             (
                 'Disabled', 
@@ -891,15 +904,59 @@ class GradientStore(object):
             ),
         ]
 
+    # Bitflag constants
+    FLAG_DEFAULT = 0x1 # This preset is default one, not write to 
+                       # preference file.
+
+    # Gradients filename
+    USER_GRADIENTS_FILE = "gradients.json"
+
     def __init__(self): 
-        self._store = Gtk.ListStore(str,object,int)
+        # store is (name, colortuple, (generated)id, bitflag)
+        self._store = Gtk.ListStore(str, object, int ,int)
         self._id_seed = 0
         for name, colors in self.DEFAULT_GRADIENTS:
-            self.register_gradient(name, colors)
+            self.register_gradient(name, colors,
+                    self.FLAG_DEFAULT)
 
-    def register_gradient(self, name, colors):
+    def load_from_file(self, app):
+        gfile = os.path.join(app.state_dirs.user_data, 
+                self.USER_GRADIENTS_FILE)
+
+        if os.path.exists(gfile):
+            with open(gfile, 'rt') as ifp:
+                datas = json.load(ifp)
+                for name, colors in datas:
+                    self.register_gradient(name, colors, 0)
+
+    def save_to_file(self, app):
+        gfile = os.path.join(app.state_dirs.user_data, 
+                self.USER_GRADIENTS_FILE)
+
+        with open(gfile, 'wt') as ofp:
+            # Some datas should not be recorded.
+            # so, modifying(generating) data list 
+            # for saving file.
+            datas = []
+            iter = self._store.get_iter_first()
+
+            while iter != None:
+                name, colors, id, flag = self._store[iter]
+                if flag & self.FLAG_DEFAULT == 0:
+                    datas.append( (name, colors) )
+                iter = self._store.iter_next(iter)
+
+            json.dump(datas, ofp)
+
+
+    def register_gradient(self, name, colors, bitflag=0):
+        """
+        :param bitflag: binary flag for special setting.
+                        this is combination of 
+                        FLAG_* constant class attributes.
+        """
         id = self._id_seed 
-        self._store.append((name, colors, id))
+        self._store.append((name, colors, id, bitflag))
         self._id_seed = id + 1
 
     def remove_gradient(self, target_name=None, target_id=None, iter=None):
@@ -912,7 +969,7 @@ class GradientStore(object):
 
         iter = self._store.get_iter_first()
         while iter != None:
-            name, colors, id = self._store[iter]
+            name, colors, id, flag = self._store[iter]
             if target_name:
                 if target_name == name:
                     self._store.remove(iter)
@@ -930,7 +987,8 @@ class GradientStore(object):
         return self._store
 
     def get_gradient_data(self, iter):
-        """Get a sequance of gradient data easily.
+        """Utility method.
+        Get a colortuples(sequance of gradient data) easily.
         """
         return self._store[iter][self.IDX_COLORS]
 
@@ -1098,7 +1156,11 @@ class GradientRenderer(Gtk.CellRenderer):
 class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
     """Presents UI for directly editing point values etc."""
 
-    GRADIENT_STORE = GradientStore()
+    _gradient_store = None
+    @classmethod
+    def on_app_exit(cls, app):
+        assert cls._gradient_store != None
+        cls._gradient_store.save_to_file(app)
 
     def __init__(self):
         super(OptionsPresenter_Polyfill, self).__init__()
@@ -1156,7 +1218,7 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
 
 
         # Creating gradient sample and its popup menu
-        store = self.GRADIENT_STORE.liststore
+        store = self.gradient_store.liststore
 
         treeview = Gtk.TreeView()
         treeview.set_size_request(175, 125)
@@ -1164,7 +1226,7 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         col = Gtk.TreeViewColumn(_('Name'), cell, text=0)
         treeview.append_column(col)
 
-        cell = GradientRenderer(self.GRADIENT_STORE)
+        cell = GradientRenderer(self.gradient_store)
         col = Gtk.TreeViewColumn(
                 _('Gradient'), 
                 cell, 
@@ -1241,6 +1303,20 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         finally:
             self._updating_ui = False                               
 
+    @property
+    def gradient_store(self):
+        if self._gradient_store == None:
+            cls = self.__class__
+            store = GradientStore()
+            store.load_from_file(self._app)
+
+            # also, adding application exit handler
+            # to save gradient colors.
+            self._app.before_exit += cls.on_app_exit
+
+            cls._gradient_store = store
+        return self._gradient_store
+
     ## Utility method
     def get_current_gradient_data(self, iter=None):
         if iter == None:
@@ -1248,7 +1324,7 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
 
         # Re-check iter
         if iter:
-            return self.GRADIENT_STORE.get_gradient_data(iter)
+            return self.gradient_store.get_gradient_data(iter)
         else:
             return None
 
@@ -1311,7 +1387,7 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
             # so, we cannot share this with
             # activate_controller_togglebutton_toggled_cb(),
             # just toggling that button does not work well.
-            data = self.GRADIENT_STORE.get_gradient_data(iter)
+            data = self.gradient_store.get_gradient_data(iter)
             polymode.enable_gradient_controller(data)
             
             self._updating_ui = True
@@ -1348,14 +1424,14 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
            #                     cn.get_rgba())
            #                 )
 
-            self.GRADIENT_STORE.register_gradient(
+            self.gradient_store.register_gradient(
                     name,
                     colors)
 
     def remove_gradient_menuitem_activate_cb(self, menuitem):     
         store, iter = self._gradient_selection.get_selected()
         if iter != None:
-            self.GRADIENT_STORE.remove_gradient(iter=iter)
+            self.gradient_store.remove_gradient(iter=iter)
 
     def new_gradient_menuitem_activate_cb(self, menuitem):
         polymode, junk = self.target
@@ -1363,10 +1439,10 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
             name = self.ask_newlayer_name()
             brushcolor = self._app.brush_color_manager.get_color().get_rgb()
             colors = ( 
-                        (1.0, brushcolor), 
+                        (0.0, brushcolor), 
                         (1.0, brushcolor)
                      )
-            self.GRADIENT_STORE.register_gradient(
+            self.gradient_store.register_gradient(
                     name,
                     colors)
 
@@ -1397,7 +1473,7 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
                 colors = self.get_color_array_from_controller(
                         polymode.gradient_ctrl)
                 store[iter][GradientStore.IDX_COLORS] = colors
-                self._gradient_renderer.refresh_gradient_cache(
+                self._gradient_renderer.refresh_gradient_sample(
                     store[iter][GradientStore.IDX_ID]
                     )
 

@@ -694,6 +694,9 @@ class DrawWindow (Gtk.Window):
     def quit_cb(self, *junk):
         model = self.app.doc.model
         model.sync_pending_changes()
+        
+        # XXX My added code, to wait pending autosave finished.
+        # This might be needed when extremely large picture editing.
         proc = model.get_autosave_processor()
         if proc.has_work():
             progress = gui.projectsave_progress.ProjectSave_progress(proc, self)
@@ -716,9 +719,7 @@ class DrawWindow (Gtk.Window):
         if not ok_to_quit:
             return True
 
-
-
-
+        self.app.before_exit() # XXX My added code, to notify application end
         self.app.profiler.cleanup()
         model.cleanup()
         Gtk.main_quit()

@@ -7,11 +7,12 @@ from gettext import gettext as _
 from gi.repository import Gdk
 
 from gui.oncanvas import *
-
+import gui.gradient
+from gui.beziertool import _Control_Handle, _Node_Bezier
 
 class _EditZone(EditZoneMixin):
     """Enumeration of what the pointer is on in the ADJUST phase"""
-    GRADIENT_BAR = 104 
+    GRADIENT_BAR = 1001
 
 class _Phase(PhaseMixin):
     """Enumeration of the states that an BezierCurveMode can be in"""
