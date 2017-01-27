@@ -505,8 +505,7 @@ class Shape_Polyline(Shape_Bezier):
                     mode.nodes.append(node)
                     mode._last_event_node = node
                     mode.current_node_index = len(mode.nodes)-1
-                   #mode._reset_selected_nodes(mode.current_node_index)
-                    mode.selected_node(mode.current_node_index, True)
+                    mode.select_node(mode.current_node_index, True)
                     mode._queue_draw_node(mode.current_node_index)
                     mode.phase = _Phase.ADJUST_POS
                     mode.drag_offset.start(mx, my)
@@ -709,6 +708,8 @@ class Shape_Rectangle(Shape):
                 # FALLTHRU: *do* start a drag 
 
             elif mode.zone == _EditZone.EMPTY_CANVAS:
+                if (len(mode.nodes) == 4):
+                    mode.accept_button_cb(tdw)
                 self.ensure_mode_nodes(mode, mx, my)
 
 

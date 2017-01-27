@@ -478,7 +478,7 @@ class PolyfillMode (OncanvasEditMixin,
                 
                 if self.phase == _Phase.ADJUST:
                     if (len(self.nodes) > 0): 
-                       #if shift_state and ctrl_state:
+                        # Calling Action buttons into cursor position
                         if shape.alt_state:
                             self._queue_draw_buttons() 
                             self.forced_button_pos = (event.x, event.y)
@@ -1473,7 +1473,7 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
                 colors = self.get_color_array_from_controller(
                         polymode.gradient_ctrl)
                 store[iter][GradientStore.IDX_COLORS] = colors
-                self._gradient_renderer.refresh_gradient_sample(
+                self._gradient_renderer.refresh_gradient_(
                     store[iter][GradientStore.IDX_ID]
                     )
 
