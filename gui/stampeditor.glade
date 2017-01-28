@@ -43,7 +43,6 @@
                 <property name="ypad">6</property>
                 <property name="label" translatable="yes">&lt;Stamp-name-here&gt;</property>
                 <property name="ellipsize">start</property>
-                <property name="angle">0.059999999999999998</property>
                 <attributes>
                   <attribute name="weight" value="bold"/>
                 </attributes>

@@ -693,19 +693,19 @@ class GradientController(object):
                 cl, cnx, cny = gui.linemode.length_and_normal(
                         sx, sy,
                         x, y)
+                ecl, cnx, cny = gui.linemode.length_and_normal(
+                        ex, ey,
+                        x, y)
 
-                # Use virtual-cross product to detect 
-                # whether exceeding 1st point or not.
-                # if this value is less than 0,
-                # it exceeds the 1st point.
-                cp = gui.linemode.cross_product(sx, sy, x, y)
-
-                min_lpos = self.nodes[idx-1].linear_pos
-                max_lpos = self.nodes[idx+1].linear_pos
-
-                if l > 0.0:
+                # If cursor-to-start_pos length or cursor-to-end_pos
+                # length is larger than entire controller length , 
+                # it means the current dragging node exceeding start point.
+                # It should not happen.
+                if l > 0.0 and cl <= l and ecl <= l:
+                    min_lpos = self.nodes[idx-1].linear_pos
+                    max_lpos = self.nodes[idx+1].linear_pos
                     cl /= l
-                    if cp > 0 and cl > min_lpos and cl < max_lpos:
+                    if cl > min_lpos and cl < max_lpos:
                         self._gradient_update = True
                         self.nodes[idx].set_linear_pos(cl)
         elif self._phase == _GradientPhase.MOVE:
