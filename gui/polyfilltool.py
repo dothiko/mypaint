@@ -647,9 +647,17 @@ class PolyfillMode (OncanvasEditMixin,
                     
             bbox = self._shape.get_maximum_rect(None, self)
             gradient = None
-            if self.gradient_ctrl.active:
-                gradient = self.gradient_ctrl.generate_gradient(None,
-                        offset_x=-bbox[0], offset_y=-bbox[1])
+            gctl = self.gradient_ctrl
+            if gctl.active:
+                sx, sy = gctl.start_pos
+                ex, ey = gctl.end_pos
+                sx-=bbox[0]
+                ex-=bbox[0]
+                sy-=bbox[1]
+                ey-=bbox[1]
+                gradient = self.gradient_ctrl.generate_gradient(
+                        sx, sy, ex, ey)
+                        
 
             cmd = PolyFill(
                     self.doc.model,
@@ -1114,33 +1122,39 @@ class GradientRenderer(Gtk.CellRenderer):
         return self.cg[id]
 
     def draw_background(self, cr, cell_area):
-        h = 0
+
         tile_size = 8
-        idx = 0
-        cr.save()
-        tilecolor = ( (0.3, 0.3, 0.3) , (0.7, 0.7, 0.7) )
-        while h < cell_area.height:
-            w = 0
-
-            if h + tile_size > cell_area.height:
-                h = cell_area.height - h
-
-            while w < cell_area.width:
-
-                if w + tile_size > cell_area.width:
-                    w = cell_area.width - w
-
-               #cr.rectangle(cell_area.x + w, cell_area.y + h, 
-               #        tile_size, tile_size)
-                cr.rectangle(w, h, 
-                        tile_size, tile_size)
-                cr.set_source_rgb(*tilecolor[idx%2])
-                cr.fill()
-                idx+=1
-                w += tile_size
-            h += tile_size
-            idx += 1
-        cr.restore()
+        gui.drawutils.render_checks(
+                cr, 24, 
+                cell_area.width / tile_size + 1, 
+                cell_area.height / tile_size + 1)
+       #h = 0
+       #tile_size = 8
+       #idx = 0
+       #cr.save()
+       #tilecolor = ( (0.3, 0.3, 0.3) , (0.7, 0.7, 0.7) )
+       #while h < cell_area.height:
+       #    w = 0
+       #
+       #    if h + tile_size > cell_area.height:
+       #        h = cell_area.height - h
+       #
+       #    while w < cell_area.width:
+       #
+       #        if w + tile_size > cell_area.width:
+       #            w = cell_area.width - w
+       #
+       #       #cr.rectangle(cell_area.x + w, cell_area.y + h, 
+       #       #        tile_size, tile_size)
+       #        cr.rectangle(w, h, 
+       #                tile_size, tile_size)
+       #        cr.set_source_rgb(*tilecolor[idx%2])
+       #        cr.fill()
+       #        idx+=1
+       #        w += tile_size
+       #    h += tile_size
+       #    idx += 1
+       #cr.restore()
 
     def do_get_preferred_width(self, view_widget):
         return (self.SAMPLE_WIDTH, self.SAMPLE_HEIGHT)

@@ -387,13 +387,15 @@ def _brush_preview_bg_fg(surface, size_in_tiles, brushinfo):
     return fgcol, spiral
 
 
-def render_checks(cr, size, nchecks):
+def render_checks(cr, size, nchecks, v_nchecks=None):
     """Render a checquerboard pattern to a cairo surface"""
     cr.set_source_rgb(*gui.style.ALPHA_CHECK_COLOR_1)
     cr.paint()
     cr.set_source_rgb(*gui.style.ALPHA_CHECK_COLOR_2)
+    if v_nchecks is None:
+        v_nchecks = nchecks
     for i in xrange(0, nchecks):
-        for j in xrange(0, nchecks):
+        for j in xrange(0, v_nchecks):
             if (i+j) % 2 == 0:
                 continue
             cr.rectangle(i*size, j*size, size, size)

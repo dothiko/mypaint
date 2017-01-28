@@ -21,7 +21,7 @@ class _GradientPhase:
     MOVE_NODE = 2
     STAY = 10
 
-class _GradientInfo(object):
+class GradientInfo(object):
     """ This class contains colors as lib.color.RGBColor object.
     Thats because to keep compatibility to drawutils.py functions.
     With storing lib.color.RGBColor object, we can use that color
@@ -37,6 +37,7 @@ class _GradientInfo(object):
         self._lpos = linear_pos # Gradient linear position.
         self._alpha = alpha  # Place this line here, 
                              # prior to self._color setup
+        self._gdk_color = None
 
         if color:
             self.set_color(color, alpha)
@@ -56,17 +57,23 @@ class _GradientInfo(object):
     def alpha(self):
         return self._alpha
 
+    @alpha.setter
+    def alpha(self, value):
+        self._alpha = value
+
     def get_rgba(self):
-        col = self._color
+        col = self.color # Use property, to enable overriding
         return (col.r, col.g, col.b, self._alpha)
 
     def set_color(self, color, alpha=1.0):
         """Use lib.color.RGBColor object 
         for compatibility to drawutils.py functions. """
 
+        self._gdk_color = None
         if type(color) == tuple or type(color) == list:
             if len(color) == 3:
                 self._color = lib.color.RGBColor(rgb=color)
+                self._alpha = alpha
             elif len(color) == 4:
                 self._color = lib.color.RGBColor(rgb=color[:3])
                 self._alpha = color[3]
@@ -74,25 +81,36 @@ class _GradientInfo(object):
                 raise ValueError
         elif isinstance(color, lib.color.RGBColor):
             self._color = color # assume it as color object 
+            self._alpha = alpha
+        elif isinstance(color, Gdk.Color):
+            self._color = lib.color.RGBColor(
+                    r = color.red / 65535.0,
+                    g = color.green / 65535.0,
+                    b = color.blue / 65535.0)
+            self._alpha = alpha
         else:
             raise ValueError("only accepts tuple,list or lib.color.RGBColor.")
 
-class _GradientInfo_Brushcolor(_GradientInfo):
+    @property
+    def gdk_color(self):
+        if self._gdk_color is None:
+            col = self.color
+            self._gdk_color = Gdk.Color(col.r * 65535, 
+                                        col.g * 65535, 
+                                        col.b * 65535)
+        return self._gdk_color
+
+class GradientInfo_Brushcolor(GradientInfo):
     """ A gradient color class, to Automatically follow current brush color.
     """
 
-    def __init__(self, app_weakproxy, linear_pos, alpha=1.0):
-        self.app = app_weakproxy # This MUST be weakref.proxy object of 
-                                 # gui.application
-        super(_GradientInfo_Brushcolor, self).__init__(linear_pos, None, alpha)
+    def __init__(self, app, linear_pos, alpha=1.0):
+        self.app = app
+        super(GradientInfo_Brushcolor, self).__init__(linear_pos, None, alpha)
 
     @property
     def color(self):
         return self.app.brush_color_manager.get_color()
-
-    def get_rgba(self):
-        col = self.color
-        return (col.r, col.g, col.b, self._alpha)
 
     def set_color(self, color, alpha=1.0):
         self._alpha = alpha
@@ -119,9 +137,9 @@ class GradientController(object):
     ACTION_NAME = "PolyfillMode"
 
     def __init__(self, app):
-        self.app = weakref.proxy(app)
-        self._current_node = None
-        self._target_node = None
+        self.app = app
+        self._current_node_index = None
+        self._target_node_index = None
         self._active = False
         self.nodes = []
         self.invalidate_cairo_gradient()
@@ -157,12 +175,12 @@ class GradientController(object):
         for i, data in enumerate(datas):
             pos, color = data
             alpha = 1.0
-            if pos != None:
+            if pos is not None:
                 curpos = max(min(pos, 1.0), 0.0)
             else:
                 curpos = max(min(float(i) / (len(datas)-1), 1.0), 0.0)
 
-            assert color[0] != None
+            assert color[0] is not None
 
             if color[0] == -1:
                 # Current color gradient.
@@ -171,14 +189,14 @@ class GradientController(object):
                 if len(color) == 2:
                     alpha = color[1]
                 self.nodes.append(
-                        _GradientInfo_Brushcolor(self.app, curpos, alpha)
+                        GradientInfo_Brushcolor(self.app, curpos, alpha)
                         )
             elif color[0] == -2:
                 raise NotImplementedError("There is no background color for mypaint!")
             else:
                 assert len(color) >= 3
                 self.nodes.append(
-                        _GradientInfo(curpos, color, alpha)
+                        GradientInfo(curpos, color, alpha)
                         )
 
         self.invalidate_cairo_gradient()
@@ -221,8 +239,8 @@ class GradientController(object):
 
     def is_ready(self):
         return (len(self.nodes) > 0 
-                and self._start_pos != None 
-                and self._end_pos != None)
+                and self._start_pos is not None 
+                and self._end_pos is not None)
 
 
     # Color/gradient related
@@ -238,8 +256,8 @@ class GradientController(object):
 
     def refresh_current_color(self):
         """Refresh selected(current) node with current brushcolor"""
-        if self._current_node != None:
-            pt = self.nodes[self._current_node]
+        if self._current_node_index is not None:
+            pt = self.nodes[self._current_node_index]
             pt.set_color(self.get_current_color())
             self.invalidate_cairo_gradient() 
 
@@ -259,7 +277,7 @@ class GradientController(object):
         if self._follow_brushcolor:
             nc = self.get_current_color()
             oc = self._prev_brushcolor
-            if (oc == None or nc.r != oc.r or nc.g != oc.g or nc.b != oc.b):
+            if (oc is None or nc.r != oc.r or nc.g != oc.g or nc.b != oc.b):
                 self.invalidate_cairo_gradient() 
                 return True
 
@@ -267,28 +285,23 @@ class GradientController(object):
         """Get cairo gradient.
         This is for Editing gradient.
         """
-        if self._cairo_gradient == None:
-            self._cairo_gradient = self.generate_gradient(tdw)
-        return self._cairo_gradient
-
-    def generate_gradient(self, tdw=None, offset_x=0, offset_y=0):
-        """Generate cairo gradient object from
-        internal datas.
-        Use this for Final output.
-        """
-        if len(self.nodes) >= 2:
+        if self._cairo_gradient is None:
             if tdw:
                 sx, sy = tdw.model_to_display(*self._start_pos)
                 ex, ey = tdw.model_to_display(*self._end_pos)
             else:
                 sx, sy = self._start_pos
                 ex, ey = self._end_pos
+            
+            self._cairo_gradient = self.generate_gradient(sx, sy, ex, ey)
+        return self._cairo_gradient
 
-            sx += offset_x
-            ex += offset_x
-            sy += offset_y
-            ey += offset_y
-
+    def generate_gradient(self, sx, sy, ex, ey):
+        """Generate cairo gradient object from
+        internal datas.
+        Use this for Final output.
+        """
+        if len(self.nodes) >= 2:
             g = cairo.LinearGradient(
                 sx, sy,
                 ex, ey
@@ -316,14 +329,14 @@ class GradientController(object):
         if i < len(self.nodes):
             self.nodes.insert(
                     i,
-                    _GradientInfo(linear_pos, color)
+                    GradientInfo(linear_pos, color)
                     )
         else:
             self.nodes.append(
-                    _GradientInfo(linear_pos, color)
+                    GradientInfo(linear_pos, color)
                     )
 
-        self._current_node = i
+        self._current_node_index = i
 
 
         self.invalidate_cairo_gradient() 
@@ -346,24 +359,29 @@ class GradientController(object):
                 linear_pos, 
                 self.get_current_color())
         
-    def remove_gradient_point(self, idx):
+    def remove_gradient_node(self, idx):
         assert idx < len(self.nodes)
 
         del self.nodes[idx]
-        self.set_target_node(None)
+        self.set_target_node_index(None)
         self.invalidate_cairo_gradient() 
 
     @property
-    def current_point(self):
-        return self._current_node
+    def current_node_index(self):
+        return self._current_node_index
 
-    def set_target_node(self, idx):
-        self._target_node = idx
-        self._current_node = idx
+    @property
+    def current_node(self):
+        if self._current_node_index is not None:
+            return self.nodes[self._current_node_index]
 
-    def clear_target_node(self):
-        self._target_node = None
-        # Still remained self._current_node
+    def set_target_node_index(self, idx):
+        self._target_node_index = idx
+        self._current_node_index = idx
+
+    def clear_target_node_index(self):
+        self._target_node_index = None
+        # Still remained self._current_node_index
             
     def hittest_node(self, tdw, x, y):
         """Get the index of a point which located at target position.
@@ -446,9 +464,9 @@ class GradientController(object):
         dx = self._dx
         dy = self._dy
 
-        if self._start_pos != None:
+        if self._start_pos is not None:
             sx, sy = tdw.model_to_display(*self._start_pos)
-        if self._end_pos != None:
+        if self._end_pos is not None:
             ex, ey = tdw.model_to_display(*self._end_pos)
             tl, nx, ny = gui.linemode.length_and_normal(
                     sx, sy,
@@ -493,7 +511,7 @@ class GradientController(object):
         if self._hit_area_index == -1:
             cursor = self._get_cursor(self.MOVING_CURSOR,
                                       self.MOVING_CURSOR_NAME)
-        elif self._hit_area_index != None:
+        elif self._hit_area_index is not None:
             cursor = self._get_cursor(self.MOVING_NODE_CURSOR,
                                       self.MOVING_NODE_CURSOR_NAME)
         return cursor
@@ -573,7 +591,7 @@ class GradientController(object):
 
             cr.restore()
 
-        if self._target_pos != None:
+        if self._target_pos is not None:
             x, y = self._target_pos
             gui.drawutils.render_round_floating_color_chip(
                     cr,
@@ -591,7 +609,7 @@ class GradientController(object):
                 gui.style.EDITABLE_ITEM_COLOR,
                 self._radius)
 
-        if self._target_node == i or self._current_node == i:
+        if self._target_node_index == i or self._current_node_index == i:
             gui.drawutils.render_round_floating_color_chip(
                     cr,
                     x, y,
@@ -621,7 +639,7 @@ class GradientController(object):
         for i, pt, cx, cy, ex, ey in self._enum_node_position(tdw):
             self.queue_single_point(tdw, ex, ey, r) 
 
-            if sx != None: # for nodes after index 1
+            if sx is not None: # for nodes after index 1
                 # queue parts of line
                 tsx = min(sx, ex)
                 tsy = min(sy, ey)
@@ -641,9 +659,9 @@ class GradientController(object):
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
 
         if idx >= 0:
-            self.set_target_node(idx)
+            self.set_target_node_index(idx)
             if shift_state: 
-               #self.remove_gradient_point(idx)
+               #self.remove_gradient_node(idx)
                 self.refresh_current_color()
                 self._phase = _GradientPhase.STAY
             else:
@@ -676,7 +694,7 @@ class GradientController(object):
         if self._phase == _GradientPhase.INIT_NODE:
             self._target_pos = (x, y)
         elif self._phase == _GradientPhase.MOVE_NODE:
-            idx = self._target_node
+            idx = self._target_node_index
             if idx == 0:
                 self._start_pos = tdw.display_to_model(x, y)
                 self._gradient_update = True
@@ -717,9 +735,9 @@ class GradientController(object):
         
         self.queue_redraw(tdw) # to erase
         if self._phase == _GradientPhase.INIT_NODE:
-            if self._start_pos == None:
+            if self._start_pos is None:
                 self.set_start_pos(tdw, self._target_pos)
-            elif self._end_pos == None:
+            elif self._end_pos is None:
                 self.set_end_pos(tdw, self._target_pos)
 
             self.invalidate_cairo_gradient()
@@ -732,7 +750,7 @@ class GradientController(object):
                 # to invoke generation of it in paint() method.
                 self.invalidate_cairo_gradient()
 
-            self.clear_target_node()
+            self.clear_target_node_index()
         elif self._phase == _GradientPhase.MOVE:
             self.finalize_offsets(tdw)
 
@@ -746,9 +764,9 @@ class GradientController(object):
         because there is no access method for tdw.
         so, caller must update visual of gradient controller.
         """
-        idx = self._current_node
+        idx = self._current_node_index
         if 0 < idx < len(self.nodes)-1:
-            self.remove_gradient_point(idx)
+            self.remove_gradient_node(idx)
 
 
 if __name__ == '__main__':
