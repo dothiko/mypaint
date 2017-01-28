@@ -201,6 +201,9 @@ class State (object):
             return
         self.keydown = False
         duration_time = event.time/1000.0 - self._enter_time 
+        # Now self.autoleave_timeout configurable,
+        # So it might be less than self.max_key_hit_duration.
+        # Thus, We need to check both of them here.
         if (duration_time < self.max_key_hit_duration and
                 duration_time < self.autoleave_timeout):
             pass  # accept as one-time hit
@@ -230,6 +233,11 @@ class State (object):
     def _autoleave_timeout_cb(self):
         if not self.keydown:
             self.leave('timeout')
+        else:
+            # We need to stop timer, but it would be done
+            # just returning False.
+            # So, only clear _autoleave_timeout_id.
+            self._autoleave_timeout_id = None
         return False
 
     ## Outside-popup timer
