@@ -1128,33 +1128,6 @@ class GradientRenderer(Gtk.CellRenderer):
                 cr, 24, 
                 cell_area.width / tile_size + 1, 
                 cell_area.height / tile_size + 1)
-       #h = 0
-       #tile_size = 8
-       #idx = 0
-       #cr.save()
-       #tilecolor = ( (0.3, 0.3, 0.3) , (0.7, 0.7, 0.7) )
-       #while h < cell_area.height:
-       #    w = 0
-       #
-       #    if h + tile_size > cell_area.height:
-       #        h = cell_area.height - h
-       #
-       #    while w < cell_area.width:
-       #
-       #        if w + tile_size > cell_area.width:
-       #            w = cell_area.width - w
-       #
-       #       #cr.rectangle(cell_area.x + w, cell_area.y + h, 
-       #       #        tile_size, tile_size)
-       #        cr.rectangle(w, h, 
-       #                tile_size, tile_size)
-       #        cr.set_source_rgb(*tilecolor[idx%2])
-       #        cr.fill()
-       #        idx+=1
-       #        w += tile_size
-       #    h += tile_size
-       #    idx += 1
-       #cr.restore()
 
     def do_get_preferred_width(self, view_widget):
         return (self.SAMPLE_WIDTH, self.SAMPLE_HEIGHT)
