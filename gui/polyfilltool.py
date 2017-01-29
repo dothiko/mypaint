@@ -173,7 +173,8 @@ class PolyFill(Command):
 ## The Polyfill Mode Class
 
 class PolyfillMode (OncanvasEditMixin,
-        HandleNodeUserMixin):
+                    HandleNodeUserMixin,
+                    RecallableNodeMixin):
     """ Polygon fill mode
 
     This class can handle multiple types of shape,
@@ -260,6 +261,7 @@ class PolyfillMode (OncanvasEditMixin,
         if PolyfillMode._shape == None:
             self.shape_type = Shape.TYPE_BEZIER
         self.forced_button_pos = None
+        self._init_recall()
 
 
     def _reset_capture_data(self):
@@ -1144,6 +1146,7 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
     """Presents UI for directly editing point values etc."""
 
     _gradient_store = None
+
     @classmethod
     def on_app_exit(cls, app):
         assert cls._gradient_store != None
@@ -1195,14 +1198,10 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         style.set_junction_sides(Gtk.JunctionSides.TOP)
         base_grid.attach(toolbar, 0, 0, 2, 1)
 
-        # Creating history combo
-        combo = builder.get_object('path_history_combobox')
-        combo.set_model(PolyfillMode.stroke_history.liststore)
-        cell = Gtk.CellRendererText()
-        combo.pack_start(cell,True)
-        combo.add_attribute(cell,'text',0)
-        self._stroke_history_combo = combo
-
+        # Creating path history recall combo
+        self.create_recall_combobox(builder,
+                                    'path_history_combobox',
+                                    PolyfillMode)
 
         # Creating gradient sample and its popup menu
         store = self.gradient_store.liststore
@@ -1210,6 +1209,7 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
         treeview = Gtk.TreeView()
         treeview.set_size_request(175, 125)
         treeview.set_model(store)
+        cell = Gtk.CellRendererText()
         col = Gtk.TreeViewColumn(_('Name'), cell, text=0)
         treeview.append_column(col)
 

@@ -185,12 +185,14 @@ class _Node_Bezier (_Control_Handle):
         self.x = x
         self.y = y
 
-    def copy(self, node, dx=0, dy=0):
+    def copy(self, dx=0, dy=0, node=None):
         """Copy all information to node,with (dx,dy) offset.
-        :param node: the _Node_Bezier object copy to
         :param dx:offset x,in model
         :param dy:offset y,in model
+        :param node: the _Node_Bezier object copy to
         """
+        if node is None:
+            node = _Node_Bezier(0, 0)
         node.x = self.x + dx
         node.y = self.y + dy
         node.pressure = self.pressure
@@ -248,74 +250,13 @@ class PressureMap(object):
     def get_pressure(self, step):
         return self.curve_widget.get_pressure_value(step)
 
-class StrokeHistory(object):
-    """ Stroke History class.this is singleton,stored as 
-    class attribute of BezierMode
-    """
-    def __init__(self, maxcount):
-        self._max = maxcount
-        self._nodes = Gtk.ListStore(str,object)
-        self._nodes.append( ('------', None) )
-        
-    def register(self, nodes):
-        lt = time.localtime()
-        timestr = '%02d:%02d:%02d-%d' % (lt.tm_hour, lt.tm_min,
-                lt.tm_sec, len(nodes))
-        self._nodes.insert(1, (timestr, nodes))
-        if len(self._nodes) > self._max:
-            del self._nodes[self._max - 1]
-
-    @property
-    def liststore(self):
-        return self._nodes
-
-    def get_and_place_nodes(self, idx, x, y):
-        """ generate a copy of stroke and
-        'place' (move) it to (x,y)
-
-        :param idx: the REVERSED index(most recent one is 0) of nodes.
-        """
-        assert 1 <= idx < len(self._nodes)
-        src = self._nodes[idx][1]
-        fn = src[0]
-        ret = []
-        for cn in src:
-            if x != None and y != None:
-                nx = (cn.x - fn.x) + x
-                ny = (cn.y - fn.y) + y
-            else:
-                nx = cn.x
-                ny = cn.y
-
-            new_node=_Node_Bezier(
-                    nx,ny,
-                    cn.pressure,
-                    cn.xtilt,cn.ytilt,
-                    cn.time,
-                    None,
-                    cn.curve)
-
-            for i in (0, 1):
-                handle = cn.get_control_handle(i)
-                if x != None and y != None:
-                    nx = (handle.x - fn.x) + x 
-                    ny = (handle.y - fn.y) + y
-                else:
-                    nx = handle.x
-                    ny = handle.y
-                new_node.set_control_handle(i, nx, ny, False)
-                if cn.curve:
-                    break
-
-            ret.append(new_node)
-
-        return ret
         
 
 
 
 class BezierMode (PressureEditableMixin,
-                  HandleNodeUserMixin):
+                  HandleNodeUserMixin,
+                  RecallableNodeMixin):
 
     ## Metadata properties
     ACTION_NAME = "BezierCurveMode"
@@ -421,7 +362,6 @@ class BezierMode (PressureEditableMixin,
 
     _DEFAULT_DTIME = 0.5 # default dtime value
 
-    stroke_history = StrokeHistory(6) # stroke history
 
     DEFAULT_POINT_CORNER = False       # default point is curve,not corner
 
@@ -437,7 +377,7 @@ class BezierMode (PressureEditableMixin,
 
     def __init__(self, **kwargs):
         super(BezierMode, self).__init__(**kwargs)
-        self._stroke_from_history = False
+        self._init_recall()
         self.forced_button_pos = None
 
     def _reset_capture_data(self):
@@ -1143,29 +1083,6 @@ class BezierMode (PressureEditableMixin,
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
-    def recall_nodes(self, idx):
-        """ recall nodes from history
-        """
-        if 0 < idx < len(self.stroke_history.liststore):
-            self._queue_draw_buttons()
-            self._queue_redraw_all_nodes()
-            self._queue_redraw_item()
-
-            self._stroke_from_history = True
-
-            x = y = None
-            if len(self.nodes) > 0:
-                x = self.nodes[0].x
-                y = self.nodes[0].y
-
-            self.nodes = self.stroke_history.get_and_place_nodes(
-                    idx, x, y)
-
-            self._queue_redraw_item()
-            self._queue_redraw_all_nodes()
-            self._queue_draw_buttons()
-            self.phase = _Phase.ADJUST
-
     def toggle_current_node_curve(self):
         """ mainly called from Callback of gui.document
         """
@@ -1392,7 +1309,8 @@ class OverlayBezier (OverlayOncanvasMixin):
                 
 
 
-class OptionsPresenter_Bezier (OptionsPresenter_ExInking):
+class OptionsPresenter_Bezier (OptionsPresenter_ExInking,
+                               RecallableNodePresnterMixin):
     """Presents UI for directly editing point values etc."""
 
     def __init__(self):
@@ -1435,12 +1353,10 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking):
         self._default_pressure_adj.set_value(self._app.preferences.get(
             "beziertool.default_pressure", BezierMode._DEFAULT_PRESSURE))
 
-        combo = builder.get_object('stroke_history_combobox')
-        combo.set_model(BezierMode.stroke_history.liststore)
-        cell = Gtk.CellRendererText()
-        combo.pack_start(cell,True)
-        combo.add_attribute(cell,'text',0)
-        self._stroke_history_combo = combo
+        self.create_recall_combobox(builder,
+                                    'stroke_history_combobox',
+                                    BezierMode)
+
 
         base_grid = builder.get_object("points_editing_grid")
         self.init_linecurve_widget(0, base_grid)
@@ -1569,11 +1485,5 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking):
         self._app.preferences['beziertool.default_pressure'] = adj.get_value()
         BezierMode.set_default_pressure(adj.get_value())
     
-    def stroke_history_combobox_changed_cb(self, widget):
-        if self._updating_ui:
-            return
-        beziermode, node_idx = self.target
-        if beziermode:
-            beziermode.recall_nodes(self._stroke_history_combo.get_active())
 
     ## Other handlers are as implemented in superclass.  

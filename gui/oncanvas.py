@@ -18,6 +18,7 @@ import math
 import collections
 import weakref
 import os.path
+import time
 from logging import getLogger
 logger = getLogger(__name__)
 
@@ -1680,5 +1681,122 @@ class OverlayOncanvasMixin(gui.overlays.Overlay):
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
         pass
-        
 
+## Recallable on-canvas nodes mixin
+#  And related classes.
+
+class StrokeHistory(object):
+    """ Stroke History class.this is singleton,stored as 
+    class attribute of RecallableNodeMixin
+    """
+    def __init__(self, maxcount):
+        self._max = maxcount
+        self._nodes = Gtk.ListStore(str,object)
+        self._nodes.append( ('------', None) )
+        
+    def register(self, nodes):
+        lt = time.localtime()
+        timestr = '%02d:%02d:%02d-%d' % (lt.tm_hour, lt.tm_min,
+                lt.tm_sec, len(nodes))
+        self._nodes.insert(1, (timestr, nodes))
+        if len(self._nodes) > self._max:
+            del self._nodes[self._max - 1]
+
+    @property
+    def liststore(self):
+        return self._nodes
+
+    def get_and_place_nodes(self, idx, x, y):
+        """ generate a copy of stroke and
+        'place' (move) it to (x,y)
+
+        :param idx: the REVERSED index(most recent one is 0) of nodes.
+        """
+        assert 1 <= idx < len(self._nodes)
+        src = self._nodes[idx][1]
+
+        fn = src[0] 
+        if x != None and y != None:
+            x = -fn.x + x
+            y = -fn.y + y
+        else:
+            x = 0
+            y = 0
+
+        ret = []
+        for cn in src:
+
+            if hasattr(cn, 'copy'):
+                # It would be a dedicated node class.
+                new_node = cn.copy(x, y)
+            elif hasattr(cn, '_replace'):
+                # This should be collection.namedtuple node
+                new_node = cn._replace(x=cn.x+dx, y=cn.y+dy) 
+
+            ret.append(new_node)
+
+        return ret
+        
+class RecallableNodeMixin(object):
+    """Node recall feature, which is to record nodes position
+    when final rendering a oncanvas-editing item, and later, 
+    we can recall node and re-edit it from that records.
+    """
+
+    stroke_history = StrokeHistory(6) # stroke history
+
+    def _init_recall(self):
+        self._stroke_from_history = False
+
+    def recall_nodes(self, idx):
+        """ recall nodes from history
+
+        CAUTION: this method reset the user class phase
+        into PhaseMixin.ADJUST.
+        """
+        if 0 < idx < len(self.stroke_history.liststore):
+            self._queue_draw_buttons()
+            self._queue_redraw_all_nodes()
+            self._queue_redraw_item()
+
+            self._stroke_from_history = True
+
+            x = y = None
+            if len(self.nodes) > 0:
+                x = self.nodes[0].x
+                y = self.nodes[0].y
+
+            self.nodes = self.stroke_history.get_and_place_nodes(
+                    idx, x, y)
+
+            self._queue_redraw_item()
+            self._queue_redraw_all_nodes()
+            self._queue_draw_buttons()
+            self.phase = PhaseMixin.ADJUST
+    
+
+class RecallableNodePresnterMixin(object):
+    """Options presenter mixin for node recallable mixin
+
+    This mixin needs 'self._updating_ui' attributes, to show whether
+    user class is updating/creating user interface.
+    """
+
+    def create_recall_combobox(self, builder, name, cls):
+        """
+        :param cls: metaclass object which uses RecallableNodeMixin
+        """
+        combo = builder.get_object(name)
+        combo.set_model(cls.stroke_history.liststore)
+        cell = Gtk.CellRendererText()
+        combo.pack_start(cell,True)
+        combo.add_attribute(cell,'text',0)
+        self._stroke_history_combo = combo
+
+    def stroke_history_combobox_changed_cb(self, widget):
+        if self._updating_ui:
+            return
+        mode, node_idx = self.target
+        if mode:
+            mode.recall_nodes(self._stroke_history_combo.get_active())
+    
