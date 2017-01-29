@@ -62,8 +62,24 @@ class GradientInfo(object):
         self._alpha = value
 
     def get_rgba(self):
+        """get a rgba tuple, converted inner represents.
+        This is for Cairo gradient, not for GradientStore
+        or coping data into another GradientController.
+
+        Because, this is 'Converted' data, so this might
+        lose some special information such as 
+        'use current brush color' etc.
+        """
         col = self.color # Use property, to enable overriding
         return (col.r, col.g, col.b, self._alpha)
+
+    def get_raw_data(self):
+        """get a raw color data, as a tuple.
+        For this class, same as get_rgba().
+        But other class, such as GradientInfo_Brushcolor,
+        it is completely dedicated method.
+        """
+        return self.get_rgba()
 
     def set_color(self, color, alpha=1.0):
         """Use lib.color.RGBColor object 
@@ -114,6 +130,10 @@ class GradientInfo_Brushcolor(GradientInfo):
 
     def set_color(self, color, alpha=1.0):
         self._alpha = alpha
+
+    def get_raw_data(self):
+        """get a raw color data, as a tuple."""
+        return (-1, self._alpha)
 
 class GradientController(object):
     """GradientController, to manage & show gradient oncanvas.

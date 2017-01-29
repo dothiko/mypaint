@@ -46,6 +46,7 @@ import lib.mypaintlib
 import lib.tiledsurface
 from gui.oncanvas import *
 import gui.gradient
+from gui.gradienteditor import *
 from gui.polyfillshape import *
 from gui.polyfillshape import _Phase, _EditZone
 import gui.dialogs
@@ -799,6 +800,23 @@ class PolyfillMode (OncanvasEditMixin,
         gctl.set_end_pos(tdw, (ex, ey))
         gctl.queue_redraw(tdw)
 
+    def refresh_gradient_controller(self, refresh_colors):
+        """refresh - queue_redraw gradient controller 
+        from outside this mode, without passing tdw.
+        :param refresh_colors: a sequence of color tuples, to
+                               update controller gradient.
+                               If this is None, only queue_redraw()
+                               is executed.
+        """
+        gctl = self.gradient_ctrl
+
+        if refresh_colors is not None:
+            gctl.setup_gradient(refresh_colors)
+
+        if gctl.active:
+            for tdw in self._overlays:
+                gctl.queue_redraw(tdw)
+
 
 
 class OverlayPolyfill (OverlayBezier):
@@ -1460,9 +1478,47 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
                 colors = self.get_color_array_from_controller(
                         polymode.gradient_ctrl)
                 store[iter][GradientStore.IDX_COLORS] = colors
-                self._gradient_renderer.refresh_gradient_(
+                self._gradient_renderer.refresh_gradient_sample(
                     store[iter][GradientStore.IDX_ID]
                     )
+
+    def edit_current_menuitem_activate_cb(self, menuitem):
+        store, iter = self._gradient_selection.get_selected()
+        polymode, junk = self.target
+        if polymode and iter != None:
+            gdlg = GradientEditorWindow()
+            gdlg.start(
+                store[iter][GradientStore.IDX_NAME],
+                store[iter][GradientStore.IDX_COLORS]
+                )
+
+            result = gdlg.result
+            if result == GradientEditorResult.OK:
+                colors = gdlg.get_colors()
+                store[iter][GradientStore.IDX_NAME] = gdlg.gradient_name
+                store[iter][GradientStore.IDX_COLORS] = colors
+            
+                self._gradient_renderer.refresh_gradient_sample(
+                        store[iter][GradientStore.IDX_ID])
+            elif result == GradientEditorResult.NEW:
+                colors = gdlg.get_colors()
+                self._gradient_store.register_gradient(
+                        gdlg.gradient_name,
+                        colors)
+            else:
+                return # Exit here, to avoid later processing
+            
+            # Nonethless gradient controller active state,
+            # call refresh_gradient_controller.
+            # Because we need update not only GUI of controller,
+            # also gradient information.
+            polymode.refresh_gradient_controller(
+                    colors)
+
+
+
+                  
+
 
    #def mode_leave_notify_cb(self, mode):
    #    """ Actually, this is not GTK signal.

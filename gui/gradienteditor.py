@@ -30,6 +30,10 @@ import lib.color
 
 ## Class definitions
 
+class GradientEditorResult:
+    CANCEL = -1
+    OK = 0
+    NEW = 1
 
 
 class GradientEditorWindow (SubWindow):
@@ -48,13 +52,12 @@ class GradientEditorWindow (SubWindow):
 
     ## Construction
 
-    def __init__(self):
-        if __name__ != '__main__':
+    def __init__(self, app=None):
+        if app:
+            self.app = app
+        else:
             from application import get_app
             app = get_app()
-        else:
-            # For testing
-            app = _test_generate_objects()
 
         SubWindow.__init__(self, app, key_input=True)
         # self.app attribute is set at superclass constructor.
@@ -125,29 +128,32 @@ class GradientEditorWindow (SubWindow):
 
        #self._buttons['save_button'].set_sensitive(self._stamp.dirty)
 
-        self.connect('hide', self.close_window_cb)
+        self.connect('hide', self.hide_window_cb)
 
         self._updating_ui = False
 
     def start(self, name, colors):
+        """Start editing of gradient.
+        """
         grctrl = self._gradient_controller
         grctrl.setup_gradient(colors)
 
         self.name_label.set_text(name)
         self._original_name = name
-
         self._buttons["new_button"].set_sensitive(False)
 
         self.show()
+        self.set_modal(True)
+        self._mainloop = GObject.MainLoop()
+        self._mainloop.run()
 
     def invalidate_gradient(self):
         grctrl = self._gradient_controller
         grctrl.invalidate_cairo_gradient()
-       #grctrl.queue_redraw(self)
         self._bg_grad = None
         da = self.draw_area.get_allocation()
         self.draw_area.queue_draw_area(
-                0, 0, da.width, da.height)
+                0, 0, da.width, da.height) # Entire draw_area invalidated.
 
 
     def set_color_to_colorbutton(self, gradnode):
@@ -157,6 +163,20 @@ class GradientEditorWindow (SubWindow):
         self.color_button.set_color(gradnode.gdk_color)
         self.alpha_adj.set_value(gradnode.alpha)
         self._updating_ui = False
+
+    def get_colors(self):
+        """Getting list of color tuples, which acceptable by 
+        GradientStore wrapper class,
+        from gradient controller of this window.
+        """
+        grctrl = self._gradient_controller
+        ret = []
+        for cn in grctrl.nodes:
+            ret.append( 
+                        (cn.linear_pos,
+                         cn.get_raw_data()) 
+                      )
+        return ret
 
 
     ## Dummy TDW methods
@@ -196,44 +216,29 @@ class GradientEditorWindow (SubWindow):
                     sx, sy, ex, ey)
         return self._bg_grad
 
-   #def draw_background(self, cr, width, height, tile_size):
-   #    y = 0
-   #    idx = 0
-   #    tilecolor = ( (0.3, 0.3, 0.3) , (0.7, 0.7, 0.7) )
-   #
-   #    cr.save()
-   #    while y < height:
-   #        x = 0
-   #
-   #        while x < width:
-   #            cr.rectangle(x, y, 
-   #                    tile_size, tile_size)
-   #            cr.set_source_rgb(*tilecolor[idx%2])
-   #            cr.fill()
-   #            idx+=1
-   #            x += tile_size
-   #        y += tile_size
-   #        idx += 1
-   #    cr.restore()
-
+    @property
+    def gradient_name(self):
+        return self.name_label.get_text()
 
     ## Main action buttons
 
     def ok_button_clicked_cb(self, button):
         """ Load a stamp preset file.
         """
+        self.result = GradientEditorResult.OK
         self.hide()
 
     def cancel_button_clicked_cb(self, button):
         """ Refresh - reflect the current stamp settings  
         into treeview.
         """
+        self.result = GradientEditorResult.CANCEL
         self.hide()
        #self._buttons['delete_button'].set_sensitive(iter is not None)
        #self._buttons['save_button'].set_sensitive(self._stamp.dirty)
     def new_button_clicked_cb(self, button):
-        newname = self.name_label.get_text()
-        assert newname != self._original_name
+        assert self.gradient_name != self._original_name
+        self.result = GradientEditorResult.NEW
         self.hide()
 
     def rename_button_clicked_cb(self, button):
@@ -252,12 +257,11 @@ class GradientEditorWindow (SubWindow):
 
     ## window handlers
 
-    def close_window_cb(self, widget):
-        """For unit testing.
+    def hide_window_cb(self, widget):
+        """
         """ 
-        # For unit testing.
-        if __name__ == '__main__': 
-            Gtk.main_quit()
+        self._mainloop.quit()
+        self.modal = False
 
     ## gradient drawarea handlers
     def gradient_drawingarea_button_press_event_cb(self, d_area, event):
@@ -412,9 +416,15 @@ class GradientEditorWindow (SubWindow):
             curnode.alpha = self.alpha_adj.get_value()
             self.invalidate_gradient()
 
-def _test_generate_objects():
-    """Generate test stamps, for unit test.
-    """
+
+
+if __name__ == '__main__':
+    # Run interactive unit test, outside the application.
+
+    logging.basicConfig()
+
+    print("### TEST ###")
+
     TEST_STAMP = [
                 { "version" : "1",
                   "name" : "test stamps",
@@ -484,16 +494,7 @@ def _test_generate_objects():
         def find_action(self, arg):
             return Gtk.RecentChooserMenu()
 
-    app = DummyApp()
-    return app
-
-def _test():
-    """Run interactive unit test, outside the application."""
-
-    logging.basicConfig()
-
-    print("### TEST ###")
-    win = GradientEditorWindow()
+    win = GradientEditorWindow(DummyApp())
     win.connect("delete-event", lambda *a: Gtk.main_quit())
     # sample code
     colors = ( 
@@ -503,13 +504,6 @@ def _test():
                 (0.75, (0.0, 1.0, 1.0)),
                 (1.0, (0.0, 0.0, 1.0))
               )
-    win.start('test gradient', colors)
-    Gtk.main()
-
-
-if __name__ == '__main__':
-    _test()
-
-
+    win.start('test gradient', colors)  # mainloop called inside this method.
 
 
