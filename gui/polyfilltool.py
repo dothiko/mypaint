@@ -1422,12 +1422,6 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
             name = self.ask_newlayer_name()
             colors = self.get_color_array_from_controller(
                     polymode.gradient_ctrl)
-           #colors = []
-           #for cn in polymode.gradient_ctrl.nodes:
-           #    colors.append(
-           #                    (cn.linear_pos,
-           #                     cn.get_rgba())
-           #                 )
 
             self.gradient_store.register_gradient(
                     name,
@@ -1508,10 +1502,12 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
             else:
                 return # Exit here, to avoid later processing
             
-            # Nonethless gradient controller active state,
+            # Even if gradient controller is in active state,
             # call refresh_gradient_controller.
             # Because we need update not only GUI of controller,
             # also gradient information.
+            # Without this, when user set controller active again,
+            # it would show wrong (old) colors.
             polymode.refresh_gradient_controller(
                     colors)
 

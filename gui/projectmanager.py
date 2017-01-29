@@ -460,6 +460,7 @@ class ProjectManagerWindow (SubWindow):
     def set_directory(self, projdir, filehandler):
         """ Set target directory, which should contain 
         stack.xml and backuped versions directory.
+        This method is startup point of this dialog window.
         """
         if self._store_wrapper:
             del self._store_wrapper
@@ -496,7 +497,8 @@ class ProjectManagerWindow (SubWindow):
         self.project_name.set_text(projname)
         self.directory_label.set_text(projdir)
 
-        # This window is modal, to 
+        # This window is modal, 
+        # avoiding user to change mypaint(canvas) state.
         self.set_modal(True)
 
     def _post_show_cb(self, widget):
