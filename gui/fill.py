@@ -9,6 +9,7 @@
 
 ## Imports
 from __future__ import print_function
+import math
 
 import gi
 from gi.repository import Gtk
@@ -17,6 +18,7 @@ from gettext import gettext as _
 
 import gui.mode
 import gui.cursor
+import lib.mypaintlib
 
 
 ## Class defs
@@ -101,7 +103,8 @@ class FloodFillMode (gui.mode.ScrollableModeMixin,
         tdw.doc.flood_fill(x, y, color.get_rgb(),
                            tolerance=opts.tolerance,
                            sample_merged=opts.sample_merged,
-                           make_new_layer=make_new_layer)
+                           make_new_layer=make_new_layer,
+                           dilation_size=opts.dilation_size)
         opts.make_new_layer = False
         return False
 
@@ -165,8 +168,10 @@ class FloodFillOptionsWidget (Gtk.Grid):
     TOLERANCE_PREF = 'flood_fill.tolerance'
     SAMPLE_MERGED_PREF = 'flood_fill.sample_merged'
     # "make new layer" is a temportary toggle, and is not saved to prefs
+    DILATION_SIZE_PREF = 'flood_fill.dilate'
 
     DEFAULT_TOLERANCE = 0.05
+    DEFAULT_DILATION_SIZE = 0
     DEFAULT_SAMPLE_MERGED = False
     DEFAULT_MAKE_NEW_LAYER = False
 
@@ -241,6 +246,36 @@ class FloodFillOptionsWidget (Gtk.Grid):
         self._make_new_layer_toggle = checkbut
 
         row += 1
+        label = Gtk.Label()
+        label.set_markup(_("Dilation size:")) # Translaters: 
+                                              # This is the label of 'pixel dilation
+                                              # for filled area'
+        label.set_tooltip_text(_("How many pixel we dilate filled area."))
+        label.set_alignment(1.0, 0.5)
+        label.set_hexpand(False)
+        self.attach(label, 0, row, 1, 1)
+        value = prefs.get(self.DILATION_SIZE_PREF, self.DEFAULT_DILATION_SIZE)
+        value = float(value)
+        # Actually 'dilating fill' accepts maximum 
+        # mypaintlib.TILE_SIZE pixel as dilation size.
+        # but it rather too large for dilation.
+        # So, adjustment upper set to TILESIZE/2.
+        adj = Gtk.Adjustment(value=value, lower=0.0, 
+                             upper=lib.mypaintlib.TILE_SIZE / 2,
+                             step_increment=1, page_increment=4,
+                             page_size=0)
+        adj.connect("value-changed", self._dilation_size_changed_cb)
+        self._dilation_size_adj = adj
+        scale = Gtk.Scale()
+        scale.set_hexpand(True)
+        scale.set_adjustment(adj)
+        scale.set_draw_value(True)
+        scale.set_value_pos(Gtk.PositionType.RIGHT)
+        scale.connect("format-value", self._dilation_size_format_value_cb)
+        self.attach(scale, 1, row, 1, 1)
+
+
+        row += 1
         align = Gtk.Alignment.new(0.5, 1.0, 1.0, 0.0)
         align.set_vexpand(True)
         button = Gtk.Button(label=_("Reset"))
@@ -248,6 +283,7 @@ class FloodFillOptionsWidget (Gtk.Grid):
         button.set_tooltip_text(_("Reset options to their defaults"))
         align.add(button)
         self.attach(align, 0, row, 2, 1)
+
 
     @property
     def tolerance(self):
@@ -265,6 +301,10 @@ class FloodFillOptionsWidget (Gtk.Grid):
     def sample_merged(self):
         return bool(self._sample_merged_toggle.get_active())
 
+    @property
+    def dilation_size(self):
+        return math.floor(self._dilation_size_adj.get_value())
+
     def _tolerance_changed_cb(self, adj):
         self.app.preferences[self.TOLERANCE_PREF] = self.tolerance
 
@@ -275,3 +315,11 @@ class FloodFillOptionsWidget (Gtk.Grid):
         self._tolerance_adj.set_value(self.DEFAULT_TOLERANCE)
         self._make_new_layer_toggle.set_active(self.DEFAULT_MAKE_NEW_LAYER)
         self._sample_merged_toggle.set_active(self.DEFAULT_SAMPLE_MERGED)
+        self._dilation_size_adj.set_value(self.DEFAULT_DILATION_SIZE)
+
+    def _dilation_size_format_value_cb(self, scale, value):
+        return "%dpx" % math.floor(value)
+
+    def _dilation_size_changed_cb(self, adj):
+        self.app.preferences[self.DILATION_SIZE_PREF] = self.dilation_size
+

@@ -26,3 +26,5 @@
 #include "fill.hpp"
 #include "eventhack.hpp"
 #include "brushsettings.hpp"
+
+#include "fill_grow.hpp"

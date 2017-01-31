@@ -33,6 +33,8 @@ typedef struct { int x, y, w, h; } Rect;
 
 %include "gdkpixbuf2numpy.hpp"
 
+%include "fill_grow.hpp"
+
 %init %{
 import_array();
 %}

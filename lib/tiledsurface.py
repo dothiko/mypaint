@@ -596,7 +596,8 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         """
         return _TiledSurfaceMove(self, x, y, sort=sort)
 
-    def flood_fill(self, x, y, color, bbox, tolerance, dst_surface):
+    def flood_fill(self, x, y, color, bbox, tolerance, dst_surface, 
+                   dilation_size):
         """Fills connected areas of this surface into another
 
         :param x: Starting point X coordinate
@@ -609,10 +610,12 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         :type tolerance: float [0.0, 1.0]
         :param dst: Target surface
         :type dst: lib.tiledsurface.MyPaintSurface
+        :param dilation_size: dilating pixel size(count).
 
         See also `lib.layer.Layer.flood_fill()` and `fill.flood_fill()`.
         """
-        flood_fill(self, x, y, color, bbox, tolerance, dst_surface)
+        flood_fill(self, x, y, color, bbox, tolerance, dst_surface,
+                   dilation_size)
 
     def get_smallest_mipmap(self):
         """ Get smallest mipmap, to generate layer thumbnail. """
@@ -992,7 +995,123 @@ class Background (Surface):
             return super(Background, self).load_from_numpy(arr, x, y)
 
 
-def flood_fill(src, x, y, color, bbox, tolerance, dst):
+#def flood_fill(src, x, y, color, bbox, tolerance, dst):
+#    """Fills connected areas of one surface into another
+#
+#    :param src: Source surface-like object
+#    :type src: Anything supporting readonly tile_request()
+#    :param x: Starting point X coordinate
+#    :param y: Starting point Y coordinate
+#    :param color: an RGB color
+#    :type color: tuple
+#    :param bbox: Bounding box: limits the fill
+#    :type bbox: lib.helpers.Rect or equivalent 4-tuple
+#    :param tolerance: how much filled pixels are permitted to vary
+#    :type tolerance: float [0.0, 1.0]
+#    :param dst: Target surface
+#    :type dst: lib.tiledsurface.MyPaintSurface
+#
+#    See also `lib.layer.Layer.flood_fill()`.
+#    """
+#    # Color to fill with
+#    fill_r, fill_g, fill_b = color
+#
+#    # Limits
+#    tolerance = helpers.clamp(tolerance, 0.0, 1.0)
+#
+#    # Maximum area to fill: tile and in-tile pixel extents
+#    bbx, bby, bbw, bbh = bbox
+#    if bbh <= 0 or bbw <= 0:
+#        return
+#    bbbrx = bbx + bbw - 1
+#    bbbry = bby + bbh - 1
+#    min_tx = int(bbx // N)
+#    min_ty = int(bby // N)
+#    max_tx = int(bbbrx // N)
+#    max_ty = int(bbbry // N)
+#    min_px = int(bbx % N)
+#    min_py = int(bby % N)
+#    max_px = int(bbbrx % N)
+#    max_py = int(bbbry % N)
+#
+#    # Tile and pixel addressing for the seed point
+#    tx, ty = int(x // N), int(y // N)
+#    px, py = int(x % N), int(y % N)
+#
+#    # Sample the pixel color there to obtain the target color
+#    with src.tile_request(tx, ty, readonly=True) as start:
+#        targ_r, targ_g, targ_b, targ_a = [int(c) for c in start[py][px]]
+#    if targ_a == 0:
+#        targ_r = 0
+#        targ_g = 0
+#        targ_b = 0
+#        targ_a = 0
+#
+#    # Flood-fill loop
+#    filled = {}
+#    tileq = [
+#        ((tx, ty),
+#         [(px, py)])
+#    ]
+#    while len(tileq) > 0:
+#        (tx, ty), seeds = tileq.pop(0)
+#        # Bbox-derived limits
+#        if tx > max_tx or ty > max_ty:
+#            continue
+#        if tx < min_tx or ty < min_ty:
+#            continue
+#        # Pixel limits within this tile...
+#        min_x = 0
+#        min_y = 0
+#        max_x = N-1
+#        max_y = N-1
+#        # ... vary at the edges
+#        if tx == min_tx:
+#            min_x = min_px
+#        if ty == min_ty:
+#            min_y = min_py
+#        if tx == max_tx:
+#            max_x = max_px
+#        if ty == max_ty:
+#            max_y = max_py
+#        # Flood-fill one tile
+#        with src.tile_request(tx, ty, readonly=True) as src_tile:
+#            dst_tile = filled.get((tx, ty), None)
+#            if dst_tile is None:
+#                dst_tile = np.zeros((N, N, 4), 'uint16')
+#                filled[(tx, ty)] = dst_tile
+#            overflows = mypaintlib.tile_flood_fill(
+#                src_tile, dst_tile, seeds,
+#                targ_r, targ_g, targ_b, targ_a,
+#                fill_r, fill_g, fill_b,
+#                min_x, min_y, max_x, max_y,
+#                tolerance
+#            )
+#            seeds_n, seeds_e, seeds_s, seeds_w = overflows
+#        # Enqueue overflows in each cardinal direction
+#        if seeds_n and ty > min_ty:
+#            tpos = (tx, ty-1)
+#            tileq.append((tpos, seeds_n))
+#        if seeds_w and tx > min_tx:
+#            tpos = (tx-1, ty)
+#            tileq.append((tpos, seeds_w))
+#        if seeds_s and ty < max_ty:
+#            tpos = (tx, ty+1)
+#            tileq.append((tpos, seeds_s))
+#        if seeds_e and tx < max_tx:
+#            tpos = (tx+1, ty)
+#            tileq.append((tpos, seeds_e))
+#
+#    # Composite filled tiles into the destination surface
+#    mode = mypaintlib.CombineNormal
+#    for (tx, ty), src_tile in filled.iteritems():
+#        with dst.tile_request(tx, ty, readonly=False) as dst_tile:
+#            mypaintlib.tile_combine(mode, src_tile, dst_tile, True, 1.0)
+#        dst._mark_mipmap_dirty(tx, ty)
+#    bbox = lib.surface.get_tiles_bbox(filled)
+#    dst.notify_observers(*bbox)
+#
+def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size):
     """Fills connected areas of one surface into another
 
     :param src: Source surface-like object
@@ -1006,6 +1125,8 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst):
     :param tolerance: how much filled pixels are permitted to vary
     :type tolerance: float [0.0, 1.0]
     :param dst: Target surface
+    :param dilation_size: Size of dialating pixels.
+                          Theorically limit is same as tilesize(64px)
     :type dst: lib.tiledsurface.MyPaintSurface
 
     See also `lib.layer.Layer.flood_fill()`.
@@ -1050,6 +1171,8 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst):
         ((tx, ty),
          [(px, py)])
     ]
+    dilated = {} # for dilated surface
+
     while len(tileq) > 0:
         (tx, ty), seeds = tileq.pop(0)
         # Bbox-derived limits
@@ -1085,6 +1208,15 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst):
                 tolerance
             )
             seeds_n, seeds_e, seeds_s, seeds_w = overflows
+
+            if dilation_size > 0:
+                mypaintlib.dilate_filled_tile(
+                        dilated,
+                        dst_tile,
+                        tx, ty,
+                        int(dilation_size),
+                        0)
+
         # Enqueue overflows in each cardinal direction
         if seeds_n and ty > min_ty:
             tpos = (tx, ty-1)
@@ -1099,14 +1231,65 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst):
             tpos = (tx+1, ty)
             tileq.append((tpos, seeds_e))
 
-    # Composite filled tiles into the destination surface
+
     mode = mypaintlib.CombineNormal
-    for (tx, ty), src_tile in filled.iteritems():
-        with dst.tile_request(tx, ty, readonly=False) as dst_tile:
-            mypaintlib.tile_combine(mode, src_tile, dst_tile, True, 1.0)
-        dst._mark_mipmap_dirty(tx, ty)
+    # Composite filled and dilated tiles into the destination surface
+    for tiledict in (dilated, filled):
+        for (tx, ty), src_tile in tiledict.iteritems():
+            with dst.tile_request(tx, ty, readonly=False) as dst_tile:
+                mypaintlib.tile_combine(mode, src_tile, dst_tile, True, 1.0)
+            dst._mark_mipmap_dirty(tx, ty)
+
     bbox = lib.surface.get_tiles_bbox(filled)
     dst.notify_observers(*bbox)
+
+
+    #def _put_dilate_pixel(dilated, tx, ty, x, y, pixel):
+    #    if x < 0:
+    #        tx -= 1
+    #        x = N + x
+    #    elif x >= N:
+    #        tx += 1
+    #        x = x - N
+    #
+    #    if y < 0:
+    #        ty -= 1
+    #        y = N + y
+    #    elif y >= N:
+    #        ty += 1
+    #        y = y - N
+    #
+    #    dst = dilated.get((tx, ty), None)
+    #    if dst is None:
+    #        dst = np.zeros((N, N, 4), 'uint16')
+    #        dilated[(tx, ty)] = dst
+    #
+    #    if dst[y, x, 3] == 0:# if not zero, it is already written.
+    #        dst[y, x] = pixel
+    #
+    #def _put_dilate_kernel(dilated, tx, ty, x, y, growsize, pixel):
+    #    for dy in xrange(growsize):
+    #        for dx in xrange(growsize):
+    #            _put_dilate_pixel(dilated, tx, ty, x - dx, y - dy, pixel)
+    #            _put_dilate_pixel(dilated, tx, ty, x + dx, y + dy, pixel)
+    #
+    #def dilate_single_tile(src_tile, tx, ty, growsize, dilated, pixel):
+    #    for y in xrange(N-1):
+    #        for x in xrange(N-1):
+    #            alpha = src_tile[y, x, 3]
+    #            # according to fill.cpp,
+    #            # tile_flood_fill function use alpha as 'wrote' flag.
+    #            # Therefore, alpha != 0 pixel means 
+    #            # 'processed' (i.e. should be dilated here) pixel.
+    #            if alpha != 0:
+    #                _put_dilate_kernel(
+    #                        dilated, 
+    #                        tx, ty,
+    #                        x, y, 
+    #                        growsize, 
+    #                        src_tile[y, x])
+    #    return 
+
 
 
 class PNGFileUpdateTask (object):

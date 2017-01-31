@@ -658,7 +658,7 @@ class FloodFill (Command):
     display_name = _("Flood Fill")
 
     def __init__(self, doc, x, y, color, bbox, tolerance,
-                 sample_merged, make_new_layer, **kwds):
+                 sample_merged, make_new_layer, dilation_size, **kwds):
         super(FloodFill, self).__init__(doc, **kwds)
         self.x = x
         self.y = y
@@ -670,6 +670,7 @@ class FloodFill (Command):
         self.new_layer = None
         self.new_layer_path = None
         self.snapshot = None
+        self.dilation_size = dilation_size
 
     def redo(self):
         # Pick a source
@@ -698,7 +699,8 @@ class FloodFill (Command):
             dst_layer = layers.current
         # Fill connected areas of the source into the destination
         src_layer.flood_fill(self.x, self.y, self.color, self.bbox,
-                             self.tolerance, dst_layer=dst_layer)
+                             self.tolerance, dst_layer=dst_layer,
+                             dilation_size=self.dilation_size)
 
     def undo(self):
         layers = self.doc.layer_stack
