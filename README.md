@@ -54,14 +54,21 @@ this increment it and save as 'foobar_003.ora'
 #### project save (experimantal) : プロジェクトセーブ機能
 This feature utilize autosave functionality,extreamly faster save your work as 'Project *Directory*',not an 
 OpenRaster file.
+
+With this feature, we does not need to compress/pack png files in one Openraster file, so this make filesave drastically faster.
+
+Furthermore,this feature brought version revert functionality. when you 'save project as new version',
+current document marked as new version and copied into backup directory.
+and if you want to revert your picture project into old version, you can select it from dialog.
+
 you can use this from 'Files' -> 'Projects' submenu,
 
  * Open Project - open project directory previously saved (or extracted Openraster file directory)
  * Open Recent Project - Quick access to recently opened/saved projects
  * Save current project - overwrite current this is almost same as 'Save' menu
  * Save As Project - save current opened work as new project directory 
- * Save Project as New version - save project , and changed (to be overwritten) layers are backuped.
- * Revert Project - **DO NOT CLICK THIS. under construction.** but you can manually revert older layer / strokemap with file manager of your desktop environment.
+ * Save Project as New version - save current document project as new version. 
+ * Revert Project - Popup selection dialog to revert current project into old one.
 
 **This code is extreamly experimental**,so you *might lost your work* when using this feature.
 
@@ -75,17 +82,12 @@ OpenRasterファイルをパッケージする手間がないため高速に保�
  * Save current project - 現在のプロジェクトを上書き保存
  * Save As Project - 新規プロジェクトとして保存
  * Save Project as New version - プロジェクトを上書き保存し、その際、上書きが発生するレイヤの画像をすべて退避します。
- * Revert Project - **作成中なのでクリックしないでください** しかし、ファイルマネージャを使って手動で戻すことも可能だと思われます。
+ * Revert Project - ダイアログを使って選択することで、プロジェクトを過去の状態に戻します。
 
 #### stabilizer : 強い手ブレ補正
-When this stabilizer toggle button (placed right side of eraser) turned on,
-strokes are much more heavily stabilized 
-than set brush preset "Smooth" value to maximum.
-This would be quite useful when I want to draw extreamly slow and weak stroke.
+This is Krita-like stabilizer function. The movement inside the range circle placed at the center of the freehand tool is ignored and only the outward movement is drawn as a stroke from the center. Thus, this stabilizes the angle of the stroke.
 
-消しゴムブラシボタンの横に新設されたトグルボタンを押すことで、
-通常の手ブレ補正を最大にするより強い手ブレ補正がかかります。
-
+Kritaのスタビライザー風の手ブレ補正機能です。フリーハンドツールの中心に置かれた範囲円の内部の動きは無視され、外側への動きだけが中心からのストロークとして描かれます。これにより、ストロークの角度が安定化されます。
 
 #### inktool - oncanvas node pressure editing : インクツールの制御点の筆圧をキャンバス上で修正可能
 With holding down and drag the selected node, you can change it's pressure.
