@@ -390,6 +390,17 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
                     return
             mypaintlib.tile_combine(mode, src, dst, dst_has_alpha, opacity)
 
+    def fetch_surrounding_tiles(self, tx, ty):
+        pass
+
+   #@property
+   #def tiledict(self):
+    # This class has tiledict attribute. so property is not needed.
+    # And, tiledict attribute of this class holds _Tile instances in tiledict, 
+    # instead of numpy tile.
+    # It is automatically detected and treated correctly in
+    # _Morphology_contour C++ class.
+
     ## Snapshotting
 
     def save_snapshot(self):
@@ -597,7 +608,7 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         return _TiledSurfaceMove(self, x, y, sort=sort)
 
     def flood_fill(self, x, y, color, bbox, tolerance, dst_surface, 
-                   dilation_size):
+                   dilation_size, gap_size):
         """Fills connected areas of this surface into another
 
         :param x: Starting point X coordinate
@@ -610,12 +621,15 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         :type tolerance: float [0.0, 1.0]
         :param dst: Target surface
         :type dst: lib.tiledsurface.MyPaintSurface
-        :param dilation_size: dilating pixel size(count).
+        :param dilation_size: dilating pixel count.
+        :type dilation_size: int [0, MYPAINT_TILE_SIZE / 2]
+        :param gap_size: Overflow-preventing closable gap size.
+        :type gap_size: int [0, MYPAINT_TILE_SIZE / 2]
 
         See also `lib.layer.Layer.flood_fill()` and `fill.flood_fill()`.
         """
         flood_fill(self, x, y, color, bbox, tolerance, dst_surface,
-                   dilation_size)
+                   dilation_size, gap_size)
 
     def get_smallest_mipmap(self):
         """ Get smallest mipmap, to generate layer thumbnail. """
@@ -1111,7 +1125,7 @@ class Background (Surface):
 #    bbox = lib.surface.get_tiles_bbox(filled)
 #    dst.notify_observers(*bbox)
 #
-def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size):
+def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size, gap_size):
     """Fills connected areas of one surface into another
 
     :param src: Source surface-like object
@@ -1125,9 +1139,12 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size):
     :param tolerance: how much filled pixels are permitted to vary
     :type tolerance: float [0.0, 1.0]
     :param dst: Target surface
+    :type dst: lib.tiledsurface.MyPaintSurface
     :param dilation_size: Size of dialating pixels.
                           Theorically limit is same as tilesize(64px)
-    :type dst: lib.tiledsurface.MyPaintSurface
+    :type dilation_size: int [0, MYPAINT_TILE_SIZE / 2]
+    :param gap_size: Overflow-preventing closable gap size. 
+    :type gap_size: int [0, MYPAINT_TILE_SIZE / 2]
 
     See also `lib.layer.Layer.flood_fill()`.
     """
@@ -1171,7 +1188,9 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size):
         ((tx, ty),
          [(px, py)])
     ]
-    dilated = {} # for dilated surface
+    dilated = {} # for dilated tiles
+    status = {} # for status tiles
+    eroded_contour = None
 
     while len(tileq) > 0:
         (tx, ty), seeds = tileq.pop(0)
@@ -1196,16 +1215,33 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size):
             max_y = max_py
         # Flood-fill one tile
         with src.tile_request(tx, ty, readonly=True) as src_tile:
+
+            if gap_size > 0: 
+                # fetch surrounding tiles, to support 
+                # dynamic allocated psuedo surface object
+                # such as TileRequestWrapper.
+                src.fetch_surrounding_tiles(tx, ty)
+                mypaintlib.detect_contour(
+                        status,
+                        src.tiledict,
+                        tx, ty,
+                        targ_r, targ_g, targ_b, targ_a,
+                        tolerance,
+                        int(gap_size));
+                eroded_contour = status.get((tx, ty), None)
+
             dst_tile = filled.get((tx, ty), None)
             if dst_tile is None:
                 dst_tile = np.zeros((N, N, 4), 'uint16')
                 filled[(tx, ty)] = dst_tile
+
             overflows = mypaintlib.tile_flood_fill(
                 src_tile, dst_tile, seeds,
                 targ_r, targ_g, targ_b, targ_a,
                 fill_r, fill_g, fill_b,
                 min_x, min_y, max_x, max_y,
-                tolerance
+                tolerance,
+                eroded_contour
             )
             seeds_n, seeds_e, seeds_s, seeds_w = overflows
 
@@ -1234,62 +1270,20 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size):
 
     mode = mypaintlib.CombineNormal
     # Composite filled and dilated tiles into the destination surface
-    for tiledict in (dilated, filled):
-        for (tx, ty), src_tile in tiledict.iteritems():
-            with dst.tile_request(tx, ty, readonly=False) as dst_tile:
-                mypaintlib.tile_combine(mode, src_tile, dst_tile, True, 1.0)
-            dst._mark_mipmap_dirty(tx, ty)
+    if len(dilated) > 0:
+        filled = dilated
+    for (tx, ty), src_tile in filled.iteritems():
+        with dst.tile_request(tx, ty, readonly=False) as dst_tile:
+            mypaintlib.tile_combine(mode, src_tile, dst_tile, True, 1.0)
+        dst._mark_mipmap_dirty(tx, ty)
+   #for tiledict in (dilated, filled):
+   #    for (tx, ty), src_tile in tiledict.iteritems():
+   #        with dst.tile_request(tx, ty, readonly=False) as dst_tile:
+   #            mypaintlib.tile_combine(mode, src_tile, dst_tile, True, 1.0)
+   #        dst._mark_mipmap_dirty(tx, ty)
 
     bbox = lib.surface.get_tiles_bbox(filled)
     dst.notify_observers(*bbox)
-
-
-    #def _put_dilate_pixel(dilated, tx, ty, x, y, pixel):
-    #    if x < 0:
-    #        tx -= 1
-    #        x = N + x
-    #    elif x >= N:
-    #        tx += 1
-    #        x = x - N
-    #
-    #    if y < 0:
-    #        ty -= 1
-    #        y = N + y
-    #    elif y >= N:
-    #        ty += 1
-    #        y = y - N
-    #
-    #    dst = dilated.get((tx, ty), None)
-    #    if dst is None:
-    #        dst = np.zeros((N, N, 4), 'uint16')
-    #        dilated[(tx, ty)] = dst
-    #
-    #    if dst[y, x, 3] == 0:# if not zero, it is already written.
-    #        dst[y, x] = pixel
-    #
-    #def _put_dilate_kernel(dilated, tx, ty, x, y, growsize, pixel):
-    #    for dy in xrange(growsize):
-    #        for dx in xrange(growsize):
-    #            _put_dilate_pixel(dilated, tx, ty, x - dx, y - dy, pixel)
-    #            _put_dilate_pixel(dilated, tx, ty, x + dx, y + dy, pixel)
-    #
-    #def dilate_single_tile(src_tile, tx, ty, growsize, dilated, pixel):
-    #    for y in xrange(N-1):
-    #        for x in xrange(N-1):
-    #            alpha = src_tile[y, x, 3]
-    #            # according to fill.cpp,
-    #            # tile_flood_fill function use alpha as 'wrote' flag.
-    #            # Therefore, alpha != 0 pixel means 
-    #            # 'processed' (i.e. should be dilated here) pixel.
-    #            if alpha != 0:
-    #                _put_dilate_kernel(
-    #                        dilated, 
-    #                        tx, ty,
-    #                        x, y, 
-    #                        growsize, 
-    #                        src_tile[y, x])
-    #    return 
-
 
 
 class PNGFileUpdateTask (object):

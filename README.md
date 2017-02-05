@@ -211,12 +211,18 @@ This feature may less useful who changes mode with keyboard toggle action,but at
 キーボードでトグルしている人にはあまり使わない機能かもですが、私には便利です。
 
 #### Pixel dilating fill feature for Floodfill : 塗りつぶしツールに「領域の拡大」
-With this pixel dilation feature for floodfill,we can (nearly) completely eliminate pixel gaps even tolerance option cannot fill at once.
-This is useful for Manga/Anime style painting.
+With 'Dilation Size' option of fill tool, we can (nearly) completely eliminate pixel gaps between the ridge of pixel border.
 if 'dialation size' is zero, ordinary fill function executed.
 
 この領域拡大機能で、しきい値オプションでは埋めきれなかったピクセルの隙間を一回で（ほぼ）埋める事ができます。
 これはアニメや漫画のような絵で役立ちます。
+
+#### gap-filling feature for Floodfill : 塗りつぶしツールに「隙間埋め」機能
+With 'Gap Size' option of fill tool, Floodfill tool can stop overflow even there are some small gap(hole) around filling area.
+You can fill an area which is not so precisely closed by something contour, with this option.
+
+この隙間埋め機能で、塗りつぶし時に小さな隙間から漏れ出すことを防ぐことができます。
+主線がきっちり塞がれて居ない絵でも塗りつぶせるようになりました。
 
 #### Plugin feature
 

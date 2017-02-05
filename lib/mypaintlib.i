@@ -27,13 +27,15 @@ typedef struct { int x, y, w, h; } Rect;
 %include "colorchanger_wash.hpp"
 %include "colorchanger_crossed_bowl.hpp"
 %include "fastpng.hpp"
+
+%ignore  floodfill_color_match;
 %include "fill.hpp"
+
 %include "eventhack.hpp"
 %include "brushsettings.hpp"
-
 %include "gdkpixbuf2numpy.hpp"
 
-%include "fill_grow.hpp"
+%include "fill_guard.hpp"
 
 %init %{
 import_array();

@@ -8,9 +8,12 @@
  */
 
 #include "fill.hpp"
+//#include "fill_util.hpp"
 
 #include "common.hpp"
 #include "fix15.hpp"
+
+#include "fill_guard.hpp"
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #define NO_IMPORT_ARRAY
@@ -18,8 +21,6 @@
 
 #include <glib.h>
 #include <mypaint-tiled-surface.h>
-
-
 
 // Pixel access helper for arrays in the tile format.
 
@@ -44,64 +45,22 @@ _floodfill_getpixel(PyArrayObject *array,
 static inline fix15_t
 _floodfill_color_match(const fix15_short_t c1_premult[4],
                        const fix15_short_t c2_premult[4],
-                       const fix15_t tolerance)
+                       const fix15_t tolerance,
+                       const char status_flag)
 {
-    const fix15_short_t c1_a = c1_premult[3];
-    fix15_short_t c1[] = {
-        fix15_short_clamp(c1_a <= 0 ? 0 : fix15_div(c1_premult[0], c1_a)),
-        fix15_short_clamp(c1_a <= 0 ? 0 : fix15_div(c1_premult[1], c1_a)),
-        fix15_short_clamp(c1_a <= 0 ? 0 : fix15_div(c1_premult[2], c1_a)),
-        fix15_short_clamp(c1_a),
-    };
-    const fix15_short_t c2_a = c2_premult[3];
-    fix15_short_t c2[] = {
-        fix15_short_clamp(c2_a <= 0 ? 0 : fix15_div(c2_premult[0], c2_a)),
-        fix15_short_clamp(c2_a <= 0 ? 0 : fix15_div(c2_premult[1], c2_a)),
-        fix15_short_clamp(c2_a <= 0 ? 0 : fix15_div(c2_premult[2], c2_a)),
-        fix15_short_clamp(c2_a),
-    };
+    // To share original _floodfill_color_match function with dilate.cpp, 
+    // original code moved into fill.hpp as renamed 'floodfill_color_match()'
+    // and this _floodfill_color_match is a little changed
+    // to support 'overflow prevention' functionality for floodfill.
+    fix15_t retvalue = floodfill_color_match(c1_premult, c2_premult, tolerance); 
 
-    // Calculate the raw distance
-    fix15_t dist = 0;
-    for (int i=0; i<4; ++i) {
-        fix15_t n = (c1[i] > c2[i]) ? (c1[i] - c2[i]) : (c2[i] - c1[i]);
-        if (n > dist)
-            dist = n;
-    }
-    /*
-     * // Alternatively, could use
-     * fix15_t sumsqdiffs = 0;
-     * for (int i=0; i<4; ++i) {
-     *     fix15_t n = (c1[i] > c2[i]) ? (c1[i] - c2[i]) : (c2[i] - c1[i]);
-     *     n >>= 2; // quarter, to avoid a fixed maths sqrt() overflow
-     *     sumsqdiffs += fix15_mul(n, n);
-     * }
-     * dist = fix15_sqrt(sumsqdiffs) << 1;  // [0.0 .. 0.5], doubled
-     * // but the max()-based metric will a) be more GIMP-like and b) not
-     * // lose those two bits of precision.
-     */
+    // When floodfill search pixel touches eroded contour status pixel,
+    // it is same as color match failed.
+    if(retvalue > 0 && (status_flag & ERODED_FLAG) != 0) 
+        return 0;
 
-    // Compare with adjustable tolerance of mismatches.
-    static const fix15_t onepointfive = fix15_one + fix15_halve(fix15_one);
-    if (tolerance > 0) {
-        dist = fix15_div(dist, tolerance);
-        if (dist > onepointfive) {  // aa < 0, but avoid underflow
-            return 0;
-        }
-        else {
-            fix15_t aa = onepointfive - dist;
-            if (aa < fix15_halve(fix15_one))
-                return fix15_short_clamp(fix15_double(aa));
-            else
-                return fix15_one;
-        }
-    }
-    else {
-        if (dist > tolerance)
-            return 0;
-        else
-            return fix15_one;
-    }
+    return retvalue;
+
 }
 
 
@@ -111,12 +70,26 @@ static inline bool
 _floodfill_should_fill(const fix15_short_t src_col[4], // premult RGB+A
                        const fix15_short_t dst_col[4], // premult RGB+A
                        const fix15_short_t targ_col[4],  // premult RGB+A
-                       const fix15_t tolerance)  // prescaled to range
+                       const fix15_t tolerance,  // prescaled to range
+                       const char status_flag)  
 {
     if (dst_col[3] != 0) {
         return false;   // already filled
     }
-    return _floodfill_color_match(src_col, targ_col, tolerance) > 0;
+    return _floodfill_color_match(src_col, targ_col, tolerance, status_flag) > 0;
+}
+
+
+// Get eroded contour status pixel
+
+inline char _get_status_flag(PyArrayObject* sts_arr, int x, int y)
+{
+    if(sts_arr)
+    {
+        return *((char*)_floodfill_getpixel(sts_arr, x, y));
+    }
+
+    return 0;
 }
 
 
@@ -130,6 +103,7 @@ typedef struct {
 
 // Flood fill implementation
 
+
 PyObject *
 tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                  PyObject *dst, /* output HxWx4 array of uint16 */
@@ -137,7 +111,9 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                  int targ_r, int targ_g, int targ_b, int targ_a, //premult
                  double fill_r, double fill_g, double fill_b,
                  int min_x, int min_y, int max_x, int max_y,
-                 double tol) /* [0..1] */
+                 double tol,  /* [0..1] */
+                 PyObject *status) /* status pixel tile HxWx1 array of char. this can be None. 
+                                      This is for 'overflow prevention' functionality.*/
 {
     // Scale the fractional tolerance arg
     const fix15_t tolerance = (fix15_t)(  MIN(1.0, MAX(0.0, tol))
@@ -152,6 +128,11 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
         };
     PyArrayObject *src_arr = ((PyArrayObject *)src);
     PyArrayObject *dst_arr = ((PyArrayObject *)dst);
+    PyArrayObject *sts_arr = NULL;
+
+    if(status != Py_None)
+        sts_arr = ((PyArrayObject *)status);
+
     // Dimensions are [y][x][component]
 #ifdef HEAVY_DEBUG
     assert(PyArray_Check(src));
@@ -193,7 +174,8 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
         y = MAX(0, MIN(y, MYPAINT_TILE_SIZE-1));
         const fix15_short_t *src_pixel = _floodfill_getpixel(src_arr, x, y);
         const fix15_short_t *dst_pixel = _floodfill_getpixel(dst_arr, x, y);
-        if (_floodfill_should_fill(src_pixel, dst_pixel, targ, tolerance)) {
+        char status_flag = _get_status_flag(sts_arr, x, y);
+        if (_floodfill_should_fill(src_pixel, dst_pixel, targ, tolerance, status_flag)) {
             _floodfill_point *seed_pt = (_floodfill_point*)
                                           malloc(sizeof(_floodfill_point));
             seed_pt->x = x;
@@ -226,9 +208,11 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
             {
                 fix15_short_t *src_pixel = _floodfill_getpixel(src_arr, x, y);
                 fix15_short_t *dst_pixel = _floodfill_getpixel(dst_arr, x, y);
+                char status_flag = _get_status_flag(sts_arr, x, y);
+
                 if (x != x0) { // Test was already done for queued pixels
                     if (! _floodfill_should_fill(src_pixel, dst_pixel,
-                                                 targ, tolerance))
+                                                 targ, tolerance, status_flag))
                     {
                         break;
                     }
@@ -241,7 +225,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                 fix15_t alpha = fix15_one;
                 if (tolerance > 0) {
                     alpha = _floodfill_color_match(targ, src_pixel,
-                                                   tolerance);
+                                                   tolerance, status_flag);
                     // Since we use the output array to mark where we've been
                     // during the fill, we can't store an alpha of zero.
                     if (alpha == 0) {
@@ -261,9 +245,11 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                     fix15_short_t *dst_pixel_above = _floodfill_getpixel(
                                                        dst_arr, x, y-1
                                                      );
+                    char status_flag_above = _get_status_flag(sts_arr, x, y-1);
+
                     bool match_above = _floodfill_should_fill(
                                          src_pixel_above, dst_pixel_above,
-                                         targ, tolerance
+                                         targ, tolerance, status_flag_above
                                        );
                     if (match_above) {
                         if (look_above) {
@@ -298,10 +284,11 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                     fix15_short_t *dst_pixel_below = _floodfill_getpixel(
                                                        dst_arr, x, y+1
                                                      );
+                    char status_flag_below = _get_status_flag(sts_arr, x, y+1);
 
                     bool match_below = _floodfill_should_fill(
                                          src_pixel_below, dst_pixel_below,
-                                         targ, tolerance
+                                         targ, tolerance, status_flag_below
                                        );
                     if (match_below) {
                         if (look_below) {

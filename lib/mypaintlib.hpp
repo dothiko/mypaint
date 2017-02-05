@@ -27,4 +27,4 @@
 #include "eventhack.hpp"
 #include "brushsettings.hpp"
 
-#include "fill_grow.hpp"
+#include "fill_guard.hpp"
