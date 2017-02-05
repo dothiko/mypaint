@@ -272,6 +272,10 @@ MorphologyBase::erode(PyObject* py_dilated, // the tiledict for dilated tiles.
 //
 class _Dilater_fix15 : public MorphologyBase {
 
+    private:
+
+        static const fix15_t fix15_half = fix15_one >> 1;// for 'alpha priority problem'
+
     protected:
 
         void _put_pixel(char* dst_pixel, const char* src_pixel)
@@ -288,15 +292,42 @@ class _Dilater_fix15 : public MorphologyBase {
         void _put_pixel(PyObject* dst_tile,int x, int y,const char* pixel)
         {
             fix15_short_t* dst_pixel = (fix15_short_t*)_get_pixel(dst_tile, x, y);
+            fix15_short_t* src_pixel = (fix15_short_t*)pixel;
             
-            if (dst_pixel[3] == 0) { // we need override this method, for this check!
-                fix15_short_t* src_pixel = (fix15_short_t*)pixel;
-                
-                // if zero, it is not written yet.
+            if (dst_pixel[3] == 0) { // rejecting already written pixel 
                 dst_pixel[0] = src_pixel[0];
                 dst_pixel[1] = src_pixel[1];
                 dst_pixel[2] = src_pixel[2];
                 dst_pixel[3] = src_pixel[3];
+            }
+            else if (dst_pixel[3] < src_pixel[3]) {
+                // XXX To solve 'alpha priority problem'
+                //
+                // 'alpha priority problem' is , I named it , such problem that
+                // if there is something translucent alpha-blending pixel at filled
+                // tiles, it might produce ugly translucent glitch. 
+                // Such translucent pixel would come from tolerance parameter of 
+                // floodfill_color_match(). 
+                // With just dilating such pixel, there might be large pixel block of
+                // translucent. 
+                // They are translucent but have alpha value at least greater than zero,
+                // so above rejecting(for speeding up) check line 'if(dst_pixel[3] == 0)'
+                // reject other much more opaque pixels to write.
+                // Thus, in some case, ugly translucent pixels glitch might be appeared.
+                //
+                // There are some options to avoid it,
+                //  a) just use completely opaque pixel for dilation.(fast and easy)
+                //  b) just overwrite when alpha value is greater.(a little slower) 
+                //  c) mix pixels when more opaque pixel incoming.(much slower?)
+                //
+                //  At this time , I took plan c), but I think it might be enough 
+                //  using plan a) for almost painting.
+                fix15_t alpha = (fix15_t)dst_pixel[3] + (fix15_t)src_pixel[3]; 
+                alpha = fix15_mul(alpha, fix15_half);
+                dst_pixel[0] = src_pixel[0];
+                dst_pixel[1] = src_pixel[1];
+                dst_pixel[2] = src_pixel[2];
+                dst_pixel[3] = fix15_short_clamp(alpha);
             }
         } 
 
