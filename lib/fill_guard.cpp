@@ -298,16 +298,16 @@ class _Dilater_fix15 : public MorphologyBase {
                 dst_pixel[0] = src_pixel[0];
                 dst_pixel[1] = src_pixel[1];
                 dst_pixel[2] = src_pixel[2];
-                dst_pixel[3] = src_pixel[3];
-            }
-            else if (dst_pixel[3] < src_pixel[3]) {
-                // XXX To solve 'alpha priority problem'
+                dst_pixel[3] = (fix15_short_t)fix15_one; 
+
+                // XXX  When I tested this functionality , sometimes I saw some strange
+                // pixel glitches something like 'color noise'.
+                // I named it 'alpha priority problem'.
                 //
-                // 'alpha priority problem' is , I named it , such problem that
-                // if there is something translucent alpha-blending pixel at filled
-                // tiles, it might produce ugly translucent glitch. 
-                // Such translucent pixel would come from tolerance parameter of 
-                // floodfill_color_match(). 
+                // The problem is that if there is translucent alpha-blending 
+                // pixel at filled tiles, it might produce ugly translucent glitch. 
+                // Such translucent pixel in flood-filled pixels would come from 
+                // tolerance parameter of floodfill_color_match(). 
                 // With just dilating such pixel, there might be large pixel block of
                 // translucent. 
                 // They are translucent but have alpha value at least greater than zero,
@@ -320,15 +320,20 @@ class _Dilater_fix15 : public MorphologyBase {
                 //  b) just overwrite when alpha value is greater.(a little slower) 
                 //  c) mix pixels when more opaque pixel incoming.(much slower?)
                 //
-                //  At this time , I took plan c), but I think it might be enough 
-                //  using plan a) for almost painting.
+                //  I tested (b) and (c), but there can be leaved annoying translucent
+                //  pixels in dilated pixels, under certain circumstance.
+                //  so I decided to use (a), this produces better results most cases.
+
+            }     
+            /*
+            else if (dst_pixel[3] < src_pixel[3]) {
                 fix15_t alpha = (fix15_t)dst_pixel[3] + (fix15_t)src_pixel[3]; 
                 alpha = fix15_mul(alpha, fix15_half);
                 dst_pixel[0] = src_pixel[0];
                 dst_pixel[1] = src_pixel[1];
                 dst_pixel[2] = src_pixel[2];
                 dst_pixel[3] = fix15_short_clamp(alpha);
-            }
+            }        */
         } 
 
         bool _is_dilate_target_pixel(const char* pixel)
@@ -704,6 +709,12 @@ detect_contour(PyObject* py_statedict, // the tiledict for status tiles.
                double tol,
                int gap_size)   // ignorable gap size.
 {
+#ifdef HEAVY_DEBUG            
+    assert(py_statedict != NULL);
+    assert(py_surfdict != NULL);
+    assert(0.0 <= tol <= 1.0);
+    assert(gap_size <= MYPAINT_TILE_SIZE / 2);
+#endif
     // actually, this function is wrapper.
     static _Morphology_contour m;
     fix15_short_t targ_pixel[4] = {(fix15_short_t)targ_r,
@@ -756,6 +767,14 @@ dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
 {
     static _Dilater_fix15 d;
     char dummy_pixel;
+
+#ifdef HEAVY_DEBUG            
+    assert(py_dilated != NULL);
+    assert(py_filled_tile != NULL);
+    assert(dilate_size <= MYPAINT_TILE_SIZE / 2);
+    assert(kernel_type == MorphologyBase::SQUARE_KERNEL || 
+           kernel_type == MorphologyBase::DIAMOND_KERNEL);
+#endif
     
     // _Dilater_fix15 class is specialized dilating filled pixels,
     // and uses 'current pixel' for dilation, not fixed/assigned pixel.
