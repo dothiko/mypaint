@@ -20,11 +20,11 @@
 
 // This constant is to refer from fill.cpp
 //
-#define SHOULD_FILL_FLAG 0x0024 // both of ERODED_MASK | SKELTON_RESULT_MASK.
-                                // But, when skelton infomation generated,
-                                // the ERODED_MASK has been removed from the
-                                // center tile with specialized finishing 
-                                // kernel functor(SkeltonFinishKernel).
+#define OBSTACLE_FILL_FLAG 0x0024 // both of ERODED_MASK | SKELTON_RESULT_MASK.
+                                  // But, when skelton infomation generated,
+                                  // the ERODED_MASK has been removed from the
+                                  // center tile with specialized finishing 
+                                  // kernel functor(SkeltonFinishKernel).
 
 // # Interface functions
 
@@ -32,7 +32,7 @@
 PyObject* detect_contour(PyObject* py_statedict, // the tiledict for dilated tiles.
                          PyObject* py_surfdict, //  source surface tile dict.
                          int tx, int ty,  // the position of py_filled_tile
-                         int targ_r, int targ_g, int targ_b, int targ_a, //premult target pixel color
+                         int targ_r, int targ_g, int targ_b, int targ_a, 
                          double tol,   // pixel tolerance of filled area.
                          int gap_size, // overflow-preventing closable gap size.
                          int do_skelton // use skelton morphology(slow)
@@ -42,8 +42,9 @@ PyObject* detect_contour(PyObject* py_statedict, // the tiledict for dilated til
 PyObject* dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
                              PyObject* py_filled_tile, // the filled src tile. 
                              int tx, int ty,  // the position of py_filled_tile
+                             double fill_r, double fill_g, double fill_b, 
                              int grow_size,    // growing size from center pixel.
-                             int kernel_type  // 0 for square kernel, 1 for diamond kernel
+                             int kernel_type  // 0=square, 1=diamond kernel
                             );
 // XXX TEST CODES
 PyObject* test_skelton(PyObject* py_statedict, // the tiledict for dilated tiles.

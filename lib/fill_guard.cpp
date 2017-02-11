@@ -471,8 +471,8 @@ class _Dilater_fix15 : public MorphologyBase<fix15_short_t> {
             }        */
         }
 
-        SquareDilateKernel<fix15_short_t> sq_kernel;
-        DiamondDilateKernel<fix15_short_t> dm_kernel;
+        static SquareDilateKernel<fix15_short_t> sq_kernel;
+        static DiamondDilateKernel<fix15_short_t> dm_kernel;
 
     public:
 
@@ -485,6 +485,7 @@ class _Dilater_fix15 : public MorphologyBase<fix15_short_t> {
 
         int dilate(PyObject* py_filled_tile, // the filled src tile. 
                    int tx, int ty,  // the position of py_filled_tile
+                   const fix15_short_t* fill_pixel,
                    int size,
                    int kernel_type  // 0 for square kernel, 1 for diamond kernel
                    )
@@ -513,7 +514,9 @@ class _Dilater_fix15 : public MorphologyBase<fix15_short_t> {
                     fix15_short_t* cur_pixel = get_pixel(py_filled_tile, x, y);
                     if (cur_pixel[3] != 0)
                     {
-                        (*functor)(this, x, y, size, cur_pixel);
+                        // using cur_pixel is hazardous in some situation,
+                        // so use fixed pixel color.
+                        (*functor)(this, x, y, size, fill_pixel);
                         dilated_cnt++;
                     }
                 }
@@ -523,7 +526,9 @@ class _Dilater_fix15 : public MorphologyBase<fix15_short_t> {
         }
 
 };
-
+              
+SquareDilateKernel<fix15_short_t> _Dilater_fix15::sq_kernel;
+DiamondDilateKernel<fix15_short_t> _Dilater_fix15::dm_kernel;
 
 // _Morphology_contour : Specialized class for detecting contour, to fill-gap.
 // This is for 16bit,flag_based erode/dilate operation.
@@ -1248,6 +1253,7 @@ PyObject*
 dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
                    PyObject* py_filled_tile, // the filled src tile. 
                    int tx, int ty,  // the position of py_filled_tile
+                   double fill_r, double fill_g, double fill_b, //premult pixel color
                    int dilate_size,    // growing size from center pixel.
                    int kernel_type) // 0 for square kernel, 1 for diamond kernel
 {
@@ -1264,6 +1270,14 @@ dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
     assert(kernel_type == _Dilater_fix15::SQUARE_KERNEL || 
            kernel_type == _Dilater_fix15::DIAMOND_KERNEL);
 #endif
+
+    
+    // Actually alpha value is not used currently.
+    // for future use.
+    double alpha=(double)fix15_one;
+    fix15_short_t fill_pixel[3] = {(fix15_short_clamp)(fill_r * alpha),
+                                   (fix15_short_clamp)(fill_g * alpha),
+                                   (fix15_short_clamp)(fill_b * alpha)};
     
     // _Dilater_fix15 class is specialized dilating filled pixels,
     // and uses 'current pixel' for dilation, not fixed/assigned pixel.
@@ -1275,7 +1289,8 @@ dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
 
     //d.setup_morphology_params(dilate_size, &dummy_pixel);
     d.init_cached_tiles(py_dilated, tx, ty);
-    d.dilate(py_filled_tile, tx, ty, dilate_size, kernel_type);
+    d.dilate(py_filled_tile, tx, ty, fill_pixel, dilate_size, kernel_type);
+    //d.dilate(py_filled_tile, tx, ty, dilate_size, kernel_type);
     d.finalize_cached_tiles(py_dilated);
 
     Py_RETURN_NONE;

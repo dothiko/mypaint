@@ -56,7 +56,7 @@ _floodfill_color_match(const fix15_short_t c1_premult[4],
 
     // When floodfill search pixel touches eroded contour status pixel,
     // it is same as color match failed.
-    if(retvalue > 0 && (status_flag & SHOULD_FILL_FLAG) != 0) 
+    if(retvalue > 0 && (status_flag & OBSTACLE_FILL_FLAG) != 0) 
         return 0;
 
     return retvalue;
