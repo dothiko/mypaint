@@ -7,7 +7,7 @@
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 
-from __future__ import print_function
+from __future__ import division, print_function
 
 from warnings import warn
 from math import ceil
@@ -239,8 +239,8 @@ class PixbufList(Gtk.DrawingArea):
             width = self.pixbuf.get_width()
             height = self.pixbuf.get_height()
         width = max(width, self.total_w)
-        self.tiles_w = max(1, int(width / self.total_w))
-        self.tiles_h = max(1, int(ceil(float(len(self.itemlist)) / self.tiles_w)))
+        self.tiles_w = max(1, int(width // self.total_w))
+        self.tiles_h = max(1, int(ceil(len(self.itemlist) / self.tiles_w)))
 
         height = self.tiles_h * self.total_h
         #self.set_size_request(-1, -1)
@@ -253,7 +253,7 @@ class PixbufList(Gtk.DrawingArea):
         self.pixbuf.fill(0xffffff00)  # transparent
         for i, item in enumerate(self.itemlist):
             x = (i % self.tiles_w) * self.total_w
-            y = (i / self.tiles_w) * self.total_h
+            y = (i // self.tiles_w) * self.total_h
             x += self.total_border
             y += self.total_border
 
@@ -273,12 +273,12 @@ class PixbufList(Gtk.DrawingArea):
 
     def index(self, x, y):
         x, y = int(x), int(y)
-        i = x / self.total_w
+        i = x // self.total_w
         if i >= self.tiles_w:
             i = self.tiles_w - 1
         if i < 0:
             i = 0
-        i = i + self.tiles_w * (y / self.total_h)
+        i = i + self.tiles_w * (y // self.total_h)
         if i < 0:
             i = 0
         return i
@@ -329,6 +329,7 @@ class PixbufList(Gtk.DrawingArea):
         # Paint the base color, and the list's pixbuf.
         state_flags = widget.get_state_flags()
         style_context = widget.get_style_context()
+        style_context.save()
         bg_color_gdk = style_context.get_background_color(state_flags)
         bg_color = uicolor.from_gdk_rgba(bg_color_gdk)
         cr.set_source_rgb(*bg_color.get_rgb())
@@ -342,6 +343,7 @@ class PixbufList(Gtk.DrawingArea):
         gdkrgba = style_context.get_background_color(
             state_flags | Gtk.StateFlags.NORMAL)
         insertion_color = uicolor.from_gdk_rgba(gdkrgba)
+        style_context.restore()
         # Draw borders
         last_i = len(self.itemlist) - 1
         for i, b in enumerate(self.itemlist):
@@ -354,7 +356,7 @@ class PixbufList(Gtk.DrawingArea):
             if rect_color is None:
                 continue
             x = (i % self.tiles_w) * self.total_w
-            y = (i / self.tiles_w) * self.total_h
+            y = (i // self.tiles_w) * self.total_h
             w = self.total_w
             h = self.total_h
 

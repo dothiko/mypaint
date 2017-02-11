@@ -9,15 +9,14 @@
 """Workspaces with a central canvas, sidebars and saved layouts"""
 
 ## Imports
-from __future__ import print_function
+from __future__ import division, print_function
 
 import os
 from warnings import warn
 import math
+import sys
 import logging
-logger = logging.getLogger(__name__)
 
-from gettext import gettext as _
 import cairo
 from gi.repository import GObject
 from gi.repository import Gtk
@@ -29,6 +28,9 @@ import lib.xml
 import lib.helpers
 import objfactory
 from widgets import borderless_button
+from lib.gettext import C_
+
+logger = logging.getLogger(__name__)
 
 ## Tool widget size constants
 
@@ -223,6 +225,7 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
         lpaned.pack1(lscrolls, resize=False, shrink=False)
         lpaned.pack2(rpaned, resize=True, shrink=False)
         rpaned.pack2(rscrolls, resize=False, shrink=False)
+        rpaned.pack1(cscrolls, resize=True, shrink=False)
         self.pack_start(lpaned, True, True, 0)
         # Autohide
         self._autohide_enabled = True
@@ -336,6 +339,11 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
             logger.debug("Right sidebar: added %d group(s)", num_added_r)
         # Floating windows
         for fi, flayout in enumerate(layout.get("floating", [])):
+            if sys.platform == "win32":
+                logger.warning(
+                    "win32: ignoring floating window definition (bug #679)"
+                )
+                continue
             logger.debug(
                 "Floating window %d: building from saved layout...",
                 fi,
@@ -400,43 +408,21 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
     def set_canvas(self, widget):
         """Canvas widget (setter)"""
         assert self.get_canvas() is None
-        self._rpaned.pack1(widget, resize=True, shrink=False)
-        self._update_canvas_scrolledwindow()
+        widget = self._canvas_scrolls.add(widget)
 
     def get_canvas(self):
         """Canvas widget (getter)"""
-        widget = self._rpaned.get_child1()
-        if widget is self._canvas_scrolls:
-            widget = widget.get_child()
+        widget = self._canvas_scrolls.get_child()
         return widget
 
     def _update_canvas_scrolledwindow(self):
-        """Update whether the canvas has a surrounding ScrolledWindow
-
-        In fullscreen mode, the ScrolledWindow is removed from the widget
-        hierarchy so that the canvas widget can occupy the full size of the
-        screen. In nonfullscreen mode, the scrollers provide a pretty frame.
-        """
-        canvas = self.get_canvas()
-        parent = canvas.get_parent()
+        """Update the canvas ScrolledWindow's border."""
+        parent = self._canvas_scrolls
         if not self._is_fullscreen:
-            if parent is self._canvas_scrolls:
-                return
-            logger.debug("Adding GtkScrolledWindow around canvas")
-            assert parent is self._rpaned
-            self._rpaned.remove(canvas)
-            self._rpaned.pack1(self._canvas_scrolls, resize=True, shrink=False)
-            self._canvas_scrolls.add(canvas)
-            self._canvas_scrolls.show_all()
+            parent.set_shadow_type(Gtk.ShadowType.NONE)
         else:
-            if parent is self._rpaned:
-                return
-            logger.debug("Removing GtkScrolledWindow around canvas")
-            assert parent is self._canvas_scrolls
-            self._canvas_scrolls.remove(canvas)
-            self._rpaned.remove(self._canvas_scrolls)
-            self._rpaned.pack1(canvas, resize=True, shrink=False)
-            self._canvas_scrolls.hide()
+            parent.set_shadow_type(Gtk.ShadowType.IN)
+        # TODO: this should really be done with CSS now.
 
     ## Tool widgets
 
@@ -1177,7 +1163,13 @@ class ToolStack (Gtk.EventBox):
             self._toolstack = toolstack
             assert self._toolstack is not None
             self.set_group_name(self.NOTEBOOK_GROUP_NAME)
-            self.connect("create-window", self._create_window_cb)
+            if sys.platform == "win32":
+                logger.warning(
+                    "win32: floating windows are not supported (bug #679), "
+                    "not enabling subwindow creation by snapping out."
+                )
+            else:
+                self.connect("create-window", self._create_window_cb)
             self.connect("page-added", self._page_added_cb)
             self.connect("page-removed", self._page_removed_cb)
             self.connect("switch-page", self._switch_page_cb)
@@ -1188,6 +1180,8 @@ class ToolStack (Gtk.EventBox):
             self.set_size_request(8, -1)
             # Action buttons
             action_hbox = Gtk.HBox()
+            action_hbox.set_homogeneous(True)
+            action_hbox.set_spacing(0)
             self.set_action_widget(action_hbox, Gtk.PackType.END)
             self.connect("show", lambda *a: action_hbox.show_all())
             # Properties button
@@ -1197,6 +1191,16 @@ class ToolStack (Gtk.EventBox):
             action_hbox.pack_start(btn, False, False, 0)
             self._properties_button = btn
             btn.set_sensitive(False)
+
+            # Sidebar swapper button
+            btn = borderless_button(
+                icon_name="mypaint-tab-sidebar-swap-symbolic",
+                size=self.ACTION_BUTTON_ICON_SIZE,
+            )
+            btn.connect("clicked", self._sidebar_swap_button_clicked_cb)
+            action_hbox.pack_start(btn, False, False, 0)
+            self._sidebar_swap_button = btn
+
             # Close tab button
             btn = borderless_button(icon_name="mypaint-close-symbolic",
                                     size=self.ACTION_BUTTON_ICON_SIZE)
@@ -1290,13 +1294,23 @@ class ToolStack (Gtk.EventBox):
             has_properties = hasattr(tool_widget, "tool_widget_properties")
             self._properties_button.set_sensitive(has_properties)
             title = _tool_widget_get_title(tool_widget)
-            close_tooltip = _("%s: close tab") % (title,)
-            if has_properties:
-                props_tooltip = _(u"%s: edit properties") % (title,)
-            else:
+            close_tooltip = C_(
+                "workspace: sidebar tabs: button tooltips",
+                u"{tab_title}: close tab",
+            ).format(tab_title=title)
+            props_tooltip = C_(
+                "workspace: sidebar tabs: button tooltips",
+                u"{tab_title}: tab options and properties",
+            ).format(tab_title=title)
+            swap_tooltip = C_(
+                "workspace: sidebar tabs: button tooltips",
+                u"{tab_title}: move tab to other sidebar",
+            ).format(tab_title=title)
+            if not has_properties:
                 props_tooltip = u""
             self._properties_button.set_tooltip_text(props_tooltip)
             self._close_button.set_tooltip_text(close_tooltip)
+            self._sidebar_swap_button.set_tooltip_text(swap_tooltip)
 
         def _close_button_clicked_cb(self, button):
             """Remove the current page (close button "clicked" event callback)
@@ -1327,6 +1341,40 @@ class ToolStack (Gtk.EventBox):
             tool_widget = page.get_child()
             if hasattr(tool_widget, "tool_widget_properties"):
                 tool_widget.tool_widget_properties()
+
+        def _sidebar_swap_button_clicked_cb(self, button):
+            """Switch the current page's sidebar ("clicked" event handler)
+
+            Ultimately fires the tool_widget_removed() and
+            tool_widget_added() @events of the owning workspace.
+
+            """
+            page_num = self.get_current_page()
+            page = self.get_nth_page(page_num)
+            if page is not None:
+                GLib.idle_add(self._deferred_swap_tool_widget_sidebar, page)
+
+        def _deferred_swap_tool_widget_sidebar(self, page):
+            try:
+                workspace = self._toolstack.workspace
+            except AttributeError:
+                logger.warning("swap: notebook is not in a workspace")
+                return False
+
+            assert page is not None
+            tool_widget = page.get_child()
+
+            src_stack = self._toolstack
+            if src_stack is workspace._rstack:
+                targ_stack = workspace._lstack
+            else:
+                targ_stack = workspace._rstack
+
+            src_stack.remove_tool_widget(tool_widget)
+            targ_stack.add_tool_widget(tool_widget)
+            targ_stack.reveal_tool_widget(tool_widget)
+
+            return False
 
         ## Dragging tabs
 
@@ -1896,6 +1944,7 @@ class ToolStackWindow (Gtk.Window):
     def __init__(self):
         Gtk.Window.__init__(self)
         self.set_type_hint(Gdk.WindowTypeHint.UTILITY)
+        self.set_deletable(False)
         self.connect("realize", self._realize_cb)
         self.connect("destroy", self._destroy_cb)
         self.stack = ToolStack()  #: The ToolStack child of the window

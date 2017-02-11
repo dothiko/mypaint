@@ -9,7 +9,7 @@
 """Common dialog functions"""
 
 ## Imports
-from __future__ import print_function
+from __future__ import division, print_function
 
 import gi
 from gi.repository import Gtk
@@ -138,7 +138,10 @@ def confirm_rewrite_brush(window, brushname, existing_preview_pixbuf, imported_p
     hbox = Gtk.HBox()
     vbox_l = Gtk.VBox()
     vbox_r = Gtk.VBox()
-    preview_r = Gtk.image_new_from_pixbuf(existing_preview_pixbuf)
+    try:
+        preview_r = Gtk.image_new_from_pixbuf(existing_preview_pixbuf)
+    except AttributeError:
+        preview_r = Gtk.Image.new_from_pixbuf(existing_preview_pixbuf)
     label_l = Gtk.Label(label=_("Imported brush"))
     label_r = Gtk.Label(label=_("Existing brush"))
 

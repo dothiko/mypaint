@@ -14,9 +14,10 @@ Painting is done in tileddrawwidget.py.
 """
 
 ## Imports
-from __future__ import print_function
+from __future__ import division, print_function
 
 import os
+import os.path
 import time
 import webbrowser
 from warnings import warn
@@ -259,7 +260,8 @@ class DrawWindow (Gtk.Window):
 
     def _init_menubar(self):
         # Load Menubar, duplicate into self.popupmenu
-        menupath = os.path.join(self.app.datapath, 'gui/menu.xml')
+        ui_dir = os.path.dirname(os.path.abspath(__file__))
+        menupath = os.path.join(ui_dir, 'menu.xml')
         with open(menupath) as fp:
             menubar_xml = fp.read()
         self.app.ui_manager.add_ui_from_string(menubar_xml)

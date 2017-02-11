@@ -7,7 +7,7 @@
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 
-from __future__ import print_function
+from __future__ import division, print_function
 
 from math import floor, isnan
 import os
@@ -128,15 +128,15 @@ class Rect (object):
         except TypeError:  # e.g. comparison to None
             return False
 
-    def overlaps(r1, r2):
+    def overlaps(self, r2):
         """Returns true if this rectangle intersects another."""
-        if max(r1.x, r2.x) >= min(r1.x + r1.w, r2.x + r2.w):
+        if max(self.x, r2.x) >= min(self.x + self.w, r2.x + r2.w):
             return False
-        if max(r1.y, r2.y) >= min(r1.y + r1.h, r2.y + r2.h):
+        if max(self.y, r2.y) >= min(self.y + self.h, r2.y + r2.h):
             return False
         return True
 
-    def expandToIncludePoint(self, x, y):
+    def expand_to_include_point(self, x, y):
         if self.w == 0 or self.h == 0:
             self.x = x
             self.y = y
@@ -154,14 +154,22 @@ class Rect (object):
         if y > self.y + self.h - 1:
             self.h += y - (self.y + self.h - 1)
 
-    def expandToIncludeRect(self, other):
+    def expand_to_include_rect(self, other):
         if other.empty():
             return
-        self.expandToIncludePoint(other.x, other.y)
-        self.expandToIncludePoint(other.x + other.w - 1, other.y + other.h - 1)
+        self.expand_to_include_point(other.x, other.y)
+        self.expand_to_include_point(
+            other.x + other.w - 1,
+            other.y + other.h - 1,
+        )
 
     def __repr__(self):
         return 'Rect(%d, %d, %d, %d)' % (self.x, self.y, self.w, self.h)
+
+    # Deprecated method names:
+
+    expandToIncludePoint = expand_to_include_point
+    expandToIncludeRect = expand_to_include_rect
 
 
 def json_dumps(obj):
@@ -226,15 +234,18 @@ def freedesktop_thumbnail(filename, pixbuf=None):
 
     If there is no thumbnail for the specified filename, a new
     thumbnail will be generated and stored according to the FDO spec.
-    A thumbnail will also get regenerated if the MTimes (as in "modified")
+    A thumbnail will also get regenerated if the file modification times
     of thumbnail and original image do not match.
+
+    :param GdkPixbuf.Pixbuf pixbuf: Thumbnail to save, optional.
+    :returns: the large (256x256) thumbnail, or None.
+    :rtype: GdkPixbuf.Pixbuf
 
     When pixbuf is given, it will be scaled and used as thumbnail
     instead of reading the file itself. In this case the file is still
     accessed to get its mtime, so this method must not be called if
     the file is still open.
 
-    Returns the large (256x256) thumbnail.
     """
 
     uri = lib.glib.filename_to_uri(os.path.abspath(filename))
@@ -268,11 +279,23 @@ def freedesktop_thumbnail(filename, pixbuf=None):
         acceptable_tb_filenames = [tb_filename_large, tb_filename_normal]
 
     for fn in acceptable_tb_filenames:
-        if not pixbuf and os.path.isfile(fn):
+        if pixbuf or not os.path.isfile(fn):
+            continue
+        try:
             # use the largest stored thumbnail that isn't obsolete
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file(fn)
+            pixbuf = lib.pixbuf.load_from_file(fn)
+        except Exception as e:
+            logger.warning(
+                u"thumb: cache file %r looks corrupt (%r). "
+                u"It will be regenerated.",
+                fn, unicode(e),
+            )
+            pixbuf = None
+        else:
+            assert pixbuf is not None
             if file_mtime == pixbuf.get_option("tEXt::Thumb::MTime"):
                 save_thumbnail = False
+                break
             else:
                 pixbuf = None
 
@@ -369,7 +392,7 @@ def get_pixbuf(filename):
 
 def scale_proportionally(pixbuf, w, h, shrink_only=True):
     width, height = pixbuf.get_width(), pixbuf.get_height()
-    scale = min(w / float(width), h / float(height))
+    scale = min(w / width, h / height)
     if shrink_only and scale >= 1:
         return pixbuf
     new_width, new_height = int(width * scale), int(height * scale)
@@ -391,9 +414,9 @@ def pixbuf_thumbnail(src, w, h, alpha=False):
         dst.fill(0xffffffff)  # white background
     src2.composite(
         dst,
-        (w - w2) / 2, (h - h2) / 2,
+        (w - w2) // 2, (h - h2) // 2,
         w2, h2,
-        (w - w2) / 2, (h - h2) / 2,
+        (w - w2) // 2, (h - h2) // 2,
         1, 1,
         GdkPixbuf.InterpType.BILINEAR,
         255,
@@ -485,9 +508,9 @@ def fmt_time_period_abbr(t):
     """
     if t < 0:
         raise ValueError("Parameter t cannot be negative")
-    days = int(t / (24 * 60 * 60))
-    hours = int(t - days * 24 * 60 * 60) / (60 * 60)
-    minutes = int(t - hours * 60 * 60) / 60
+    days = int(t // (24 * 60 * 60))
+    hours = int(t - days * 24 * 60 * 60) // (60 * 60)
+    minutes = int(t - hours * 60 * 60) // 60
     seconds = int(t - minutes * 60)
     # TRANSLATORS: I'm assuming that time periods in places where
     # TRANSLATORS: abbreviations make sense don't need ngettext()
