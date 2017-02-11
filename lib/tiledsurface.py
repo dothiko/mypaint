@@ -608,7 +608,7 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         return _TiledSurfaceMove(self, x, y, sort=sort)
 
     def flood_fill(self, x, y, color, bbox, tolerance, dst_surface, 
-                   dilation_size, gap_size):
+                   dilation_size, gap_size, use_skelton):
         """Fills connected areas of this surface into another
 
         :param x: Starting point X coordinate
@@ -625,11 +625,13 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         :type dilation_size: int [0, MYPAINT_TILE_SIZE / 2]
         :param gap_size: Overflow-preventing closable gap size.
         :type gap_size: int [0, MYPAINT_TILE_SIZE / 2]
+        :param use_skelton: use skelton morphology to get more thinner contour
+        :type use_skelton: boolean
 
         See also `lib.layer.Layer.flood_fill()` and `fill.flood_fill()`.
         """
         flood_fill(self, x, y, color, bbox, tolerance, dst_surface,
-                   dilation_size, gap_size)
+                   dilation_size, gap_size, use_skelton)
 
     def get_smallest_mipmap(self):
         """ Get smallest mipmap, to generate layer thumbnail. """
@@ -1125,7 +1127,8 @@ class Background (Surface):
 #    bbox = lib.surface.get_tiles_bbox(filled)
 #    dst.notify_observers(*bbox)
 #
-def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size, gap_size):
+def flood_fill(src, x, y, color, bbox, tolerance, dst, 
+               dilation_size, gap_size, use_skelton):
     """Fills connected areas of one surface into another
 
     :param src: Source surface-like object
@@ -1142,9 +1145,13 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size, gap_size):
     :type dst: lib.tiledsurface.MyPaintSurface
     :param dilation_size: Size of dialating pixels.
                           Theorically limit is same as tilesize(64px)
-    :type dilation_size: int [0, MYPAINT_TILE_SIZE / 2]
+    :type dilation_size: int [0, MYPAINT_TILE_SIZE / 2 - 1]
     :param gap_size: Overflow-preventing closable gap size. 
-    :type gap_size: int [0, MYPAINT_TILE_SIZE / 2]
+    :type gap_size: int [0, MYPAINT_TILE_SIZE / 2 - 1]
+    :param use_skelton: use skelton morphology to detect contour(slow)
+    :type use_skelton: boolean.If True, 'skelton_mask' parameter of 
+                       mypaintlib.skelton_mask is 0x0020.
+                       otherwise, it should be 0xffff.
 
     See also `lib.layer.Layer.flood_fill()`.
     """
@@ -1191,6 +1198,10 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size, gap_size):
     dilated = {} # for dilated tiles
     status = {} # for status tiles
     eroded_contour = None
+    if use_skelton:
+        skelton_mask = 0x0020
+    else:
+        skelton_mask = 0xffff
 
     while len(tileq) > 0:
         (tx, ty), seeds = tileq.pop(0)
@@ -1227,7 +1238,8 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size, gap_size):
                         tx, ty,
                         targ_r, targ_g, targ_b, targ_a,
                         tolerance,
-                        int(gap_size));
+                        int(gap_size),
+                        int(use_skelton));
                 eroded_contour = status.get((tx, ty), None)
 
             dst_tile = filled.get((tx, ty), None)
@@ -1241,7 +1253,8 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size, gap_size):
                 fill_r, fill_g, fill_b,
                 min_x, min_y, max_x, max_y,
                 tolerance,
-                eroded_contour
+                eroded_contour,
+                skelton_mask
             )
             seeds_n, seeds_e, seeds_s, seeds_w = overflows
 
@@ -1276,11 +1289,6 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size, gap_size):
         with dst.tile_request(tx, ty, readonly=False) as dst_tile:
             mypaintlib.tile_combine(mode, src_tile, dst_tile, True, 1.0)
         dst._mark_mipmap_dirty(tx, ty)
-   #for tiledict in (dilated, filled):
-   #    for (tx, ty), src_tile in tiledict.iteritems():
-   #        with dst.tile_request(tx, ty, readonly=False) as dst_tile:
-   #            mypaintlib.tile_combine(mode, src_tile, dst_tile, True, 1.0)
-   #        dst._mark_mipmap_dirty(tx, ty)
 
     bbox = lib.surface.get_tiles_bbox(filled)
     dst.notify_observers(*bbox)
