@@ -319,6 +319,7 @@ class SquareDilateKernel : public KernelFunctor<T> {
     public:
         virtual int operator()(MorphologyBase<T>* mb, int cx, int cy, int size,const T* pixel)
         {
+            mb->put_pixel(cx, cy, pixel);
             for (int dy = 0; dy <= size; dy++) {
                 for (int dx = 0; dx <= size; dx++) {
                     if (dx != 0 || dy != 0) {
@@ -340,6 +341,7 @@ class DiamondDilateKernel : public KernelFunctor<T> {
     public:
         virtual int operator()(MorphologyBase<T>* mb, int cx, int cy, int size, const T* pixel)
         {
+            mb->put_pixel(cx, cy, pixel);
             for (int dy = 0; dy <= size; dy++) {
                 for (int dx = 0; dx <= size-dy; dx++) {
                     if (dx != 0 || dy != 0) {
@@ -355,10 +357,12 @@ class DiamondDilateKernel : public KernelFunctor<T> {
         }
 };
 
+
 template <class T>
-class DiamondErodeKernel : public KernelFunctor<T> {
-        
-        inline int _is_erodable(MorphologyBase<T>* mb, int cx, int cy, int dx, int dy, const T* target_pixel)
+class ErodeKernelFunctor { //: public KernelFunctor<T> {
+
+    protected:
+        int _is_erodable(MorphologyBase<T>* mb, int cx, int cy, int dx, int dy, const T* target_pixel)
         {   
             if (!mb->is_equal_cached_pixel(cx-dx, cy-dy, target_pixel))
                 return 0;
@@ -373,11 +377,18 @@ class DiamondErodeKernel : public KernelFunctor<T> {
 
     public:
         virtual int operator()(MorphologyBase<T>* mb, int cx, int cy, int size, 
+                               const T* pixel, const T* target_pixel) = 0;
+};
+
+template <class T>
+class DiamondErodeKernel : public ErodeKernelFunctor<T> {
+    public:
+        virtual int operator()(MorphologyBase<T>* mb, int cx, int cy, int size, 
                                const T* pixel, const T* target_pixel)
         {
             for (int dy = 0; dy <= size; dy++) {
                 for (int dx = 0; dx <= size - dy; dx++) {
-                    if (_is_erodable(mb, cx, cy, dx, dy, target_pixel) == 0)
+                    if (ErodeKernelFunctor<T>::_is_erodable(mb, cx, cy, dx, dy, target_pixel) == 0)
                         return 0;
                 }
             }
@@ -388,14 +399,14 @@ class DiamondErodeKernel : public KernelFunctor<T> {
 };
 
 template <class T>
-class SquareErodeKernel : public DiamondErodeKernel<T> {
+class SquareErodeKernel : public ErodeKernelFunctor<T> {
         
     public:
         virtual int operator()(MorphologyBase<T>* mb, int cx, int cy, int size, const T* pixel, const T* target_pixel)
         {
             for (int dy = 0; dy <= size; dy++) {
                 for (int dx = 0; dx <= size; dx++) {
-                    if (_is_erodable(mb, cx, cy, dx, dy, target_pixel) == 0)
+                    if (ErodeKernelFunctor<T>::_is_erodable(mb, cx, cy, dx, dy, target_pixel) == 0)
                         return 0;
                 }
             }
@@ -570,8 +581,9 @@ class _Morphology_contour: public MorphologyBase<short> {
         // - kernel functors
         static SquareDilateKernel<short> s_sq_dilate_kernel;
         static DiamondDilateKernel<short> s_dm_dilate_kernel;
+        static SquareErodeKernel<short> s_sq_erode_kernel;
         static DiamondErodeKernel<short> s_dm_erode_kernel;
-
+        
         class SkeltonFinishKernel: public KernelFunctor<short> {
                 
             protected:
@@ -635,14 +647,6 @@ class _Morphology_contour: public MorphologyBase<short> {
                         }
 
                     }
-                    /*
-                    // removing generic eroded flags from center tile 
-                    if ( 0 <= cx && cx < MYPAINT_TILE_SIZE &&
-                         0 <= cy && cy < MYPAINT_TILE_SIZE ) {
-                        short* cur_pixel = (short*)pixel;
-                       // *cur_pixel &= (~ERODED_MASK);
-                    }
-                    */
                     return ret;
                 }
         };
@@ -676,13 +680,14 @@ class _Morphology_contour: public MorphologyBase<short> {
                 {
                     int cnt = 0;
                     if (pixel != NULL) {
-                        if ((*pixel & SKELTON_DILATED_MASK) == 0 && (*pixel & SKELTON_BASE_MASK) != 0)
-                        {
+                        if ((*pixel & SKELTON_DILATED_MASK) == 0 && 
+                            (*pixel & SKELTON_BASE_MASK) != 0) {
                             // skelton pixel == not dilated, but original area
                             *pixel |= SKELTON_RESULT_MASK;
                             cnt = 1;
-                        }
-                        *pixel &= (~(SKELTON_ERODED_MASK|SKELTON_DILATED_MASK)); // clear skelton work masks
+                        } 
+                        // clear skelton dilation mask. skelton erosion mask remained.
+                        *pixel &= (~SKELTON_DILATED_MASK); 
                     }
                     return cnt;
                 }
@@ -758,11 +763,12 @@ class _Morphology_contour: public MorphologyBase<short> {
                 short target_flag;
                 short flag;
                 int size;
+                ErodeKernelFunctor<short>* kernel;  // kernel selectable
 
                 int operator()(MorphologyBase<short>* mb,short* pixel, int x, int y)
                 {
                     if (pixel != NULL && (*pixel & target_flag) != 0) {
-                        s_dm_erode_kernel(mb, x, y, size, &flag, &target_flag);
+                        (*kernel)(mb, x, y, size, &flag, &target_flag);
                     }
                     return 0;
                 }
@@ -888,27 +894,31 @@ class _Morphology_contour: public MorphologyBase<short> {
             // Only center tile should be eroded.
             PyObject* target_tile = _get_cached_tile_from_index(CENTER_TILE_INDEX, false);
 #ifdef HEAVY_DEBUG
-            assert(target_tile != NULL);
+            //assert(target_tile != NULL);
 #endif
 
-            char tile_info = _get_tile_info(target_tile);
+            if (target_tile != NULL) {
+                char tile_info = _get_tile_info(target_tile);
 
-            if ((tile_info & ERODED_TILE_MASK) != 0)
-                return;
-
-#ifdef HEAVY_DEBUG
-            assert((tile_info & DILATED_TILE_MASK) != 0);
-#endif
+                if ((tile_info & ERODED_TILE_MASK) != 0)
+                    return;
+            }
             
-            // to failsafe, limit grow size within MYPAINT_MYPAINT_TILE_SIZE
             Functor_erode func;
             func.target_flag = DILATED_MASK;
             func.flag = ERODED_MASK;
             func.size = gap_size;
-
+            func.kernel = &s_dm_erode_kernel;
             _iterate_pixel(func, gap_size);
-            
-            _set_tile_info(target_tile, ERODED_TILE_MASK);
+
+            // new center tile might generated in _iterate_pixel()
+            // so re-get it.
+            // and if it generated, set tile info flag.
+            if (target_tile == NULL) 
+                target_tile = _get_cached_tile_from_index(CENTER_TILE_INDEX, false);
+
+            if (target_tile != NULL) 
+                _set_tile_info(target_tile, ERODED_TILE_MASK);
         }
 
         // Apply skelton morphology (might slow!)
@@ -917,17 +927,18 @@ class _Morphology_contour: public MorphologyBase<short> {
             
             // check whether this (center) tile is already 'skeltoned'
             PyObject* target_tile = _get_cached_tile_from_index(CENTER_TILE_INDEX, false);
-#ifdef HEAVY_DEBUG
-            assert(target_tile != NULL);
-#endif
-            char tile_info = _get_tile_info(target_tile);
-            if ((tile_info & SKELTON_TILE_MASK) != 0)
-               return;
+
+            if (target_tile != NULL) {
+                char tile_info = _get_tile_info(target_tile);
+                if ((tile_info & SKELTON_TILE_MASK) != 0)
+                   return;
+            }
 
             // Functors
             Functor_convert_erodedflag func_conv_eroded;
             Functor_convert_resultflag func_conv_result;
             Functor_erode func_erode;
+            func_erode.kernel = &s_dm_erode_kernel;
             func_erode.size = 1;
 
             Functor_dilate_skelton func_dilate;
@@ -951,31 +962,22 @@ class _Morphology_contour: public MorphologyBase<short> {
             for(int cnt=0; cnt < MYPAINT_TILE_SIZE; cnt++) {
                 
                 // first of all, erode current eroded flag area.
-                //m_source_pixel = &work_pixel;
                 func_erode.flag = SKELTON_ERODED_MASK;
                 func_erode.target_flag = SKELTON_BASE_MASK;
                 _iterate_pixel(func_erode, gap_size);
                 
-
-                // change m_source_pixel to WORK2_MASK flag.
-                // because, if dilating pixel and its source is same,
-                // dilation routines respond its own wrote pixels. 
-                //m_source_pixel = &work2_pixel;
+                // dilate it one pixel every NEWS direction (=3x3), 
+                // with diamond kernel.
                 func_dilate.flag = SKELTON_DILATED_MASK;
                 _iterate_pixel(func_dilate, gap_size);
 
                 // such erosion -> dilation operation called as 'open', in Morphology.
 
-                // then, mark SKELTON_MASK to pixels which is 
-                // (normal_eroded flagged area & not opened_area)
+                // Then, mark SKELTON_RESULT_MASK to pixels. 
+                // They are placed where 
+                // (normal_eroded flagged area & not 'opened' area)
+                // i.e. the difference of eroded and dilated area.
                 _iterate_pixel(func_conv_result, gap_size);
-                
-                // finally, erode current SKELTON_BASE_MASK area
-                // into SKELTON_ERODED_MASK
-                //m_source_pixel = &work_pixel;
-                func_erode.flag = SKELTON_ERODED_MASK;
-                _iterate_pixel(func_erode, gap_size);
-
                 
                 // then, convert back eroded SKELTON_ERODED_MASK into 
                 // SKELTON_BASE_MASK. and loop it again 
@@ -985,7 +987,6 @@ class _Morphology_contour: public MorphologyBase<short> {
 
 
             }
-
             
             // Loop ended.
             // we should get the result of skelton morphorogy.
@@ -1000,8 +1001,9 @@ class _Morphology_contour: public MorphologyBase<short> {
 
             // Although already center tile has been set ERODED_TILE_MASK flag
             // in most case.
-            target_tile = _get_cached_tile_from_index(CENTER_TILE_INDEX, true);
-            _set_tile_info(target_tile, SKELTON_TILE_MASK);
+            target_tile = _get_cached_tile_from_index(CENTER_TILE_INDEX, false);
+            if (target_tile != NULL)
+                _set_tile_info(target_tile, SKELTON_TILE_MASK);
         }
 
 
@@ -1084,23 +1086,11 @@ class _Morphology_contour: public MorphologyBase<short> {
                         Py_DECREF(surf_tile);
                         s_cache_tiles[i] = state_tile;
                     }
-                    else if (i == CENTER_TILE_INDEX) {    
-                        // surface tile does not exist - 
-                        // i.e. user clicked empty tile!
-                        // However, we need center state tile
-                        // everytime detecting contour.
-                        // so just generate it.
-                        s_cache_tiles[i] = _generate_tile();
-
-                        // State tiles in other empty place might be needed
-                        // as dilation going on, but it would be generated
-                        // on demand.
-                    }
                 }
             }
 
 #ifdef HEAVY_DEBUG            
-            assert(s_cache_tiles[CENTER_TILE_INDEX] != NULL);
+            //assert(s_cache_tiles[CENTER_TILE_INDEX] != NULL);
 #endif
         }
 
@@ -1157,8 +1147,10 @@ class _Morphology_contour: public MorphologyBase<short> {
 
 SquareDilateKernel<short> _Morphology_contour::s_sq_dilate_kernel;
 DiamondDilateKernel<short> _Morphology_contour::s_dm_dilate_kernel;
+SquareErodeKernel<short> _Morphology_contour::s_sq_erode_kernel;
 DiamondErodeKernel<short> _Morphology_contour::s_dm_erode_kernel;
 _Morphology_contour::SkeltonFinishKernel _Morphology_contour::s_finish_kernel;
+
 //
 // Python Interface functions.
 //
