@@ -7,8 +7,8 @@
  * (at your option) any later version.
  */
 
-#ifndef DILATE_HPP
-#define DILATE_HPP
+#ifndef FILL_GUARD_HPP
+#define FILL_GUARD_HPP
 
 #include <Python.h>
 
@@ -46,11 +46,13 @@ PyObject* dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated t
                              int grow_size,    // growing size from center pixel.
                              int kernel_type  // 0=square, 1=diamond kernel
                             );
+#ifdef HEAVY_DEBUG
 // XXX TEST CODES
 PyObject* test_skelton(PyObject* py_statedict, // the tiledict for dilated tiles.
                        int tx, int ty,  // the position of py_filled_tile
                        int gap_size  // overflow-preventing closable gap size.
                        );
+#endif
 
 #endif
 

@@ -1129,6 +1129,7 @@ class _Morphology_contour: public MorphologyBase<short> {
             finalize_cached_tiles(py_statedict); 
         }
 
+#ifdef HEAVY_DEBUG
         // XXX TEST CODES
         void test_skelton(PyObject* py_statedict, // 8bit state tiles dict
                             int tx, int ty, // current tile location
@@ -1141,6 +1142,7 @@ class _Morphology_contour: public MorphologyBase<short> {
 
             finalize_cached_tiles(py_statedict); 
         }
+#endif
         
 };
 
@@ -1288,6 +1290,7 @@ dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
     Py_RETURN_NONE;
 }
 
+#ifdef HEAVY_DEBUG
 // XXX TEST CODES
 PyObject* test_skelton(PyObject* py_statedict, // the tiledict for dilated tiles.
                        int tx, int ty,  // the position of py_filled_tile
@@ -1302,4 +1305,4 @@ PyObject* test_skelton(PyObject* py_statedict, // the tiledict for dilated tiles
 
     Py_RETURN_NONE;// DO NOT FORGET THIS!
 }
-
+#endif
