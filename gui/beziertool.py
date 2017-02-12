@@ -1094,6 +1094,29 @@ class BezierMode (PressureEditableMixin,
             self.options_presenter.set_checkbutton_curvepoint(
                     cn.curve)
 
+    def update_node(self, i, **kwargs):
+        """Updates properties of a node, and redraws it.
+        
+        :param i: node index
+        :param kwargs: keyword arguments of nodes. incoming datas, such as
+                       'x', 'y', or 'pressure' are stored as keyworded data.
+        """
+        assert i < len(self.nodes)
+        node = self.nodes[i]
+        if 'pressure' in kwargs:
+            node.pressure = kwargs['pressure']
+        if 'xtilt' in kwargs:
+            node.pressure = kwargs['xtilt']
+        if 'ytilt' in kwargs:
+            node.pressure = kwargs['ytilt']
+        if 'time' in kwargs:
+            node.pressure = kwargs['time']
+
+        self._queue_draw_node(i)
+        self._queue_redraw_item()
+
+
+        pass # placeholder, to be implemented in derived class.
 
     ## Action button handlers
 

@@ -1048,6 +1048,29 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 self._queue_redraw_all_nodes()
 
 
+    def update_node(self, i, **kwargs):
+        """Updates properties of a node, and redraws it.
+        
+        :param i: node index
+        :param kwargs: keyword arguments of nodes. incoming datas, such as
+                       'x', 'y', or 'pressure' are stored as keyworded data.
+        """
+        pass # placeholder, to be implemented in derived class.
+
+
+       #changing_pos = bool({"x", "y"}.intersection(kwargs))
+       #oldnode = self.nodes[i]
+       #if changing_pos:
+       #    self._queue_draw_node(i)
+       #self.nodes[i] = oldnode._replace(**kwargs)
+       ## FIXME: The curve redraw is a bit flickery.
+       ##   Perhaps dragging to adjust should only draw an
+       ##   armature during the drag, leaving the redraw to
+       ##   the stop handler.
+       #self._queue_redraw_item()
+       #if changing_pos:
+       #    self._queue_draw_node(i)
+
     ## Action button related
 
     def is_actionbutton_ready(self):
