@@ -1945,6 +1945,8 @@ class OptionsPresenter_ExInking (object):
 
     def _variation_preset_combo_changed_cb(self, widget):
         iter = self._variation_preset_combo.get_active_iter()
+        # TODO app.stroke_pressure_settings...? 
+        # it sounds rather strange...
         self._app.stroke_pressure_settings.current_setting = \
                 self.variation_preset_store[iter][0]
         self.curve.setting_changed_cb()

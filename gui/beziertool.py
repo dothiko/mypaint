@@ -1011,21 +1011,30 @@ class BezierMode (PressureEditableMixin,
 
         self._queue_redraw_item()
 
-        # First of all, get the entire stroke length
-        # to normalize stroke.
+        # First of all, get the entire bezier stroke length.
+        # That length is used to normalize stroke later.
 
         node_length=[]
         total_length = 0.0
 
         for idx, cn in enumerate(self.nodes[:-1]):
             nn = self.nodes[idx + 1]
-            ox, oy = gui.drawutils.get_cubic_bezier_segment(cn, cn.get_control_handle(1),
-                        nn.get_control_handle(0), nn, 0)
+            ox = gui.drawutils.get_cubic_bezier(
+                    cn.x, cn.get_control_handle(1).x,
+                    nn.get_control_handle(0).x, nn.x, 0)
+            oy = gui.drawutils.get_cubic_bezier(
+                    cn.y, cn.get_control_handle(1).y,
+                    nn.get_control_handle(0).y, nn.y, 0)
+
             cur_step = BezierMode.DRAFT_STEP
             length = 0.0 
             while cur_step < 1.0:
-                cx, cy = gui.drawutils.get_cubic_bezier_segment(cn, cn.get_control_handle(1),
-                            nn.get_control_handle(0), nn, cur_step)
+                cx = gui.drawutils.get_cubic_bezier(
+                        cn.x, cn.get_control_handle(1).x,
+                        nn.get_control_handle(0).x, nn.x, cur_step)
+                cy = gui.drawutils.get_cubic_bezier(
+                        cn.y, cn.get_control_handle(1).y,
+                        nn.get_control_handle(0).y, nn.y, cur_step)
                 length += vector_length(cx - ox, cy - oy)
                 cur_step += BezierMode.DRAFT_STEP
                 ox = cx
@@ -1034,13 +1043,12 @@ class BezierMode (PressureEditableMixin,
             node_length.append(length)
             total_length+=length
 
-        node_length.append(total_length) # this is sentinel
+        node_length.append(total_length) 
 
-
-        # use control handle class temporary to get smooth pressures.
+        # use curve class, to get smooth pressures.
         cur_length = 0.0
         for idx,cn in enumerate(self.nodes):
-            cn.pressure = curve.get_curve_value(cur_length / total_length)
+            cn.pressure = curve.get_pressure_value(cur_length / total_length)
             cur_length += node_length[idx]
         
         self._queue_redraw_item()
@@ -1494,7 +1502,8 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking,
         super(OptionsPresenter_Bezier, self)._variation_preset_combo_changed_cb(widget)
         beziermode, node_idx = self.target
         if beziermode:
-            beziermode.redraw_item_cb()
+           #beziermode.redraw_item_cb()
+            beziermode.apply_pressure_from_curve_widget()
 
     def _default_dtime_value_changed_cb(self, adj):
         if self._updating_ui:
