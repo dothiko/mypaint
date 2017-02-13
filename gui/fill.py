@@ -321,7 +321,8 @@ class FloodFillOptionsWidget (Gtk.Grid):
             _("Use morphology of skelton to detect much thinner contour.\n"
               "With this, overflow-prevention can produce more precise edges."))
         self.attach(checkbut, 1, row, 1, 1)
-        active = self.DEFAULT_USE_SKELTON
+        active = prefs.get(self.USE_SKELTON_PREF, self.DEFAULT_USE_SKELTON)
+        value = float(value)
         checkbut.set_active(active)
         self._use_skelton_toggle = checkbut
         checkbut.connect("toggled", self._use_skelton_toggled_cb)
@@ -376,6 +377,7 @@ class FloodFillOptionsWidget (Gtk.Grid):
         self._sample_merged_toggle.set_active(self.DEFAULT_SAMPLE_MERGED)
         self._dilation_size_adj.set_value(self.DEFAULT_DILATION_SIZE)
         self._gap_size_adj.set_value(self.DEFAULT_GAP_SIZE)
+        self._use_skelton_toggle.set_active(self.DEFAULT_USE_SKELTON)
 
    #def _dilation_size_format_value_cb(self, scale, value):
    #    return "%dpx" % math.floor(value)
