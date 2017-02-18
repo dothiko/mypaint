@@ -496,6 +496,20 @@ class _GapFiller: public Tilecache<char> {
             return true;
         }
 
+        bool _put_erode_square_kernel(const int cx, const int cy, 
+                                      const int size,
+                                      const char flag)
+        {
+            // erode kernel in this class is always diamond.
+            for (int dy = 0; dy <= size; dy++) {
+                for (int dx = 0; dx <= size; dx++) {
+                    if ( ! _check_erode_pixels(cx, cy, dx, dy))
+                        return false;
+                }
+            }
+            _put_flag(cx, cy, ERODED_MASK);
+            return true;
+        }
 
         // - special information methods
         //
@@ -556,13 +570,9 @@ class _GapFiller: public Tilecache<char> {
 
 
 
-        // - contour detecting morphology methods
-        //
-        // Dilate existing 9 status tiles, to ensure center status tile can get complete dilation.
-        // With this dilation, maximum 9+16 = 25 state tiles might be generated.
-        // But primary 9 tiles marked as 'dilation executed' and reused,
-        // Therefore not so many processing time is consumed.
-        void _dilate_contour(int gap_radius)    // growing size from center pixel.
+        // Dilate entire center tile and some area of surrounding 8 tiles, 
+        // to ensure center status tile can get complete dilation.
+        void _dilate_contour(int gap_radius) 
         {
             for (int y = -gap_radius; y < gap_radius + MYPAINT_TILE_SIZE; y++) {
                 for (int x = -gap_radius; x < gap_radius + MYPAINT_TILE_SIZE; x++) {
@@ -579,7 +589,7 @@ class _GapFiller: public Tilecache<char> {
             _set_tile_info(CENTER_TILE_INDEX, DILATED_TILE_MASK);
         }
 
-        void _erode_contour(int gap_radius)    // growing size from center pixel.
+        void _erode_contour(int gap_radius, bool use_square)
         {
             // Only center tile should be eroded.
             char tile_info = _get_tile_info(CENTER_TILE_INDEX);
@@ -594,8 +604,10 @@ class _GapFiller: public Tilecache<char> {
                 for (int x = -gap_radius; x < gap_radius + MYPAINT_TILE_SIZE; x++) {
                     char* pixel = get_cached_pixel(x, y, false);
                     if (pixel != NULL && (*pixel & DILATED_MASK) != 0) {
-                        _put_erode_kernel(x, y, gap_radius, ERODED_MASK);
-                      //*pixel &= erase_flag;
+                        if (use_square)
+                            _put_erode_square_kernel(x, y, gap_radius, ERODED_MASK);
+                        else
+                            _put_erode_kernel(x, y, gap_radius, ERODED_MASK);
                     }
                 }
             }
@@ -722,7 +734,14 @@ class _GapFiller: public Tilecache<char> {
             // detecting contour with dilate & erode.
             _dilate_contour(gap_radius);
             
-            _erode_contour(gap_radius);
+            // for now, using small size erosion with square kernel.
+            // Diamond-shaped, same gap_radius size as used in dilation 
+            // would work fine, but it produces patially thick contour 
+            // in some case.
+            // On the other hand,square-small kernel produces always 
+            // thick contour, but it is easily predictable.
+            if (gap_radius / 2 - 1 > 0 )
+                _erode_contour(gap_radius/2-1, true);
 
             finalize_cached_tiles(py_statedict); 
         }
