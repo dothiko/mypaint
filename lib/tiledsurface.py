@@ -611,7 +611,7 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         return _TiledSurfaceMove(self, x, y, sort=sort)
 
     def flood_fill(self, x, y, color, bbox, tolerance, dst_surface, 
-                   dilation_size, gap_size, use_skelton):
+                   dilation_size, gap_size):
         """Fills connected areas of this surface into another
 
         :param x: Starting point X coordinate
@@ -628,13 +628,11 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         :type dilation_size: int [0, MYPAINT_TILE_SIZE / 2]
         :param gap_size: Overflow-preventing closable gap size.
         :type gap_size: int [0, MYPAINT_TILE_SIZE / 2]
-        :param use_skelton: use skelton morphology to get more thinner contour
-        :type use_skelton: boolean
 
         See also `lib.layer.Layer.flood_fill()` and `fill.flood_fill()`.
         """
         flood_fill(self, x, y, color, bbox, tolerance, dst_surface,
-                   dilation_size, gap_size, use_skelton)
+                   dilation_size, gap_size)
 
     def get_smallest_mipmap(self):
         """ Get smallest mipmap, to generate layer thumbnail. """
@@ -1016,7 +1014,7 @@ class Background (Surface):
             return super(Background, self).load_from_numpy(arr, x, y)
 
 def flood_fill(src, x, y, color, bbox, tolerance, dst, 
-               dilation_size, gap_size, use_skelton):
+               dilation_size, gap_size):
     """Fills connected areas of one surface into another
 
     :param src: Source surface-like object
@@ -1036,10 +1034,6 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
     :type dilation_size: int [0, MYPAINT_TILE_SIZE / 2 - 1]
     :param gap_size: Overflow-preventing closable gap size. 
     :type gap_size: int [0, MYPAINT_TILE_SIZE / 2 - 1]
-    :param use_skelton: use skelton morphology to detect contour(slow)
-    :type use_skelton: boolean.If True, 'skelton_mask' parameter of 
-                       mypaintlib.skelton_mask is 0x0020.
-                       otherwise, it should be 0xffff.
 
     See also `lib.layer.Layer.flood_fill()`.
     """
@@ -1081,15 +1075,13 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
     filled = {}
     tileq = [
         ((tx, ty),
-         [(px, py)])
+         [(px, py)]) 
     ]
     dilated = {} # for dilated tiles
     status = {} # for status tiles
     eroded_contour = None
-    if use_skelton:
-        skelton_mask = 0x0020
-    else:
-        skelton_mask = 0xffff
+    is_first_call = True # to detect first call of detect_contour
+    is_limited_mode = False  
 
     while len(tileq) > 0:
         (tx, ty), seeds = tileq.pop(0)
@@ -1120,15 +1112,28 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
                 # dynamic allocated psuedo surface object
                 # such as TileRequestWrapper.
                 src.fetch_surrounding_tiles(tx, ty)
-                mypaintlib.detect_contour(
+                mypaintlib.fill_gap(
                         status,
                         src.tiledict,
                         tx, ty,
                         targ_r, targ_g, targ_b, targ_a,
                         tolerance,
-                        int(gap_size),
-                        int(use_skelton));
+                        int(gap_size));
                 eroded_contour = status.get((tx, ty), None)
+                # XXX is below codes still needed...??
+                if is_first_call:
+                    if eroded_contour is not None:
+                        status_flag = eroded_contour[py][px]
+                        if (status_flag & 0x0004) != 0:
+                            # status flag is already in contour area!
+                            # This might happen when there is narrower area
+                            # than gap size setting, and end user want to
+                            # fill such area.
+                            # If so, use special flag to notify it
+                            # to tile_flood_fill().
+                            is_limited_mode = True
+                    is_first_call = False
+
 
             dst_tile = filled.get((tx, ty), None)
             if dst_tile is None:
@@ -1142,7 +1147,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
                 min_x, min_y, max_x, max_y,
                 tolerance,
                 eroded_contour,
-                skelton_mask
+                is_limited_mode
             )
             seeds_n, seeds_e, seeds_s, seeds_w = overflows
 
@@ -1182,7 +1187,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
     bbox = lib.surface.get_tiles_bbox(filled)
     dst.notify_observers(*bbox)
 
-    # XXX TEST CODES
+    # XXX DEBUG CODES, To serialize current status tile
    #basedir = '/tmp/tiles'
    #import time
    #lt = time.localtime()
@@ -1191,8 +1196,13 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
    #os.makedirs(basedir)
    #for ck in status:
    #    arr = status[ck]
-   #    np.save(os.path.join(basedir, "%d_%d.npa" % ck), arr)
-
+   #    np.save(os.path.join(basedir, "%d_%d.npy" % ck), arr)
+   #import json
+   #with open(os.path.join(basedir, "info.json"), 'wt') as ofp:
+   #    info = {}
+   #    info["tolerance"] = tolerance
+   #    info["gap_size"] = gap_size
+   #    json.dump(info, ofp)
 
 class PNGFileUpdateTask (object):
     """Piecemeal callable: writes to or replaces a PNG file

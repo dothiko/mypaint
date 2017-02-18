@@ -659,7 +659,7 @@ class FloodFill (Command):
 
     def __init__(self, doc, x, y, color, bbox, tolerance,
                  sample_merged, make_new_layer, 
-                 dilation_size, gap_size, use_skelton, **kwds):
+                 dilation_size, gap_size,  **kwds):
         super(FloodFill, self).__init__(doc, **kwds)
         self.x = x
         self.y = y
@@ -673,7 +673,6 @@ class FloodFill (Command):
         self.snapshot = None
         self.dilation_size = dilation_size
         self.gap_size = gap_size
-        self.use_skelton = use_skelton
 
     def redo(self):
         # Pick a source
@@ -704,8 +703,7 @@ class FloodFill (Command):
         src_layer.flood_fill(self.x, self.y, self.color, self.bbox,
                              self.tolerance, dst_layer=dst_layer,
                              dilation_size=self.dilation_size,
-                             gap_size=self.gap_size,
-                             use_skelton=self.use_skelton)
+                             gap_size=self.gap_size)
 
     def undo(self):
         layers = self.doc.layer_stack

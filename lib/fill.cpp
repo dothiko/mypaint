@@ -46,7 +46,8 @@ static inline fix15_t
 _floodfill_color_match(const fix15_short_t c1_premult[4],
                        const fix15_short_t c2_premult[4],
                        const fix15_t tolerance,
-                       const int status_flag)
+                       const int status_flag,
+                       const bool is_fragment_mode)
 {
     // To share original _floodfill_color_match function with dilate.cpp, 
     // original code moved into fill.hpp as renamed 'floodfill_color_match()'
@@ -56,9 +57,15 @@ _floodfill_color_match(const fix15_short_t c1_premult[4],
 
     // When floodfill search pixel touches eroded contour status pixel,
     // it is same as color match failed.
-    if(retvalue > 0 && (status_flag & OBSTACLE_FILL_FLAG) != 0) 
-        return 0;
-
+    if(retvalue > 0) {
+        if (is_fragment_mode) {
+            if ((status_flag & INNER_CONTOUR_FLAG) == 0)  
+                return 0;
+        }                    
+        else if ((status_flag & OBSTACLE_FILL_FLAG) != 0) { 
+            return 0;
+        }
+    }
     return retvalue;
 
 }
@@ -71,12 +78,14 @@ _floodfill_should_fill(const fix15_short_t src_col[4], // premult RGB+A
                        const fix15_short_t dst_col[4], // premult RGB+A
                        const fix15_short_t targ_col[4],  // premult RGB+A
                        const fix15_t tolerance,  // prescaled to range
-                       const int status_flag)  
+                       const int status_flag,
+                       const bool is_fragment_mode)  
 {
     if (dst_col[3] != 0) {
         return false;   // already filled
     }
-    return _floodfill_color_match(src_col, targ_col, tolerance, status_flag) > 0;
+    return _floodfill_color_match(src_col, targ_col, tolerance, 
+                                  status_flag, is_fragment_mode) > 0;
 }
 
 
@@ -113,9 +122,8 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                  int min_x, int min_y, int max_x, int max_y,
                  double tol,  /* [0..1] */
                  PyObject *status,    /* status pixel tile of uint16.*/
-                 int skelton_mask)  /* when status tile 'skeltoned', 
-                                       this should be 0x0020.
-                                       otherwise, this should be 0xFFFF.*/
+                 bool is_fragment_mode) /* fragment mode, to fill small part 
+                                           which is buried in eroded area*/
 {
     // Scale the fractional tolerance arg
     const fix15_t tolerance = (fix15_t)(  MIN(1.0, MAX(0.0, tol))
@@ -177,7 +185,8 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
         const fix15_short_t *src_pixel = _floodfill_getpixel(src_arr, x, y);
         const fix15_short_t *dst_pixel = _floodfill_getpixel(dst_arr, x, y);
         short status_flag = _get_status_flag(sts_arr, x, y);
-        if (_floodfill_should_fill(src_pixel, dst_pixel, targ, tolerance, status_flag)) {
+        if (_floodfill_should_fill(src_pixel, dst_pixel, targ, 
+                                   tolerance, status_flag, is_fragment_mode)) {
             _floodfill_point *seed_pt = (_floodfill_point*)
                                           malloc(sizeof(_floodfill_point));
             seed_pt->x = x;
@@ -210,13 +219,13 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
             {
                 fix15_short_t *src_pixel = _floodfill_getpixel(src_arr, x, y);
                 fix15_short_t *dst_pixel = _floodfill_getpixel(dst_arr, x, y);
-                int status_flag = _get_status_flag(
-                                     sts_arr, x, y
-                                   ) & skelton_mask;
+                int status_flag = _get_status_flag(sts_arr, x, y);
 
                 if (x != x0) { // Test was already done for queued pixels
+
                     if (! _floodfill_should_fill(src_pixel, dst_pixel,
-                                                 targ, tolerance, status_flag))
+                                                 targ, tolerance, status_flag,
+                                                 is_fragment_mode))
                     {
                         break;
                     }
@@ -229,7 +238,8 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                 fix15_t alpha = fix15_one;
                 if (tolerance > 0) {
                     alpha = _floodfill_color_match(targ, src_pixel,
-                                                   tolerance, status_flag);
+                                                   tolerance, status_flag,
+                                                   is_fragment_mode);
                     // Since we use the output array to mark where we've been
                     // during the fill, we can't store an alpha of zero.
                     if (alpha == 0) {
@@ -249,13 +259,12 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                     fix15_short_t *dst_pixel_above = _floodfill_getpixel(
                                                        dst_arr, x, y-1
                                                      );
-                    int status_flag_above = _get_status_flag(
-                                               sts_arr, x, y-1
-                                             ) & skelton_mask;
+                    int status_flag_above = _get_status_flag(sts_arr, x, y-1);
 
                     bool match_above = _floodfill_should_fill(
                                          src_pixel_above, dst_pixel_above,
-                                         targ, tolerance, status_flag_above
+                                         targ, tolerance, status_flag_above,
+                                         is_fragment_mode
                                        );
                     if (match_above) {
                         if (look_above) {
@@ -290,13 +299,12 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                     fix15_short_t *dst_pixel_below = _floodfill_getpixel(
                                                        dst_arr, x, y+1
                                                      );
-                    int status_flag_below = _get_status_flag(
-                                               sts_arr, x, y+1
-                                             ) & skelton_mask;
+                    int status_flag_below = _get_status_flag(sts_arr, x, y+1);
 
                     bool match_below = _floodfill_should_fill(
                                          src_pixel_below, dst_pixel_below,
-                                         targ, tolerance, status_flag_below
+                                         targ, tolerance, status_flag_below,
+                                         is_fragment_mode
                                        );
                     if (match_below) {
                         if (look_below) {
@@ -364,4 +372,5 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
 #endif
     return result;
 }
+
 

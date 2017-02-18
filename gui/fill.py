@@ -105,8 +105,7 @@ class FloodFillMode (gui.mode.ScrollableModeMixin,
                            sample_merged=opts.sample_merged,
                            make_new_layer=make_new_layer,
                            dilation_size=opts.dilation_size,
-                           gap_size=opts.gap_size,
-                           use_skelton=opts.use_skelton)
+                           gap_size=opts.gap_size)
         opts.make_new_layer = False
         return False
 
@@ -172,14 +171,12 @@ class FloodFillOptionsWidget (Gtk.Grid):
     # "make new layer" is a temportary toggle, and is not saved to prefs
     DILATION_SIZE_PREF = 'flood_fill.dilate_size'
     GAP_SIZE_PREF = 'flood_fill.gap_size'
-    USE_SKELTON_PREF = 'flood_fill.use_skelton'
 
     DEFAULT_TOLERANCE = 0.05
     DEFAULT_SAMPLE_MERGED = False
     DEFAULT_MAKE_NEW_LAYER = False
     DEFAULT_DILATION_SIZE = 0
     DEFAULT_GAP_SIZE = 0
-    DEFAULT_USE_SKELTON = False
 
     def __init__(self):
         Gtk.Grid.__init__(self)
@@ -253,23 +250,23 @@ class FloodFillOptionsWidget (Gtk.Grid):
 
         row += 1
         label = Gtk.Label()
-        label.set_markup(_("Dilation Size:")) # XXX ...is this make sense as English?
-        label.set_tooltip_text(_("How many pixels filled area is dilated."))
+        label.set_markup(_("Dilation Size:")) 
+        label.set_tooltip_text(_("How many pixels dilated to filled area."))
         label.set_alignment(1.0, 0.5)
         label.set_hexpand(False)
         self.attach(label, 0, row, 1, 1)
         value = prefs.get(self.DILATION_SIZE_PREF, self.DEFAULT_DILATION_SIZE)
         value = float(value)
-        # Theorically 'dilating fill' would accepts maximum 
+        # Theorically 'dilation fill' would accepts maximum 
         # mypaintlib.TILE_SIZE pixel as dilation size.
         # but, another 'closing gap' functionality needs to limit dilation/erode
-        # size to a half of TILE_SIZE, to limit(save) processing time and
-        # memory usage.
-        # And 'closing gap' and 'dilating fill' share same codes for dilation mophology,
+        # size to (a half of TILE_SIZE - 1), to limit(save) processing time and
+        # memory usage by using tile cache.
+        # And 'gap fill' and 'dilation fill' share same logic for dilation morphology,
         # so this limitation also must be shared.
-        # Therefore, the upper value of this adjustment set to TILESIZE/2.
+        # Therefore, the upper value of this adjustment set to TILESIZE/2-1.
         adj = Gtk.Adjustment(value=value, lower=0.0, 
-                             upper=lib.mypaintlib.TILE_SIZE / 2,
+                             upper=lib.mypaintlib.TILE_SIZE / 2 - 1,
                              step_increment=1, page_increment=4,
                              page_size=0)
         adj.connect("value-changed", self._dilation_size_changed_cb)
@@ -288,16 +285,16 @@ class FloodFillOptionsWidget (Gtk.Grid):
 
         row += 1
         label = Gtk.Label()
-        label.set_markup(_("Gap Size:")) # XXX ...is this make sense as English?
+        label.set_markup(_("Gap Radius:")) 
         label.set_tooltip_text(_("To prevent overflow, Flood Fill does not go "
-                                 "through this size of gap."))
+                                 "through gaps within this radius."))
         label.set_alignment(1.0, 0.5)
         label.set_hexpand(False)
         self.attach(label, 0, row, 1, 1)
         value = prefs.get(self.GAP_SIZE_PREF, self.DEFAULT_GAP_SIZE)
         value = float(value)
         adj = Gtk.Adjustment(value=value, lower=0.0, 
-                             upper=lib.mypaintlib.TILE_SIZE / 2,
+                             upper=lib.mypaintlib.TILE_SIZE / 2 - 1,
                              step_increment=1, page_increment=4,
                              page_size=0)
         adj.connect("value-changed", self._gap_size_changed_cb)
@@ -306,26 +303,6 @@ class FloodFillOptionsWidget (Gtk.Grid):
         spinbtn.set_hexpand(True)
         spinbtn.set_adjustment(adj)
         self.attach(spinbtn, 1, row, 1, 1)
-
-        row += 1
-        label = Gtk.Label()
-        label.set_markup(_("Contour Detect:"))
-        label.set_tooltip_text(_("Coutour detection method"))
-        label.set_alignment(1.0, 0.5)
-        label.set_hexpand(False)
-        self.attach(label, 0, row, 1, 1)
-
-        text = _("Use skelton(slow)")
-        checkbut = Gtk.CheckButton.new_with_label(text)
-        checkbut.set_tooltip_text(
-            _("Use morphology of skelton to detect much thinner contour.\n"
-              "With this, overflow-prevention can produce more precise edges."))
-        self.attach(checkbut, 1, row, 1, 1)
-        active = prefs.get(self.USE_SKELTON_PREF, self.DEFAULT_USE_SKELTON)
-        value = float(value)
-        checkbut.set_active(active)
-        self._use_skelton_toggle = checkbut
-        checkbut.connect("toggled", self._use_skelton_toggled_cb)
 
         row += 1
         align = Gtk.Alignment.new(0.5, 1.0, 1.0, 0.0)
@@ -361,10 +338,6 @@ class FloodFillOptionsWidget (Gtk.Grid):
     def gap_size(self):
         return math.floor(self._gap_size_adj.get_value())
 
-    @property
-    def use_skelton(self):
-        return bool(self._use_skelton_toggle.get_active())
-
     def _tolerance_changed_cb(self, adj):
         self.app.preferences[self.TOLERANCE_PREF] = self.tolerance
 
@@ -377,7 +350,6 @@ class FloodFillOptionsWidget (Gtk.Grid):
         self._sample_merged_toggle.set_active(self.DEFAULT_SAMPLE_MERGED)
         self._dilation_size_adj.set_value(self.DEFAULT_DILATION_SIZE)
         self._gap_size_adj.set_value(self.DEFAULT_GAP_SIZE)
-        self._use_skelton_toggle.set_active(self.DEFAULT_USE_SKELTON)
 
    #def _dilation_size_format_value_cb(self, scale, value):
    #    return "%dpx" % math.floor(value)
@@ -388,5 +360,3 @@ class FloodFillOptionsWidget (Gtk.Grid):
     def _gap_size_changed_cb(self, adj):
         self.app.preferences[self.GAP_SIZE_PREF] = self.gap_size
 
-    def _use_skelton_toggled_cb(self, checkbut):
-        self.app.preferences[self.USE_SKELTON_PREF] = self.use_skelton

@@ -20,23 +20,29 @@
 
 // This constant is to refer from fill.cpp
 //
-#define OBSTACLE_FILL_FLAG 0x0024 // both of ERODED_MASK | SKELTON_RESULT_MASK.
-                                  // But, when skelton infomation generated,
-                                  // the ERODED_MASK has been removed from the
-                                  // center tile with specialized finishing 
-                                  // kernel functor(SkeltonFinishKernel).
+#define OBSTACLE_FILL_FLAG (0x0020 | 0x0004) 
+                            // both of ERODED_MASK | SKELTON_RESULT_MASK.
+                            // But, when skelton infomation generated,
+                            // the ERODED_MASK has been removed from the
+                            // center tile with specialized finishing 
+                            // kernel functor(SkeltonFinishKernel).
+
+#define INNER_CONTOUR_FLAG 0x0004
+                            // To detect whether initially pressed position
+                            // is inside eroded contour.
+                            // If so, we need to limit floodfill target
+                            // to eroded and targeted pixel area.
 
 // # Interface functions
 
 // setup state tile, to detect fillable gap.
-PyObject* detect_contour(PyObject* py_statedict, // the tiledict for dilated tiles.
-                         PyObject* py_surfdict, //  source surface tile dict.
-                         int tx, int ty,  // the position of py_filled_tile
-                         int targ_r, int targ_g, int targ_b, int targ_a, 
-                         double tol,   // pixel tolerance of filled area.
-                         int gap_size, // overflow-preventing closable gap size.
-                         int do_skelton // use skelton morphology(slow)
-                         );
+PyObject* fill_gap(PyObject* py_statedict, // the tiledict for dilated tiles.
+                   PyObject* py_surfdict, //  source surface tile dict.
+                   int tx, int ty,  // the position of py_filled_tile
+                   int targ_r, int targ_g, int targ_b, int targ_a, 
+                   double tol,   // pixel tolerance of filled area.
+                   int gap_size  // overflow-preventing closable gap size.
+                   );
 
 // dilate filled tile
 PyObject* dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
@@ -48,10 +54,6 @@ PyObject* dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated t
                             );
 #ifdef HEAVY_DEBUG
 // XXX TEST CODES
-PyObject* test_skelton(PyObject* py_statedict, // the tiledict for dilated tiles.
-                       int tx, int ty,  // the position of py_filled_tile
-                       int gap_size  // overflow-preventing closable gap size.
-                       );
 #endif
 
 #endif
