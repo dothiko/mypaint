@@ -396,15 +396,15 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 
     def checkpoint(self, flush=True, **kwargs):
         """Sync pending changes from (and to) the model
-
+    
         If called with flush==False, this is an override which just
         redraws the pending stroke with the current brush settings and
         color. This is the behavior our testers expect:
         https://github.com/mypaint/mypaint/issues/226
-
+    
         When this mode is left for another mode (see `leave()`), the
         pending brushwork is committed properly.
-
+    
         """
         if flush:
             # Commit the pending work normally
@@ -417,8 +417,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             self._queue_draw_buttons()
             self._queue_redraw_all_nodes()
             self._queue_redraw_item()
- 
- 
  
     def _update_zone_and_target(self, tdw, x, y):
         """Update the zone and target node under a cursor position"""
@@ -659,27 +657,31 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 
                 return False
         elif self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
-                if self.zone == EditZoneMixin.CONTROL_NODE:
-                    # clicked a node.
-                    mx, my = tdw.display_to_model(event.x, event.y)
-                    self.drag_offset.start(mx, my)
-                    self.phase = PhaseMixin.ADJUST_POS
-                    
-                    targidx = self.target_node_index
-                    if ctrl_state:
-                        # Node selection editing mode.
-                        self.select_node(targidx, not ctrl_state)
-                    else:
-                        # Ordinary selection of a node.
-                        # When the target node is already in selected_nodes list,
-                        # only activate it (i.e. it becomes self.current_node_index).
-                        # Otherwise, only the node is selected, other selected nodes
-                        # should be cleared.
-                        self.select_node(targidx ,targidx)
 
+            if self.phase == PhaseMixin.CAPTURE:
+                self._start_new_capture_phase(rollback=False)
 
+            if self.zone == EditZoneMixin.CONTROL_NODE:
+                # clicked a node.
+                mx, my = tdw.display_to_model(event.x, event.y)
+                self.drag_offset.start(mx, my)
+                self.phase = PhaseMixin.ADJUST_POS
+                
+                targidx = self.target_node_index
+                if ctrl_state:
+                    # Node selection editing mode.
+                    self.select_node(targidx, not ctrl_state)
                 else:
-                    pass
+                    # Ordinary selection of a node.
+                    # When the target node is already in selected_nodes list,
+                    # only activate it (i.e. it becomes self.current_node_index).
+                    # Otherwise, only the node is selected, other selected nodes
+                    # should be cleared.
+                    self.select_node(targidx ,targidx)
+
+
+            else:
+                pass
 
             # FALLTHRU: *do* start a drag
 

@@ -381,13 +381,21 @@ class BezierMode (PressureEditableMixin,
         self.forced_button_pos = None
 
     def _reset_capture_data(self):
+        """ Reset capture related data.
+        This method would be called the initializing codes of
+        capture phase.
+        """
         super(BezierMode, self)._reset_capture_data()
         self.phase = _Phase.ADJUST
+        self._pressure_modified = False
 
     def _reset_adjust_data(self):
+        """ Reset adjust related data.
+        This method would be called each time the adjust phase has reached to
+        node_drag_stop_cb()
+        """
         super(BezierMode, self)._reset_adjust_data()
         self.current_node_handle = None
-
     
     def _generate_overlay(self, tdw):
         return OverlayBezier(self, tdw)
@@ -696,6 +704,7 @@ class BezierMode (PressureEditableMixin,
             # In this class, we can add nodes
             # everytime we want.
             # so actually there is no 'CAPTURE' phase.
+            self._start_new_capture_phase(rollback=False)
             self.phase = _Phase.ADJUST
 
         if self.phase in (_Phase.ADJUST, _Phase.ADJUST_POS): 
@@ -724,11 +733,12 @@ class BezierMode (PressureEditableMixin,
 
             # FALLTHRU: *do* start a drag 
         
-        elif self.phase == _Phase.ADJUST_PRESSURE: 
-            # XXX in some cases,ADJUST_PRESSURE phase come here
-            # without reaching drag_stop_cb.(it might due to pen tablet...)
-            # so ignore this for now,or something should be done here?
-            pass 
+       #elif self.phase == _Phase.ADJUST_PRESSURE: 
+       #    # XXX in some cases,ADJUST_PRESSURE phase come here
+       #    # without reaching drag_stop_cb.(it might due to pen tablet...)
+       #    # so ignore this for now,or something should be done here?
+       #    print('adjuting!')
+       #    pass 
         elif self.phase == _Phase.INSERT_NODE:
             mx, my = tdw.display_to_model(event.x, event.y)
             pressed_segment = self._detect_on_stroke(mx, my)
@@ -776,6 +786,8 @@ class BezierMode (PressureEditableMixin,
                     # New node added!
                     node = self._get_event_data(tdw, event)
                     self.nodes.append(node)
+                    if not self._pressure_modified:
+                        self.apply_pressure_from_curve_widget()
                     self._last_event_node = node
                     self.phase = _Phase.INIT_HANDLE
                     idx = len(self.nodes) - 1
@@ -807,7 +819,6 @@ class BezierMode (PressureEditableMixin,
 
         if self.phase == _Phase.ADJUST:
             pass
-            
         elif self.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
             node = self._last_event_node
             if self._last_event_node:
@@ -817,7 +828,6 @@ class BezierMode (PressureEditableMixin,
                         shift_state)
                 self._queue_draw_node(self.current_node_index, tdws=(tdw,))# to update
             self._queue_redraw_item()
-                
         else:
             super(BezierMode, self).node_drag_update_cb(tdw, event, dx, dy)
 
@@ -834,23 +844,22 @@ class BezierMode (PressureEditableMixin,
         elif self.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
             node = self._last_event_node
       
-            # At initialize handle phase, even if the node is not 'curve'
-            # Set the handles as symmetry.
+            # When initializing handle phase, 
+            # even if the node is NOT 'curved' one,
+            # the handles must be set as symmetry.
+            # Otherwise, it might be rather confusing or unoperatable.
             if (self.phase == _Phase.INIT_HANDLE and 
                     len(self.nodes) > 1 and node.curve == False):
-                # Setting curve property twice.
-                # the first one is to create initial symmetry handle.
+                # Setting 'curve' property of node twice.
+
+                # The first one is to create initial symmetry handle.
                 node.curve = True 
-                # after then, set curve property to the desired
+
+                # After that, set curve property to the desired
                 # initial value = False.
                 node.curve = False
 
             self._queue_draw_node(self.current_node_index) # to erase
-
-           #dx, dy = self.drag_offset.get_model_offset()
-           #node.set_control_handle_offset(self.current_node_handle,
-           #        dx, dy,
-           #        False) #shift_state)
 
             self._queue_redraw_item()
             if len(self.nodes) > 1:
@@ -872,6 +881,10 @@ class BezierMode (PressureEditableMixin,
             self._queue_draw_buttons()
             self._queue_draw_selected_nodes() 
             self.phase = _Phase.ADJUST
+        elif self.phase in (_Phase.ADJUST_PRESSURE, 
+                            _Phase.ADJUST_PRESSURE_ONESHOT): 
+            self._pressure_modified = True
+            super(BezierMode, self).node_drag_stop_cb(tdw)
         else:
             super(BezierMode, self).node_drag_stop_cb(tdw)
 
@@ -1006,8 +1019,8 @@ class BezierMode (PressureEditableMixin,
         if len(self.nodes) < 2:
             return
 
-        assert hasattr(self.options_presenter,'curve')
-        curve = self.options_presenter.curve
+       #assert hasattr(self.options_presenter,'curve')
+       #curve = self.options_presenter.curve
 
         self._queue_redraw_item()
 
@@ -1047,10 +1060,11 @@ class BezierMode (PressureEditableMixin,
 
         # use curve class, to get smooth pressures.
         cur_length = 0.0
+        pressure_map = self.pressure_map
         for idx,cn in enumerate(self.nodes):
-            cn.pressure = curve.get_pressure_value(cur_length / total_length)
+           #cn.pressure = curve.get_pressure_value(cur_length / total_length)
+            cn.pressure = pressure_map.get_pressure(cur_length / total_length)
             cur_length += node_length[idx]
-        
         self._queue_redraw_item()
 
 
