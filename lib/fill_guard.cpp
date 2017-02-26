@@ -24,12 +24,15 @@
 #define GET_TX_FROM_INDEX(tx, idx) ((tx) + (((idx) % 3) - 1))
 #define GET_TY_FROM_INDEX(ty, idx) ((ty) + (((idx) / 3) - 1))
 
-// defining the _Tile wrapper object surface-cache attribute.
+// the _Tile wrapper object surface-cache attribute name.
 #define ATTR_NAME_RGBA "rgba"
+
+// Maximum operation size. i.e. 'gap-radius'
+#define MAX_OPERATION_SIZE ((MYPAINT_TILE_SIZE / 2) - 1)
 
 inline char* get_tile_pixel(PyArrayObject* tile, const int x, const int y)
 {
-    // XXX copyed from fill.cpp
+    // XXX almost copyed from fill.cpp::_floodfill_getpixel()
     const unsigned int xstride = PyArray_STRIDE(tile, 1);
     const unsigned int ystride = PyArray_STRIDE(tile, 0);
     return (PyArray_BYTES((PyArrayObject*)tile)
@@ -41,15 +44,13 @@ inline char* get_tile_pixel(PyArrayObject* tile, const int x, const int y)
  *
  *
  * @detail
- * Base class for Morphology operation.
- * This class does tile cache management, and basic pixel operation
+ * Base Template class for tile cache operation and basic pixel operation
  * over entire tile cache.
  * 
- * Pixel functor class is assigned as a parameter for _iterate_pixel method
- * of this class, and Pixel functor class might uses Kernel functor class
- * to put a bunch of pixel.
- * And, Kernel functor class uses Tilecache derived class to draw pixel
- * with crossing over boundary of each cached tiles.
+ * This class has 3x3 tile cache, to ensure morphology operation is exactly
+ * done even at the border of the tile.
+ * dilating operation would affect surrounding tiles over its border,
+ * also, eroding operation would refer surrounding tiles.
  */
 
 template <class T>
@@ -145,18 +146,8 @@ class Tilecache
                         Py_INCREF(dst_tile); 
                         // With PyDict_GetItem(), tile is just borrowed. 
                         // so incref here.
-                        // Otherwise, some tile would be generated in 
-                        // this module.
-                        // Such 'new tile' would be 'increfed' with 
-                        // calling PyDict_SetItem() at _finalize_dilated_tiles().
-                        // On the other hand, A  Borrowed tile, it is already 
-                        // in tile dictionary, so it would not get increfed 
-                        // even PyDict_SetItem().
-                        // And all items decrefed in _finalize_cached_tiles().
-                        // Therefore we need incref it here.
-                        //
-                        // keys are generated every time cache is set up, 
-                        // so no need to incref.
+                        // On the other hand, key object is always generated
+                        // above line, so does not need incref.
 #ifdef HEAVY_DEBUG
                         assert(dst_tile->ob_refcnt >= 2);
 #endif
@@ -195,9 +186,9 @@ class Tilecache
                 }
 
 #ifdef HEAVY_DEBUG
-                assert(key->ob_refcnt >= 0);
+                assert(key->ob_refcnt >= 1);
 #endif
-                Py_DECREF(key); // key might not used after it is generated.
+                Py_DECREF(key); 
             
             }
 
@@ -279,7 +270,7 @@ class _Dilater_fix15 : public Tilecache<fix15_short_t> {
         {
             fix15_short_t* dst_pixel = get_cached_pixel(rx, ry, true);
 
-            if (dst_pixel[3] == 0) { // rejecting already written pixel 
+            if (dst_pixel[3] == 0) { // rejecting already dilated pixel 
                 dst_pixel[0] = pixel[0];
                 dst_pixel[1] = pixel[1];
                 dst_pixel[2] = pixel[2];
@@ -321,9 +312,9 @@ class _Dilater_fix15 : public Tilecache<fix15_short_t> {
             }        */
         }
 
-        inline void _place_kernel(const int cx, const int cy,
-                                  const int dx, const int dy, 
-                                  const fix15_short_t* pixel)
+        inline void _write_kernel_pixels(const int cx, const int cy,
+                                         const int dx, const int dy, 
+                                         const fix15_short_t* pixel)
         {
             _put_pixel(cx-dx, cy-dy, pixel);
             if (dx != 0 || dy != 0) {
@@ -338,7 +329,7 @@ class _Dilater_fix15 : public Tilecache<fix15_short_t> {
         {
             for (int dy = 0; dy <= size; dy++) {
                 for (int dx = 0; dx <= size; dx++) {
-                    _place_kernel(cx, cy, dx, dy, pixel);
+                    _write_kernel_pixels(cx, cy, dx, dy, pixel);
                 }
             }
         }
@@ -348,7 +339,7 @@ class _Dilater_fix15 : public Tilecache<fix15_short_t> {
         {
             for (int dy = 0; dy <= size; dy++) {
                 for (int dx = 0; dx <= size-dy; dx++) {
-                    _place_kernel(cx, cy, dx, dy, pixel);
+                    _write_kernel_pixels(cx, cy, dx, dy, pixel);
                 }
             }
         }
@@ -369,9 +360,6 @@ class _Dilater_fix15 : public Tilecache<fix15_short_t> {
                    int kernel_type  // 0 for square kernel, 1 for diamond kernel
                    )
         {
-#ifdef HEAVY_DEBUG
-            assert(size <= MYPAINT_TILE_SIZE / 2 - 1);
-#endif
 
             int dilated_cnt = 0;
 
@@ -430,7 +418,7 @@ class _GapFiller: public Tilecache<char> {
             *dst_pixel |= flag;
         }
 
-        inline void _place_dilate_kernel(const int cx, const int cy,
+        inline void _write_dilate_flags(const int cx, const int cy,
                                   const int dx, const int dy, 
                                   const char flag)
         {
@@ -442,19 +430,19 @@ class _GapFiller: public Tilecache<char> {
             }
         }
 
-        void _put_dilate_kernel(const int cx, const int cy, const int size,
+        inline void _put_dilate_kernel(const int cx, const int cy, const int size,
                                 const char flag)
         {
             // dilate kernel in this class is always square.
             for (int dy = 0; dy <= size; dy++) {
                 for (int dx = 0; dx <= size; dx++) {
-                    _place_dilate_kernel(cx, cy, dx, dy, flag);
+                    _write_dilate_flags(cx, cy, dx, dy, flag);
                 }
             }
         }
 
 
-        inline bool _check_erode_single_pixels(const int cx, const int cy)
+        inline bool _check_erode_single_pixel(const int cx, const int cy)
         {
             char* dst_pixel;
             dst_pixel = get_cached_pixel(cx, cy, false);
@@ -467,15 +455,15 @@ class _GapFiller: public Tilecache<char> {
         inline bool _check_erode_pixels(const int cx, const int cy,
                                         const int dx, const int dy) 
         {
-            if ( ! _check_erode_single_pixels(cx - dx, cy - dy))
+            if ( ! _check_erode_single_pixel(cx - dx, cy - dy))
                     return false;
 
             if (dx != 0 || dy != 0) {
-                if ( ! _check_erode_single_pixels(cx + dx, cy - dy))
+                if ( ! _check_erode_single_pixel(cx + dx, cy - dy))
                         return false;
-                else if ( ! _check_erode_single_pixels(cx - dx, cy + dy))
+                else if ( ! _check_erode_single_pixel(cx - dx, cy + dy))
                         return false;
-                else if ( ! _check_erode_single_pixels(cx + dx, cy + dy))
+                else if ( ! _check_erode_single_pixel(cx + dx, cy + dy))
                         return false;
             }
 
@@ -540,8 +528,12 @@ class _GapFiller: public Tilecache<char> {
 #endif
             for(int i=0; i < TILE_INFO_MAX; i++) {
                 pixel = get_pixel(tile_index, 0, i, false);
-                if (pixel == NULL)
+                if (pixel == NULL) {
+#ifdef HEAVY_DEBUG
+                    assert(i==0);   
+#endif
                     return VOID_TILE_MASK;
+                }
 
                 if (*pixel & TILE_INFO_MASK)
                     retflag |= flag;
@@ -559,8 +551,12 @@ class _GapFiller: public Tilecache<char> {
             char* pixel;
             for(int i=0; i < TILE_INFO_MAX && flag != 0; i++) {
                 pixel = get_pixel(tile_index, 0, i, false);
-                if (pixel == NULL)
+                if (pixel == NULL) {
+#ifdef HEAVY_DEBUG
+                    assert(i==0);  
+#endif
                     return; // this tile does not have entity.
+                }
 
                 if (flag & 0x01)
                     *pixel |= TILE_INFO_MASK;
@@ -574,6 +570,16 @@ class _GapFiller: public Tilecache<char> {
         // to ensure center status tile can get complete dilation.
         void _dilate_contour(int gap_radius) 
         {
+            char tile_info = _get_tile_info(CENTER_TILE_INDEX);
+
+#ifdef HEAVY_DEBUG
+            assert((tile_info & VOID_TILE_MASK) == 0);
+            assert(gap_radius <= MAX_OPERATION_SIZE);
+#endif
+
+            if ((tile_info & DILATED_TILE_MASK) != 0)
+                return;
+
             for (int y = -gap_radius; y < gap_radius + MYPAINT_TILE_SIZE; y++) {
                 for (int x = -gap_radius; x < gap_radius + MYPAINT_TILE_SIZE; x++) {
                     char* pixel = get_cached_pixel(x, y, false);
@@ -595,6 +601,7 @@ class _GapFiller: public Tilecache<char> {
             char tile_info = _get_tile_info(CENTER_TILE_INDEX);
 #ifdef HEAVY_DEBUG
             assert((tile_info & VOID_TILE_MASK) == 0);
+            assert(gap_radius <= MAX_OPERATION_SIZE);
 #endif
 
             if ((tile_info & ERODED_TILE_MASK) != 0)
@@ -724,6 +731,10 @@ class _GapFiller: public Tilecache<char> {
                       fix15_t tolerance,
                       int gap_radius)
         {
+#ifdef HEAVY_DEBUG
+            assert(gap_radius <= MAX_OPERATION_SIZE);
+#endif
+
             init_cached_tiles(py_statedict, tx, ty); 
 
             _setup_state_tiles(py_statedict, 
@@ -731,31 +742,41 @@ class _GapFiller: public Tilecache<char> {
                                targ_pixel,
                                tolerance);
         
-            // detecting contour with dilate & erode.
+            // Filling gap with dilated contour
+            // (contour = not flood-fill targeted pixel area).
             _dilate_contour(gap_radius);
+
+            // Then, erode the contour to make it much thinner.
             
-            // for now, using small size erosion with square kernel.
-            // Diamond-shaped, same gap_radius size as used in dilation 
-            // would work fine, but it produces patially thick contour 
-            // in some case.
-            // On the other hand,square-small kernel produces always 
-            // thick contour, but it is easily predictable.
-            if (gap_radius / 2 - 1 > 0 )
-                _erode_contour(gap_radius/2-1, true);
+            // Currently, using small size erosion with square kernel.
+            //
+            // At older version, I used a kernel for erosion 
+            // which is Diamond-shaped, same gap_radius size as used in dilation. 
+            // That works fine, but it would produces patially 
+            // thick contour in some case.
+            // It would be annoying, unpredictable result for end user.
+            // On the other hand,square-shaped,small size erosion kernel 
+            // produces always thicker contour, but it is easily predictable,
+            // and easily make it up with 'dilation size'(of filled area) option.
+            int erosion_size = gap_radius / 2 - 1;
+            if (erosion_size > 0 )
+                _erode_contour(erosion_size, true);
+
+            // I also created to make much thinner contour with 
+            // skelton morphology, but it was too slow
+            // (mypaint hanged up for several seconds) 
+            // when floodfill spill out the targeted area.
+            // so I gave up it.
 
             finalize_cached_tiles(py_statedict); 
         }
 
-#ifdef HEAVY_DEBUG
-        // XXX TEST CODES
-#endif
-        
 };
 
 // - Python Interface functions.
 //
 
-/** gap_fill:
+/** fill_gap:
  *
  * @py_statedict: a Python dictinary, which stores 'state tiles'
  * @py_pre_filled_tile: a Numpy.array object of color tile.
@@ -784,13 +805,13 @@ fill_gap(PyObject* py_statedict, // the tiledict for status tiles.
     assert(py_surfdict != NULL);
     assert(0.0 <= tol);
     assert(tol <= 1.0);
-    assert(gap_radius <= MYPAINT_TILE_SIZE / 2 - 1);
+    assert(gap_radius <= MAX_OPERATION_SIZE);
 #endif
     // actually, this function is wrapper.
     
-    // XXX Morphology object defined as static. 
+    // XXX Morphology Operation object defined as static. 
     // Because this function called each time before a tile flood-filled,
-    // I think constructing/destructing cost would not be ignored.
+    // I think constructing/destructing cost cannot be ignored.
     // Otherwise, we can use something start/end wrapper function and
     // use PyCapsule object...
     static _GapFiller m;
@@ -806,7 +827,7 @@ fill_gap(PyObject* py_statedict, // the tiledict for status tiles.
                                         * fix15_one);
 
     // limit gap size.
-    gap_radius %= (MYPAINT_TILE_SIZE / 2 - 1);
+    gap_radius %= MAX_OPERATION_SIZE;
 
     m.fill_gap(py_statedict, py_surfdict,
                tx, ty, 
@@ -861,7 +882,7 @@ dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
 #ifdef HEAVY_DEBUG            
     assert(py_dilated != NULL);
     assert(py_filled_tile != NULL);
-    assert(dilate_size <= MYPAINT_TILE_SIZE / 2);
+    assert(dilate_size <= MAX_OPERATION_SIZE);
     assert(kernel_type == _Dilater_fix15::SQUARE_KERNEL || 
            kernel_type == _Dilater_fix15::DIAMOND_KERNEL);
 #endif
@@ -880,7 +901,7 @@ dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
     // dummy pixel is passed to setup_morphology_params().
     
     // limit dilation size.
-    dilate_size %= (MYPAINT_TILE_SIZE / 2 - 1);
+    dilate_size %= MAX_OPERATION_SIZE;
 
     d.init_cached_tiles(py_dilated, tx, ty);
     d.dilate(py_filled_tile, tx, ty, fill_pixel, dilate_size, kernel_type);
@@ -889,6 +910,3 @@ dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
     Py_RETURN_NONE;
 }
 
-#ifdef HEAVY_DEBUG
-// XXX TEST CODES
-#endif
