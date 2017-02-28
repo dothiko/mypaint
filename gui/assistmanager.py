@@ -71,7 +71,7 @@ class AssistManager(object):
                 if combo_model.get(row.iter,0)[0] == self._current.name:
                    combo.set_active_iter(row.iter)
 
-            self._activate_presenter(self._current.get_presenter()) 
+            self._activate_presenter(self._current.options_presenter) 
 
         self._brushlookup[brush_name] = assistant
 
@@ -165,10 +165,16 @@ class AssistManager(object):
     def presenter_box(self):
         return self._presenter_grid
 
-    def _activate_presenter(self, widget):
-        assert self._presenter_grid != None
-        if widget == None:
+    def _activate_presenter(self, presenter):
+        """
+        :param presenter: assist.Optionpresenter_* class instance.
+        """
+        assert self._presenter_grid is not None
+        if presenter is None:
             widget = self._empty_box
+        else:
+            widget = presenter.get_box_widget()
+
 
         bin = self._assistant_options_bin
         old_option = bin.get_child()

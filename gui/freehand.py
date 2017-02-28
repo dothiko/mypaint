@@ -424,13 +424,10 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
             assistant = tdw.app.assistmanager.current
             if assistant:
-                assistant.reset()
                #assistant.fetch(tdw, event.x, event.y, 
                #        event.get_axis(Gdk.AxisUse.PRESSURE),
                #        event.time, drawstate.button_down)
-                assistant.button_press_cb(tdw, event.x, event.y, 
-                        event.get_axis(Gdk.AxisUse.PRESSURE),
-                        event.time, drawstate.button_down)
+                assistant.button_press_cb(tdw, event) 
 
             result = True
         return (super(FreehandMode, self).button_press_cb(tdw, event)
@@ -447,9 +444,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
             assistant = tdw.app.assistmanager.current
             if assistant:
-                assistant.button_release_cb(tdw, event.x, event.y, 
-                        0.0,
-                        event.time, event.button)
+                assistant.button_release_cb(tdw, event)
 
             # Notify observers after processing the event
             self.doc.input_stroke_ended(event)
@@ -523,11 +518,16 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         ytilt = event.get_axis(Gdk.AxisUse.YTILT)
         state = event.state
 
+        # XXX added codes for assitants.
         assistant = tdw.app.assistmanager.current
         if assistant:
-            if drawstate.button_down != None:
-                # To erase old overlay drawings of assistant.
-                assistant.queue_draw_area(tdw)
+           #if drawstate.button_down != None:
+           #    # To erase old overlay drawings of assistant.
+           #    if assistant.motion_notify_cb(tdw, event):
+           #        return super(FreehandMode, self).motion_notify_cb(tdw, event)
+               #assistant.queue_draw_area(tdw)
+            if assistant.motion_notify_cb(tdw, event):
+                return super(FreehandMode, self).motion_notify_cb(tdw, event)
 
         # Workaround for buggy evdev behaviour.
         # Events sometimes get a zero raw pressure reading when the
@@ -632,8 +632,9 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             # Check that we can use the eventhack data uncorrected
             if (hx0, hy0, ht0) == (x, y, time):
                 for hx, hy, ht in drawstate.evhack_positions:
+                    # XXX added codes for assitants.
                     if assistant:
-                        assistant.fetch(tdw, hx, hy, pressure, time, drawstate.button_down)
+                        assistant.fetch(hx, hy, pressure, time)
                         for hx, hy, hp in assistant.enum_samples(tdw):
                             queue_motion(ht, hx, hy, hp, None, None)
                         continue
@@ -650,18 +651,20 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         if len(drawstate.evhack_positions) > 0:
             drawstate.evhack_positions = []
 
+        # XXX added codes for assitants.
         if assistant:
             # Assitant event position fetch and queue motion
-            button_down = drawstate.button_down
-            if fakepressure is not None:
-                button_down = None
+           #button_down = drawstate.button_down
+           #if fakepressure is not None:
+           #    button_down = None
 
-            assistant.fetch(tdw, x, y, pressure, time, button_down)
+            assistant.fetch(x, y, pressure, time)
             for x, y, p in assistant.enum_samples(tdw):
                 queue_motion(time, x, y, p, xtilt, ytilt)
 
             # New positioned assistant overlay should be drawn here.
-            if button_down is not None:
+           #if button_down is not None:
+            if fakepressure is None:
                 assistant.queue_draw_area(tdw)
         else:
             # Ordinary event queuing
@@ -679,7 +682,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         # XXX In original code, motion_notify_cb() end without 
         # calling superclass one.
         # Is there any reasons to do so...?
-        # Anyway,we need to detect device change in this version,so call this.
+        # Anyway,we need to detect device change in this version.
+        # so call this.
         return super(FreehandMode, self).motion_notify_cb(tdw, event)
 
 
