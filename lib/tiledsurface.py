@@ -1151,7 +1151,9 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
             )
             seeds_n, seeds_e, seeds_s, seeds_w = overflows
 
-            if dilation_size > 0:
+            if dilation_size > 0 and is_limited_mode == False:
+                # XXX TEST: when limited_mode is activated,
+                # we get better result without dilation.
                 mypaintlib.dilate_filled_tile(
                         dilated,
                         dst_tile,
