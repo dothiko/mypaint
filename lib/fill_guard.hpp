@@ -49,8 +49,7 @@ PyObject* dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated t
                              PyObject* py_filled_tile, // the filled src tile. 
                              int tx, int ty,  // the position of py_filled_tile
                              double fill_r, double fill_g, double fill_b, 
-                             int grow_size,    // growing size from center pixel.
-                             int kernel_type  // 0=square, 1=diamond kernel
+                             int grow_size    // growing size from center pixel.
                             );
 #ifdef HEAVY_DEBUG
 // XXX TEST CODES

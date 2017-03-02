@@ -10,11 +10,7 @@
 
 #include <glib.h>
 #include <mypaint-tiled-surface.h>
-
-#define USE_CIRCLE_DILATE 1
-#ifdef USE_CIRCLE_DILATE
 #include <math.h>
-#endif
 
 #ifdef HEAVY_DEBUG
 #include <stdio.h>
@@ -44,6 +40,23 @@ inline char* get_tile_pixel(PyArrayObject* tile, const int x, const int y)
             + (y * ystride)
             + (x * xstride));
 }
+/** 
+ * @ Pixel functor
+ *
+ *
+ * @detail
+ * Base class for pixel manipulation at _apply_functor_to_kernel
+ * of Tilecache class.
+ * 
+ */
+
+/*
+class _PixelFunctor
+{
+    virtual int operator()(Tilecache* cacheobj, const int cx, const int cy) = 0;
+};
+*/
+
 /** 
  * @ Tilecache
  *
@@ -121,6 +134,47 @@ class Tilecache
         PyObject* _get_cached_key(int index)
         {
             return m_cache_keys[index];
+        }
+
+        // virtual handler method: used from _search_kernel
+        virtual bool is_match_pixel(const int cx, const int cy, const T* target_pixel) = 0;
+
+        // Utility method: applying pixel functor to circle-shaped kernel
+        inline bool _search_kernel(const int cx, const int cy, 
+                                   const int size,
+                                   const T* target_pixel,
+                                   bool target_result)
+        {
+            // dilate kernel in this class is always square.
+            int cw;
+            double rad;
+            bool result;
+
+            for (int dy = size; dy >= 0; dy--) {
+                rad = acos((double)dy / (double)size);
+                cw = (int)(sin(rad) * (double)size);
+                for (int dx = 0; dx < cw; dx++) {
+                    result = is_match_pixel(cx + dx, cy - dy, target_pixel);
+                    if (result == target_result) 
+                        return true;
+
+                    if ( dx != 0 || dy != 0) {
+                        result = is_match_pixel(cx + dx, cy + dy, target_pixel);
+                        if (result == target_result) 
+                            return true;
+
+                        result = is_match_pixel(cx - dx, cy - dy, target_pixel);
+                        if (result == target_result) 
+                            return true;
+
+                        result = is_match_pixel(cx - dx, cy + dy, target_pixel);
+                        if (result == target_result) 
+                            return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
     public:
@@ -258,6 +312,7 @@ class Tilecache
             return get_pixel(tile_index, cx, cy, generate);
         }
 
+
         
 };
 
@@ -270,10 +325,33 @@ class Tilecache
 class _Dilater_fix15 : public Tilecache<fix15_short_t> {
 
     protected:
-        
-        inline void _put_pixel(int rx, int ry, const fix15_short_t* pixel)
+
+        virtual bool is_match_pixel(const int cx, const int cy, 
+                                    const fix15_short_t* target_pixel) 
         {
-            fix15_short_t* dst_pixel = get_cached_pixel(rx, ry, true);
+            // target_pixel is ignored.
+            //
+            // And, this class only refer the currently targetted tile,
+            // so coordinates which are negative or exceeding tile size
+            // should be just ignored.
+            if (cx < 0 || cy < 0 
+                || cx >= MYPAINT_TILE_SIZE 
+                || cy >= MYPAINT_TILE_SIZE) {
+               return false;
+            } 
+
+            fix15_short_t* cur_pixel = 
+                (fix15_short_t*)get_tile_pixel(
+                                    m_target_tile,
+                                    cx, cy);
+            if (cur_pixel[3] != 0)
+                return true;
+            return false;
+        }
+        
+        inline void _put_pixel(int cx, int cy, const fix15_short_t* pixel)
+        {
+            fix15_short_t* dst_pixel = get_cached_pixel(cx, cy, true);
 
             if (dst_pixel[3] == 0) { // rejecting already dilated pixel 
                 dst_pixel[0] = pixel[0];
@@ -317,37 +395,7 @@ class _Dilater_fix15 : public Tilecache<fix15_short_t> {
             }        */
         }
 
-        inline void _write_kernel_pixels(const int cx, const int cy,
-                                         const int dx, const int dy, 
-                                         const fix15_short_t* pixel)
-        {
-            _put_pixel(cx-dx, cy-dy, pixel);
-            if (dx != 0 || dy != 0) {
-                _put_pixel(cx+dx, cy-dy, pixel);
-                _put_pixel(cx-dx, cy+dy, pixel);
-                _put_pixel(cx+dx, cy+dy, pixel);
-            }
-        }
-
-        void _put_square_kernel(const int cx, const int cy, const int size,
-                                const fix15_short_t* pixel)
-        {
-            for (int dy = 0; dy <= size; dy++) {
-                for (int dx = 0; dx <= size; dx++) {
-                    _write_kernel_pixels(cx, cy, dx, dy, pixel);
-                }
-            }
-        }
-
-        void _put_diamond_kernel(const int cx, const int cy, const int size,
-                                 const fix15_short_t* pixel)
-        {
-            for (int dy = 0; dy <= size; dy++) {
-                for (int dx = 0; dx <= size-dy; dx++) {
-                    _write_kernel_pixels(cx, cy, dx, dy, pixel);
-                }
-            }
-        }
+        PyArrayObject* m_target_tile;
 
     public:
 
@@ -361,32 +409,20 @@ class _Dilater_fix15 : public Tilecache<fix15_short_t> {
         int dilate(PyObject* py_filled_tile, // the filled src tile. 
                    int tx, int ty,  // the position of py_filled_tile
                    const fix15_short_t* fill_pixel,
-                   int size,
-                   int kernel_type  // 0 for square kernel, 1 for diamond kernel
+                   int size
                    )
         {
 
             int dilated_cnt = 0;
+            m_target_tile = (PyArrayObject*)py_filled_tile;
 
-            for (int y=0; y < MYPAINT_TILE_SIZE; y++) {
-                for (int x=0; x < MYPAINT_TILE_SIZE; x++) {
-                    fix15_short_t* cur_pixel = 
-                        (fix15_short_t*)get_tile_pixel(
-                                            (PyArrayObject*)py_filled_tile, 
-                                            x, y);
-                    if (cur_pixel[3] != 0)
-                    {
-                        switch (kernel_type) {
-                            case DIAMOND_KERNEL:
-                                _put_diamond_kernel(x, y, size, fill_pixel);
-                                break;
-
-                            case SQUARE_KERNEL:
-                            default:
-                                _put_square_kernel(x, y, size, fill_pixel);
-                                break;
-                        }
-                        dilated_cnt++;
+           // for (int y=0; y < MYPAINT_TILE_SIZE; y++) {
+           //     for (int x=0; x < MYPAINT_TILE_SIZE; x++) {
+            for (int cy=-size; cy < MYPAINT_TILE_SIZE+size; cy++) {
+                for (int cx=-size; cx < MYPAINT_TILE_SIZE+size; cx++) {
+                    // target pixel is unused.
+                    if (_search_kernel(cx, cy, size, NULL, true)) {
+                        _put_pixel(cx, cy, fill_pixel);
                     }
                 }
             }
@@ -423,160 +459,18 @@ class _GapFiller: public Tilecache<char> {
             *dst_pixel |= flag;
         }
 
-        inline void _write_dilate_flags(const int cx, const int cy,
-                                  const int dx, const int dy, 
-                                  const char flag)
-        {
-            _put_flag(cx-dx, cy-dy, flag);
-            if (dx != 0 || dy != 0) {
-                _put_flag(cx+dx, cy-dy, flag);
-                _put_flag(cx-dx, cy+dy, flag);
-                _put_flag(cx+dx, cy+dy, flag);
-            }
-        }
-        
-        inline void _put_diamond_dilate_kernel(const int cx, const int cy, const int size,
-                                const char flag)
-        {
-            for (int dy = 0; dy <= size; dy++) {
-                for (int dx = 0; dx <= size - dy; dx++) {
-                    _write_dilate_flags(cx, cy, dx, dy, flag);
-                }
-            }
-        }
-
-        inline void _put_dilate_kernel(const int cx, const int cy, const int size,
-                                const char flag)
-        {
-            // dilate kernel in this class is always square.
-#ifdef USE_CIRCLE_DILATE
-            int sy = cy - size;
-            int sx;
-            int cw;
-            double rad;
-
-            for (int dy = size - 1; dy >= 0; dy--) {
-                rad = acos((double)dy / (double)size);
-                //cw = (int)(sin(M_PI_2 * ((double)(size - dy) / (double)size)) * (double)size);
-                cw = (int)(sin(rad) * (double)size);
-                sx = cx - cw;
-                for (int dx = 0; dx < cw * 2; dx++) {
-                    _put_flag(sx + dx, sy + dy, flag);
-                    _put_flag(sx + dx, sy - dy, flag);
-                    //_write_dilate_flags(cx, cy, dx, dy, flag);
-                }
-            }
-
-#else
-            for (int dy = 0; dy <= size; dy++) {
-                for (int dx = 0; dx <= size; dx++) {
-                    _write_dilate_flags(cx, cy, dx, dy, flag);
-                }
-            }
-#endif
-        }
-
-
-        inline bool _check_target_pixel(const int cx, const int cy, const char flag)
+        virtual bool is_match_pixel(const int cx, const int cy, const char* target_pixel) 
         {
             char* dst_pixel;
             dst_pixel = get_cached_pixel(cx, cy, false);
             if (dst_pixel == NULL || 
-                    (*dst_pixel & flag) == 0) {
+                    (*dst_pixel & *target_pixel) == 0) {
                 return false;
             }
             return true;
         }
-        inline bool _check_erode_pixels(const int cx, const int cy,
-                                        const int dx, const int dy) 
-        {
-            if ( ! _check_target_pixel(cx - dx, cy - dy, DILATED_MASK))
-                    return false;
-
-            if (dx != 0 || dy != 0) {
-                if ( ! _check_target_pixel(cx + dx, cy - dy, DILATED_MASK))
-                        return false;
-                else if ( ! _check_target_pixel(cx - dx, cy + dy, DILATED_MASK))
-                        return false;
-                else if ( ! _check_target_pixel(cx + dx, cy + dy, DILATED_MASK))
-                        return false;
-            }
-
-            return true;
-        }
-
-        bool _put_erode_kernel(const int cx, const int cy, const int size,
-                               const char flag)
-        {
-            // erode kernel in this class is always diamond.
-            for (int dy = 0; dy <= size; dy++) {
-                for (int dx = 0; dx <= size-dy; dx++) {
-                    if ( ! _check_erode_pixels(cx, cy, dx, dy))
-                        return false;
-                }
-            }
-            _put_flag(cx, cy, ERODED_MASK);
-            return true;
-        }
-
-        bool _put_erode_square_kernel(const int cx, const int cy, 
-                                      const int size,
-                                      const char flag)
-        {
-#ifdef USE_CIRCLE_DILATE
-            int sy = cy - size;
-            int sx;
-            int cw;
-            double rad;
-
-            for (int dy = size - 1; dy >= 0; dy--) {
-                rad = acos((double)dy / (double)size);
-                //cw = (int)(sin(M_PI_2 * ((double)(size - dy) / (double)size)) * (double)size);
-                cw = (int)(sin(rad) * (double)size);
-                sx = cx - cw;
-                for (int dx = 0; dx < cw * 2; dx++) {
-                    if (! _check_target_pixel(sx + dx, sy + dy, DILATED_MASK))
-                        return false;
-                    if (! _check_target_pixel(sx + dx, sy - dy, DILATED_MASK))
-                        return false;
-                }
-            }
-
-#else
-            // erode kernel in this class is always diamond.
-            for (int dy = 0; dy <= size; dy++) {
-                for (int dx = 0; dx <= size; dx++) {
-                    if ( ! _check_erode_pixels(cx, cy, dx, dy))
-                        return false;
-                }
-            }
-#endif
-            _put_flag(cx, cy, ERODED_MASK);
-            return true;
-        }
 
 
-        bool _search_dilatable(const int cx, const int cy, 
-                               const int size)
-        {
-            int sy = cy - size;
-            int sx;
-            int cw;
-            double rad;
-
-            for (int dy = size - 1; dy >= 0; dy--) {
-                rad = acos((double)dy / (double)size);
-                cw = (int)(sin(rad) * (double)size);
-                sx = cx - cw;
-                for (int dx = 0; dx < cw * 2; dx++) {
-                    if (_check_target_pixel(sx + dx, sy + dy, EXIST_MASK))
-                        return true;
-                    if (_check_target_pixel(sx + dx, sy - dy, EXIST_MASK))
-                        return true;
-                }
-            }
-            return false;
-        }
 
         // - special information methods
         //
@@ -658,19 +552,8 @@ class _GapFiller: public Tilecache<char> {
 
             if ((tile_info & DILATED_TILE_MASK) != 0)
                 return;
-            /*
-            for (int y = -gap_radius; y < gap_radius + MYPAINT_TILE_SIZE; y++) {
-                for (int x = -gap_radius; x < gap_radius + MYPAINT_TILE_SIZE; x++) {
-                    char* pixel = get_cached_pixel(x, y, false);
-                    if (pixel != NULL  
-                        && (*pixel & EXIST_MASK) != 0  
-                        && (*pixel & PROCESSED_MASK) == 0) {
-                            _put_dilate_kernel(x, y, gap_radius, DILATED_MASK);
-                            *pixel |= PROCESSED_MASK;
-                    }
-                }
-            }
-            */
+
+            char flag = EXIST_MASK;
 
             for (int y = 0; y < MYPAINT_TILE_SIZE; y++) {
                 for (int x = 0; x < MYPAINT_TILE_SIZE; x++) {
@@ -678,7 +561,7 @@ class _GapFiller: public Tilecache<char> {
                     if (pixel != NULL   
                         && (*pixel & PROCESSED_MASK) != 0) {
                     }
-                    else if (_search_dilatable(x, y, gap_radius)) {
+                    else if (_search_kernel(x, y, gap_radius, &flag, true)) {
                         // if pixel is NULL (i.e. tile is NULL)
                         // generate it.
                         if (pixel == NULL)
@@ -692,7 +575,8 @@ class _GapFiller: public Tilecache<char> {
             _set_tile_info(CENTER_TILE_INDEX, DILATED_TILE_MASK);
         }
 
-        void _erode_contour(int gap_radius, bool use_square)
+       // void _erode_contour(int gap_radius, bool use_square)
+        void _erode_contour(int gap_radius)
         {
             // Only center tile should be eroded.
             char tile_info = _get_tile_info(CENTER_TILE_INDEX);
@@ -703,15 +587,15 @@ class _GapFiller: public Tilecache<char> {
 
             if ((tile_info & ERODED_TILE_MASK) != 0)
                 return;
-            
+
+            char flag = DILATED_MASK;
             for (int y = -gap_radius; y < gap_radius + MYPAINT_TILE_SIZE; y++) {
                 for (int x = -gap_radius; x < gap_radius + MYPAINT_TILE_SIZE; x++) {
                     char* pixel = get_cached_pixel(x, y, false);
                     if (pixel != NULL && (*pixel & DILATED_MASK) != 0) {
-                        if (use_square)
-                            _put_erode_square_kernel(x, y, gap_radius, ERODED_MASK);
-                        else
-                            _put_erode_kernel(x, y, gap_radius, ERODED_MASK);
+                        if ( ! _search_kernel(x, y, gap_radius, &flag, false)){
+                            _put_flag(x, y, ERODED_MASK);
+                        }
                     }
                 }
             }
@@ -845,24 +729,9 @@ class _GapFiller: public Tilecache<char> {
             _dilate_contour(gap_radius);
 
             // Then, erode the contour to make it much thinner.
-
-#ifdef USE_SQUARE_EROSION            
-            // For this option, using small size erosion with square kernel.
-            //
-            // At older version, I used a kernel for erosion 
-            // which is Diamond-shaped, same gap_radius size as used in dilation. 
-            // That works fine, but it would produces patially 
-            // thick contour in some case.
-            // It would be annoying, unpredictable result for end user.
-            // On the other hand,square-shaped,small size erosion kernel 
-            // produces always thicker contour, but it is easily predictable,
-            // and easily make it up with 'dilation size'(of filled area) option.
             int erosion_size = gap_radius / 2;
             if (erosion_size > 0 )
-                _erode_contour(erosion_size, true);
-#else
-            _erode_contour(gap_radius, false);
-#endif
+                _erode_contour(erosion_size);
 
             // I also created to make much thinner contour with 
             // skelton morphology, but it was too slow
@@ -884,7 +753,7 @@ class _GapFiller: public Tilecache<char> {
             _dilate_contour(gap_radius);
             int erosion_size = gap_radius / 2;
             if (erosion_size > 0 )
-                _erode_contour(erosion_size, true);
+                _erode_contour(erosion_size);
         }
 
 };
@@ -986,8 +855,7 @@ dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
                    PyObject* py_filled_tile, // the filled src tile.  
                    int tx, int ty,  // the position of py_filled_tile 
                    double fill_r, double fill_g, double fill_b, //premult pixel color 
-                   int dilate_size,    // growing size from center pixel.  
-                   int kernel_type) // 0 for square kernel, 1 for diamond kernel 
+                   int dilate_size)    // growing size from center pixel.  
 {
     // Morphology object defined as static. 
     // Because this function called each time before a tile flood-filled,
@@ -998,8 +866,6 @@ dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
     assert(py_dilated != NULL);
     assert(py_filled_tile != NULL);
     assert(dilate_size <= MAX_OPERATION_SIZE);
-    assert(kernel_type == _Dilater_fix15::SQUARE_KERNEL || 
-           kernel_type == _Dilater_fix15::DIAMOND_KERNEL);
 #endif
 
     
@@ -1019,7 +885,7 @@ dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
     dilate_size %= MAX_OPERATION_SIZE;
 
     d.init_cached_tiles(py_dilated, tx, ty);
-    d.dilate(py_filled_tile, tx, ty, fill_pixel, dilate_size, kernel_type);
+    d.dilate(py_filled_tile, tx, ty, fill_pixel, dilate_size);
     d.finalize_cached_tiles(py_dilated);
 
     Py_RETURN_NONE;
