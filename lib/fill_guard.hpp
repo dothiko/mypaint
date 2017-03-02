@@ -54,6 +54,10 @@ PyObject* dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated t
                             );
 #ifdef HEAVY_DEBUG
 // XXX TEST CODES
+PyObject*
+test(PyObject* py_statedict, // the tiledict for status tiles.
+     const int tx, const int ty,
+     const int dilate_size);   // growing size from center pixel.
 #endif
 
 #endif

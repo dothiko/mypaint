@@ -11,6 +11,11 @@
 #include <glib.h>
 #include <mypaint-tiled-surface.h>
 
+#define USE_CIRCLE_DILATE 1
+#ifdef USE_CIRCLE_DILATE
+#include <math.h>
+#endif
+
 #ifdef HEAVY_DEBUG
 #include <stdio.h>
 #endif
@@ -429,16 +434,46 @@ class _GapFiller: public Tilecache<char> {
                 _put_flag(cx+dx, cy+dy, flag);
             }
         }
+        
+        inline void _put_diamond_dilate_kernel(const int cx, const int cy, const int size,
+                                const char flag)
+        {
+            for (int dy = 0; dy <= size; dy++) {
+                for (int dx = 0; dx <= size - dy; dx++) {
+                    _write_dilate_flags(cx, cy, dx, dy, flag);
+                }
+            }
+        }
 
         inline void _put_dilate_kernel(const int cx, const int cy, const int size,
                                 const char flag)
         {
             // dilate kernel in this class is always square.
+#ifdef USE_CIRCLE_DILATE
+            int sy = cy - size;
+            int sx;
+            int cw;
+            double rad;
+
+            for (int dy = size - 1; dy >= 0; dy--) {
+                rad = acos((double)dy / (double)size);
+                //cw = (int)(sin(M_PI_2 * ((double)(size - dy) / (double)size)) * (double)size);
+                cw = (int)(sin(rad) * (double)size);
+                sx = cx - cw;
+                for (int dx = 0; dx < cw * 2; dx++) {
+                    _put_flag(sx + dx, sy + dy, flag);
+                    _put_flag(sx + dx, sy - dy, flag);
+                    //_write_dilate_flags(cx, cy, dx, dy, flag);
+                }
+            }
+
+#else
             for (int dy = 0; dy <= size; dy++) {
                 for (int dx = 0; dx <= size; dx++) {
                     _write_dilate_flags(cx, cy, dx, dy, flag);
                 }
             }
+#endif
         }
 
 
@@ -488,6 +523,26 @@ class _GapFiller: public Tilecache<char> {
                                       const int size,
                                       const char flag)
         {
+#ifdef USE_CIRCLE_DILATE
+            int sy = cy - size;
+            int sx;
+            int cw;
+            double rad;
+
+            for (int dy = size - 1; dy >= 0; dy--) {
+                rad = acos((double)dy / (double)size);
+                //cw = (int)(sin(M_PI_2 * ((double)(size - dy) / (double)size)) * (double)size);
+                cw = (int)(sin(rad) * (double)size);
+                sx = cx - cw;
+                for (int dx = 0; dx < cw * 2; dx++) {
+                    if (! _check_erode_single_pixel(sx + dx, sy + dy))
+                        return false;
+                    if (! _check_erode_single_pixel(sx + dx, sy - dy))
+                        return false;
+                }
+            }
+
+#else
             // erode kernel in this class is always diamond.
             for (int dy = 0; dy <= size; dy++) {
                 for (int dx = 0; dx <= size; dx++) {
@@ -495,6 +550,7 @@ class _GapFiller: public Tilecache<char> {
                         return false;
                 }
             }
+#endif
             _put_flag(cx, cy, ERODED_MASK);
             return true;
         }
@@ -660,7 +716,8 @@ class _GapFiller: public Tilecache<char> {
             return state_tile;
         }
 
-        // convert color tiles around (tx, ty) into state flag tiles.
+        // Before call this method, init_cached_tiles() must be already called.
+        // This method converts color tiles around (tx, ty) into state flag tiles.
         // also, this setup function sets newly generated status tile into cache.
         void _setup_state_tiles(PyObject* py_statedict, // 8bit state tiles dict
                                 PyObject* py_surfdict, // source surface tiles dict
@@ -747,8 +804,9 @@ class _GapFiller: public Tilecache<char> {
             _dilate_contour(gap_radius);
 
             // Then, erode the contour to make it much thinner.
-            
-            // Currently, using small size erosion with square kernel.
+
+#ifdef USE_SQUARE_EROSION            
+            // For this option, using small size erosion with square kernel.
             //
             // At older version, I used a kernel for erosion 
             // which is Diamond-shaped, same gap_radius size as used in dilation. 
@@ -758,9 +816,12 @@ class _GapFiller: public Tilecache<char> {
             // On the other hand,square-shaped,small size erosion kernel 
             // produces always thicker contour, but it is easily predictable,
             // and easily make it up with 'dilation size'(of filled area) option.
-            int erosion_size = gap_radius / 2 - 1;
+            int erosion_size = gap_radius / 2;
             if (erosion_size > 0 )
                 _erode_contour(erosion_size, true);
+#else
+            _erode_contour(gap_radius, false);
+#endif
 
             // I also created to make much thinner contour with 
             // skelton morphology, but it was too slow
@@ -769,6 +830,20 @@ class _GapFiller: public Tilecache<char> {
             // so I gave up it.
 
             finalize_cached_tiles(py_statedict); 
+        }
+
+        void test_dilate(PyObject* py_statedict, // 8bit state tiles dict
+                         const int tx, const int ty,
+                         const int gap_radius)
+        {
+            init_cached_tiles(py_statedict, tx, ty); 
+
+            // Filling gap with dilated contour
+            // (contour = not flood-fill targeted pixel area).
+            _dilate_contour(gap_radius);
+            int erosion_size = gap_radius / 2;
+            if (erosion_size > 0 )
+                _erode_contour(erosion_size, true);
         }
 
 };
@@ -867,13 +942,12 @@ fill_gap(PyObject* py_statedict, // the tiledict for status tiles.
 // dilate color filled tile. postprocess of flood_fill.
 PyObject*
 dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
-                   PyObject* py_filled_tile, // the filled src tile. 
-                   int tx, int ty,  // the position of py_filled_tile
-                   double fill_r, double fill_g, double fill_b, //premult pixel color
-                   int dilate_size,    // growing size from center pixel.
-                   int kernel_type) // 0 for square kernel, 1 for diamond kernel
+                   PyObject* py_filled_tile, // the filled src tile.  
+                   int tx, int ty,  // the position of py_filled_tile 
+                   double fill_r, double fill_g, double fill_b, //premult pixel color 
+                   int dilate_size,    // growing size from center pixel.  
+                   int kernel_type) // 0 for square kernel, 1 for diamond kernel 
 {
-    
     // Morphology object defined as static. 
     // Because this function called each time before a tile flood-filled,
     // so constructing/destructing cost would not be ignored.
@@ -910,3 +984,18 @@ dilate_filled_tile(PyObject* py_dilated, // the tiledict for dilated tiles.
     Py_RETURN_NONE;
 }
 
+#ifdef HEAVY_DEBUG
+PyObject*
+test(PyObject* py_statedict, // the tiledict for status tiles.
+     const int tx, const int ty,
+     const int dilate_size)    // growing size from center pixel.
+{
+    static _GapFiller m;
+
+    m.test_dilate(py_statedict, 
+                  tx, ty,
+                  dilate_size);
+
+    Py_RETURN_NONE;
+}
+#endif

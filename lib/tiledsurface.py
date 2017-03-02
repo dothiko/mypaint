@@ -1190,21 +1190,21 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
     dst.notify_observers(*bbox)
 
     # XXX DEBUG CODES, To serialize current status tile
-   #basedir = '/tmp/tiles'
-   #import time
-   #lt = time.localtime()
-   #curtimedir="%04d%02d%02d-%02d%02d%02d" % lt[0:6]
-   #basedir = os.path.join(basedir, curtimedir[2:])
-   #os.makedirs(basedir)
-   #for ck in status:
-   #    arr = status[ck]
-   #    np.save(os.path.join(basedir, "%d_%d.npy" % ck), arr)
-   #import json
-   #with open(os.path.join(basedir, "info.json"), 'wt') as ofp:
-   #    info = {}
-   #    info["tolerance"] = tolerance
-   #    info["gap_size"] = gap_size
-   #    json.dump(info, ofp)
+    basedir = '/tmp/tiles'
+    import time
+    lt = time.localtime()
+    curtimedir="%04d%02d%02d-%02d%02d%02d" % lt[0:6]
+    basedir = os.path.join(basedir, curtimedir[2:])
+    os.makedirs(basedir)
+    for ck in status:
+        arr = status[ck]
+        np.save(os.path.join(basedir, "%d_%d.npy" % ck), arr)
+    import json
+    with open(os.path.join(basedir, "info.json"), 'wt') as ofp:
+        info = {}
+        info["tolerance"] = tolerance
+        info["gap_size"] = gap_size
+        json.dump(info, ofp)
 
 class PNGFileUpdateTask (object):
     """Piecemeal callable: writes to or replaces a PNG file
