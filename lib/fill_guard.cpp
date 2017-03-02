@@ -477,12 +477,12 @@ class _GapFiller: public Tilecache<char> {
         }
 
 
-        inline bool _check_erode_single_pixel(const int cx, const int cy)
+        inline bool _check_target_pixel(const int cx, const int cy, const char flag)
         {
             char* dst_pixel;
             dst_pixel = get_cached_pixel(cx, cy, false);
             if (dst_pixel == NULL || 
-                    (*dst_pixel & DILATED_MASK) == 0) {
+                    (*dst_pixel & flag) == 0) {
                 return false;
             }
             return true;
@@ -490,15 +490,15 @@ class _GapFiller: public Tilecache<char> {
         inline bool _check_erode_pixels(const int cx, const int cy,
                                         const int dx, const int dy) 
         {
-            if ( ! _check_erode_single_pixel(cx - dx, cy - dy))
+            if ( ! _check_target_pixel(cx - dx, cy - dy, DILATED_MASK))
                     return false;
 
             if (dx != 0 || dy != 0) {
-                if ( ! _check_erode_single_pixel(cx + dx, cy - dy))
+                if ( ! _check_target_pixel(cx + dx, cy - dy, DILATED_MASK))
                         return false;
-                else if ( ! _check_erode_single_pixel(cx - dx, cy + dy))
+                else if ( ! _check_target_pixel(cx - dx, cy + dy, DILATED_MASK))
                         return false;
-                else if ( ! _check_erode_single_pixel(cx + dx, cy + dy))
+                else if ( ! _check_target_pixel(cx + dx, cy + dy, DILATED_MASK))
                         return false;
             }
 
@@ -535,9 +535,9 @@ class _GapFiller: public Tilecache<char> {
                 cw = (int)(sin(rad) * (double)size);
                 sx = cx - cw;
                 for (int dx = 0; dx < cw * 2; dx++) {
-                    if (! _check_erode_single_pixel(sx + dx, sy + dy))
+                    if (! _check_target_pixel(sx + dx, sy + dy, DILATED_MASK))
                         return false;
-                    if (! _check_erode_single_pixel(sx + dx, sy - dy))
+                    if (! _check_target_pixel(sx + dx, sy - dy, DILATED_MASK))
                         return false;
                 }
             }
@@ -553,6 +553,29 @@ class _GapFiller: public Tilecache<char> {
 #endif
             _put_flag(cx, cy, ERODED_MASK);
             return true;
+        }
+
+
+        bool _search_dilatable(const int cx, const int cy, 
+                               const int size)
+        {
+            int sy = cy - size;
+            int sx;
+            int cw;
+            double rad;
+
+            for (int dy = size - 1; dy >= 0; dy--) {
+                rad = acos((double)dy / (double)size);
+                cw = (int)(sin(rad) * (double)size);
+                sx = cx - cw;
+                for (int dx = 0; dx < cw * 2; dx++) {
+                    if (_check_target_pixel(sx + dx, sy + dy, EXIST_MASK))
+                        return true;
+                    if (_check_target_pixel(sx + dx, sy - dy, EXIST_MASK))
+                        return true;
+                }
+            }
+            return false;
         }
 
         // - special information methods
@@ -635,7 +658,7 @@ class _GapFiller: public Tilecache<char> {
 
             if ((tile_info & DILATED_TILE_MASK) != 0)
                 return;
-
+            /*
             for (int y = -gap_radius; y < gap_radius + MYPAINT_TILE_SIZE; y++) {
                 for (int x = -gap_radius; x < gap_radius + MYPAINT_TILE_SIZE; x++) {
                     char* pixel = get_cached_pixel(x, y, false);
@@ -644,6 +667,24 @@ class _GapFiller: public Tilecache<char> {
                         && (*pixel & PROCESSED_MASK) == 0) {
                             _put_dilate_kernel(x, y, gap_radius, DILATED_MASK);
                             *pixel |= PROCESSED_MASK;
+                    }
+                }
+            }
+            */
+
+            for (int y = 0; y < MYPAINT_TILE_SIZE; y++) {
+                for (int x = 0; x < MYPAINT_TILE_SIZE; x++) {
+                    char* pixel = get_cached_pixel(x, y, false);
+                    if (pixel != NULL   
+                        && (*pixel & PROCESSED_MASK) != 0) {
+                    }
+                    else if (_search_dilatable(x, y, gap_radius)) {
+                        // if pixel is NULL (i.e. tile is NULL)
+                        // generate it.
+                        if (pixel == NULL)
+                            pixel = get_cached_pixel(x, y, true);
+
+                        *pixel |= (PROCESSED_MASK | DILATED_MASK);
                     }
                 }
             }
