@@ -454,6 +454,59 @@ class _GapFiller: public Tilecache<char> {
             return true;
         }
 
+        inline void _write_dilate_flags(const int cx, const int cy,
+                                  const int dx, const int dy, 
+                                  const char flag)
+        {
+            _put_flag(cx-dx, cy-dy, flag);
+            if (dx != 0 || dy != 0) {
+                _put_flag(cx+dx, cy-dy, flag);
+                _put_flag(cx-dx, cy+dy, flag);
+                _put_flag(cx+dx, cy+dy, flag);
+            }
+        }
+        
+        inline void _put_diamond_dilate_kernel(const int cx, const int cy, const int size,
+                                const char flag)
+        {
+            for (int dy = 0; dy <= size; dy++) {
+                for (int dx = 0; dx <= size - dy; dx++) {
+                    _write_dilate_flags(cx, cy, dx, dy, flag);
+                }
+            }
+        }
+
+        inline void _put_dilate_kernel(const int cx, const int cy, const int size,
+                                const char flag)
+        {
+            // dilate kernel in this class is always square.
+#ifdef USE_CIRCLE_DILATE
+            int sy = cy - size;
+            int sx;
+            int cw;
+            double rad;
+
+            for (int dy = size - 1; dy >= 0; dy--) {
+                rad = acos((double)dy / (double)size);
+                //cw = (int)(sin(M_PI_2 * ((double)(size - dy) / (double)size)) * (double)size);
+                cw = (int)(sin(rad) * (double)size);
+                sx = cx - cw;
+                for (int dx = 0; dx < cw * 2; dx++) {
+                    _put_flag(sx + dx, sy + dy, flag);
+                    _put_flag(sx + dx, sy - dy, flag);
+                    //_write_dilate_flags(cx, cy, dx, dy, flag);
+                }
+            }
+
+#else
+            for (int dy = 0; dy <= size; dy++) {
+                for (int dx = 0; dx <= size; dx++) {
+                    _write_dilate_flags(cx, cy, dx, dy, flag);
+                }
+            }
+#endif
+        }
+
 
 
         // - special information methods
@@ -538,9 +591,11 @@ class _GapFiller: public Tilecache<char> {
                 return;
 
             char flag = EXIST_FLAG;
-
-            for (int y = 0; y < MYPAINT_TILE_SIZE; y++) {
-                for (int x = 0; x < MYPAINT_TILE_SIZE; x++) {
+            
+            // start -1 and  end +1 is need to dilate
+            // edge pixels of center tile.
+            for (int y = -1; y < MYPAINT_TILE_SIZE+1; y++) {
+                for (int x = -1; x < MYPAINT_TILE_SIZE+1; x++) {
                     char* pixel = get_cached_pixel(x, y, false);
                     if (pixel != NULL   
                         && (*pixel & PROCESSED_FLAG) != 0) {
@@ -556,7 +611,7 @@ class _GapFiller: public Tilecache<char> {
                         // generate it.
                         if (pixel == NULL)
                             pixel = get_cached_pixel(x, y, true);
-
+            
                         *pixel |= (PROCESSED_FLAG | DILATED_FLAG);
                     }
                 }
