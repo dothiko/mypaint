@@ -47,7 +47,7 @@ _floodfill_color_match(const fix15_short_t c1_premult[4],
                        const fix15_short_t c2_premult[4],
                        const fix15_t tolerance,
                        const int status_flag,
-                       const bool is_fragment_mode)
+                       const bool fragment_mode)
 {
     // To share original _floodfill_color_match function with dilate.cpp, 
     // original code moved into fill.hpp as renamed 'floodfill_color_match()'
@@ -58,11 +58,15 @@ _floodfill_color_match(const fix15_short_t c1_premult[4],
     // When floodfill search pixel touches eroded contour status pixel,
     // it is same as color match failed.
     if(retvalue > 0) {
-        if (is_fragment_mode) {
+        if (fragment_mode) {
+            // Fragment mode:
+            // draw only inside eroded contour.
             if ((status_flag & INNER_CONTOUR_FLAG) == 0)  
                 return 0;
         }                    
-        else if ((status_flag & OBSTACLE_FILL_FLAG) != 0) { 
+        else if ((status_flag & INNER_CONTOUR_FLAG) != 0)  
+        {
+            // Normal fill guard: reject when scan touch eroded contour.
             return 0;
         }
     }
@@ -79,13 +83,13 @@ _floodfill_should_fill(const fix15_short_t src_col[4], // premult RGB+A
                        const fix15_short_t targ_col[4],  // premult RGB+A
                        const fix15_t tolerance,  // prescaled to range
                        const int status_flag,
-                       const bool is_fragment_mode)  
+                       const bool fragment_mode)  
 {
     if (dst_col[3] != 0) {
         return false;   // already filled
     }
     return _floodfill_color_match(src_col, targ_col, tolerance, 
-                                  status_flag, is_fragment_mode) > 0;
+                                  status_flag, fragment_mode) > 0;
 }
 
 
@@ -121,9 +125,9 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                  double fill_r, double fill_g, double fill_b,
                  int min_x, int min_y, int max_x, int max_y,
                  double tol,  /* [0..1] */
-                 PyObject *status,    /* status pixel tile of uint16.*/
-                 bool is_fragment_mode) /* fragment mode, to fill small part 
-                                           which is buried in eroded area*/
+                 PyObject *status,    /* status pixel tile of uint8.*/
+                 bool fragment_mode) /* fragment mode, to draw unfilled small part 
+                                        which is produced by gap filling contour*/
 {
     // Scale the fractional tolerance arg
     const fix15_t tolerance = (fix15_t)(  MIN(1.0, MAX(0.0, tol))
@@ -186,7 +190,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
         const fix15_short_t *dst_pixel = _floodfill_getpixel(dst_arr, x, y);
         short status_flag = _get_status_flag(sts_arr, x, y);
         if (_floodfill_should_fill(src_pixel, dst_pixel, targ, 
-                                   tolerance, status_flag, is_fragment_mode)) {
+                                   tolerance, status_flag, fragment_mode)) {
             _floodfill_point *seed_pt = (_floodfill_point*)
                                           malloc(sizeof(_floodfill_point));
             seed_pt->x = x;
@@ -225,7 +229,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
 
                     if (! _floodfill_should_fill(src_pixel, dst_pixel,
                                                  targ, tolerance, status_flag,
-                                                 is_fragment_mode))
+                                                 fragment_mode))
                     {
                         break;
                     }
@@ -239,7 +243,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                 if (tolerance > 0) {
                     alpha = _floodfill_color_match(targ, src_pixel,
                                                    tolerance, status_flag,
-                                                   is_fragment_mode);
+                                                   fragment_mode);
                     // Since we use the output array to mark where we've been
                     // during the fill, we can't store an alpha of zero.
                     if (alpha == 0) {
@@ -264,7 +268,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                     bool match_above = _floodfill_should_fill(
                                          src_pixel_above, dst_pixel_above,
                                          targ, tolerance, status_flag_above,
-                                         is_fragment_mode
+                                         fragment_mode
                                        );
                     if (match_above) {
                         if (look_above) {
@@ -304,7 +308,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                     bool match_below = _floodfill_should_fill(
                                          src_pixel_below, dst_pixel_below,
                                          targ, tolerance, status_flag_below,
-                                         is_fragment_mode
+                                         fragment_mode
                                        );
                     if (match_below) {
                         if (look_below) {

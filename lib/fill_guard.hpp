@@ -20,14 +20,8 @@
 
 // This constant is to refer from fill.cpp
 //
-#define OBSTACLE_FILL_FLAG (0x0020 | 0x0004) 
-                            // both of ERODED_MASK | SKELTON_RESULT_MASK.
-                            // But, when skelton infomation generated,
-                            // the ERODED_MASK has been removed from the
-                            // center tile with specialized finishing 
-                            // kernel functor(SkeltonFinishKernel).
 
-#define INNER_CONTOUR_FLAG 0x0004
+#define INNER_CONTOUR_FLAG 0x04
                             // To detect whether initially pressed position
                             // is inside eroded contour.
                             // If so, we need to limit floodfill target

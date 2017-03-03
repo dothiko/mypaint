@@ -38,8 +38,8 @@ tile_flood_fill  (PyObject *src,     // readonly HxWx4 array of uint16
                   double fill_r, double fill_g, double fill_b,
                   int min_x, int min_y, int max_x, int max_y,
                   double tolerance,  // [0..1]
-                  PyObject *status,   // Status tile, HxWx1 array of short
-                  bool is_fragment_mode // filling small fragment mode
+                  PyObject *status,   // Status tile, HxWx1 array of char
+                  bool fragment_mode // small fragment of contour filling mode
                   );       
 
 

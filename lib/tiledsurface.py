@@ -1081,7 +1081,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
     status = {} # for status tiles
     eroded_contour = None
     is_first_call = True # to detect first call of detect_contour
-    is_limited_mode = False  
+    fragment_mode = False  
 
     while len(tileq) > 0:
         (tx, ty), seeds = tileq.pop(0)
@@ -1124,14 +1124,14 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
                 if is_first_call:
                     if eroded_contour is not None:
                         status_flag = eroded_contour[py][px]
-                        if (status_flag & 0x0004) != 0:
+                        if (status_flag & 0x04) != 0:
                             # status flag is already in contour area!
                             # This might happen when there is narrower area
                             # than gap size setting, and end user want to
                             # fill such area.
                             # If so, use special flag to notify it
                             # to tile_flood_fill().
-                            is_limited_mode = True
+                            fragment_mode = True
                     is_first_call = False
 
 
@@ -1147,11 +1147,11 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
                 min_x, min_y, max_x, max_y,
                 tolerance,
                 eroded_contour,
-                is_limited_mode
+                fragment_mode
             )
             seeds_n, seeds_e, seeds_s, seeds_w = overflows
 
-            if dilation_size > 0 and is_limited_mode == False:
+            if dilation_size > 0 and fragment_mode == False:
                 # XXX TEST: when limited_mode is activated,
                 # we get better result without dilation.
                 mypaintlib.dilate_filled_tile(
@@ -1190,21 +1190,21 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
     dst.notify_observers(*bbox)
 
     # XXX DEBUG CODES, To serialize current status tile
-   #basedir = '/tmp/tiles'
-   #import time
-   #lt = time.localtime()
-   #curtimedir="%04d%02d%02d-%02d%02d%02d" % lt[0:6]
-   #basedir = os.path.join(basedir, curtimedir[2:])
-   #os.makedirs(basedir)
-   #for ck in status:
-   #    arr = status[ck]
-   #    np.save(os.path.join(basedir, "%d_%d.npy" % ck), arr)
-   #import json
-   #with open(os.path.join(basedir, "info.json"), 'wt') as ofp:
-   #    info = {}
-   #    info["tolerance"] = tolerance
-   #    info["gap_size"] = gap_size
-   #    json.dump(info, ofp)
+    basedir = '/tmp/tiles'
+    import time
+    lt = time.localtime()
+    curtimedir="%04d%02d%02d-%02d%02d%02d" % lt[0:6]
+    basedir = os.path.join(basedir, curtimedir[2:])
+    os.makedirs(basedir)
+    for ck in status:
+        arr = status[ck]
+        np.save(os.path.join(basedir, "%d_%d.npy" % ck), arr)
+    import json
+    with open(os.path.join(basedir, "info.json"), 'wt') as ofp:
+        info = {}
+        info["tolerance"] = tolerance
+        info["gap_size"] = gap_size
+        json.dump(info, ofp)
 
 class PNGFileUpdateTask (object):
     """Piecemeal callable: writes to or replaces a PNG file

@@ -12,11 +12,6 @@
 #include <mypaint-tiled-surface.h>
 #include <math.h>
 
-#ifdef HEAVY_DEBUG
-#include <stdio.h>
-#endif
-
-
 #define CENTER_TILE_INDEX 4
 #define MAX_CACHE_COUNT 9
 
@@ -40,23 +35,6 @@ inline char* get_tile_pixel(PyArrayObject* tile, const int x, const int y)
             + (y * ystride)
             + (x * xstride));
 }
-/** 
- * @ Pixel functor
- *
- *
- * @detail
- * Base class for pixel manipulation at _apply_functor_to_kernel
- * of Tilecache class.
- * 
- */
-
-/*
-class _PixelFunctor
-{
-    virtual int operator()(Tilecache* cacheobj, const int cx, const int cy) = 0;
-};
-*/
-
 /** 
  * @ Tilecache
  *
@@ -137,9 +115,18 @@ class Tilecache
         }
 
         // virtual handler method: used from _search_kernel
-        virtual bool is_match_pixel(const int cx, const int cy, const T* target_pixel) = 0;
+        virtual bool is_match_pixel(const int cx, const int cy, 
+                                    const T* target_pixel) = 0;
 
-        // Utility method: applying pixel functor to circle-shaped kernel
+        // Utility method: check pixel existance inside circle-shaped kernel
+        // for morphology operation.
+        //
+        // For morphology operation, we can use same looping logic to search pixels
+        // but wanted result is different for each operation.
+        // in dilation, we would check 'is there any valid pixel inside the kernel'
+        // in erosion , we would check 'is the entire kernel filled with valid pixels'
+        // so use 'target_result' parameter to share codes between
+        // these different operations.
         inline bool _search_kernel(const int cx, const int cy, 
                                    const int size,
                                    const T* target_pixel,
@@ -150,7 +137,7 @@ class Tilecache
             double rad;
             bool result;
 
-            for (int dy = size; dy >= 0; dy--) {
+            for (int dy = size-1; dy >= 0; dy--) {
                 rad = acos((double)dy / (double)size);
                 cw = (int)(sin(rad) * (double)size);
                 for (int dx = 0; dx < cw; dx++) {
@@ -158,7 +145,7 @@ class Tilecache
                     if (result == target_result) 
                         return true;
 
-                    if ( dx != 0 || dy != 0) {
+                    if (dx != 0 || dy != 0) {
                         result = is_match_pixel(cx + dx, cy + dy, target_pixel);
                         if (result == target_result) 
                             return true;
@@ -265,10 +252,10 @@ class Tilecache
                      bool generate)
         {
             PyArrayObject* tile = (PyArrayObject*)_get_cached_tile_from_index(
-                                                           cache_index, generate);
-            if (tile) {
+                                                    cache_index, generate);
+            if (tile) 
                 return (T*)get_tile_pixel(tile, x, y);
-            }
+            
             return NULL;
         }
 
@@ -416,8 +403,6 @@ class _Dilater_fix15 : public Tilecache<fix15_short_t> {
             int dilated_cnt = 0;
             m_target_tile = (PyArrayObject*)py_filled_tile;
 
-           // for (int y=0; y < MYPAINT_TILE_SIZE; y++) {
-           //     for (int x=0; x < MYPAINT_TILE_SIZE; x++) {
             for (int cy=-size; cy < MYPAINT_TILE_SIZE+size; cy++) {
                 for (int cx=-size; cx < MYPAINT_TILE_SIZE+size; cx++) {
                     // target pixel is unused.
@@ -436,20 +421,20 @@ class _Dilater_fix15 : public Tilecache<fix15_short_t> {
 // This is for 8bit,flag_based erode/dilate operation.
 //
 // in new flood_fill(), we use tiles of 8bit bitflag status to figure out 
-// original contour, not-filled pixels area(EXIST_MASK) , 
-// dilated area from original contour(DILATED_MASK) and
-// the result, eroded area from dilated area(ERODED_MASK).
+// original contour, not-filled pixels area(EXIST_FLAG) , 
+// dilated area from original contour(DILATED_FLAG) and
+// the result, eroded area from dilated area(ERODED_FLAG).
 
 class _GapFiller: public Tilecache<char> {
 
     protected:
         // pixel status information flag.
-        static const char EXIST_MASK = 0x01;
-        static const char DILATED_MASK = 0x02; // This means the pixel is just dilated pixel,
+        static const char EXIST_FLAG = 0x01;
+        static const char DILATED_FLAG = 0x02; // This means the pixel is just dilated pixel,
                                                // not sure original source pixel.
                                                // it might be empty pixel in source tile.
-        static const char ERODED_MASK = 0x04;
-        static const char PROCESSED_MASK = 0x08; // This means 'This pixel has original source
+        static const char ERODED_FLAG = 0x04;
+        static const char PROCESSED_FLAG = 0x08; // This means 'This pixel has original source
                                                     // contour pixel, and dilated'.
 
 
@@ -461,10 +446,9 @@ class _GapFiller: public Tilecache<char> {
 
         virtual bool is_match_pixel(const int cx, const int cy, const char* target_pixel) 
         {
-            char* dst_pixel;
-            dst_pixel = get_cached_pixel(cx, cy, false);
-            if (dst_pixel == NULL || 
-                    (*dst_pixel & *target_pixel) == 0) {
+            char* dst_pixel = get_cached_pixel(cx, cy, false);
+            if (dst_pixel == NULL 
+                || (*dst_pixel & *target_pixel) == 0) {
                 return false;
             }
             return true;
@@ -475,19 +459,19 @@ class _GapFiller: public Tilecache<char> {
         // - special information methods
         //
         // Special informations recorded into a tile with
-        // setting INFO_MASK bitflag to paticular pixel.
+        // setting INFO_FLAG bitflag to paticular pixel.
         // And they have various means,according to its location. 
         
         // tile status information flags.
         // This flag is only set to paticular location of tile pixels.
-        static const char TILE_INFO_MASK = 0x80;
+        static const char TILE_INFO_FLAG = 0x80;
 
-        static const char DILATED_TILE_MASK = 0x01;
-        static const char ERODED_TILE_MASK = 0x02;
-        static const char VOID_TILE_MASK = 0x80;  // invalid(does not exist) tile.
+        static const char DILATED_TILE_FLAG = 0x01;
+        static const char ERODED_TILE_FLAG = 0x02;
+        static const char VOID_TILE_FLAG = 0x80;  // invalid(does not exist) tile.
 
         // Maximum count of Tile info flags.
-        // VOID_TILE_MASK is not included to this number.
+        // VOID_TILE_FLAG is not included to this number.
         static const int TILE_INFO_MAX = 2; 
         
         char _get_tile_info(const int tile_index)
@@ -505,10 +489,10 @@ class _GapFiller: public Tilecache<char> {
 #ifdef HEAVY_DEBUG
                     assert(i==0);   
 #endif
-                    return VOID_TILE_MASK;
+                    return VOID_TILE_FLAG;
                 }
 
-                if (*pixel & TILE_INFO_MASK)
+                if (*pixel & TILE_INFO_FLAG)
                     retflag |= flag;
                 flag = flag << 1;
             }
@@ -532,7 +516,7 @@ class _GapFiller: public Tilecache<char> {
                 }
 
                 if (flag & 0x01)
-                    *pixel |= TILE_INFO_MASK;
+                    *pixel |= TILE_INFO_FLAG;
                 flag = flag >> 1;
             }
         }
@@ -546,20 +530,26 @@ class _GapFiller: public Tilecache<char> {
             char tile_info = _get_tile_info(CENTER_TILE_INDEX);
 
 #ifdef HEAVY_DEBUG
-            assert((tile_info & VOID_TILE_MASK) == 0);
+            assert((tile_info & VOID_TILE_FLAG) == 0);
             assert(gap_radius <= MAX_OPERATION_SIZE);
 #endif
 
-            if ((tile_info & DILATED_TILE_MASK) != 0)
+            if ((tile_info & DILATED_TILE_FLAG) != 0)
                 return;
 
-            char flag = EXIST_MASK;
+            char flag = EXIST_FLAG;
 
             for (int y = 0; y < MYPAINT_TILE_SIZE; y++) {
                 for (int x = 0; x < MYPAINT_TILE_SIZE; x++) {
                     char* pixel = get_cached_pixel(x, y, false);
                     if (pixel != NULL   
-                        && (*pixel & PROCESSED_MASK) != 0) {
+                        && (*pixel & PROCESSED_FLAG) != 0) {
+                        // pixel exists, but it already processed.
+                        // = does nothing
+                        //
+                        // otherwise, pixel is not processed 
+                        // or, pixel does not exist(==NULL)
+                        // we might place pixel.
                     }
                     else if (_search_kernel(x, y, gap_radius, &flag, true)) {
                         // if pixel is NULL (i.e. tile is NULL)
@@ -567,40 +557,39 @@ class _GapFiller: public Tilecache<char> {
                         if (pixel == NULL)
                             pixel = get_cached_pixel(x, y, true);
 
-                        *pixel |= (PROCESSED_MASK | DILATED_MASK);
+                        *pixel |= (PROCESSED_FLAG | DILATED_FLAG);
                     }
                 }
             }
 
-            _set_tile_info(CENTER_TILE_INDEX, DILATED_TILE_MASK);
+            _set_tile_info(CENTER_TILE_INDEX, DILATED_TILE_FLAG);
         }
 
-       // void _erode_contour(int gap_radius, bool use_square)
         void _erode_contour(int gap_radius)
         {
             // Only center tile should be eroded.
             char tile_info = _get_tile_info(CENTER_TILE_INDEX);
 #ifdef HEAVY_DEBUG
-            assert((tile_info & VOID_TILE_MASK) == 0);
+            assert((tile_info & VOID_TILE_FLAG) == 0);
             assert(gap_radius <= MAX_OPERATION_SIZE);
 #endif
 
-            if ((tile_info & ERODED_TILE_MASK) != 0)
+            if ((tile_info & ERODED_TILE_FLAG) != 0)
                 return;
 
-            char flag = DILATED_MASK;
+            char flag = DILATED_FLAG;
             for (int y = -gap_radius; y < gap_radius + MYPAINT_TILE_SIZE; y++) {
                 for (int x = -gap_radius; x < gap_radius + MYPAINT_TILE_SIZE; x++) {
                     char* pixel = get_cached_pixel(x, y, false);
-                    if (pixel != NULL && (*pixel & DILATED_MASK) != 0) {
+                    if (pixel != NULL && (*pixel & DILATED_FLAG) != 0) {
                         if ( ! _search_kernel(x, y, gap_radius, &flag, false)){
-                            _put_flag(x, y, ERODED_MASK);
+                            _put_flag(x, y, ERODED_FLAG);
                         }
                     }
                 }
             }
 
-            _set_tile_info(CENTER_TILE_INDEX, ERODED_TILE_MASK);
+            _set_tile_info(CENTER_TILE_INDEX, ERODED_TILE_FLAG);
         }
 
         // Convert(and initialize) color pixel tile into 8bit status tile.
@@ -633,7 +622,7 @@ class _GapFiller: public Tilecache<char> {
                                               tolerance) == 0) {
                         char* state_pixel = 
                             get_tile_pixel((PyArrayObject*)state_tile, px, py);
-                        *state_pixel |= EXIST_MASK;
+                        *state_pixel |= EXIST_FLAG;
                     }
                 }
             }
