@@ -917,11 +917,16 @@ class MergeLayerDown (Command):
         self._lower_layer = None
         self._merged_layer = None
 
+        # using 'merge' prefix for keyword argument, 
+        # because it would not use in superclass constructor.
+        self._only_opaque =  'merge_only_opaque' in kwds
+
     def redo(self):
         rootstack = self.doc.layer_stack
         merged = self._merged_layer
         if merged is None:
-            merged = rootstack.layer_new_merge_down(self._upper_path)
+            merged = rootstack.layer_new_merge_down(self._upper_path,
+                        only_opaque=self._only_opaque)
             assert merged is not None
             self._merged_layer = merged
         self._lower_layer = rootstack.deeppop(self._lower_path)

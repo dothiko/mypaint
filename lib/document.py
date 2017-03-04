@@ -1192,7 +1192,7 @@ class Document (object):
         layers = self.layer_stack
         self.do(command.NormalizeLayerMode(self, layers.current))
 
-    def merge_current_layer_down(self):
+    def merge_current_layer_down(self, only_opaque=False):
         """Merge the current layer into the one below"""
         rootstack = self.layer_stack
         cur_path = rootstack.current_path
@@ -1202,8 +1202,13 @@ class Document (object):
         if dst_path is None:
             logger.info("Merge Down is not possible here")
             return False
-        self.do(command.MergeLayerDown(self))
+        self.do(command.MergeLayerDown(self, merge_only_opaque=only_opaque))
         return True
+
+    def merge_current_layer_down_opaque(self):
+        """Merge the current layer into the one below,
+        only on opaque area"""
+        return self.merge_current_layer_down(only_opaque=True)
 
     def merge_visible_layers(self):
         """Merge all visible layers into one & discard originals."""

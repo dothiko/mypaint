@@ -1652,10 +1652,11 @@ class RootLayerStack (group.LayerStack):
 
         return target_path
 
-    def layer_new_merge_down(self, path):
+    def layer_new_merge_down(self, path, only_opaque=False):
         """Create a new layer containg the Merge Down of two layers
 
         :param tuple path: Path to the top layer to Merge Down
+        :param boolean only_opaque: whether merge on only opaque area or not.
         :returns: New merged layer
         :rtype: lib.layer.data.PaintingLayer
 
@@ -1693,11 +1694,16 @@ class RootLayerStack (group.LayerStack):
         backdrop_layers = self._get_backdrop(target_path)
         # Normalize input
         merge_layers = []
-        for p in [target_path, path]:
+        opaque_masks = []
+        for i, p in enumerate([target_path, path]):
             assert p is not None
             layer = self.layer_new_normalized(p)
             merge_layers.append(layer)
+            if i==0 and only_opaque:
+                opaque_masks.append(layer)
+                assert None not in opaque_masks
         assert None not in merge_layers
+
         # Build output strokemap, determine set of data tiles to merge
         dstlayer = data.PaintingLayer()
         tiles = set()
@@ -1707,6 +1713,7 @@ class RootLayerStack (group.LayerStack):
             assert not layer.locked
             assert not layer.branch_locked
             dstlayer.strokes[:0] = layer.strokes
+
         # Build a (hopefully sensible) combined name too
         names = [l.name for l in reversed(merge_layers)
                  if l.has_interesting_name()]
@@ -1720,11 +1727,50 @@ class RootLayerStack (group.LayerStack):
         logger.debug("Merge Down: normalized source=%r", merge_layers)
         # Rendering loop
         dstsurf = dstlayer._surface
+
         for tx, ty in tiles:
             with dstsurf.tile_request(tx, ty, readonly=False) as dst:
                 for layer in merge_layers:
                     layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+
+        # If only_opaque is assigned,
+        # Build 'target path' layer and use it as opaque mask.
+        # and make final layer image.
+        if only_opaque:
+            masklayer = data.PaintingLayer()
+           #tiles = set()
+           #for layer in opaque_masks:
+           #    tiles.update(layer.get_tile_coords())
+           #    assert isinstance(layer, data.PaintingLayer)
+           #    assert not layer.locked
+           #    assert not layer.branch_locked
+           #    #masklayer.strokes[:0] = layer.strokes
+
+            # Build target 'mask' layer surface.
+            masksurf = masklayer._surface
+            for tx, ty in tiles:
+                with masksurf.tile_request(tx, ty, readonly=False) as dst:
+                    for layer in opaque_masks:
+                        layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+
+            # Then, set dstlayer mode as Source-Atop and
+            # composite on masklayer.
+            # With this, only on opaque area of target 'masklayer'
+            # would be overwritten by dstlayer(=merged layer image).
+            dstlayer.mode = lib.mypaintlib.CombineSourceAtop
+            for tx, ty in tiles:
+                with masksurf.tile_request(tx, ty, readonly=False) as dst:
+                    dstlayer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+
+            lib.surface.finalize_surface(masksurf, tiles)
+
+            # Pretend masklayer as dstlayer.
+            masklayer.name = dstlayer.name
+            masklayer.strokes = dstlayer.strokes
+            dstlayer = masklayer
+
         return dstlayer
+
 
     def layer_new_merge_visible(self):
         """Create and return the merge of all currently visible layers
