@@ -658,8 +658,9 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 return False
         elif self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
 
-            if self.phase == PhaseMixin.CAPTURE:
-                self._start_new_capture_phase(rollback=False)
+            if (self.phase == PhaseMixin.CAPTURE
+                and self.zone == EditZoneMixin.EMPTY_CANVAS):
+                    self._start_new_capture_phase(rollback=False)
 
             if self.zone == EditZoneMixin.CONTROL_NODE:
                 # clicked a node.

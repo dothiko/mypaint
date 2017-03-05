@@ -430,7 +430,7 @@ class PolyfillMode (OncanvasEditMixin,
 
     ## Drawing Phase related
 
-    def _start_new_capture_phase(self, composite_mode, rollback=False):
+    def _start_new_capture_phase(self, rollback=False):
         self._queue_draw_buttons()
         self._queue_redraw_all_nodes()
         self._queue_redraw_item()
@@ -439,7 +439,7 @@ class PolyfillMode (OncanvasEditMixin,
             self._stop_task_queue_runner(complete=False)
         else:
             self._stop_task_queue_runner(complete=True)
-            self._draw_polygon(composite_mode)
+           #self._draw_polygon(composite_mode)
 
         self._reset_capture_data()
         self._reset_adjust_data()
@@ -640,8 +640,9 @@ class PolyfillMode (OncanvasEditMixin,
         else:
             return
 
-        self._start_new_capture_phase(composite_mode, rollback=False)
-
+        self._draw_polygon(composite_mode)
+        self._start_new_capture_phase(rollback=False)
+               
     def _draw_polygon(self, composite_mode):
         """Draw polygon (inner method)
         """
@@ -697,17 +698,16 @@ class PolyfillMode (OncanvasEditMixin,
     def _do_action(self, key):
         if (self.phase in (_Phase.ADJUST, _Phase.ACTION) and
                 len(self.nodes) > 1):
-            self._start_new_capture_phase(
-                self.BUTTON_OPERATIONS[_ActionButton.ACCEPT],
-                rollback=False)
+            self._draw_polygon(
+                self.BUTTON_OPERATIONS[_ActionButton.ACCEPT])
+            self._start_new_capture_phase(rollback=False)
 
     def accept_button_cb(self, tdw):
         self._do_action(_ActionButton.ACCEPT)
 
     def reject_button_cb(self, tdw):
         if (self.phase in (_Phase.ADJUST, _Phase.ACTION)):
-            self._start_new_capture_phase(
-                None, rollback=True)
+            self._start_new_capture_phase(rollback=True)
 
     def erase_button_cb(self, tdw):
         self._do_action(_ActionButton.ERASE)
