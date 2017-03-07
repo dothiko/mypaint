@@ -217,8 +217,9 @@ class PolyfillMode (OncanvasEditMixin,
             'ZoomViewMode',
             'PanViewMode',
             "SelectionMode",
+            "ColorPickMode",
         ])
-
+    
     ## Other class vars
 
    #button_info = _ButtonInfo()       # button infomation class

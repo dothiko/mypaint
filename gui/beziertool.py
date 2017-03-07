@@ -38,6 +38,80 @@ from gui.exinktool import _LayoutNode
 from gui.linemode import *
 from gui.oncanvas import *
 
+## Function defs
+
+
+def detect_on_stroke(nodes, x, y, allow_distance = 4.0):
+    """Detecting pressed point is on the stroke currently editing.
+    To share this code between other modules, this is implemented
+    as global function, not a class method.
+    
+    :param nodes: a sequence of nodes. 
+                  nodes must have get_control_handle method.
+    :param x: cursor x position in MODEL coord
+    :param y: cursor y position in MODEL coord
+    :param allow_distance: the allowed distance from stroke.
+    :return : a tuple of (the index of 'previous' node, time parameter of stroke)
+    :rtype : a tuple when the pressed point is on stroke, otherwise
+             None.
+    
+    """
+
+    # XXX Transplant from https://gist.github.com/MadRabbit/996893
+    def find_x_for(p0, p1, p2, p3, tx, init):
+        t=init
+        x=t 
+        i=0
+        while i < 5: # making 5 iterations max
+            z = gui.drawutils.get_cubic_bezier(
+                    p0, p1, p2, p3, x) - tx
+
+            if abs(z) < 0.0000001:
+                break # if already got close enough
+
+            dx = gui.drawutils.get_diff_cubic_bezier(
+                  p0, p1, p2, p3, x)
+            if dx == 0.0:
+                break
+
+            x = x - z / dx
+            i+=1
+
+        return x # try any of x
+
+
+
+    for i,cn in enumerate(nodes[:-1]):
+        # Get boundary rectangle,to reduce processing segment
+        nn = nodes[i+1]
+        p0 = cn.x
+        p1 = cn.get_control_handle(1).x
+        p2 = nn.get_control_handle(0).x
+        p3 = nn.x
+
+        q0 = cn.y
+        q1 = cn.get_control_handle(1).y
+        q2 = nn.get_control_handle(0).y
+        q3 = nn.y
+
+        sx, ex = gui.drawutils.get_minmax_bezier(p0, p1, p2, p3)
+        sy, ey = gui.drawutils.get_minmax_bezier(q0, q1, q2, q3)
+        
+        if sx <= x <= ex and sy <= y <= ey:
+            # cursor is inside the bezier segment.
+            c=0
+            t=1.0
+            while c < 2:
+                t = find_x_for(p0, p1, p2, p3, x, t)
+                cy = gui.drawutils.get_cubic_bezier(q0, q1, q2, q3, t)
+                if abs(y - cy) < allow_distance:
+                    # the timepoint Found!
+                    return (i, t)
+                t = 0.0
+                c+=1
+
+    # Fallthrough: return None when failed.
+
 ## Class defs
 
 class _Control_Handle(object):
@@ -471,72 +545,72 @@ class BezierMode (PressureEditableMixin,
         self.forced_button_pos = None
 
     ## Stroke related
-    def _detect_on_stroke(self, x, y, allow_distance = 4.0):
-        """Detecting pressed point is on the stroke currently editing.
-        
-        :param x: cursor x position in MODEL coord
-        :param y: cursor y position in MODEL coord
-        :param allow_distance: the allowed distance from stroke.
-        :return : a tuple of (the index of 'previous' node, time parameter of stroke)
-        :rtype : a tuple when the pressed point is on stroke, otherwise
-                 None.
-        
-        """
-
-        # XXX Transplant from https://gist.github.com/MadRabbit/996893
-        def find_x_for(p0, p1, p2, p3, tx, init):
-            t=init
-            x=t 
-            i=0
-            while i < 5: # making 5 iterations max
-                z = gui.drawutils.get_cubic_bezier(
-                        p0, p1, p2, p3, x) - tx
-
-                if abs(z) < 0.0000001:
-                    break # if already got close enough
-
-                dx = gui.drawutils.get_diff_cubic_bezier(
-                      p0, p1, p2, p3, x)
-                if dx == 0.0:
-                    break
-
-                x = x - z / dx
-                i+=1
-
-            return x # try any of x
-
-
-
-        for i,cn in enumerate(self.nodes[:-1]):
-            # Get boundary rectangle,to reduce processing segment
-            nn = self.nodes[i+1]
-            p0 = cn.x
-            p1 = cn.get_control_handle(1).x
-            p2 = nn.get_control_handle(0).x
-            p3 = nn.x
-
-            q0 = cn.y
-            q1 = cn.get_control_handle(1).y
-            q2 = nn.get_control_handle(0).y
-            q3 = nn.y
-
-            sx, ex = gui.drawutils.get_minmax_bezier(p0, p1, p2, p3)
-            sy, ey = gui.drawutils.get_minmax_bezier(q0, q1, q2, q3)
-            
-            if sx <= x <= ex and sy <= y <= ey:
-                # cursor is inside the bezier segment.
-                c=0
-                t=1.0
-                while c < 2:
-                    t = find_x_for(p0, p1, p2, p3, x, t)
-                    cy = gui.drawutils.get_cubic_bezier(q0, q1, q2, q3, t)
-                    if abs(y - cy) < allow_distance:
-                        # the timepoint Found!
-                        return (i, t)
-                    t = 0.0
-                    c+=1
-
-        # Fallthrough: return None when failed.
+   #def _detect_on_stroke(self, x, y, allow_distance = 4.0):
+   #    """Detecting pressed point is on the stroke currently editing.
+   #    
+   #    :param x: cursor x position in MODEL coord
+   #    :param y: cursor y position in MODEL coord
+   #    :param allow_distance: the allowed distance from stroke.
+   #    :return : a tuple of (the index of 'previous' node, time parameter of stroke)
+   #    :rtype : a tuple when the pressed point is on stroke, otherwise
+   #             None.
+   #    
+   #    """
+   #
+   #    # XXX Transplant from https://gist.github.com/MadRabbit/996893
+   #    def find_x_for(p0, p1, p2, p3, tx, init):
+   #        t=init
+   #        x=t 
+   #        i=0
+   #        while i < 5: # making 5 iterations max
+   #            z = gui.drawutils.get_cubic_bezier(
+   #                    p0, p1, p2, p3, x) - tx
+   #    
+   #            if abs(z) < 0.0000001:
+   #                break # if already got close enough
+   #    
+   #            dx = gui.drawutils.get_diff_cubic_bezier(
+   #                  p0, p1, p2, p3, x)
+   #            if dx == 0.0:
+   #                break
+   #    
+   #            x = x - z / dx
+   #            i+=1
+   #    
+   #        return x # try any of x
+   #    
+   #    
+   #    
+   #    for i,cn in enumerate(self.nodes[:-1]):
+   #        # Get boundary rectangle,to reduce processing segment
+   #        nn = self.nodes[i+1]
+   #        p0 = cn.x
+   #        p1 = cn.get_control_handle(1).x
+   #        p2 = nn.get_control_handle(0).x
+   #        p3 = nn.x
+   #    
+   #        q0 = cn.y
+   #        q1 = cn.get_control_handle(1).y
+   #        q2 = nn.get_control_handle(0).y
+   #        q3 = nn.y
+   #    
+   #        sx, ex = gui.drawutils.get_minmax_bezier(p0, p1, p2, p3)
+   #        sy, ey = gui.drawutils.get_minmax_bezier(q0, q1, q2, q3)
+   #        
+   #        if sx <= x <= ex and sy <= y <= ey:
+   #            # cursor is inside the bezier segment.
+   #            c=0
+   #            t=1.0
+   #            while c < 2:
+   #                t = find_x_for(p0, p1, p2, p3, x, t)
+   #                cy = gui.drawutils.get_cubic_bezier(q0, q1, q2, q3, t)
+   #                if abs(y - cy) < allow_distance:
+   #                    # the timepoint Found!
+   #                    return (i, t)
+   #                t = 0.0
+   #                c+=1
+   #    
+   #    # Fallthrough: return None when failed.
 
     ## Redraws
     def _queue_draw_node(self, i, offsets=None, tdws=None):
@@ -741,7 +815,7 @@ class BezierMode (PressureEditableMixin,
        #    pass 
         elif self.phase == _Phase.INSERT_NODE:
             mx, my = tdw.display_to_model(event.x, event.y)
-            pressed_segment = self._detect_on_stroke(mx, my)
+            pressed_segment = detect_on_stroke(self.nodes, mx, my)
             if pressed_segment:
                 # pressed_segment is a tuple which contains
                 # (node index of start of segment, stroke step)

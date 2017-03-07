@@ -8,7 +8,7 @@ from gi.repository import Gdk
 
 from gui.oncanvas import *
 import gui.gradient
-from gui.beziertool import _Control_Handle, _Node_Bezier
+from gui.beziertool import detect_on_stroke, _Control_Handle, _Node_Bezier
 
 class _EditZone(EditZoneMixin):
     """Enumeration of what the pointer is on in the ADJUST phase"""
@@ -275,28 +275,36 @@ class Shape_Bezier(Shape):
 
                 # FALLTHRU: *do* start a drag 
 
-            elif mode.zone == _EditZone.EMPTY_CANVAS:
-                
-                if mode.phase == _Phase.ADJUST:
-                    if (len(mode.nodes) > 0): 
-                       #if shift_state and ctrl_state:
-                        if self.ctrl_state:
-                            mx, my = tdw.display_to_model(event.x, event.y)
-                            pressed_segment = mode._detect_on_stroke(mx, my)
-                            if pressed_segment:
-                                # pressed_segment is a tuple which contains
-                                # (node index of start of segment, stroke step)
-
-                                # To erase buttons 
-                                mode._queue_draw_buttons() 
-
-                                mode._divide_bezier(*pressed_segment)
-
-                                # queue new node here.
-                                mode._queue_draw_node(pressed_segment[0] + 1)
-                                
-                                mode.phase = _Phase.PLACE_NODE
-                                return Shape.CANCEL_EVENT # Cancel drag event
+           # TODO deprecated, because there is some problem
+           # to dividing stroke as user interface aspect.
+           # We want to pick colors from EMPTY_CANVAS,
+           # but on_stroke check is high cost for processing power,
+           # so it is difficult to distinguish that point is actually
+           # empty canvas or on stroke midpoint.
+           # We might need other 'User-defined modifier keys'...  
+           
+           #elif mode.zone == _EditZone.EMPTY_CANVAS:
+           #    
+           #    if mode.phase == _Phase.ADJUST:
+           #        if (len(mode.nodes) > 0): 
+           #            if shift_state and ctrl_state:
+           #           #if self.ctrl_state:
+           #                mx, my = tdw.display_to_model(event.x, event.y)
+           #                pressed_segment = beziertool.detect_on_stroke(mx, my)
+           #                if pressed_segment:
+           #                    # pressed_segment is a tuple which contains
+           #                    # (node index of start of segment, stroke step)
+           #
+           #                    # To erase buttons 
+           #                    mode._queue_draw_buttons() 
+           #
+           #                    mode._divide_bezier(*pressed_segment)
+           #
+           #                    # queue new node here.
+           #                    mode._queue_draw_node(pressed_segment[0] + 1)
+           #                    
+           #                    mode.phase = _Phase.PLACE_NODE
+           #                    return Shape.CANCEL_EVENT # Cancel drag event
 
 
 
