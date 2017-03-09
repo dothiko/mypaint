@@ -1382,7 +1382,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
     def merge_layer_down_opaque_cb(self, action):
         """Action callback: squash current layer into the one below it,
         only on opaque area."""
-        if self.model.merge_current_layer_down_opaque():
+        if self.model.merge_current_layer_down(only_opaque=True):
             self.layerblink_state.activate(action)
 
     def merge_visible_layers_cb(self, action):

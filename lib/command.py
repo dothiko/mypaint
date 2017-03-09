@@ -919,7 +919,8 @@ class MergeLayerDown (Command):
 
         # using 'merge' prefix for keyword argument, 
         # because it would not use in superclass constructor.
-        self._only_opaque =  'merge_only_opaque' in kwds
+        self._only_opaque =  ('merge_only_opaque' in kwds 
+                               and kwds['merge_only_opaque'] == True)
 
     def redo(self):
         rootstack = self.doc.layer_stack

@@ -1703,7 +1703,6 @@ class RootLayerStack (group.LayerStack):
                 opaque_masks.append(layer)
                 assert None not in opaque_masks
         assert None not in merge_layers
-
         # Build output strokemap, determine set of data tiles to merge
         dstlayer = data.PaintingLayer()
         tiles = set()
@@ -1727,7 +1726,6 @@ class RootLayerStack (group.LayerStack):
         logger.debug("Merge Down: normalized source=%r", merge_layers)
         # Rendering loop
         dstsurf = dstlayer._surface
-
         for tx, ty in tiles:
             with dstsurf.tile_request(tx, ty, readonly=False) as dst:
                 for layer in merge_layers:
