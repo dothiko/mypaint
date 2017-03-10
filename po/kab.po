@@ -1,23 +1,23 @@
-# Persian translations for PACKAGE package.
-# Copyright (C) 2015 THE PACKAGE'S COPYRIGHT HOLDER
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the PACKAGE package.
-# Automatically generated, 2015.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2015-07-11 21:24+0100\n"
-"PO-Revision-Date: 2017-01-04 15:07+0000\n"
-"Last-Translator: hamed nasib <cghamed752@chmail.ir>\n"
-"Language-Team: Persian "
-"<https://hosted.weblate.org/projects/mypaint/mypaint/fa/>\n"
-"Language: fa\n"
+"PO-Revision-Date: 2017-02-28 20:05+0000\n"
+"Last-Translator: Muḥend Belqasem <belkacem77@gmail.com>\n"
+"Language-Team: Kabyle "
+"<https://hosted.weblate.org/projects/mypaint/mypaint/kab/>\n"
+"Language: kab\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 2.11-dev\n"
+"X-Generator: Weblate 2.12-dev\n"
 
 #: ../gui/accelmap.py:55
 #, python-brace-format
@@ -26,53 +26,51 @@ msgid ""
 "<b>{action_label}</b><small>\n"
 "{action_desc}</small>"
 msgstr ""
-"<b>{action_label}</b><small>\n"
-"{action_desc}</small>"
 
 #: ../gui/accelmap.py:59
 #, python-brace-format
 msgctxt "Accelerator map editor: accelerator key column markup"
 msgid "<big><b>{accel_label}</b></big>"
-msgstr "<big><b>{accel_label}</b></big>"
+msgstr ""
 
 #: ../gui/accelmap.py:63
 #, python-brace-format
 msgctxt "Accelerator map editor: action column: hidden searchable plaintext"
 msgid "{action_label} {action_desc} {accel_label}"
-msgstr "{action_label} {action_desc} {accel_label}"
+msgstr ""
 
 #: ../gui/accelmap.py:99 ../gui/buttonmap.py:278
 msgid "Action"
-msgstr "عمل"
+msgstr "Tigawt"
 
 #: ../gui/accelmap.py:114
 msgid "Key combination"
-msgstr "دکمه ترکیبی"
+msgstr ""
 
 #: ../gui/accelmap.py:270
 #, python-format
 msgid "Edit Key for '%s'"
-msgstr "ویرایش دکمه برای '%s'"
+msgstr ""
 
 #: ../gui/accelmap.py:301 ../gui/buttonmap.py:493
 msgid "Action:"
-msgstr "عمل:"
+msgstr "Tigawt :"
 
 #: ../gui/accelmap.py:314
 msgid "Path:"
-msgstr "مسیر:"
+msgstr "Abrid:"
 
 #: ../gui/accelmap.py:325
 msgid "Key:"
-msgstr "کلید:"
+msgstr "Taqeffalt:"
 
 #: ../gui/accelmap.py:363
 msgid "Press keys to update this assignment"
-msgstr "دکمه های دلخواه را برای انتساب به این عمل  فشار دهید"
+msgstr ""
 
 #: ../gui/accelmap.py:416
 msgid "Unknown Action"
-msgstr "عمل ناشناخته"
+msgstr "Tugawt tarussint"
 
 #: ../gui/accelmap.py:425
 #, python-brace-format
@@ -80,142 +78,133 @@ msgid ""
 "<b>{accel} is already in use for '{action}'. The existing assignment will be "
 "replaced.</b>"
 msgstr ""
-"<b>{accel}قبلا مورد استفاده قرار گرفته برای '{action}'. این انتساب جدید "
-"جایگزین قبلی میشود.</b>"
 
 #: ../gui/application.py:634
 #, python-brace-format
 msgid "Open Folder “{folder_basename}”…"
-msgstr "باز کردن پوشه “{folder_basename}” …"
+msgstr "Ldi akaram “{folder_basename}”…"
 
 #. ... so that the main actions end up in the bottom-right of the
 #. dialog (reversed for rtl scripts), where the eye ends up
 #. naturally at the end of the flow.
 #: ../gui/application.py:642
 msgid "OK"
-msgstr "تایید"
+msgstr "IH"
 
 #: ../gui/autorecover.py:70
 msgid "No backups were found in the cache."
-msgstr "فایل پشتیبانی در ذخیرهگاه وجود ندارد."
+msgstr ""
 
 #: ../gui/autorecover.py:71
 msgid "No Available Backups"
-msgstr "فایل پشتیبان در دسترس نیست"
+msgstr ""
 
 #: ../gui/autorecover.py:74
 msgid "Open the Cache Folder…"
-msgstr "باز کردن محل ذخیره…"
+msgstr ""
 
 #: ../gui/autorecover.py:120
 msgid "Backup Recovery Failed"
-msgstr "بازیابی فایل پشتیبان شکست خورد"
+msgstr ""
 
 #: ../gui/autorecover.py:123
 msgid "Open the Backup’s Folder…"
-msgstr "باز کردن پوشه فایل های پشتیبان…"
+msgstr ""
 
 #: ../gui/autorecover.py:130
 #, python-brace-format
 msgid "Recovered file from {iso_datetime}.ora"
-msgstr "بازیابی کن پرونده را با کمک پرونده {iso_datetime}.ora"
+msgstr ""
 
 #: ../gui/backgroundwindow.py:51
 msgid "Save as Default"
-msgstr "ذخیره به پیش فرض"
+msgstr ""
 
 #: ../gui/backgroundwindow.py:57
 msgid "Background"
-msgstr "پس زمینه"
+msgstr "Agilal"
 
 #: ../gui/backgroundwindow.py:75
 msgid "Pattern"
-msgstr "الگو"
+msgstr ""
 
 #: ../gui/backgroundwindow.py:87 ../lib/modes.py:96
 msgid "Color"
-msgstr "رنگ"
+msgstr ""
 
 #: ../gui/backgroundwindow.py:93
 msgid "Add color to Patterns"
-msgstr "افزودن رنگ به الگو"
+msgstr ""
 
 #: ../gui/backgroundwindow.py:255
 msgid "One or more backgrounds could not be loaded"
-msgstr "یک یا چند پس زمینه نمی تواند بارگزاری شود"
+msgstr ""
 
 #: ../gui/backgroundwindow.py:256
 msgid "Error loading backgrounds"
-msgstr "خطا در بارگیری پس زمینه ها"
+msgstr ""
 
 #: ../gui/backgroundwindow.py:257
 msgid ""
 "Please remove the unloadable files, or check your libgdkpixbuf installation."
 msgstr ""
-"لطفا پرونده های غیرقابل بارگزاری را حذف کنید؛ یا از نصب بودن پرونده "
-"libgdkpixbuf اطمینان حاصل کنید."
 
 #: ../gui/backgroundwindow.py:359
 #, python-brace-format
 msgid "Gdk-Pixbuf couldn't load \"{filename}\", and reported \"{error}\""
 msgstr ""
-"Gdk-Pixbuf نمی تواند \"{filename}\"را بارگزاری کند, و خطای\"{error}\"گزارش "
-"شده"
 
 #: ../gui/backgroundwindow.py:369
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "{filename} has zero size (w={w}, h={h})"
-msgstr "{filename} 1 هیچ حجمی ندارد (w={w} 2, h={h} 3)"
+msgstr ""
 
 #: ../gui/brusheditor.py:80
 msgctxt "brush settings editor: subwindow title"
 msgid "Brush Settings Editor"
-msgstr "ویرایشگر تنظیمات قلم"
+msgstr ""
 
 #: ../gui/brusheditor.py:264
 msgctxt "brush settings list: brush metadata texts group"
 msgid "About"
-msgstr "درباره"
+msgstr ""
 
 #: ../gui/brusheditor.py:275
 msgctxt "brush settings list: setting group"
 msgid "Experimental"
-msgstr "آزمایشی"
+msgstr ""
 
 #: ../gui/brusheditor.py:282
 msgctxt "brush settings list: setting group"
 msgid "Basic"
-msgstr "پایه"
+msgstr ""
 
 #: ../gui/brusheditor.py:300
 msgctxt "brush settings list: setting group"
 msgid "Opacity"
-msgstr "شفافیت"
+msgstr ""
 
 #: ../gui/brusheditor.py:312
-#, fuzzy
 msgctxt "brush settings list: setting group"
 msgid "Dabs"
 msgstr ""
 
 #: ../gui/brusheditor.py:323
-#, fuzzy
 msgctxt "brush settings list: setting group"
 msgid "Smudge"
-msgstr "لکه"
+msgstr ""
 
 #: ../gui/brusheditor.py:334
 msgctxt "brush settings list: setting group"
 msgid "Speed"
-msgstr "سرعت"
+msgstr ""
 
 #: ../gui/brusheditor.py:348
 msgctxt "brush settings list: setting group"
 msgid "Tracking"
-msgstr "ره گیری"
+msgstr ""
 
 #: ../gui/brusheditor.py:359
-#, fuzzy
 msgctxt "brush settings list: setting group"
 msgid "Stroke"
 msgstr ""
@@ -223,66 +212,66 @@ msgstr ""
 #: ../gui/brusheditor.py:370
 msgctxt "brush settings list: setting group"
 msgid "Color"
-msgstr "رنگ"
+msgstr ""
 
 #: ../gui/brusheditor.py:385
 msgctxt "brush settings list: setting group"
 msgid "Custom"
-msgstr "سفارشی"
+msgstr ""
 
 #: ../gui/brusheditor.py:454
 msgctxt "brush settings editor: save brush: error message"
 msgid "No brush selected, please use “Add As New” instead."
-msgstr "هیچ قلمی انتخاب نشده،لطفا از \"اضافه کردن بعنوان جدید\" استفاده کنید."
+msgstr ""
 
 #: ../gui/brusheditor.py:479
 msgctxt "brush settings editor: rename brush: error message"
 msgid "No brush selected!"
-msgstr "قلمی انتخاب نشده!"
+msgstr ""
 
 #: ../gui/brusheditor.py:488
 msgctxt "brush settings editor: rename brush: dialog title"
 msgid "Rename Brush"
-msgstr "تغییر نام قلم مو"
+msgstr ""
 
 #: ../gui/brusheditor.py:505
 msgctxt "brush settings editor: rename brush: error message"
 msgid "A brush with this name already exists!"
-msgstr "یک قلم موی با این نام از قبل وجود دارد!"
+msgstr ""
 
 #: ../gui/brusheditor.py:539
 msgctxt "brush settings editor: delete brush: error message"
 msgid "No brush selected!"
-msgstr "هیچ قلم موی انتخاب نشده!"
+msgstr ""
 
 #: ../gui/brusheditor.py:545
 #, python-brace-format
 msgctxt "brush settings editor: delete brush: confirm dialog question"
 msgid "Really delete brush “{brush_name}” from disk?"
-msgstr "میخواهید قلم “{brush_name}”حذف کنید از رایانه؟"
+msgstr ""
 
 #: ../gui/brusheditor.py:664
 msgctxt "brush settings editor: header: fallback name"
 msgid "(Unnamed brush)"
-msgstr "قلم بی نام"
+msgstr ""
 
 #: ../gui/brusheditor.py:671
 #, python-brace-format
 msgctxt "brush settings editor: header: is-modified hint"
 msgid "{brush_name} [unsaved]"
-msgstr "[ذخیره نشد]{brush_name}"
+msgstr ""
 
 #: ../gui/brushiconeditor.py:37
 msgid "Brush Icon"
-msgstr "آیکون قلم"
+msgstr ""
 
 #: ../gui/brushiconeditor.py:38
 msgid "Brush Icon (editing)"
-msgstr "آیکون قلم(ویرایش)"
+msgstr ""
 
 #: ../gui/brushiconeditor.py:75
 msgid "No brush selected"
-msgstr "قلمی انتخاب نشده"
+msgstr ""
 
 #: ../gui/brushiconeditor.py:77
 #, python-format
@@ -290,8 +279,6 @@ msgid ""
 "<b>%s</b>\n"
 "<small>Select a valid brush first</small>"
 msgstr ""
-"<b>%s</b>\n"
-"<small>انتخاب یک قلم اولیه معتبر</small>"
 
 #: ../gui/brushiconeditor.py:80
 #, python-format
@@ -299,8 +286,6 @@ msgid ""
 "<b>%s</b> <i>(modified)</i>\n"
 "<small>Changes are not yet saved</small>"
 msgstr ""
-"<b>%s</b> <i>(modified)</i>\n"
-"<small>تغییراتی تا کنون ذخیره نشده</small>"
 
 #: ../gui/brushiconeditor.py:83
 #, python-format
@@ -308,8 +293,6 @@ msgid ""
 "<b>%s</b> (editing)\n"
 "<small>Paint with any brush or color</small>"
 msgstr ""
-"<b>%s</b> (editing)\n"
-"<small>نقاشی با هر قلم یا رنگی</small>"
 
 #: ../gui/brushiconeditor.py:86
 #, python-format
@@ -317,115 +300,110 @@ msgid ""
 "<b>%s</b>\n"
 "<small>Click ‘Edit’ to make changes to the icon</small>"
 msgstr ""
-"<b>%s</b>\n"
-"<small>کلیک کنید روی دکمه ویرایش برای اعمال تغییرات</small>"
 
 #: ../gui/brushiconeditor.py:157
 msgid "Edit"
-msgstr "ویرایش"
+msgstr ""
 
 #: ../gui/brushiconeditor.py:159
 msgid "Begin editing this preview icon"
-msgstr "آغاز ویرایش"
+msgstr ""
 
 #: ../gui/brushiconeditor.py:165
 msgid "Revert"
-msgstr "برگشت"
+msgstr ""
 
 #: ../gui/brushiconeditor.py:167
 msgid "Discard changes, and cancel editing"
-msgstr "ذخیره نکردن تغییرات و لغو ویرایش"
+msgstr ""
 
 #: ../gui/brushiconeditor.py:174
 msgid "Clear"
-msgstr "پاک کردن"
+msgstr ""
 
 #: ../gui/brushiconeditor.py:176
 msgid "Clear the preview icon"
-msgstr "پاک کردن آیکون پیش نمایش"
+msgstr ""
 
 #: ../gui/brushiconeditor.py:182
 msgid "Auto"
-msgstr "خودکار"
+msgstr ""
 
 #: ../gui/brushiconeditor.py:184
 msgid "Use the default icon"
-msgstr "استفاده از آیکون پیش فرض"
+msgstr ""
 
 #: ../gui/brushiconeditor.py:194 ../po/tmp/brusheditor.glade.h:11
 msgid "Save"
-msgstr "ذخیره کردن"
+msgstr ""
 
 #: ../gui/brushiconeditor.py:196
 msgid "Save this preview icon, and finish editing"
-msgstr "ذخیره آیکون پیش نمایش و پایان دادن ویرایش"
+msgstr ""
 
 #: ../gui/brushmanager.py:98
-#, fuzzy
 msgid "Lost & Found"
 msgstr ""
 
 #: ../gui/brushmanager.py:99
 msgid "Deleted"
-msgstr "حذف شده"
+msgstr ""
 
 #: ../gui/brushmanager.py:100
 msgid "Favorites"
-msgstr "محبوب ها"
+msgstr ""
 
 #: ../gui/brushmanager.py:101
 msgid "Ink"
-msgstr "برداری"
+msgstr ""
 
 #: ../gui/brushmanager.py:102
 msgid "Classic"
-msgstr "قدیمی"
+msgstr ""
 
 #: ../gui/brushmanager.py:103
 msgid "Set#1"
-msgstr "مجموعه۱"
+msgstr ""
 
 #: ../gui/brushmanager.py:104
 msgid "Set#2"
-msgstr "مجموعه۲"
+msgstr ""
 
 #: ../gui/brushmanager.py:105
 msgid "Set#3"
-msgstr "مجموعه۳"
+msgstr ""
 
 #: ../gui/brushmanager.py:106
 msgid "Set#4"
-msgstr "مجموعه۴"
+msgstr ""
 
 #: ../gui/brushmanager.py:107
 msgid "Set#5"
-msgstr "مجموعه۵"
+msgstr ""
 
 #: ../gui/brushmanager.py:108
-#, fuzzy
 msgid "Experimental"
 msgstr ""
 
 #: ../gui/brushmanager.py:109
 msgid "New"
-msgstr "جدید"
+msgstr ""
 
 #: ../gui/brushmanager.py:967
 msgid "Unknown Brush"
-msgstr "قلم ناشناخته"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:183
 msgctxt "brush list context menu"
 msgid "Add to favorites"
-msgstr "اضافه کردن به محبوب ها"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:187
 msgctxt "brush list context menu"
 msgid "Remove from favorites"
-msgstr "حذف از محبوب ها"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:192
-#, fuzzy
 msgctxt "brush list context menu"
 msgid "Clone"
 msgstr ""
@@ -433,62 +411,62 @@ msgstr ""
 #: ../gui/brushselectionwindow.py:196
 msgctxt "brush list context menu"
 msgid "Edit brush settings"
-msgstr "ویرایش تنظیمات قلم"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:201
 msgctxt "brush list context menu"
 msgid "Delete"
-msgstr "حذف"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:241
 msgctxt "brush list commands"
 msgid "Really delete brush from disk?"
-msgstr "میخواهید این قلم را از رایانه حذف کنید؟"
+msgstr ""
 
 #. TRANSLATORS: number of brushes in a brush group, for tooltips
 #: ../gui/brushselectionwindow.py:295
 #, python-format
 msgid "%d brush"
 msgid_plural "%d brushes"
-msgstr[0] "%d قلم"
-msgstr[1] "%d قلم ها"
+msgstr[0] ""
+msgstr[1] ""
 
 #: ../gui/brushselectionwindow.py:323
 #, python-brace-format
 msgctxt "brush group properties dialog: title"
 msgid "Group “{group_name}”"
-msgstr "گروه“{group_name}”"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:332
 msgctxt "brush group properties dialog: action buttons"
 msgid "Rename Group"
-msgstr "تغییر نام گروه"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:338
 msgctxt "brush group properties dialog: action buttons"
 msgid "Export as Zipped Brushset"
-msgstr "صدور فایل فشرده مجموعه قلم ها"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:344
 msgctxt "brush group properties dialog: action buttons"
 msgid "Delete Group"
-msgstr "حذف گروه"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:364
 msgctxt "brush group rename dialog: title"
 msgid "Rename Group"
-msgstr "تغییر نام گروه"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:382
 msgctxt "brush group rename"
 msgid "A group with this name already exists!"
-msgstr "یک گروه با این نام از قبل وجود دارد!"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:391
 #, python-brace-format
 msgctxt "brush group delete"
 msgid "Really delete group “{group_name}”?"
-msgstr "واقعا می خواهید “{group_name}”را حذف کنید؟"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:409
 #, python-brace-format
@@ -497,106 +475,101 @@ msgid ""
 "Could not delete group “{group_name}”.\n"
 "Some special groups cannot be deleted."
 msgstr ""
-"نمی تواند گروه“{group_name}” را حذف کند.\n"
-"بعضی از گروه های خاص نمی توانند حذف شوند."
 
 #: ../gui/brushselectionwindow.py:420
 msgctxt "brush group export dialog: title"
 msgid "Export Brushes"
-msgstr "خروجی دادن قلم ها"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:425
 msgctxt "brush group export dialog"
 msgid "MyPaint brush package (*.zip)"
-msgstr "مجموعه قلم مای پینت"
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:445
 msgctxt "brush groups menu"
 msgid "New Group..."
-msgstr "ایجاد گروه جدید..."
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:448
 msgctxt "brush groups menu"
 msgid "Import Brushes..."
-msgstr "وارد کردن قلم های خارجی..."
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:451
 msgctxt "brush groups menu"
 msgid "Get More Brushes..."
-msgstr "دریافت قلم های بیشتر..."
+msgstr ""
 
 #: ../gui/brushselectionwindow.py:465
 msgctxt "new brush group dialog: title"
 msgid "Create Group"
-msgstr "ایجاد گروه"
+msgstr ""
 
 #: ../gui/buttonmap.py:56
 msgid "Button"
-msgstr "دکمه"
+msgstr ""
 
 #. TRANSLATORS: abbreviated "Button <number>" for forms like "Alt+Btn1"
 #: ../gui/buttonmap.py:59
 msgid "Btn"
-msgstr "دکمه"
+msgstr ""
 
 #: ../gui/buttonmap.py:293
 msgid "Button press"
-msgstr "فشردن دکمه"
+msgstr ""
 
 #: ../gui/buttonmap.py:311
 msgid "Add a new binding"
-msgstr "افزودن کلید میانبر"
+msgstr ""
 
 #: ../gui/buttonmap.py:319
 msgid "Remove the current binding"
-msgstr "حذف کلید میانبر موجود"
+msgstr ""
 
 #: ../gui/buttonmap.py:470
 #, python-format
 msgid "Edit binding for '%s'"
-msgstr "ویرایش کلید میانبر داده شده برای '%s'"
+msgstr ""
 
 #: ../gui/buttonmap.py:504
 msgid "Button press:"
-msgstr "فشردن دکمه:"
+msgstr ""
 
 #: ../gui/buttonmap.py:537
-#, fuzzy
 msgid ""
 "Hold down modifier keys, and press a button over this text to set a new "
 "binding."
 msgstr ""
 
 #: ../gui/buttonmap.py:559
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid ""
 "{button} cannot be bound without modifier keys (its meaning is fixed, sorry)"
 msgstr ""
-"{button} بدون کلید میانبر انتساب داده نمیشود (its meaning is fixed, sorry)"
 
 #: ../gui/buttonmap.py:574
 #, python-brace-format
 msgid "{button_combination} is already bound to the action '{action_name}'"
-msgstr "{button_combination} قبلا به عمل '{action_name}' نسبت داده شده"
+msgstr ""
 
 #: ../gui/colorpicker.py:71
 msgid "Pick Color"
-msgstr "انتخاب رنگ"
+msgstr ""
 
 #: ../gui/colorpicker.py:74
 msgid "Set the color used for painting"
-msgstr "انتخاب رنگ استفاده شده برای نقاشی"
+msgstr ""
 
 #: ../gui/colors/adjbases.py:707
 msgid "Color details"
-msgstr "جزئیات رنگ"
+msgstr ""
 
 #: ../gui/colors/adjbases.py:831
 msgid "Current brush color, and the color most recently used for painting"
-msgstr "زنگ های موجود قلم و رنگ های استفاده شده برای نقاشی"
+msgstr ""
 
 #: ../gui/colors/hcywheel.py:48
-#, fuzzy
 msgctxt "Online help pages"
 msgid ""
 "https://github.com/mypaint/mypaint/wiki/v1.2-HCY-Wheel-and-Gamut-Mask-Editor"
@@ -605,10 +578,9 @@ msgstr ""
 #: ../gui/colors/hcywheel.py:86
 msgctxt "Color Wheels: activity toggle: action title"
 msgid "Gamut Mask Active"
-msgstr "قالب رنگ بندی فعال"
+msgstr ""
 
 #: ../gui/colors/hcywheel.py:90
-#, fuzzy
 msgctxt "Color Wheels: activity toggle: action tooltip"
 msgid "Limit your palette for specific moods using a gamut mask."
 msgstr ""
@@ -616,10 +588,9 @@ msgstr ""
 #: ../gui/colors/hcywheel.py:355
 msgctxt "HCY Color Wheel: tooltip"
 msgid "HCY hue and chroma."
-msgstr "HCY طیف و مشخصه ها رنگ."
+msgstr ""
 
 #: ../gui/colors/hcywheel.py:411
-#, fuzzy
 msgctxt "HCY Mask Editor Wheel: tooltip"
 msgid ""
 "Gamut mask editor. Click in the middle to create or manipulate shapes, or "
@@ -627,13 +598,11 @@ msgid ""
 msgstr ""
 
 #: ../gui/colors/hcywheel.py:893
-#, fuzzy
 msgctxt "HCY Gamut Mask template name"
 msgid "Atmospheric Triad"
 msgstr ""
 
 #: ../gui/colors/hcywheel.py:897
-#, fuzzy
 msgctxt "HCY Gamut Mask template description"
 msgid ""
 "Moody and subjective, defined by one dominant primary and two primaries "
@@ -641,7 +610,6 @@ msgid ""
 msgstr ""
 
 #: ../gui/colors/hcywheel.py:905
-#, fuzzy
 msgctxt "HCY Gamut Mask template name"
 msgid "Shifted Triad"
 msgstr ""
@@ -654,7 +622,7 @@ msgstr ""
 #: ../gui/colors/hcywheel.py:920
 msgctxt "HCY Gamut Mask template name"
 msgid "Complementary"
-msgstr "مکمل یک دیگر"
+msgstr ""
 
 #: ../gui/colors/hcywheel.py:924
 msgctxt "HCY Gamut Mask template description"
@@ -664,7 +632,6 @@ msgid ""
 msgstr ""
 
 #: ../gui/colors/hcywheel.py:940
-#, fuzzy
 msgctxt "HCY Gamut Mask template name"
 msgid "Mood and Accent"
 msgstr ""
@@ -679,17 +646,16 @@ msgstr ""
 #: ../gui/colors/hcywheel.py:953
 msgctxt "HCY Gamut Mask template name"
 msgid "Split Complementary"
-msgstr "مکمل دو بخشی"
+msgstr ""
 
 #: ../gui/colors/hcywheel.py:957
 msgctxt "HCY Gamut Mask template description"
 msgid ""
 "Two analogous colors and a complement to them, with no secondary colors "
 "between them."
-msgstr "دو رنگ مشابه و یک رنگ مکمل بین آنها , با رنگ های غیر ثانویه بین آنها."
+msgstr ""
 
 #: ../gui/colors/hcywheel.py:969
-#, fuzzy
 msgctxt "HCY Gamut Mask new-from-template dialog: window title"
 msgid "New Gamut Mask from Template"
 msgstr ""
@@ -697,38 +663,34 @@ msgstr ""
 #: ../gui/colors/hcywheel.py:1038
 msgctxt "HCY Gamut Mask Editor dialog: window title"
 msgid "Gamut Mask Editor"
-msgstr "ویرایشگر قالب رنگ بندی"
+msgstr ""
 
 #: ../gui/colors/hcywheel.py:1061
 msgctxt "HCY Gamut Mask Editor dialog: mask-is-active checkbox"
 msgid "Active"
-msgstr "فعال"
+msgstr ""
 
 #: ../gui/colors/hcywheel.py:1085
 msgctxt "HCY Mask Editor: action button labels"
 msgid "Help…"
-msgstr "راهنما…"
+msgstr ""
 
 #: ../gui/colors/hcywheel.py:1091
-#, fuzzy
 msgctxt "HCY Mask Editor: action button tooltips"
 msgid "Create mask from template."
 msgstr ""
 
 #: ../gui/colors/hcywheel.py:1095
-#, fuzzy
 msgctxt "HCY Mask Editor: action button tooltips"
 msgid "Load mask from a GIMP palette file."
 msgstr ""
 
 #: ../gui/colors/hcywheel.py:1099
-#, fuzzy
 msgctxt "HCY Mask Editor: action button tooltips"
 msgid "Save mask to a GIMP palette file."
 msgstr ""
 
 #: ../gui/colors/hcywheel.py:1103
-#, fuzzy
 msgctxt "HCY Mask Editor: action button tooltips"
 msgid "Erase the mask."
 msgstr ""
@@ -736,22 +698,19 @@ msgstr ""
 #: ../gui/colors/hcywheel.py:1107
 msgctxt "HCY Mask Editor: action button tooltips"
 msgid "Open the online help for this dialog in a web browser."
-msgstr "باز کردن تالار گقت و گو  در مرورگر وب برای راهنمای بیشتر."
+msgstr ""
 
 #: ../gui/colors/hcywheel.py:1174
-#, fuzzy
 msgctxt "HCY Gamut Mask load dialog: window title"
 msgid "Save Mask as a GIMP Palette"
 msgstr ""
 
 #: ../gui/colors/hcywheel.py:1191
-#, fuzzy
 msgctxt "HCY Gamut Mask load dialog: window title"
 msgid "Load Mask from a GIMP Palette"
 msgstr ""
 
 #: ../gui/colors/hcywheel.py:1257
-#, fuzzy
 msgctxt "HCY Wheel color adjuster page: properties tooltip."
 msgid "Set gamut mask."
 msgstr ""
@@ -771,83 +730,73 @@ msgstr ""
 #. Tooltip mappings, indexed by whatever the slider currently represents
 #: ../gui/colors/hsvcube.py:37 ../gui/colors/hsvsquare.py:129
 msgid "HSV Hue"
-msgstr "HSV طیف"
+msgstr ""
 
 #: ../gui/colors/hsvcube.py:38
-#, fuzzy
 msgid "HSV Saturation"
 msgstr ""
 
 #: ../gui/colors/hsvcube.py:39
-#, fuzzy
 msgid "HSV Value"
 msgstr ""
 
 #: ../gui/colors/hsvcube.py:40 ../gui/colors/hsvsquare.py:130
-#, fuzzy
 msgid "HSV Saturation and Value"
 msgstr ""
 
 #: ../gui/colors/hsvcube.py:41
-#, fuzzy
 msgid "HSV Hue and Value"
 msgstr ""
 
 #: ../gui/colors/hsvcube.py:42 ../gui/colors/hsvwheel.py:33
-#, fuzzy
 msgid "HSV Hue and Saturation"
 msgstr ""
 
 #: ../gui/colors/hsvcube.py:54
-#, fuzzy
 msgid "Rotate cube (show different axes)"
 msgstr ""
 
 #: ../gui/colors/hsvcube.py:74
 msgid "HSV Cube"
-msgstr "مربعHSV"
+msgstr ""
 
 #: ../gui/colors/hsvcube.py:78
-#, fuzzy
 msgid "An HSV cube which can be rotated to show different planar slices."
 msgstr ""
 
 #: ../gui/colors/hsvsquare.py:57
 msgid "HSV Square"
-msgstr "مربعHSV"
+msgstr ""
 
 #: ../gui/colors/hsvsquare.py:61
 msgid "An HSV Square which can be rotated to show different hues."
-msgstr "دارای طیف حلقوی که انتخاب رنگ را آسانتر می کند."
+msgstr ""
 
 #: ../gui/colors/hsvtriangle.py:47
-#, fuzzy
 msgid "HSV Triangle"
 msgstr ""
 
 #: ../gui/colors/hsvtriangle.py:51
-#, fuzzy
 msgid "The standard GTK color selector"
 msgstr ""
 
 #: ../gui/colors/hsvwheel.py:89
 msgid "HSV Wheel"
-msgstr "دایرهHSV"
+msgstr ""
 
 #: ../gui/colors/hsvwheel.py:93
-#, fuzzy
 msgid "Saturation and Value color changer."
 msgstr ""
 
 #: ../gui/colors/paletteview.py:72
 msgctxt "palette panel: properties button tooltip"
 msgid "Palette properties"
-msgstr "مشخصات پالت"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:81
 msgctxt "palette panel tab tooltip title"
 msgid "Palette"
-msgstr "جعبه رنگ"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:87
 msgctxt "palette panel tab tooltip description"
@@ -857,27 +806,27 @@ msgstr ""
 #: ../gui/colors/paletteview.py:113
 msgctxt "palette editor dialog: palette name entry"
 msgid "Untitled Palette"
-msgstr "جعبه رنگ بدون نام"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:120
 msgctxt "palette editor dialog: title"
 msgid "Palette Editor"
-msgstr "ویرایشگر پالت"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:166
 msgctxt "palette editor dialog: action buttons: tooltips"
 msgid "Load from a GIMP palette file"
-msgstr "بارگیری پالت های گیمپ"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:170
 msgctxt "palette editor dialog: action buttons: tooltips"
 msgid "Save to a GIMP palette file"
-msgstr "ذخیره به عنوان پالت گیمپ"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:174
 msgctxt "palette editor dialog: action buttons: tooltips"
 msgid "Add a new empty swatch"
-msgstr "اضافه کردن یک نمونه جدید"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:178
 msgctxt "palette editor dialog: action buttons: tooltips"
@@ -887,40 +836,39 @@ msgstr ""
 #: ../gui/colors/paletteview.py:182
 msgctxt "palette editor dialog: action buttons: tooltips"
 msgid "Remove all swatches"
-msgstr "حذف همه نمونه ها"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:196
 msgctxt "palette editor dialog: palette name/title entry: label"
 msgid "Title:"
-msgstr "عنوان:"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:200
 msgctxt "palette editor dialog: palette name/title entry: tooltip"
 msgid "Name or description for this palette"
-msgstr "نام یا توضیحاتی برای جعبه رنگ"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:212
 msgctxt "palette editor dialog: number-of-columns spinbutton: title"
 msgid "Columns:"
-msgstr "ستون ها:"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:216
 msgctxt "palette editor dialog: number-of-columns spinbutton: tooltip"
 msgid "Number of columns"
-msgstr "شماره از ستون ها"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:233
 msgctxt "palette editor dialog: color name entry: label"
 msgid "Color name:"
-msgstr "نام رنگ:"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:237
 msgctxt "palette editor dialog: color name entry: tooltip"
 msgid "Current color's name"
-msgstr "نام رنگ فعلی"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:328
-#, fuzzy
 msgctxt "palette editor dialog: color name entry"
 msgid "Empty palette slot"
 msgstr ""
@@ -928,12 +876,12 @@ msgstr ""
 #: ../gui/colors/paletteview.py:384
 msgctxt "palette load dialog: title"
 msgid "Load palette"
-msgstr "بارگیری جعبه رنگ"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:397
 msgctxt "palette save dialog: title"
 msgid "Save palette"
-msgstr "ذخیره جعبه رنگ"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:549
 msgctxt "palette view"
@@ -944,13 +892,11 @@ msgid ""
 msgstr ""
 
 #: ../gui/colors/paletteview.py:704
-#, fuzzy
 msgctxt "palette view"
 msgid "Empty palette slot (drag a color here)"
 msgstr ""
 
 #: ../gui/colors/paletteview.py:792
-#, fuzzy
 msgctxt "palette view: context menu"
 msgid "Add Empty Slot"
 msgstr ""
@@ -958,27 +904,24 @@ msgstr ""
 #: ../gui/colors/paletteview.py:798
 msgctxt "palette view: context menu"
 msgid "Insert Row"
-msgstr "وارد کردن ردیف"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:804
 msgctxt "palette view: context menu"
 msgid "Insert Column"
-msgstr "وارد کردن ستون"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:812
-#, fuzzy
 msgctxt "palette view: context menu"
 msgid "Fill Gap (RGB)"
 msgstr ""
 
 #: ../gui/colors/paletteview.py:818
-#, fuzzy
 msgctxt "palette view: context menu"
 msgid "Fill Gap (HCY)"
 msgstr ""
 
 #: ../gui/colors/paletteview.py:824
-#, fuzzy
 msgctxt "palette view: context menu"
 msgid "Fill Gap (HSV)"
 msgstr ""
@@ -986,56 +929,53 @@ msgstr ""
 #: ../gui/colors/paletteview.py:1282
 msgctxt "palette load dialog: filters"
 msgid "GIMP palette file (*.gpl)"
-msgstr "جعبه رنگ گیمپ(*.gpl)"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:1289
 msgctxt "palette load dialog: filters"
 msgid "All files (*)"
-msgstr "همه فایل ها(*)"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:1331
 msgctxt "palette save dialog: filters"
 msgid "GIMP palette file (*.gpl)"
-msgstr "جعبه رنگ گیمپ(*.gpl)"
+msgstr ""
 
 #: ../gui/colors/paletteview.py:1338
 msgctxt "palette save dialog: filters"
 msgid "All files (*)"
-msgstr "همه فایل ها(*)"
+msgstr ""
 
 #: ../gui/colors/picker.py:100
-#, fuzzy
 msgid "Pick a color from the screen"
 msgstr ""
 
 #: ../gui/colors/sliders.py:44
 msgctxt "color sliders panel: red/green/blue: slider label"
 msgid "R"
-msgstr "قرمز"
+msgstr ""
 
 #: ../gui/colors/sliders.py:48
 msgctxt "color sliders panel: red/green/blue: slider label"
 msgid "G"
-msgstr "سبز"
+msgstr ""
 
 #: ../gui/colors/sliders.py:52
 msgctxt "color sliders panel: red/green/blue: slider label"
 msgid "B"
-msgstr "آبی"
+msgstr ""
 
 #: ../gui/colors/sliders.py:56
 msgctxt "color sliders panel: hue/chroma/luma: slider label"
 msgid "H"
-msgstr "طیف"
+msgstr ""
 
 #: ../gui/colors/sliders.py:60
-#, fuzzy
 msgctxt "color sliders panel: hue/chroma/luma: slider label"
 msgid "C"
 msgstr ""
 
 #: ../gui/colors/sliders.py:64
-#, fuzzy
 msgctxt "color sliders panel: hue/chroma/luma: slider label"
 msgid "Y"
 msgstr ""
@@ -1043,56 +983,54 @@ msgstr ""
 #: ../gui/colors/sliders.py:108
 msgctxt "color sliders panel: tab title (in tooltip)"
 msgid "Component Sliders"
-msgstr "موئلفه های نواری"
+msgstr ""
 
 #: ../gui/colors/sliders.py:115
 msgctxt "color sliders panel: tab description (in tooltip)"
 msgid "Adjust individual components of the color."
-msgstr "انتخاب رنگ با تنظیم جز به جز موئلف های رنگ."
+msgstr ""
 
 #: ../gui/colors/sliders.py:160
 msgctxt "color component slider: tooltip"
 msgid "RGB Red"
-msgstr "RGB قرمز"
+msgstr ""
 
 #: ../gui/colors/sliders.py:177
 msgctxt "color component slider: tooltip"
 msgid "RGB Green"
-msgstr "RGB سبز"
+msgstr ""
 
 #: ../gui/colors/sliders.py:194
 msgctxt "color component slider: tooltip"
 msgid "RGB Blue"
-msgstr "RGB آبی"
+msgstr ""
 
 #: ../gui/colors/sliders.py:211
 msgctxt "color component slider: tooltip"
 msgid "HSV Hue"
-msgstr "طیفHSV"
+msgstr ""
 
 #: ../gui/colors/sliders.py:224
 msgctxt "color component slider: tooltip"
 msgid "HSV Saturation"
-msgstr "اشباعHSV"
+msgstr ""
 
 #: ../gui/colors/sliders.py:236
 msgctxt "color component slider: tooltip"
 msgid "HSV Value"
-msgstr "ارزشHSV"
+msgstr ""
 
 #: ../gui/colors/sliders.py:248
 msgctxt "color component slider: tooltip"
 msgid "HCY Hue"
-msgstr "طیفHCY"
+msgstr ""
 
 #: ../gui/colors/sliders.py:262
-#, fuzzy
 msgctxt "color component slider: tooltip"
 msgid "HCY Chroma"
 msgstr ""
 
 #: ../gui/colors/sliders.py:275
-#, fuzzy
 msgctxt "color component slider: tooltip"
 msgid "HCY Luma (Y')"
 msgstr ""
@@ -1100,27 +1038,27 @@ msgstr ""
 #: ../gui/colortools.py:148
 msgctxt "color changer dock panels: tab tooltip title"
 msgid "Liquid Wash"
-msgstr "مایع مواج"
+msgstr ""
 
 #: ../gui/colortools.py:152
 msgctxt "color changer dock panels: tab tooltip description"
 msgid "Change color using a liquid-like wash of nearby colors."
-msgstr "انتخاب رنگ از شانه های یک جعبه مایع مواج جالب."
+msgstr ""
 
 #: ../gui/colortools.py:162
 msgctxt "color changer dock panels: tab tooltip title"
 msgid "Concentric Rings"
-msgstr "حلقه های هم مرکز"
+msgstr ""
 
 #: ../gui/colortools.py:166
 msgctxt "color changer dock panels: tab tooltip description"
 msgid "Change color using concentric HSV rings."
-msgstr "انتخاب رنگ از میان حلقه های هم مرکز HSV."
+msgstr ""
 
 #: ../gui/colortools.py:176
 msgctxt "color changer dock panels: tab tooltip title"
 msgid "Crossed Bowl"
-msgstr "جعبه رنگ چلیپای"
+msgstr ""
 
 #: ../gui/colortools.py:180
 msgctxt "color changer dock panels: tab tooltip description"
@@ -1128,7 +1066,6 @@ msgid "Change color with HSV ramps crossing a radial bowl of color."
 msgstr ""
 
 #: ../gui/device.py:46
-#, fuzzy
 msgctxt "prefs: device's type label"
 msgid "Cursor/puck"
 msgstr ""
@@ -1136,42 +1073,42 @@ msgstr ""
 #: ../gui/device.py:50
 msgctxt "prefs: device's type label"
 msgid "Eraser"
-msgstr "پاک کن"
+msgstr ""
 
 #: ../gui/device.py:54
 msgctxt "prefs: device's type label"
 msgid "Keyboard"
-msgstr "صفحه کلید"
+msgstr ""
 
 #: ../gui/device.py:58
 msgctxt "prefs: device's type label"
 msgid "Mouse"
-msgstr "موشواره"
+msgstr ""
 
 #: ../gui/device.py:62
 msgctxt "prefs: device's type label"
 msgid "Pen"
-msgstr "خودکار"
+msgstr ""
 
 #: ../gui/device.py:66
 msgctxt "prefs: device's type label"
 msgid "Touchpad"
-msgstr "صفحه لمسی"
+msgstr ""
 
 #: ../gui/device.py:70
 msgctxt "prefs: device's type label"
 msgid "Touchscreen"
-msgstr "صفحه نمایش لمسی"
+msgstr ""
 
 #: ../gui/device.py:90
 msgctxt "device settings: allowed usage"
 msgid "Ignore"
-msgstr "رد کن"
+msgstr ""
 
 #: ../gui/device.py:94
 msgctxt "device settings: allowed usage"
 msgid "Any Task"
-msgstr "هیچ وظیفه ای"
+msgstr ""
 
 #: ../gui/device.py:98
 msgctxt "device settings: allowed usage"
@@ -1181,12 +1118,12 @@ msgstr ""
 #: ../gui/device.py:102
 msgctxt "device settings: allowed usage"
 msgid "Navigation only"
-msgstr "فقط ناوبری"
+msgstr ""
 
 #: ../gui/device.py:127
 msgctxt "device settings: unmodified scroll action"
 msgid "Zoom"
-msgstr "بزرگ نمای"
+msgstr ""
 
 #: ../gui/device.py:128
 msgctxt "device settings: unmodified scroll action"
@@ -1196,22 +1133,22 @@ msgstr ""
 #: ../gui/device.py:405
 msgctxt "prefs: devices table: column header"
 msgid "Device"
-msgstr "دستگاه"
+msgstr ""
 
 #: ../gui/device.py:419
 msgctxt "prefs: devices table: column header"
 msgid "Axes"
-msgstr "محور ها"
+msgstr ""
 
 #: ../gui/device.py:433
 msgctxt "prefs: devices table: column header"
 msgid "Type"
-msgstr "نوع"
+msgstr ""
 
 #: ../gui/device.py:456
 msgctxt "prefs: devices table: column header"
 msgid "Use for..."
-msgstr "استفاده برای..."
+msgstr ""
 
 #: ../gui/device.py:486
 msgctxt "prefs: devices table: column header"
@@ -1220,7 +1157,7 @@ msgstr ""
 
 #: ../gui/dialogs.py:67 ../gui/externalapp.py:120 ../gui/layers.py:364
 msgid "Name"
-msgstr "نام"
+msgstr ""
 
 #: ../gui/dialogs.py:109
 msgid "Overwrite brush?"
@@ -1228,27 +1165,27 @@ msgstr ""
 
 #: ../gui/dialogs.py:118 ../gui/dialogs.py:177
 msgid "Replace"
-msgstr "جایگزین"
+msgstr ""
 
 #: ../gui/dialogs.py:121 ../gui/dialogs.py:180 ../po/tmp/brusheditor.glade.h:3
 msgid "Rename"
-msgstr "تغییر نام"
+msgstr ""
 
 #: ../gui/dialogs.py:124
 msgid "Replace all"
-msgstr "جایگزینی همه"
+msgstr ""
 
 #: ../gui/dialogs.py:126
 msgid "Rename all"
-msgstr "تغییر نام همه"
+msgstr ""
 
 #: ../gui/dialogs.py:141
 msgid "Imported brush"
-msgstr "قلم خارجی"
+msgstr ""
 
 #: ../gui/dialogs.py:142
 msgid "Existing brush"
-msgstr "قلم موجود"
+msgstr ""
 
 #: ../gui/dialogs.py:144
 #, python-format
@@ -1272,7 +1209,7 @@ msgstr ""
 
 #: ../gui/dialogs.py:282
 msgid "Import brush package?"
-msgstr "مجموعه قلم وارد نرم افزار شود؟"
+msgstr ""
 
 #: ../gui/dialogs.py:299
 #, python-format
@@ -1280,12 +1217,12 @@ msgid "<b>Do you really want to import package `%s'?</b>"
 msgstr ""
 
 #: ../gui/document.py:436
-#, fuzzy, python-format
+#, python-format
 msgid "Load brush settings from shortcut slot %d"
 msgstr ""
 
 #: ../gui/document.py:437
-#, fuzzy, python-format
+#, python-format
 msgid "Store brush settings in shortcut slot %d"
 msgstr ""
 
@@ -1302,20 +1239,20 @@ msgstr ""
 #: ../gui/document.py:538
 #, python-format
 msgid "Undo %s"
-msgstr "برگشت %s"
+msgstr "Uɣal %s"
 
 #: ../gui/document.py:540
 msgid "Undo"
-msgstr "خنثی کردن عمل"
+msgstr "Uɣal"
 
 #: ../gui/document.py:550
 #, python-format
 msgid "Redo %s"
-msgstr "رفتن به%s"
+msgstr ""
 
 #: ../gui/document.py:552
 msgid "Redo"
-msgstr "رفتن"
+msgstr ""
 
 #. TRANSLATORS: Statusbar message explaining button and modifier
 #. TRANSLATORS: combinations used to access modes/tools/actions.
@@ -1323,7 +1260,7 @@ msgstr "رفتن"
 #: ../gui/document.py:818
 #, python-brace-format
 msgid "{button_combination} is {resultant_action}"
-msgstr "{button_combination}هست {resultant_action}"
+msgstr ""
 
 #. TRANSLATORS: "With <current-modifiers> held down: <separated-list>"
 #. TRANSLATORS: Action names may contain coordinating conjunctions such
@@ -1331,7 +1268,6 @@ msgstr "{button_combination}هست {resultant_action}"
 #. TRANSLATORS: wording for the separator. Also a little more spacing
 #. TRANSLATORS: than normal looks good here.
 #: ../gui/document.py:830
-#, fuzzy
 msgid ";  "
 msgstr ""
 
@@ -1342,7 +1278,7 @@ msgstr ""
 
 #: ../gui/document.py:1244
 msgid "Layer Name"
-msgstr "نام لایه"
+msgstr ""
 
 #. TRANSLATORS: footer icon tooltip markup for the current mode
 #. TRANSLATORS: tooltip for the layer mode dropdown (markup)
@@ -1352,18 +1288,15 @@ msgid ""
 "<b>{name}</b>\n"
 "{description}"
 msgstr ""
-"<b>{name}</b>\n"
-"{description}"
 
 #. TRANSLATORS: window title for use with a filename
 #: ../gui/drawwindow.py:298
-#, fuzzy, python-format
+#, python-format
 msgid "%s - MyPaint"
 msgstr ""
 
 #. TRANSLATORS: window title for use without a filename
 #: ../gui/drawwindow.py:301 ../po/tmp/mypaint.glade.h:1
-#, fuzzy
 msgid "MyPaint"
 msgstr ""
 
@@ -1373,32 +1306,32 @@ msgstr ""
 
 #: ../gui/drawwindow.py:607
 msgid "Leave Fullscreen Mode"
-msgstr "خروج از حالت تمام صفحه"
+msgstr ""
 
 #: ../gui/drawwindow.py:608
 msgid "Leave Fullscreen"
-msgstr "خروج از تمام صفحه"
+msgstr ""
 
 #: ../gui/drawwindow.py:611
 msgid "Enter Fullscreen Mode"
-msgstr "ورود به حالت تمام صفحه"
+msgstr ""
 
 #: ../gui/drawwindow.py:612
 msgid "Fullscreen"
-msgstr "تمام صفحه"
+msgstr ""
 
 #. FIXME: should do this periodically, not only on quit
 #: ../gui/drawwindow.py:740
 msgid "Quit"
-msgstr "خروج"
+msgstr ""
 
 #: ../gui/drawwindow.py:740
 msgid "Really Quit?"
-msgstr "واقعا از برنامه خارج می شوید؟"
+msgstr ""
 
 #: ../gui/drawwindow.py:754
 msgid "Import brush package..."
-msgstr "وارد کردن بسته های قلم..."
+msgstr ""
 
 #: ../gui/drawwindow.py:755
 msgid "MyPaint brush package (*.zip)"
@@ -1424,7 +1357,7 @@ msgstr ""
 #: ../gui/externalapp.py:36
 #, python-brace-format
 msgid "Updated layer “{layer_name}” with external edits"
-msgstr "بروز شد لایه“{layer_name}” با ویرایش های خارجی"
+msgstr ""
 
 #: ../gui/externalapp.py:46
 #, python-brace-format
@@ -1442,75 +1375,69 @@ msgstr ""
 
 #: ../gui/externalapp.py:56
 msgid "Open With..."
-msgstr "باز کردن با..."
+msgstr ""
 
 #: ../gui/externalapp.py:107
 msgid "Icon"
-msgstr "آکون"
+msgstr ""
 
 #: ../gui/externalapp.py:150
 msgid "no description"
-msgstr "بدون توضیحات"
+msgstr ""
 
 #. (name, patterns)
 #: ../gui/filehandling.py:93
 msgid "All Recognized Formats"
-msgstr "همه قالب های رسمی"
+msgstr ""
 
 #: ../gui/filehandling.py:94 ../gui/filehandling.py:109
-#, fuzzy
 msgid "OpenRaster (*.ora)"
 msgstr ""
 
 #: ../gui/filehandling.py:95
-#, fuzzy
 msgid "PNG (*.png)"
 msgstr ""
 
 #: ../gui/filehandling.py:96
-#, fuzzy
 msgid "JPEG (*.jpg; *.jpeg)"
 msgstr ""
 
 #. (name, extension, options)
 #: ../gui/filehandling.py:108
 msgid "By extension (prefer default format)"
-msgstr "به وسیله قالب(قالب پیش فرض)"
+msgstr ""
 
 #: ../gui/filehandling.py:110
-#, fuzzy
 msgid "PNG solid with background (*.png)"
 msgstr ""
 
 #: ../gui/filehandling.py:111
 msgid "PNG transparent (*.png)"
-msgstr "PNG شفاف (*.png)"
+msgstr ""
 
 #: ../gui/filehandling.py:112
-#, fuzzy
 msgid "Multiple PNG transparent (*.XXX.png)"
 msgstr ""
 
 #: ../gui/filehandling.py:113
 msgid "JPEG 90% quality (*.jpg; *.jpeg)"
-msgstr "JPEG کیفیت%90 (*.jpg; *.jpeg)"
+msgstr ""
 
 #: ../gui/filehandling.py:166
 msgid "Save..."
-msgstr "ذخیره..."
+msgstr ""
 
 #: ../gui/filehandling.py:177
 msgid "Format to save as:"
-msgstr "ذخیره با قالب:"
+msgstr ""
 
 #: ../gui/filehandling.py:203
-#, fuzzy
 msgid "Confirm"
 msgstr ""
 
 #: ../gui/filehandling.py:204
 msgid "Really continue?"
-msgstr "واقعا می خواهید ادامه دهید؟"
+msgstr ""
 
 #: ../gui/filehandling.py:234
 #, python-brace-format
@@ -1519,69 +1446,69 @@ msgstr ""
 
 #: ../gui/filehandling.py:243
 msgid "_Save as Scrap"
-msgstr "_ذخیره کرده ورقه"
+msgstr ""
 
 #: ../gui/filehandling.py:282
 #, python-brace-format
 msgctxt "file handling: open: during load (statusbar)"
 msgid "Loading “{file_basename}”…"
-msgstr "بارگزاری“{file_basename}”…"
+msgstr ""
 
 #: ../gui/filehandling.py:296
 #, python-brace-format
 msgctxt "file handling: open failed (statusbar)"
 msgid "Could not load “{file_basename}”."
-msgstr "نمی تواند “{file_basename}”را بارگزاری کند."
+msgstr ""
 
 #: ../gui/filehandling.py:321
 #, python-brace-format
 msgctxt "file handling: open success (statusbar)"
 msgid "Loaded “{file_basename}”."
-msgstr "“{file_basename}”بارگزاری شد."
+msgstr ""
 
 #: ../gui/filehandling.py:422
 #, python-brace-format
 msgctxt "file handling: during export (statusbar)"
 msgid "Exporting to “{file_basename}”…"
-msgstr "صادر کردن“{file_basename}”…"
+msgstr ""
 
 #: ../gui/filehandling.py:427
 #, python-brace-format
 msgctxt "file handling: during save (statusbar)"
 msgid "Saving “{file_basename}”…"
-msgstr "ذخیره“{file_basename}” …"
+msgstr ""
 
 #: ../gui/filehandling.py:449
 #, python-brace-format
 msgctxt "file handling: export failure (statusbar)"
 msgid "Failed to export to “{file_basename}”."
-msgstr "فرایند صادر کردن“{file_basename}” شکست خورد."
+msgstr ""
 
 #: ../gui/filehandling.py:454
 #, python-brace-format
 msgctxt "file handling: save failure (statusbar)"
 msgid "Failed to save “{file_basename}”."
-msgstr "فرایند ذخیره کردن “{file_basename}” شکست خورد."
+msgstr ""
 
 #: ../gui/filehandling.py:476
 #, python-brace-format
 msgctxt "file handling: export success (statusbar)"
 msgid "Exported to “{file_basename}” successfully."
-msgstr "“{file_basename}” صادر شد."
+msgstr ""
 
 #: ../gui/filehandling.py:481
 #, python-brace-format
 msgctxt "file handling: save success (statusbar)"
 msgid "Saved “{file_basename}” successfully."
-msgstr "“{file_basename}”ذخیره شد."
+msgstr ""
 
 #: ../gui/filehandling.py:503 ../gui/filehandling.py:520
 msgid "Open..."
-msgstr "باز کردن..."
+msgstr ""
 
 #: ../gui/filehandling.py:552
 msgid "Open Scratchpad..."
-msgstr "باز کردن چرک نویس..."
+msgstr ""
 
 #: ../gui/filehandling.py:845
 #, python-format
@@ -1590,15 +1517,15 @@ msgstr ""
 
 #: ../gui/fill.py:75 ../lib/command.py:459
 msgid "Flood Fill"
-msgstr "سیل رنگ"
+msgstr ""
 
 #: ../gui/fill.py:78
 msgid "Fill areas with color"
-msgstr "پر کردن همه جا با رنگ"
+msgstr ""
 
 #: ../gui/fill.py:183
 msgid "Tolerance:"
-msgstr "انحراف مجاز:"
+msgstr ""
 
 #: ../gui/fill.py:185
 msgid ""
@@ -1608,14 +1535,13 @@ msgstr ""
 
 #: ../gui/fill.py:205
 msgid "Source:"
-msgstr "منبع:"
+msgstr ""
 
 #: ../gui/fill.py:206
 msgid "Which visible layers should be filled"
 msgstr ""
 
 #: ../gui/fill.py:211
-#, fuzzy
 msgid "Sample Merged"
 msgstr ""
 
@@ -1628,7 +1554,7 @@ msgstr ""
 
 #: ../gui/fill.py:226
 msgid "Target:"
-msgstr "هدف:"
+msgstr ""
 
 #: ../gui/fill.py:227
 msgid "Where the output should go"
@@ -1636,7 +1562,7 @@ msgstr ""
 
 #: ../gui/fill.py:232
 msgid "New Layer (once)"
-msgstr "لایه جدید(یک بار)"
+msgstr ""
 
 #: ../gui/fill.py:235
 msgid ""
@@ -1646,17 +1572,17 @@ msgstr ""
 
 #: ../gui/fill.py:245 ../gui/mode.py:605
 msgid "Reset"
-msgstr "راه اندازی مجدد"
+msgstr ""
 
 #: ../gui/fill.py:247
 msgid "Reset options to their defaults"
-msgstr "بازنشانی تنظیمات به حالت پیش فرض"
+msgstr ""
 
 #: ../gui/footer.py:181
 #, python-brace-format
 msgctxt "current brush indicator: tooltip (no-description case)"
 msgid "<b>{brush_name}</b>"
-msgstr "<b>{brush_name}</b>"
+msgstr ""
 
 #: ../gui/footer.py:186
 #, python-brace-format
@@ -1665,12 +1591,10 @@ msgid ""
 "<b>{brush_name}</b>\n"
 "{brush_desc}"
 msgstr ""
-"<b>{brush_name}</b>\n"
-"{brush_desc}"
 
 #: ../gui/framewindow.py:93
 msgid "Edit Frame"
-msgstr "قاب ویرایش"
+msgstr ""
 
 #: ../gui/framewindow.py:96
 msgid "Adjust the document frame"
@@ -1678,7 +1602,7 @@ msgstr ""
 
 #: ../gui/framewindow.py:445
 msgid "Frame Size"
-msgstr "اندازه قاب"
+msgstr ""
 
 #. unit :  (conversion_factor, upper, lower, step_incr, page_incr, digits)
 #: ../gui/framewindow.py:448 ../gui/framewindow.py:512
@@ -1686,23 +1610,23 @@ msgstr "اندازه قاب"
 #: ../gui/framewindow.py:896 ../gui/framewindow.py:948
 #: ../gui/framewindow.py:953
 msgid "px"
-msgstr "پیکسل"
+msgstr ""
 
 #: ../gui/framewindow.py:450
 msgid "Height:"
-msgstr "ارتفاع:"
+msgstr ""
 
 #: ../gui/framewindow.py:451
 msgid "Width:"
-msgstr "طول:"
+msgstr ""
 
 #: ../gui/framewindow.py:452
 msgid "Resolution:"
-msgstr "وضوح:"
+msgstr ""
 
 #: ../gui/framewindow.py:454
 msgid "DPI"
-msgstr "DPI(تعداد نقطه در هر اینچ)"
+msgstr ""
 
 #: ../gui/framewindow.py:458
 msgid "Dots Per Inch (really Pixels Per Inch)"
@@ -1710,68 +1634,68 @@ msgstr ""
 
 #: ../gui/framewindow.py:460
 msgid "Color:"
-msgstr "رنگ:"
+msgstr ""
 
 #: ../gui/framewindow.py:497
 msgid "Frame Color"
-msgstr "رنگ قاب"
+msgstr ""
 
 #: ../gui/framewindow.py:520
 msgid "<b>Frame dimensions</b>"
-msgstr "<b>ابعاد قاب</b>"
+msgstr ""
 
 #: ../gui/framewindow.py:534
 msgid "<b>Pixel density</b>"
-msgstr "<b>تراکم پیکسل</b>"
+msgstr ""
 
 #: ../gui/framewindow.py:562
 msgid "Set Frame to Layer"
-msgstr "همسان کردن اندازه قاب و نقاشی لایه"
+msgstr ""
 
 #: ../gui/framewindow.py:563
 msgid "Set frame to the extents of the current layer"
-msgstr "اندازه قاب را به اندازه لایه انتخابی موجود تغییر می دهد"
+msgstr ""
 
 #: ../gui/framewindow.py:565
 msgid "Set Frame to Document"
-msgstr "همسان کردن اندازه قاب و کل طراحی"
+msgstr ""
 
 #: ../gui/framewindow.py:566
 msgid "Set frame to the combination of all layers"
-msgstr "اندازه قاب را به اندازه کل سند طراحی تغییر می دهد(تمام لایه ها)"
+msgstr ""
 
 #: ../gui/framewindow.py:576
 msgid "Trim Layer to Frame"
-msgstr "برش لایه به اندازه قاب"
+msgstr ""
 
 #: ../gui/framewindow.py:577
 msgid "Trim parts of the current layer which lie outside the frame"
-msgstr "بخش های از طراحی(درون لایه انتخابی) که خارج از قاب هست را حذف می کند"
+msgstr ""
 
 #: ../gui/framewindow.py:583
 msgid "Enabled"
-msgstr "فعال"
+msgstr ""
 
 #: ../gui/framewindow.py:695
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "{width:g}×{height:g} {units}"
 msgstr ""
 
 #: ../gui/framewindow.py:884
 msgid "inch"
-msgstr "اینچ"
+msgstr ""
 
 #: ../gui/framewindow.py:885
 msgid "cm"
-msgstr "سانتی متر"
+msgstr ""
 
 #: ../gui/framewindow.py:886
 msgid "mm"
-msgstr "میلیمتر"
+msgstr ""
 
 #: ../gui/freehand.py:120
 msgid "Freehand Drawing"
-msgstr "طراحی با دست آزاد"
+msgstr ""
 
 #: ../gui/freehand.py:123
 msgid "Paint free-form brush strokes"
@@ -1785,11 +1709,11 @@ msgstr ""
 
 #: ../gui/gtkexcepthook.py:152
 msgid "Bug Detected"
-msgstr "خطای شناخته شده"
+msgstr ""
 
 #: ../gui/gtkexcepthook.py:155
 msgid "<big><b>A programming error has been detected.</b></big>"
-msgstr "<big><b>یک خطای برنامه نویسی پیدا شده.</b></big>"
+msgstr ""
 
 #: ../gui/gtkexcepthook.py:158
 msgid ""
@@ -1802,24 +1726,24 @@ msgstr ""
 
 #: ../gui/gtkexcepthook.py:166
 msgid "Search Tracker..."
-msgstr "جستجوی رهگیر ها..."
+msgstr ""
 
 #. only development and prereleases
 #: ../gui/gtkexcepthook.py:168
 msgid "Report..."
-msgstr "گزارش..."
+msgstr ""
 
 #: ../gui/gtkexcepthook.py:170
 msgid "Ignore Error"
-msgstr "خطا را نادیده بگیر"
+msgstr ""
 
 #: ../gui/gtkexcepthook.py:171
 msgid "Quit MyPaint"
-msgstr "خروج ازMyPaint"
+msgstr ""
 
 #: ../gui/gtkexcepthook.py:181
 msgid "Details..."
-msgstr "جزئیات..."
+msgstr ""
 
 #: ../gui/gtkexcepthook.py:208 ../gui/gtkexcepthook.py:211
 msgid "Exception while analyzing the exception."
@@ -1854,7 +1778,7 @@ msgstr ""
 
 #: ../gui/inktool.py:88 ../gui/inktool.py:452
 msgid "Inking"
-msgstr "طراحی برداری"
+msgstr ""
 
 #: ../gui/inktool.py:91
 msgid "Draw, and then adjust smooth lines"
@@ -1862,76 +1786,74 @@ msgstr ""
 
 #: ../gui/inputtestwindow.py:30
 msgid "Input Device Test"
-msgstr "آزمیش دستگاه های ورودی"
+msgstr ""
 
 #: ../gui/inputtestwindow.py:57
 msgid "(no pressure)"
-msgstr "(بدون فشار)"
+msgstr ""
 
 #: ../gui/inputtestwindow.py:58
 msgid "Pressure:"
-msgstr "فشار:"
+msgstr ""
 
 #: ../gui/inputtestwindow.py:60
-#, fuzzy
 msgid "(no tilt)"
 msgstr ""
 
 #: ../gui/inputtestwindow.py:61
-#, fuzzy
 msgid "Tilt:"
 msgstr ""
 
 #: ../gui/inputtestwindow.py:66
 msgid "(no device)"
-msgstr "(نبود دستگاه)"
+msgstr ""
 
 #: ../gui/inputtestwindow.py:67
 msgid "Device:"
-msgstr "دستگاه:"
+msgstr ""
 
 #. TRANSLATORS: Command to move a layer in the horizontal plane,
 #. TRANSLATORS: preserving its position in the stack.
 #: ../gui/layermanip.py:47 ../lib/command.py:899
 msgid "Move Layer"
-msgstr "حرکت دادن لایه"
+msgstr ""
 
 #: ../gui/layermanip.py:50
 msgid "Move the current layer"
-msgstr "حرکت دادن لایه موجود"
+msgstr ""
 
 #. # Module vars
 #. TRANSLATORS: Display name template for otherwise anonymous layers
 #: ../gui/layers.py:35
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "{default_name} at {path}"
 msgstr ""
 
 #: ../gui/layers.py:353
 msgid "Type"
-msgstr "نوع"
+msgstr ""
 
 #: ../gui/layers.py:375
 msgid "Visible"
-msgstr "مرئی"
+msgstr ""
 
 #: ../gui/layers.py:384
 msgid "Locked"
-msgstr "قفل شده"
+msgstr ""
 
 #: ../gui/layerswindow.py:77
 msgid "Layers"
-msgstr "لایه ها"
+msgstr ""
 
 #: ../gui/layerswindow.py:78
 msgid "Arrange layers and assign effects"
-msgstr "ردیف کننده لایه ها و تاثیرات انتسابی"
+msgstr ""
 
 #. TRANSLATORS: tooltip for the opacity slider (text)
 #: ../gui/layerswindow.py:84
 #, python-format
 msgid "Layer opacity: %d%%"
-msgstr "شفافت لایه: %d%%"
+msgstr ""
 
 #. TRANSLATORS: status bar messages for drag, without/with modifiers
 #: ../gui/layerswindow.py:91
@@ -1945,11 +1867,11 @@ msgstr ""
 
 #: ../gui/layerswindow.py:131
 msgid "Layer"
-msgstr "لایه"
+msgstr ""
 
 #: ../gui/layerswindow.py:145
 msgid "Mode:"
-msgstr "حالت:"
+msgstr ""
 
 #: ../gui/layerswindow.py:147
 msgid ""
@@ -1958,7 +1880,7 @@ msgstr ""
 
 #: ../gui/layerswindow.py:171
 msgid "Opacity:"
-msgstr "شفافیت:"
+msgstr ""
 
 #: ../gui/layerswindow.py:173
 msgid ""
@@ -1992,7 +1914,7 @@ msgstr ""
 
 #: ../gui/linemode.py:43
 msgid "Head"
-msgstr "سر"
+msgstr ""
 
 #: ../gui/linemode.py:44
 msgid "Stroke lead-in end"
@@ -2000,7 +1922,7 @@ msgstr ""
 
 #: ../gui/linemode.py:45
 msgid "Tail"
-msgstr "دم"
+msgstr ""
 
 #: ../gui/linemode.py:46
 msgid "Stroke trail-off beginning"
@@ -2012,7 +1934,7 @@ msgstr ""
 
 #: ../gui/linemode.py:215 ../gui/linemode.py:744
 msgid "Lines and Curves"
-msgstr "خط ها و منحنی ها"
+msgstr ""
 
 #. TRANSLATORS: users should never see this message
 #: ../gui/linemode.py:219
@@ -2025,7 +1947,7 @@ msgstr ""
 
 #: ../gui/linemode.py:756
 msgid "Connected Lines"
-msgstr "خطوط متصل"
+msgstr ""
 
 #: ../gui/linemode.py:759
 msgid "Draw a sequence of lines; Shift adds curves, Ctrl constrains angle"
@@ -2033,7 +1955,7 @@ msgstr ""
 
 #: ../gui/linemode.py:768
 msgid "Ellipses and Circles"
-msgstr "دایره ها و بیضی ها"
+msgstr ""
 
 #: ../gui/linemode.py:771
 msgid "Draw ellipses; Shift rotates, Ctrl constrains ratio/angle"
@@ -2061,52 +1983,52 @@ msgstr ""
 #: ../gui/meta.py:51
 msgctxt "About dialog: credits: tasks"
 msgid "programming"
-msgstr "برنامه نویس"
+msgstr ""
 
 #: ../gui/meta.py:55
 msgctxt "About dialog: credits: tasks"
 msgid "portability"
-msgstr "قابلیت انتقال"
+msgstr ""
 
 #: ../gui/meta.py:59
 msgctxt "About dialog: credits: tasks"
 msgid "project management"
-msgstr "مدیریت پروژه"
+msgstr ""
 
 #: ../gui/meta.py:63
 msgctxt "About dialog: credits: tasks: brush presets and icons"
 msgid "brushes"
-msgstr "قلم ها"
+msgstr ""
 
 #: ../gui/meta.py:67
 msgctxt "About dialog: credits: tasks: background paper textures"
 msgid "patterns"
-msgstr "الگو ها"
+msgstr ""
 
 #: ../gui/meta.py:71
 msgctxt "About dialog: credits: tasks: icons for internal tools"
 msgid "tool icons"
-msgstr "آیکون های ابزار"
+msgstr ""
 
 #: ../gui/meta.py:75
 msgctxt "About dialog: credits: tasks: the main application icon"
 msgid "desktop icon"
-msgstr "آیکون دسکتاپ"
+msgstr ""
 
 #: ../gui/meta.py:79
 msgctxt "About dialog: credits: tasks: palettes"
 msgid "palettes"
-msgstr "جعبه های رنگ"
+msgstr ""
 
 #: ../gui/meta.py:84
 msgctxt "About dialog: credits: tasks: docs, manuals and HOWTOs"
 msgid "documentation"
-msgstr "اسناد"
+msgstr ""
 
 #: ../gui/meta.py:88
 msgctxt "About dialog: credits: tasks: user support"
 msgid "support"
-msgstr "حمایت"
+msgstr ""
 
 #: ../gui/meta.py:92
 msgctxt "About dialog: credits: tasks: outreach (social media, ads?)"
@@ -2116,7 +2038,7 @@ msgstr ""
 #: ../gui/meta.py:96
 msgctxt "About dialog: credits: tasks: running or building a community"
 msgid "community"
-msgstr "جامعه کاربران"
+msgstr ""
 
 #: ../gui/meta.py:101
 msgctxt "About dialog: credits: tasks: joiner punctuation"
@@ -2126,17 +2048,17 @@ msgstr ""
 #: ../gui/meta.py:163
 msgctxt "About dialog: credits: translator credits (your name(s) here!)"
 msgid "translator-credits"
-msgstr "سید حامد نصیب"
+msgstr ""
 
 #. TRANSLATORS: "Brush radius" for the options panel. Short.
 #: ../gui/mode.py:562
 msgid "Size:"
-msgstr "اندازه:"
+msgstr ""
 
 #. TRANSLATORS: "Brush opacity" for the options panel. Short.
 #: ../gui/mode.py:564
 msgid "Opaque:"
-msgstr "مات:"
+msgstr ""
 
 #. TRANSLATORS: "Brush hardness/sharpness" for the options panel. Short.
 #: ../gui/mode.py:566
@@ -2151,7 +2073,7 @@ msgstr ""
 #: ../gui/optionspanel.py:46
 msgctxt "options panel: tab tooltip: title"
 msgid "Tool Options"
-msgstr "تنظیمات ابزار"
+msgstr ""
 
 #: ../gui/optionspanel.py:50
 msgctxt "options panel: tab tooltip: description"
@@ -2162,17 +2084,17 @@ msgstr ""
 #, python-brace-format
 msgctxt "options panel: header"
 msgid "<b>{mode_name}</b>"
-msgstr "<b>{mode_name}</b>"
+msgstr ""
 
 #: ../gui/optionspanel.py:61
 msgctxt "options panel: body"
 msgid "<i>No options available</i>"
-msgstr "<i>تنظیماتی در دسترس نیست</i>"
+msgstr ""
 
 #: ../gui/overlays.py:160
 #, python-format
 msgid "Zoom: %.01f%%"
-msgstr "بزرگنمایی:%.01f%%"
+msgstr ""
 
 #: ../gui/picker.py:457
 msgctxt "context picker: statusbar text during grab"
@@ -2186,12 +2108,12 @@ msgstr ""
 
 #: ../gui/preferenceswindow.py:40
 msgid "Preferences"
-msgstr "تنظیمات"
+msgstr ""
 
 #. TRANSLATORS: title of panel showing an overview of the whole canvas
 #: ../gui/previewwindow.py:199
 msgid "Preview"
-msgstr "پیش نمایش"
+msgstr ""
 
 #: ../gui/previewwindow.py:201
 msgid "Show preview of the whole drawing area"
@@ -2201,11 +2123,11 @@ msgstr ""
 #. TRANSLATORS: main view is pointing.
 #: ../gui/previewwindow.py:259
 msgid "Show Viewfinder"
-msgstr "نمایش منظره یاب"
+msgstr ""
 
 #: ../gui/scratchwindow.py:36
 msgid "Scratchpad"
-msgstr "چرک نویس"
+msgstr ""
 
 #: ../gui/scratchwindow.py:38
 msgid "Mix colors and make sketches on separate scrap pages"
@@ -2213,71 +2135,71 @@ msgstr ""
 
 #: ../gui/spinbox.py:32
 msgid "Previous item"
-msgstr "بخش قبلی"
+msgstr ""
 
 #: ../gui/spinbox.py:35
 msgid "Next item"
-msgstr "بخش بعدی"
+msgstr ""
 
 #: ../gui/spinbox.py:97
 msgid "(Nothing to show)"
-msgstr "(نبود طراحی برای نمایش)"
+msgstr ""
 
 #: ../gui/symmetry.py:76
 msgctxt "symmetry axis edit mode: instructions shown in statusbar"
 msgid "Place axis"
-msgstr "محور مکان"
+msgstr ""
 
 #: ../gui/symmetry.py:80
 msgctxt "symmetry axis edit mode: instructions shown in statusbar"
 msgid "Move axis"
-msgstr "جابجای محور"
+msgstr ""
 
 #: ../gui/symmetry.py:84
 msgctxt "symmetry axis edit mode: instructions shown in statusbar"
 msgid "Remove axis"
-msgstr "حذف محور"
+msgstr ""
 
 #: ../gui/symmetry.py:96
 msgctxt "symmetry axis edit mode: mode name (tooltips)"
 msgid "Edit Symmetry Axis"
-msgstr "ویرایش محور تقارن"
+msgstr ""
 
 #: ../gui/symmetry.py:102
 msgctxt "symmetry axis edit mode: mode description (tooltips)"
 msgid "Adjust the painting symmetry axis."
-msgstr "تنظیم محور تقارن برای طراحی."
+msgstr ""
 
 #: ../gui/symmetry.py:307
 msgctxt "symmetry axis options panel: labels"
 msgid "Position:"
-msgstr "موقعیت:"
+msgstr ""
 
 #: ../gui/symmetry.py:311
 msgctxt "symmetry axis options panel: position button: no axis pos."
 msgid "None"
-msgstr "هیچ"
+msgstr ""
 
 #: ../gui/symmetry.py:315
 #, python-format
 msgctxt "symmetry axis options panel: position button: axis pos. in pixels"
 msgid "%d px"
-msgstr "پیکسل %d"
+msgstr ""
 
 #: ../gui/symmetry.py:319
 msgctxt "symmetry axis options panel: labels"
 msgid "Alpha:"
-msgstr "آلفا:"
+msgstr ""
 
 #: ../gui/symmetry.py:352
 msgctxt "symmetry axis options panel: axis position dialog: window title"
 msgid "Axis Position"
-msgstr "محور مکان"
+msgstr ""
 
 #: ../gui/symmetry.py:424
 msgctxt "symmetry axis options panel: axis active checkbox"
 msgid "Enabled"
-msgstr "فعال"
+msgstr ""
 
 #: ../gui/toolbar.py:32
 msgid "File handling"
@@ -2289,19 +2211,19 @@ msgstr ""
 
 #: ../gui/toolbar.py:34
 msgid "Undo and Redo"
-msgstr "برگشت دادن و خنثی سازی"
+msgstr ""
 
 #: ../gui/toolbar.py:35
 msgid "Blend Modes"
-msgstr "حالت های ترکیبی"
+msgstr ""
 
 #: ../gui/toolbar.py:36
 msgid "Line Modes"
-msgstr "حالت های خط"
+msgstr ""
 
 #: ../gui/toolbar.py:37
 msgid "View (Main)"
-msgstr "نمایش (اصلی)"
+msgstr ""
 
 #: ../gui/toolbar.py:38
 msgid "View (Alternative/Secondary)"
@@ -2309,10 +2231,9 @@ msgstr ""
 
 #: ../gui/toolbar.py:39
 msgid "View (Resetting)"
-msgstr "نمایش(با تنظیمات اولیه)"
+msgstr ""
 
 #: ../gui/topbar.py:91
-#, fuzzy
 msgid "<b>MyPaint</b>"
 msgstr ""
 
@@ -2326,7 +2247,7 @@ msgstr ""
 
 #: ../gui/viewmanip.py:77
 msgid "Zoom View"
-msgstr "نمایش بزرگنمای"
+msgstr ""
 
 #: ../gui/viewmanip.py:80
 msgid "Zoom the canvas view"
@@ -2334,7 +2255,7 @@ msgstr ""
 
 #: ../gui/viewmanip.py:119
 msgid "Rotate View"
-msgstr "نمایش چرخان"
+msgstr ""
 
 #: ../gui/viewmanip.py:122
 msgid "Rotate the canvas view"
@@ -2343,20 +2264,20 @@ msgstr ""
 #: ../gui/workspace.py:1211
 #, python-format
 msgid "%s: close tab"
-msgstr "بستن زبانه:%s"
+msgstr ""
 
 #: ../gui/workspace.py:1213
 #, python-format
 msgid "%s: edit properties"
-msgstr "ویرایش مشخصات:%s"
+msgstr ""
 
 #: ../lib/command.py:158
 msgid "Unknown Command"
-msgstr "دستور ناشناخته"
+msgstr ""
 
 #: ../lib/command.py:272
 msgid "Undefined (command not started yet)"
-msgstr "تعریف نشده(این دستور هنوز اجرا نشده)"
+msgstr ""
 
 #. TRANSLATORS: A short time spent painting / making brushwork.
 #. TRANSLATORS: This can correspond to zero or more touches of
@@ -2372,14 +2293,14 @@ msgstr ""
 
 #: ../lib/command.py:542
 msgid "Clear Layer"
-msgstr "پاک کردن لایه"
+msgstr ""
 
 #. This is used by Paste layer as well as when loading from a PNG
 #. file. However in the latter case, the undo stack is reset
 #. immediately afterward.
 #: ../lib/command.py:566
 msgid "Paste Layer"
-msgstr "چسپاندن لایه"
+msgstr ""
 
 #: ../lib/command.py:589
 msgid "New Layer from Visible"
@@ -2387,40 +2308,40 @@ msgstr ""
 
 #: ../lib/command.py:631
 msgid "Merge Visible Layers"
-msgstr "ترکیب کردن لایه های مرئی"
+msgstr ""
 
 #: ../lib/command.py:705
 msgid "Merge Down"
-msgstr "ترکیب به پایینی"
+msgstr ""
 
 #: ../lib/command.py:754
 msgid "Normalize Layer Mode"
-msgstr "طبیعی کردن حالت لایه"
+msgstr ""
 
 #: ../lib/command.py:797
 #, python-brace-format
 msgid "Add {layer_default_name}"
-msgstr "اضافه کردن{layer_default_name}"
+msgstr ""
 
 #: ../lib/command.py:820
 msgid "Remove Layer"
-msgstr "حذف لایه"
+msgstr ""
 
 #: ../lib/command.py:867
 msgid "Select Layer"
-msgstr "انتخاب لایه"
+msgstr ""
 
 #: ../lib/command.py:996
 msgid "Duplicate Layer"
-msgstr "تکثیر لایه"
+msgstr ""
 
 #: ../lib/command.py:1019
 msgid "Move Layer Up"
-msgstr "حرکت لایه به بالا"
+msgstr ""
 
 #: ../lib/command.py:1033
 msgid "Move Layer Down"
-msgstr "حرکت لایه به پایین"
+msgstr ""
 
 #: ../lib/command.py:1060
 msgid "Move Layer in Stack"
@@ -2428,23 +2349,23 @@ msgstr ""
 
 #: ../lib/command.py:1181
 msgid "Rename Layer"
-msgstr "تغییر نام لایه"
+msgstr ""
 
 #: ../lib/command.py:1232
 msgid "Make Layer Visible"
-msgstr "ایجاد لایه مرئی"
+msgstr ""
 
 #: ../lib/command.py:1234
 msgid "Make Layer Invisible"
-msgstr "ایجاد لایه نامرئی"
+msgstr ""
 
 #: ../lib/command.py:1272
 msgid "Lock Layer"
-msgstr "لایه قفل"
+msgstr ""
 
 #: ../lib/command.py:1274
 msgid "Unlock Layer"
-msgstr "لایه باز"
+msgstr ""
 
 #: ../lib/command.py:1292
 #, python-format
@@ -2453,7 +2374,7 @@ msgstr ""
 
 #: ../lib/command.py:1331
 msgid "Unknown Mode"
-msgstr "حالت ناشناخته"
+msgstr ""
 
 #: ../lib/command.py:1332
 #, python-format
@@ -2466,11 +2387,11 @@ msgstr ""
 
 #: ../lib/command.py:1358
 msgid "Disable Frame"
-msgstr "غیرفعال کردن قاب"
+msgstr ""
 
 #: ../lib/command.py:1376
 msgid "Update Frame"
-msgstr "به روز کردن قاب"
+msgstr ""
 
 #: ../lib/command.py:1405
 msgid "Edit Layer Externally"
@@ -2480,7 +2401,7 @@ msgstr ""
 #, python-brace-format
 msgctxt "Document IO: common error strings: {error_loading_common}"
 msgid "Error loading “{basename}”."
-msgstr "خطا در بارگزاری “{basename}”."
+msgstr ""
 
 #: ../lib/document.py:74
 msgctxt "Document IO: common error strings: {see_logs}"
@@ -2495,7 +2416,7 @@ msgstr ""
 #: ../lib/document.py:188
 msgctxt "Document autosave descriptions: the {ago} string: past"
 msgid "ago"
-msgstr "قبل"
+msgstr ""
 
 #: ../lib/document.py:196
 #, python-brace-format
@@ -2510,7 +2431,7 @@ msgstr ""
 #, python-brace-format
 msgctxt "Document autosave descriptions"
 msgid "Incomplete backup updated {last_modified_time} {ago}"
-msgstr "بروزرسانی فایل پشتیبان کامل نشد {last_modified_time} {ago}"
+msgstr ""
 
 #: ../lib/document.py:208
 #, python-brace-format
@@ -2562,11 +2483,6 @@ msgid ""
 "\n"
 "{see_logs}"
 msgstr ""
-"{error_loading_common}\n"
-"\n"
-"دلیل: {reason}\n"
-"\n"
-"{see_logs}"
 
 #: ../lib/document.py:1313
 #, python-brace-format
@@ -2575,8 +2491,6 @@ msgid ""
 "{error_loading_common}\n"
 "Unknown file format extension: “{ext}”"
 msgstr ""
-"{error_loading_common}\n"
-"پسوند این قالب ناشناخته است:“{ext}”"
 
 #: ../lib/document.py:1384
 #, python-brace-format
@@ -2600,38 +2514,37 @@ msgid ""
 msgstr ""
 
 #: ../lib/helpers.py:402
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "{days}d{hours}h"
 msgstr ""
 
 #: ../lib/helpers.py:404
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "{hours}h{minutes}m"
 msgstr ""
 
 #: ../lib/helpers.py:406
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "{minutes}m{seconds}s"
 msgstr ""
 
 #: ../lib/helpers.py:408
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "{seconds}s"
 msgstr ""
 
 #: ../lib/layer/core.py:73 ../lib/layer/data.py:1221
 msgctxt "layer default names"
 msgid "Layer"
-msgstr "لایه"
+msgstr ""
 
 #: ../lib/layer/core.py:85
-#, fuzzy, python-format
+#, python-format
 msgctxt "layer unique names: template (leave untranslated if unsure)"
 msgid "%(name)s %(number)d"
 msgstr ""
 
 #: ../lib/layer/core.py:89
-#, fuzzy
 msgctxt "layer unique names: match regex (leave untranslated if unsure)"
 msgid "^(.*?)\\s*(\\d+)$"
 msgstr ""
@@ -2639,7 +2552,7 @@ msgstr ""
 #: ../lib/layer/data.py:1107
 msgctxt "layer default names"
 msgid "Vector Layer"
-msgstr "لایه برداری"
+msgstr ""
 
 #: ../lib/layer/data.py:1153
 msgctxt "layer default names"
@@ -2654,7 +2567,7 @@ msgstr ""
 #: ../lib/layer/group.py:59
 msgctxt "layer default names"
 msgid "Group"
-msgstr "گروه"
+msgstr ""
 
 #: ../lib/layer/tree.py:53
 msgctxt "layer default names"
@@ -2664,7 +2577,7 @@ msgstr ""
 #: ../lib/layer/tree.py:92
 msgctxt "layer default names"
 msgid "Root"
-msgstr "ریشه"
+msgstr ""
 
 #: ../lib/layer/tree.py:1684 ../lib/layer/tree.py:1738
 msgctxt "layer default names: joiner punctuation for merged layers"
@@ -2672,55 +2585,46 @@ msgid ", "
 msgstr ""
 
 #: ../lib/modes.py:36
-#, fuzzy
 msgid "Pass-through"
 msgstr ""
 
 #: ../lib/modes.py:37
-#, fuzzy
 msgid "Group contents apply directly to the group's backdrop"
 msgstr ""
 
 #: ../lib/modes.py:41
 msgid "Normal"
-msgstr "طبیعی"
+msgstr ""
 
 #: ../lib/modes.py:42
-#, fuzzy
 msgid "The top layer only, without blending colors."
 msgstr ""
 
 #: ../lib/modes.py:44
-#, fuzzy
 msgid "Multiply"
 msgstr ""
 
 #: ../lib/modes.py:45
-#, fuzzy
 msgid ""
 "Similar to loading two slides into a projector and projecting the combined "
 "result."
 msgstr ""
 
 #: ../lib/modes.py:48
-#, fuzzy
 msgid "Screen"
 msgstr ""
 
 #: ../lib/modes.py:49
-#, fuzzy
 msgid ""
 "Like shining two separate slide projectors onto a screen simultaneously. "
 "This is the inverse of 'Multiply'."
 msgstr ""
 
 #: ../lib/modes.py:52
-#, fuzzy
 msgid "Overlay"
 msgstr ""
 
 #: ../lib/modes.py:53
-#, fuzzy
 msgid ""
 "Overlays the backdrop with the top layer, preserving the backdrop's "
 "highlights and shadows. This is the inverse of 'Hard Light'."
@@ -2728,29 +2632,25 @@ msgstr ""
 
 #: ../lib/modes.py:57
 msgid "Darken"
-msgstr "تیره کردن"
+msgstr ""
 
 #: ../lib/modes.py:58
-#, fuzzy
 msgid "The top layer is used where it is darker than the backdrop."
 msgstr ""
 
 #: ../lib/modes.py:61
 msgid "Lighten"
-msgstr "روشن کردن"
+msgstr ""
 
 #: ../lib/modes.py:62
-#, fuzzy
 msgid "The top layer is used where it is lighter than the backdrop."
 msgstr ""
 
 #: ../lib/modes.py:65
-#, fuzzy
 msgid "Dodge"
 msgstr ""
 
 #: ../lib/modes.py:66
-#, fuzzy
 msgid ""
 "Brightens the backdrop using the top layer. The effect is similar to the "
 "photographic darkroom technique of the same name which is used for improving "
@@ -2759,10 +2659,9 @@ msgstr ""
 
 #: ../lib/modes.py:70
 msgid "Burn"
-msgstr "سوخته"
+msgstr ""
 
 #: ../lib/modes.py:71
-#, fuzzy
 msgid ""
 "Darkens the backdrop using the top layer. The effect looks similar to the "
 "photographic darkroom technique of the same name which is used for reducing "
@@ -2771,47 +2670,41 @@ msgstr ""
 
 #: ../lib/modes.py:75
 msgid "Hard Light"
-msgstr "روشنی سخت"
+msgstr ""
 
 #: ../lib/modes.py:76
-#, fuzzy
 msgid "Similar to shining a harsh spotlight onto the backdrop."
 msgstr ""
 
 #: ../lib/modes.py:78
 msgid "Soft Light"
-msgstr "روشنی نرم"
+msgstr ""
 
 #: ../lib/modes.py:79
-#, fuzzy
 msgid "Like shining a diffuse spotlight onto the backdrop."
 msgstr ""
 
 #: ../lib/modes.py:81
 msgid "Difference"
-msgstr "اختلاف"
+msgstr ""
 
 #: ../lib/modes.py:82
-#, fuzzy
 msgid "Subtracts the darker color from the lighter of the two."
 msgstr ""
 
 #: ../lib/modes.py:84
-#, fuzzy
 msgid "Exclusion"
 msgstr ""
 
 #: ../lib/modes.py:85
-#, fuzzy
 msgid "Similar to the 'Difference' mode, but lower in contrast."
 msgstr ""
 
 #: ../lib/modes.py:88
 msgid "Hue"
-msgstr "طیف"
+msgstr ""
 
 #: ../lib/modes.py:89
-#, fuzzy
 msgid ""
 "Combines the hue of the top layer with the saturation and luminosity of the "
 "backdrop."
@@ -2819,29 +2712,25 @@ msgstr ""
 
 #: ../lib/modes.py:92
 msgid "Saturation"
-msgstr "اشباع"
+msgstr ""
 
 #: ../lib/modes.py:93
-#, fuzzy
 msgid ""
 "Applies the saturation of the top layer's colors to the hue and luminosity "
 "of the backdrop."
 msgstr ""
 
 #: ../lib/modes.py:97
-#, fuzzy
 msgid ""
 "Applies the hue and saturation of the top layer to the luminosity of the "
 "backdrop."
 msgstr ""
 
 #: ../lib/modes.py:100
-#, fuzzy
 msgid "Luminosity"
 msgstr ""
 
 #: ../lib/modes.py:101
-#, fuzzy
 msgid ""
 "Applies the luminosity of the top layer to the hue and saturation of the "
 "backdrop."
@@ -2849,10 +2738,9 @@ msgstr ""
 
 #: ../lib/modes.py:105
 msgid "Plus"
-msgstr "اضافی"
+msgstr ""
 
 #: ../lib/modes.py:106
-#, fuzzy
 msgid "This layer and its backdrop are simply added together."
 msgstr ""
 
@@ -2902,8 +2790,6 @@ msgid ""
 "Unable to construct a vital internal object. Your system may not have enough "
 "memory to perform this operation."
 msgstr ""
-"ناتوان در شکل دادن یکی از عناصر داخلی.رایانه شما ممکن است حافظه مورد نیاز "
-"برای انجام این عملیات را نداشته باشد."
 
 #: ../lib/surface.py:325
 #, python-brace-format
@@ -2914,15 +2800,11 @@ msgid ""
 "Reason: {err}\n"
 "Target folder: “{dirname}”."
 msgstr ""
-"فرایند نوشتن “{basename}”شکست خورد.\n"
-"\n"
-"دلیل:{err}.\n"
-"مسیر پوشه:“{dirname}”."
 
 #: ../lib/tiledsurface.py:542
 #, python-format
 msgid "PNG reader failed: %s"
-msgstr "PNGخوان شکست خورد:%s"
+msgstr ""
 
 #: ../po/tmp/autorecover.glade.h:1
 msgid "Recover interrupted work?"
@@ -2932,17 +2814,17 @@ msgstr ""
 #: ../po/tmp/autorecover.glade.h:3
 msgctxt "Autosave Recovery dialog|"
 msgid "_Recover and Save..."
-msgstr "ـگرفتن پشتیبان و ذخیره کردن..."
+msgstr ""
 
 #: ../po/tmp/autorecover.glade.h:4
 msgctxt "Autosave Recovery dialog|Recover and Save|"
 msgid "Save this backup to disk, then continue working on it."
-msgstr "ذخیره پشتیبان روی رایانه و ادامه دادن کار."
+msgstr ""
 
 #: ../po/tmp/autorecover.glade.h:5
 msgctxt "Autosave Recovery dialog|"
 msgid "_Ignore for Now"
-msgstr "ـرد کردن برای جدید"
+msgstr ""
 
 #: ../po/tmp/autorecover.glade.h:6
 msgctxt "Autosave Recovery dialog|Cancel button|"
@@ -2955,9 +2837,6 @@ msgid ""
 "MyPaint crashed with unsaved work, but it made backups. You can recover a "
 "file now, or leave it till you start MyPaint again."
 msgstr ""
-"برنامه بدون ذخیره کردن کار متوقف شده اما یک فایل پشتیبان از آن تهیه شده . "
-"شما میتوانید بازیابی کنید فایل پشتیبان را یا ترک کنید برنامه رو و دوباره "
-"شروع کنید."
 
 #: ../po/tmp/autorecover.glade.h:8
 msgid "Thumbnail"
@@ -2965,43 +2844,41 @@ msgstr ""
 
 #: ../po/tmp/autorecover.glade.h:9
 msgid "Description"
-msgstr "توصیف"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:1
 msgid "Copy to New"
-msgstr "چسباندن به پرونده جدید"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:2
 msgid "Copy these settings and the current brush's icon to a new brush"
-msgstr "یک قلم جدید ایجاد کن و این تنظیمات و آیکون را به آن اختصاص بده"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:4
 msgid "Rename this brush"
-msgstr "تغییر نام این قلم"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:5
 msgid "Edit Icon"
-msgstr "ویرایش آیکون"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:6
 msgid ""
 "Edit this brush's icon in a separate window (you will be able to use any "
 "brush to draw it)"
 msgstr ""
-"ویرایش آیکون قلم ها در پنجره جدید(you will be able to use any brush to draw "
-"it)"
 
 #: ../po/tmp/brusheditor.glade.h:7
 msgid "Delete"
-msgstr "حذف"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:8
 msgid "Delete this brush from the disk"
-msgstr "حذف قلم از روی رایانه"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:9
 msgid "Live update"
-msgstr "بروز رسانی زنده"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:10
 msgid ""
@@ -3011,38 +2888,38 @@ msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:12
 msgid "Save these settings to the brush"
-msgstr "ذخیره این تنظیمات در این قلم"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:13
 msgid "Brush Setting"
-msgstr "تنظیمات قلم"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:14
 msgctxt "brush editor|metadata settings|labels for widgets|tooltips|"
 msgid "Short description for use in tooltips"
-msgstr "توضیح کوتاه برای استفاده از توضیحات راهنما"
+msgstr ""
 
 #. Description for user tooltips
 #: ../po/tmp/brusheditor.glade.h:16
 msgctxt "brush editor|metadata settings|labels|"
 msgid "Description:"
-msgstr "توضیح:"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:17
 msgctxt "brush editor|metadata settings|labels for widgets|tooltips|"
 msgid "Brush developer's notes"
-msgstr "نکاتی برای توسعه دهندگان قلم"
+msgstr ""
 
 #. Notes for developers
 #: ../po/tmp/brusheditor.glade.h:19
 msgctxt "brush editor|metadata settings|labels|"
 msgid "Notes:"
-msgstr "نکات:"
+msgstr ""
 
 #. field label (non-editable)
 #: ../po/tmp/brusheditor.glade.h:21
 msgid "Setting name:"
-msgstr "تنظیمات نام:"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:22
 msgid ""
@@ -3052,7 +2929,7 @@ msgstr ""
 #. field label
 #: ../po/tmp/brusheditor.glade.h:24
 msgid "Base value:"
-msgstr "ارزش پایه:"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:25
 msgid "Reset the base value to its default"
@@ -3070,7 +2947,7 @@ msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:29
 msgid "<ymin>"
-msgstr "<ymin>"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:30
 msgid ""
@@ -3080,15 +2957,15 @@ msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:32
 msgid "<ymax>"
-msgstr "<ymax>"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:33
 msgid "Output"
-msgstr "خروجی"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:34
 msgid "Input"
-msgstr "ورودی"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:35
 msgid "Adjusts the maximum value"
@@ -3106,7 +2983,7 @@ msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:39
 msgid "<xmin>"
-msgstr "<xmin>"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:40
 msgid ""
@@ -3116,7 +2993,7 @@ msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:42
 msgid "<xmax>"
-msgstr "<xmax>"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:43
 msgid "Variation of the base value by stylus input and other criteria"
@@ -3132,7 +3009,7 @@ msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:46
 msgid "Edit Setting"
-msgstr "ویرایش تنظیمات"
+msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:47
 msgid "Adjust this input mapping in detail"
@@ -3140,12 +3017,12 @@ msgstr ""
 
 #: ../po/tmp/brusheditor.glade.h:48
 msgid "{tooltip}"
-msgstr "{tooltip}"
+msgstr ""
 
 #. field name (template)
 #: ../po/tmp/brusheditor.glade.h:50
 msgid "{dname}:"
-msgstr "{dname}:"
+msgstr ""
 
 #: ../po/tmp/inktool.glade.h:1
 msgctxt "Inking tool options: point value sliders: labels: tooltips"
@@ -3155,7 +3032,7 @@ msgstr ""
 #: ../po/tmp/inktool.glade.h:2
 msgctxt "Inking tool options: point value sliders: labels"
 msgid "Press:"
-msgstr "فشار:"
+msgstr ""
 
 #. The meaning of negative values is *not* affected by text direction.&#10;The widget's RTL/LTR layout, however, *is* affected.&#10;The value (and signs) *is* shown.
 #: ../po/tmp/inktool.glade.h:4
@@ -3167,19 +3044,16 @@ msgid ""
 msgstr ""
 
 #: ../po/tmp/inktool.glade.h:7
-#, fuzzy
 msgctxt "Inking tool options: point value sliders: labels"
 msgid "X-tilt:"
 msgstr ""
 
 #: ../po/tmp/inktool.glade.h:8
-#, fuzzy
 msgctxt "Inking tool options: point value sliders: labels"
 msgid "Y-tilt:"
 msgstr ""
 
 #: ../po/tmp/inktool.glade.h:9
-#, fuzzy
 msgid "Tilt in the canvas Y axis"
 msgstr ""
 
@@ -3191,37 +3065,37 @@ msgstr ""
 #: ../po/tmp/inktool.glade.h:11
 msgctxt "Inking tool options: point value sliders: labels"
 msgid "Time:"
-msgstr "زمان:"
+msgstr ""
 
 #: ../po/tmp/inktool.glade.h:12
 msgctxt "Inking tool options: node delete button: label"
 msgid "Delete Point"
-msgstr "حذف گره"
+msgstr ""
 
 #: ../po/tmp/inktool.glade.h:13
 msgctxt "Inking tool options: node delete button: tooltip"
 msgid "Delete the currently selected point"
-msgstr "حذف گره انتخاب شده موجود"
+msgstr ""
 
 #: ../po/tmp/mypaint.glade.h:2
 msgctxt "footer: color picker button: tooltip"
 msgid "Pick color"
-msgstr "تشخیص رنگ"
+msgstr ""
 
 #: ../po/tmp/mypaint.glade.h:3
 msgctxt "Footerbar|"
 msgid "Edit the current color in detail"
-msgstr "ویرایش رنگ موجود با جزئیات"
+msgstr ""
 
 #: ../po/tmp/mypaint.glade.h:4
 msgctxt "Footerbar|"
 msgid "Add the current color to the palette"
-msgstr "افزودن رنگ موجود به جعبه رنگ"
+msgstr ""
 
 #: ../po/tmp/mypaint.glade.h:5
 msgctxt "Footerbar|"
 msgid "Canvas scale and rotation"
-msgstr "اندازه و چرخش بوم نقاشی"
+msgstr ""
 
 #. str.format() template
 #: ../po/tmp/mypaint.glade.h:8
@@ -3240,10 +3114,9 @@ msgstr ""
 #: ../po/tmp/preferenceswindow.glade.h:1
 msgctxt "Prefs Dialog|Saving|Save Formats and Locations|Default|"
 msgid "OpenRaster (*.ora)"
-msgstr "OpenRaster (*.ora)"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:2
-#, fuzzy
 msgctxt "Prefs Dialog|Saving|Save Formats and Locations|Default|"
 msgid "PNG solid with background (*.png)"
 msgstr ""
@@ -3252,31 +3125,31 @@ msgstr ""
 #, no-c-format
 msgctxt "Prefs Dialog|Saving|Save Formats and Locations|Default|"
 msgid "JPEG 90% quality (*.jpg; *.jpeg)"
-msgstr "JPEG  غلظت90% (*.jpg;*.jpeg)"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:6
 #, no-c-format
 msgctxt "Prefs Dialog|View|Zoom|Default|"
 msgid "25%"
-msgstr "۲۵%"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:8
 #, no-c-format
 msgctxt "Prefs Dialog|View|Zoom|Default|"
 msgid "50%"
-msgstr "۵۰%"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:10
 #, no-c-format
 msgctxt "Prefs Dialog|View|Zoom|Default|"
 msgid "100%"
-msgstr "۱۰۰%"
+msgstr "100%"
 
 #: ../po/tmp/preferenceswindow.glade.h:12
 #, no-c-format
 msgctxt "Prefs Dialog|View|Zoom|Default|"
 msgid "200%"
-msgstr "۲۰۰%"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:13
 msgctxt "Prefs Dialog|View|Cursors|Freehand Cursor|Type|"
@@ -3302,36 +3175,36 @@ msgstr ""
 #: ../po/tmp/preferenceswindow.glade.h:18
 msgctxt "Prefs Dialog|Pen Input|Input Device Settings|Pressure Mapping|"
 msgid "Input Pressure"
-msgstr "فشار ورودی"
+msgstr ""
 
 #. Graph y-axis label
 #: ../po/tmp/preferenceswindow.glade.h:20
 msgctxt "Prefs Dialog|Pen Input|Input Device Settings|Pressure Mapping|"
 msgid "Brush Pressure"
-msgstr "فشار قلم"
+msgstr ""
 
 #. Graph label, range (0...1)
 #: ../po/tmp/preferenceswindow.glade.h:22
 msgctxt "Prefs Dialog|Pen Input|Input Device Settings|Pressure Mapping|"
 msgid "0.0"
-msgstr "۰.۰"
+msgstr ""
 
 #. Graph label, range (0...1)
 #: ../po/tmp/preferenceswindow.glade.h:24
 msgctxt "Prefs Dialog|Pen Input|Input Device Settings|Pressure Mapping|"
 msgid "1.0"
-msgstr "۱.۰"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:25
 msgctxt "Prefs Dialog|Pen Input|"
 msgid "<b>Global Pressure Mapping</b>"
-msgstr "<b>ویرایش نقشه فشار قلم در کل برنامه</b>"
+msgstr ""
 
 #. Tab label in preferences dialog
 #: ../po/tmp/preferenceswindow.glade.h:27
 msgctxt "Prefs Dialog|"
 msgid "Pressure"
-msgstr "فشار"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:28
 msgctxt "Prefs Dialog|Devices|"
@@ -3343,11 +3216,11 @@ msgstr ""
 #: ../po/tmp/preferenceswindow.glade.h:29
 msgctxt "Prefs Dialog|Button|"
 msgid "<b>Device Usage</b>"
-msgstr "<b>کاربرد دستگاه</b>"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:30
 msgid "Devices"
-msgstr "وسیله ها"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:31
 msgctxt "Prefs Dialog|Button|Pointer Button Mappings|"
@@ -3355,48 +3228,46 @@ msgid ""
 "• The space bar can be used like Button2.\n"
 "• Some tablet pads' buttons cannot be held down when pressed."
 msgstr ""
-"از دکمه space میتوانید به جای دکمه دوم استفاده کنید.\n"
-"Some tablet pads' buttons cannot be held down when pressed."
 
 #: ../po/tmp/preferenceswindow.glade.h:33
 msgctxt "Prefs Dialog|Button|"
 msgid "<b>Pointer Button Mappings</b>"
-msgstr "<b>کلید های میانبر</b>"
+msgstr ""
 
 #. Tab label in preferences dialog
 #: ../po/tmp/preferenceswindow.glade.h:35
 msgctxt "Prefs Dialog|"
 msgid "Buttons"
-msgstr "دکمه ها"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:36
 msgctxt "Prefs Dialog|Button|"
 msgid "<b>Keyboard Mappings</b>"
-msgstr "<b>نقشه های صفحه کلید</b>"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:37
 msgid "Keys"
-msgstr "کلید ها"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:38
 msgctxt "Prefs Dialog|Load & Save|Saving|"
 msgid "Default file format:"
-msgstr "قالب پیش فرض پرونده:"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:39
 msgctxt "Prefs Dialog|Load & Save|Saving|"
 msgid "Prefix when saving scraps:"
-msgstr "پیشوند ذخیره ورقه ها:"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:40
 msgctxt "Prefs Dialog|Load & Save|"
 msgid "<b>Saving</b>"
-msgstr "<b>ذخیره سازی</b>"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:41
 msgctxt "Prefs Dialog|Load & Save|"
 msgid "<b>Color Management</b>"
-msgstr "<b>مدیریت رنگ</b>"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:42
 msgctxt "Prefs Dialog|Load & Save|Color Management|"
@@ -3439,19 +3310,19 @@ msgstr ""
 #: ../po/tmp/preferenceswindow.glade.h:51
 msgctxt "Prefs Dialog|Load & Save|"
 msgid "<b>Automated Backups</b>"
-msgstr "<b>پشتیبان گیری خودکار</b>"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:52
 msgctxt "Prefs Dialog|Load & Save|Automated Backups|switch label"
 msgid "Back up unsaved work:"
-msgstr "تهیه نسخه پشتیبان از کار های ذخیره نشده:"
+msgstr ""
 
 #. In seconds. Lowest value is 5, highest is 300 (5 minutes). Only matters when enabled.
 #: ../po/tmp/preferenceswindow.glade.h:54
 msgctxt ""
 "Prefs Dialog|Load & Save|Automated Backups|interval spinbox units suffix"
 msgid "seconds of inactivity"
-msgstr "فاصله زمانی به ثانیه"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:55
 msgctxt "Prefs Dialog|Load & Save|Automated Backups|switch tooltip"
@@ -3464,37 +3335,37 @@ msgstr ""
 #: ../po/tmp/preferenceswindow.glade.h:56
 msgctxt "Prefs Dialog|Load & Save|Automated Backups|interval label"
 msgid "Time between backups:"
-msgstr "فاصله زمانی بین پشتیبان گیری ها:"
+msgstr ""
 
 #. Tab label in preferences dialog
 #: ../po/tmp/preferenceswindow.glade.h:58
 msgctxt "Prefs Dialog|"
 msgid "Load & Save"
-msgstr "بارگزاری و ذخیره کردن"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:59
 msgctxt "Prefs Dialog|View|"
 msgid "<b>Zoom and Rendering</b>"
-msgstr "<b>بزرگنمای و پردازش</b>"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:60
 msgid "Default zoom level:"
-msgstr "مرحله پیش فرض بزرگنمای:"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:61
 msgctxt "Prefs Dialog|View|"
 msgid "<b>Interface</b>"
-msgstr "<b>رابط کاربری</b>"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:62
 msgctxt "Prefs Dialog|View|Interface|"
 msgid "Toolbar icon size:"
-msgstr "اندازه نوار ابزار:"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:63
 msgctxt "Prefs Dialog|View|Interface|"
 msgid "Freehand cursor type:"
-msgstr "نوع نشانگر در حالت دست آزاد:"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:64
 msgctxt "Prefs Dialog|View|Interface|"
@@ -3520,12 +3391,12 @@ msgstr ""
 #: ../po/tmp/preferenceswindow.glade.h:68
 msgctxt "Prefs Dialog|View|Interface|Icon size|"
 msgid "Large (requires recent GTK3)"
-msgstr "بزرگ(نیازمند آخرین نسخهGTK3)"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:69
 msgctxt "Prefs Dialog|View|Interface|Icon size|"
 msgid "Small"
-msgstr "کوچک"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:70
 msgctxt "Prefs Dialog|View|Zoom|"
@@ -3571,13 +3442,13 @@ msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:81
 msgid "Hide cursor while painting"
-msgstr "مخفی کردن نشانگر هنگام شروع نقاشی"
+msgstr ""
 
 #. Tab label in preferences dialog&#10;
 #: ../po/tmp/preferenceswindow.glade.h:83
 msgctxt "Prefs Dialog|"
 msgid "View"
-msgstr "نمایش"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:84
 msgctxt "Prefs Dialog|Color|Color Wheel|Primaries|"
@@ -3590,12 +3461,12 @@ msgstr ""
 #: ../po/tmp/preferenceswindow.glade.h:87
 msgctxt "Prefs Dialog|Color|Color Wheel|"
 msgid "Primaries are:"
-msgstr "رنگ های اصلی:"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:88
 msgctxt "Prefs Dialog|Color|Color Wheel|Primaries|"
 msgid "Standard digital Red/Green/Blue"
-msgstr "استاندارد (قرمز /سبز /آبی) RGB"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:89
 msgid ""
@@ -3658,13 +3529,13 @@ msgstr ""
 #: ../po/tmp/preferenceswindow.glade.h:98
 msgctxt "Prefs Dialog|Color|"
 msgid "<b>Color Wheel</b>"
-msgstr "<b>دایره رنگ</b>"
+msgstr ""
 
 #. Tab label in preferences dialog
 #: ../po/tmp/preferenceswindow.glade.h:100
 msgctxt "Prefs Dialog|"
 msgid "Color"
-msgstr "رنگ"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:101
 msgctxt "Prefs Dialog|Pen Input|Mode|"
@@ -3674,62 +3545,62 @@ msgstr ""
 #: ../po/tmp/preferenceswindow.glade.h:102
 msgctxt "Prefs Dialog|Pen Input|Mode|"
 msgid "Disabled (no pressure sensitivity)"
-msgstr "غیرفعال(عدم حساسیت به فشار)"
+msgstr ""
 
 #: ../po/tmp/preferenceswindow.glade.h:103
 msgctxt "Prefs Dialog|Pen Input|Mode|"
 msgid "Window (not recommended)"
-msgstr "پنجره(توصیه نمی شود)"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:1
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "New"
-msgstr "جدید"
+msgstr "Amaynut"
 
 #: ../po/tmp/resources.xml.h:2
 msgctxt "Toolbar (short labels)"
 msgid "New"
-msgstr "جدید"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:3
 msgctxt "Toolbar (tooltips), Accel Editor (descriptions)"
 msgid "Start with a new blank canvas."
-msgstr "شروع با یک بوم نقاشی خام."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:4
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Open…"
-msgstr "باز کردن…"
+msgstr "Ldi..."
 
 #: ../po/tmp/resources.xml.h:5
 msgctxt "Toolbar (short labels)"
 msgid "Open"
-msgstr "باز کردن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:6
 msgctxt "Toolbar (tooltips), Accel Editor (descriptions)"
 msgid "Load a file to work on."
-msgstr "بارگزاری یک پرونده برای کار."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:7
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Open Most Recent"
-msgstr "باز کردن بسیار اخیر"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:8
 msgctxt "Accel Editor (descriptions)"
 msgid "Load the file you saved most recently."
-msgstr "بارگزاری پرونده های که اخیرا ذخیره کرده اید."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:9
 msgctxt "Menu→File (labels)"
 msgid "Open Recent"
-msgstr "باز کردن کار های اخیر"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:10
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Revert"
-msgstr "برگشت"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:11
 msgctxt "Accel Editor (descriptions)"
@@ -3739,27 +3610,27 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:12
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Save"
-msgstr "ذخیره کردن"
+msgstr "Sekles"
 
 #: ../po/tmp/resources.xml.h:13
 msgctxt "Accel Editor (descriptions)"
 msgid "Save your work to a file."
-msgstr "ذخیره کردن کار در یک پرونده جدید."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:14
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Save As…"
-msgstr "ذخیره کردن در …"
+msgstr "Sekles s yisem..."
 
 #: ../po/tmp/resources.xml.h:15
 msgctxt "Accel Editor (descriptions)"
 msgid "Save your work to a file, assigning it a new name."
-msgstr "ذخیره کار در یک پرونده با اختصاص دادن نام جدید."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:16
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Export…"
-msgstr "صادر کردن…"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:17
 msgid "Export your work to a file, but keep working on the same file."
@@ -3768,7 +3639,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:18
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Save As Scrap"
-msgstr "ذخیره کردن ورقه"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:19
 msgctxt "Accel Editor (descriptions)"
@@ -3778,22 +3649,22 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:20
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Open Previous Scrap"
-msgstr "باز کردن ورقه قبلی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:21
 msgctxt "Accel Editor (descriptions)"
 msgid "Load the scrap file before the current one."
-msgstr "بارگزاری ورقه ی قبل از این ورقه جاری در پرده نقاشی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:22
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Open Next Scrap"
-msgstr "باز کردن ورقه بعدی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:23
 msgctxt "Accel Editor (descriptions)"
 msgid "Load the scrap file after the current one."
-msgstr "بارگزاری ورقه ی بعد از این ورقه جاری در پرده نقاشی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:24
 msgctxt "Menu→File (labels), Accel Editor (labels)"
@@ -3808,42 +3679,42 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:26
 msgctxt "Menu→Brush (label)"
 msgid "Brush Groups"
-msgstr "مجموعه قلم ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:27
 msgctxt "Toolbar (short labels)"
 msgid "Brushes"
-msgstr "قلم ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:28
 msgctxt "Toolbar (tooltips)"
 msgid "List of brush groups."
-msgstr "لیستی از مجموعه های قلم."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:29
 msgctxt "Toolbar (label)"
 msgid "Color Adjusters"
-msgstr "جعبه های رنگ"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:30
 msgctxt "Toolbar (short labels)"
 msgid "Colors"
-msgstr "رنگ ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:31
 msgctxt "Toolbar (tooltips)"
 msgid "Available color adjusters."
-msgstr "جعبه های رنگ در دسترس."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:32
 msgctxt "Menu→Layer→Properties (label)"
 msgid "Mode"
-msgstr "حالت"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:33
 msgctxt "Toolbar (short labels)"
 msgid "Mode"
-msgstr "حالت"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:34
 msgctxt "Toolbar (tooltips)"
@@ -3853,27 +3724,27 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:35
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
 msgid "Increase Brush Size"
-msgstr "افزایش اندازه قلم"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:36
 msgctxt "Accel Editor (descriptions)"
 msgid "Make the working brush bigger."
-msgstr "اندازه نوک قلم را بزرگتر میکند."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:37
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
 msgid "Decrease Brush Size"
-msgstr "کاهش اندازه قلم"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:38
 msgctxt "Accel Editor (descriptions)"
 msgid "Make the working brush smaller."
-msgstr "اندازه نوک قلم را کوچکتر میکند."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:39
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
 msgid "Increase Brush Opacity"
-msgstr "کاهش شفافیت قلم"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:40
 msgctxt "Accel Editor (descriptions)"
@@ -3883,74 +3754,67 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:41
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
 msgid "Decrease Brush Opacity"
-msgstr "افزایش شفافیت قلم"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:42
 msgctxt "Accel Editor (descriptions)"
 msgid "Make the working brush less opaque."
-msgstr "شفافیت را افزایش می دهد."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:43
 msgctxt "Menu→Color→Adjust Color (labels), Accel Editor (labels)"
 msgid "Lighten Painting Color"
-msgstr "افزایش روشنی رنگ"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:44
 msgctxt "Accel Editor (descriptions)"
 msgid "Increase the lightness of the current painting color."
 msgstr ""
-"با افزایش نور تابیده شده روی رنگ؛رنگ را روشنتر می کند ولی به سمت رنگ سفید "
-"حرکت نمی دهد."
 
 #: ../po/tmp/resources.xml.h:45
 msgctxt "Menu→Color→Adjust Color (labels), Accel Editor (labels)"
 msgid "Darken Painting Color"
-msgstr "افزایش تیرگی رنگ"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:46
 msgctxt "Accel Editor (descriptions)"
 msgid "Decrease the lightness of the current painting color."
 msgstr ""
-"با کاهش میزان نور تابیده شده روی رنگ ؛رنگ را به سمت رنگ سیاه انتقال می دهد."
 
 #: ../po/tmp/resources.xml.h:47
 msgctxt "Menu→Color→Adjust Color (labels), Accel Editor (labels)"
 msgid "Change Hue Anticlockwise"
-msgstr "تغییر طیف رنگ پاد ساعتگرد"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:48
 msgctxt "Accel Editor (descriptions)"
 msgid "Rotate the painting color’s hue anticlockwise on the color wheel."
 msgstr ""
-"طیف انتخابی رنگ را(آبی -زرد- و ...) با سمت چپ طیف حرکت داده و رنگ دیگری را "
-"انتخاب میکند.مقدار تغییر رنگ اندک خواهد بود."
 
 #: ../po/tmp/resources.xml.h:49
 msgctxt "Menu→Color→Adjust Color (labels), Accel Editor (labels)"
 msgid "Change Hue Clockwise"
-msgstr "تغییر طیف رنگ (ساعتگرد)"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:50
 msgctxt "Accel Editor (descriptions)"
 msgid "Rotate the painting color’s hue clockwise on the color wheel."
 msgstr ""
-"طیف انتخابی رنگ را(آبی -زرد- و ...) با سمت راست طیف حرکت داده و رنگ دیگری را "
-"انتخاب میکند.مقدار تغییر رنگ اندک خواهد بود."
 
 #: ../po/tmp/resources.xml.h:51
 msgctxt "Menu→Color→Adjust Color (labels), Accel Editor (labels)"
 msgid "Increase Saturation"
-msgstr "افزایش اشباع بودن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:52
 msgctxt "Accel Editor (descriptions)"
 msgid "Make the painting color more saturated (more colorful, purer)."
-msgstr "ایجاد رنگ با درجه اشباع بیشتر(افزایش درجه رنگ و خلوص آن)."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:53
 msgctxt "Menu→Color→Adjust Color (labels), Accel Editor (labels)"
 msgid "Decrease Saturation"
-msgstr "کاهش اشباع بودن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:54
 msgctxt "Accel Editor (descriptions)"
@@ -4002,7 +3866,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:63
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Clear Layer"
-msgstr "پاک کردن لایه"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:64
 msgctxt "Accel Editor (descriptions)"
@@ -4022,7 +3886,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:67
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Copy Layer to Clipboard"
-msgstr "رونوشت لایه به حافظه موقت"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:68
 msgctxt "Accel Editor (descriptions)"
@@ -4032,7 +3896,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:69
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Paste Layer from Clipboard"
-msgstr "چسباندن لایه از حافظه موقت"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:70
 msgctxt "Accel Editor (descriptions)"
@@ -4042,7 +3906,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:71
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Edit Layer in External App…"
-msgstr "ویرایش لایه در برنامه خارجی…"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:72
 msgctxt "Accel Editor (descriptions)"
@@ -4052,13 +3916,12 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:73
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Update Layer with External Edits"
-msgstr "بروز رسانی لایه با ویرایش خارجی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:74
 msgctxt "Accel Editor (descriptions)"
 msgid "Commit changes saved from the external app (normally automatic)."
 msgstr ""
-"اعمال تغییرات ذخیره شده به وسیله ویرایشگر های خارجی در برنامه(انجام خودکار)."
 
 #: ../po/tmp/resources.xml.h:75
 msgctxt "Menu→Layer→Go to Layer (labels), Accel Editor (labels)"
@@ -4073,133 +3936,127 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:77
 msgctxt "Menu→Layer→Go to Layer (labels), Accel Editor (labels)"
 msgid "Go to Layer Above"
-msgstr "برو به لایه بالای"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:78
 msgctxt "Accel Editor (descriptions)"
 msgid "Go one layer up in the layer stack."
-msgstr "انتخاب لایه بالاتر از لایه جاری."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:79
 msgctxt "Menu→Layer→Go to Layer (labels), Accel Editor (labels)"
 msgid "Go to Layer Below"
-msgstr "برو به لایه پایینی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:80
 msgctxt "Accel Editor (descriptions)"
 msgid "Go one layer down in the layer stack."
-msgstr "انتخاب لایه پایین تر از لایه جاری."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:81
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Painting Layer"
-msgstr "ایجاد لایه نقاشی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:82
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new painting layer above the current layer."
-msgstr "افزودن یک لایه نقاشی به بالای لایه انتخابی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:83
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Vector Layer…"
-msgstr "ایجاد لایه برداری…"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:84
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new vector layer above the current layer, and begin editing it."
 msgstr ""
-"افزودن یک لایه بُرداری جدید به بالای لایه انتخابی و انتخاب آن برای شروع "
-"ویرایش."
 
 #: ../po/tmp/resources.xml.h:85
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Layer Group"
-msgstr "ایجاد گروه لایه ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:86
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new layer group above the current layer."
-msgstr "افزودن یک گروه لایه به بالای لایه انتخابی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:87
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Painting Layer Below"
-msgstr "ایجاد لایه نقاشی در پایین"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:88
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new painting layer below the current layer."
-msgstr "افزودن لایه نقاشی در پایین لایه انتخابی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:89
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Vector Layer Below…"
-msgstr "ایجاد لایه برداری در پایین…"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:90
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new vector layer below the current layer, and begin editing it."
 msgstr ""
-"افزودن یک لایه بُرداری جدید به پایین لایه انتخابی و انتخاب آن برای شروع "
-"ویرایش."
 
 #: ../po/tmp/resources.xml.h:91
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Layer Group Below"
-msgstr "ایجاد لایه گروهی در پایین"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:92
 msgctxt "Accel Editor (descriptions)"
 msgid "Add a new layer group below the current layer."
-msgstr "افزودن گروه لایه یه پایینتر از لایه انتخابی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:93
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Merge Layer Down"
-msgstr "ترکیب لایه با پایینی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:94
 msgctxt "Accel Editor (descriptions)"
 msgid "Merge the current layer with the layer beneath it."
-msgstr "ترکیب لایه انتخابی با لایه پایین تر از خود."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:95
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Merge Visible Layers"
-msgstr "ترکیب تمام لایه های مرئی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:96
 msgctxt "Accel Editor (descriptions)"
 msgid "Consolidate all visible layers, and delete the originals."
-msgstr "حذف همه لایه ها به جزی لایه های مرئی.."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:97
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "New Layer from Visible"
-msgstr "ایجاد یک لایه مرئی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:98
 msgctxt "Accel Editor (descriptions)"
 msgid "Like ‘Merge Visible Layers’, but doesn’t delete the originals."
 msgstr ""
-"همه لایه های مرئی را با هم ترکیب میکند و لایه جدیدی میسازد.ولی لایه های اصلی "
-"را دست نخورده میگزارد."
 
 #: ../po/tmp/resources.xml.h:99
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Delete Layer"
-msgstr "حذف لایه"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:100
 msgctxt "Accel Editor (descriptions)"
 msgid "Remove the current layer from the layer stack."
-msgstr "حذف لایه انتخابی از میان لایه ها."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:101
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Convert to Normal Painting Layer"
-msgstr "تبدیل به لایه نقاشی عادی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:102
 msgctxt "Accel Editor (descriptions)"
@@ -4207,12 +4064,11 @@ msgid ""
 "Convert the current layer or group to a painting layer in ‘Normal’ mode, "
 "preserving its appearance."
 msgstr ""
-"تبدیل لایه یا گروه لایه جاری به یک لایه نقاشی در حالت عادی.با حفظ ظاهر آن."
 
 #: ../po/tmp/resources.xml.h:103
 msgctxt "Menu→Layer→Opacity (labels), Accel Editor (labels)"
 msgid "Increase Layer’s Opacity"
-msgstr "افزایش شفافیت لایه ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:104
 msgctxt "Accel Editor (descriptions)"
@@ -4222,7 +4078,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:105
 msgctxt "Menu→Layer→Opacity (labels), Accel Editor (labels)"
 msgid "Reduce Layer’s Opacity"
-msgstr "کاهش شفافیت لایه ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:106
 msgctxt "Accel Editor (descriptions)"
@@ -4232,28 +4088,27 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:107
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Raise Layer"
-msgstr "انتقال به بالا"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:108
 msgctxt "Accel Editor (descriptions)"
 msgid "Raise the current layer one step in the layer stack."
-msgstr "بالا بردن لایه انتخابی نسبت به لایه بالای خود در پنجره مدیریت لایه ها."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:109
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Lower Layer"
-msgstr "انتقال به پایین"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:110
 msgctxt "Accel Editor (descriptions)"
 msgid "Lower the current layer one step in the layer stack."
 msgstr ""
-"پایین بردن لایه انتخابی نسبت به لایه پایینی خود در پنجره مدیریت لایه ها."
 
 #: ../po/tmp/resources.xml.h:111
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Duplicate Layer"
-msgstr "تکثیر کردن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:112
 msgctxt "Accel Editor (descriptions)"
@@ -4263,17 +4118,17 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:113
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Rename Layer…"
-msgstr "تغییر نام لایه…"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:114
 msgctxt "Accel Editor (descriptions)"
 msgid "Enter a new name for the current layer."
-msgstr "وارد کردن یک نام جدید برای لایه موجود."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:115
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Layer Locked"
-msgstr "قفل بودن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:116
 msgctxt "Accel Editor (descriptions)"
@@ -4284,7 +4139,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:117
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Layer Visible"
-msgstr "مرئی بودن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:118
 msgctxt "Accel Editor (descriptions)"
@@ -4294,7 +4149,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:119
 msgctxt "Menu→View (labels), Accel Editor (labels)"
 msgid "Show Background"
-msgstr "نمایش پس زمینه"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:120
 msgctxt "Accel Editor (descriptions)"
@@ -4314,7 +4169,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:123
 msgctxt "Menu→View (labels), Accel Editor (labels)"
 msgid "Fit to View"
-msgstr "نمایش کل نقاشی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:124
 msgctxt "Accel Editor (descriptions)"
@@ -4324,62 +4179,62 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:125
 msgctxt "Menu→View (labels)"
 msgid "Reset"
-msgstr "باز نشاندن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:126
 msgctxt "Menu→View→Reset (labels), Accel Editor (labels)"
 msgid "Reset Zoom"
-msgstr "بازنشاندن بزرگ نمای"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:127
 msgctxt "Accel Editor (descriptions)"
 msgid "Restore the view’s zoom to its default."
-msgstr "مقدار بزرگنمای را به حالت پیشفرض برمیگرداند."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:128
 msgctxt "Menu→View→Reset (labels), Accel Editor (labels)"
 msgid "Reset Rotation"
-msgstr "بازنشاندن چرخش"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:129
 msgctxt "Accel Editor (descriptions)"
 msgid "Restore the view’s rotation to 0°"
-msgstr "باز گرداندن میزان چرخش حالت نمایش به صفر درجه"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:130
 msgctxt "Menu→View→Reset (labels), Accel Editor (labels)"
 msgid "Reset Mirroring"
-msgstr "بازنشاندن حالت تقارن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:131
 msgctxt "Accel Editor (descriptions)"
 msgid "Turn off mirroring of the view."
-msgstr "غیر فعال کردن حالت تقارن."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:132
 msgctxt "Menu→View→Adjust View (labels), Accel Editor (labels)"
 msgid "Zoom In"
-msgstr "بزرگنمای به داخل"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:133
 msgctxt "Accel Editor (descriptions)"
 msgid "Increase magnification."
-msgstr "افزایش بزرگ نمای."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:134
 msgctxt "Menu→View→Adjust View (labels), Accel Editor (labels)"
 msgid "Zoom Out"
-msgstr "بزرگنمای به بیرون"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:135
 msgctxt "Accel Editor (descriptions)"
 msgid "Decrease magnification."
-msgstr "کاهش بزرگنمای."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:136
 msgctxt "Menu→View→Adjust View (labels), Accel Editor (labels)"
 msgid "Rotate Counterclockwise"
-msgstr "چرخش از راست به چب"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:137
 msgctxt "Accel Editor (descriptions)"
@@ -4389,7 +4244,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:138
 msgctxt "Menu→View→Adjust View (labels), Accel Editor (labels)"
 msgid "Rotate Clockwise"
-msgstr "چرخش از چپ به راست"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:139
 msgctxt "Accel Editor (descriptions)"
@@ -4399,7 +4254,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:140
 msgctxt "Menu→View→Adjust View (labels), Accel Editor (labels)"
 msgid "Mirror Horizontal"
-msgstr "چرخش تصویر روی محور افقی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:141
 msgctxt "Accel Editor (descriptions)"
@@ -4409,7 +4264,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:142
 msgctxt "Menu→View→Adjust View (labels), Accel Editor (labels)"
 msgid "Mirror Vertical"
-msgstr "چرخش تصویر روی محور عمودی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:143
 msgctxt "Accel Editor (descriptions)"
@@ -4419,7 +4274,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:144
 msgctxt "Menu→View (labels), Accel Editor (labels)"
 msgid "Layer Solo"
-msgstr "فقط نمایش این لایه"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:145
 msgctxt "Accel Editor (descriptions)"
@@ -4429,7 +4284,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:146
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Symmetrical Painting Active"
-msgstr "فعال بودن حالت نقاشی متقارن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:147
 msgctxt "Accel Editor (descriptions)"
@@ -4439,7 +4294,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:148
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Frame Enabled"
-msgstr "نمایش قاب"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:149
 msgctxt "Accel Editor (descriptions)"
@@ -4459,7 +4314,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:152
 msgctxt "Menu→Help→Debug (labels), Accel Editor (labels)"
 msgid "Visualize Rendering"
-msgstr "نمایش تصویری پردازش قلم"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:153
 msgctxt "Accel Editor (descriptions)"
@@ -4479,12 +4334,12 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:156
 msgctxt "Menu→Brush (labels)"
 msgid "Paint Mode"
-msgstr "حالت نقاشی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:157
 msgctxt "Menu→Brush→Blend Mode (labels), Accel Editor (labels)"
 msgid "Paint Mode: Normal"
-msgstr "حالت نقاشی: عادی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:158
 msgctxt "Accel Editor (descriptions)"
@@ -4494,73 +4349,73 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:159
 msgctxt "Menu→Brush→Blend Mode (labels), Accel Editor (labels)"
 msgid "Paint Mode: Eraser"
-msgstr "حالت نقاشی: پاک کن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:160
 msgctxt "Accel Editor (descriptions)"
 msgid "Erase using the current brush."
-msgstr "پاک کن از قلم جاری استفاده می کند."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:161
 msgctxt "Menu→Brush→Blend Mode (labels), Accel Editor (labels)"
 msgid "Paint Mode: Lock Alpha"
-msgstr "حالت نقاشی:قفل آلفا"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:162
 msgctxt "Accel Editor (descriptions)"
 msgid "Applying the brush doesn't change the layer’s opacity."
-msgstr "اعمال قلم روی صفحه تغییری در شفافیت ایجاد نمی کند."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:163
 msgctxt "Menu→Brush→Blend Mode (labels), Accel Editor (labels)"
 msgid "Paint Mode: Colorize"
-msgstr "حالت نقاشی:رنگ آمیزی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:164
 msgctxt "Accel Editor (descriptions)"
 msgid ""
 "Apply color to the current layer without affecting its brightness or opacity."
-msgstr "اعمال رنگ روی لایه بدون تاثیر گذاشتن بر شفافیت و درخشندگی صفحه."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:165
 msgctxt "Menu (labels)"
 msgid "File"
-msgstr "پرونده"
+msgstr "Afaylu"
 
 #: ../po/tmp/resources.xml.h:166
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Quit"
-msgstr "خروج"
+msgstr "Ffeɣ"
 
 #: ../po/tmp/resources.xml.h:167
 msgctxt "Accel Editor (descriptions)"
 msgid "Close main window and exit the app."
-msgstr "بستن پنجره اصلی و خروج از برنامه."
+msgstr "Mdel asfaylu agejdan sakin ffeγ seg usnas."
 
 #: ../po/tmp/resources.xml.h:168
 msgctxt "Menu (labels)"
 msgid "Edit"
-msgstr "ویرایش"
+msgstr "Ẓreg"
 
 #: ../po/tmp/resources.xml.h:169
 msgctxt "Menu→Edit (labels)"
 msgid "Current Tool"
-msgstr "ابزار جاری"
+msgstr "Afecku urmid"
 
 #: ../po/tmp/resources.xml.h:170
 msgctxt "Menu (labels)"
 msgid "Color"
-msgstr "رنگ"
+msgstr "Ini"
 
 #: ../po/tmp/resources.xml.h:171
 msgctxt "Menu→Color (labels)"
 msgid "Adjust Color"
-msgstr "تنظیم رنگ"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:172
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Color History Popup"
-msgstr "پنجره واشو تاریخچه رنگ"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:173
 msgctxt "Accel Editor (descriptions)"
@@ -4580,7 +4435,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:176
 msgctxt "Menu→Color"
 msgid "Next Palette Color"
-msgstr "جعبه رنگ بعدی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:177
 msgctxt "Accel Editor (descriptions)"
@@ -4590,7 +4445,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:178
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Previous Palette Color"
-msgstr "جعبه رنگ قبلی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:179
 msgctxt "Accel Editor (descriptions)"
@@ -4600,7 +4455,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:180
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Add Color to Palette"
-msgstr "افزودن  رنگ به جعبه رنگ"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:181
 msgctxt "Accel Editor (descriptions)"
@@ -4610,87 +4465,87 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:182
 msgctxt "Menu (labels)"
 msgid "Layer"
-msgstr "لایه"
+msgstr "Tissi"
 
 #: ../po/tmp/resources.xml.h:183
 msgctxt "Menu→Layer→Properties (labels)"
 msgid "Opacity"
-msgstr "شفافیت"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:184
 msgctxt "Menu→Layer (labels)"
 msgid "Go to Layer"
-msgstr "رفتن به لایه"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:185
 msgctxt "Menu→Layer (labels)"
 msgid "New Layer Below"
-msgstr "ایجاد لایه جدید در پایین"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:186
 msgctxt "Menu→Layer (labels)"
 msgid "Properties"
-msgstr "مشخصات"
+msgstr "Timeẓlyin"
 
 #: ../po/tmp/resources.xml.h:187
 msgctxt "Menu (labels)"
 msgid "Scratchpad"
-msgstr "چرک نویس"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:188
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
 msgid "New Scratchpad"
-msgstr "چرک نویس جدید"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:189
 msgctxt "Accel Editor (descriptions)"
 msgid "Load the default scratchpad as a new scratchpad canvas."
-msgstr "برگشت قاب چرک نویس به حالت پیش فرض"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:190
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
 msgid "Open Scratchpad…"
-msgstr "باز کردن چرک نویس …"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:191
 msgctxt "Accel Editor (descriptions)"
 msgid "Load an image file on disk into the scratchpad."
-msgstr "بارگزاری یک تصویر در پس زمینه پنجره چرک نویس."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:192
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
 msgid "Save Scratchpad"
-msgstr "ذخیره چرک نویس"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:193
 msgctxt "Accel Editor (descriptions)"
 msgid "Save the scratchpad to its existing file on disk."
-msgstr "ذخیره چرک نویس"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:194
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
 msgid "Export Scratchpad As…"
-msgstr "صادر کردن چرک نویس با قالب…"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:195
 msgctxt "Accel Editor (descriptions)"
 msgid "Export the scratchpad to disk, under a file name of your choice."
-msgstr "خروجی گرفتن از چرک نویس بر روی دیسک حافظه با نام دلخواه"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:196
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
 msgid "Revert Scratchpad"
-msgstr "برگشت به حالت اولیه"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:197
 msgctxt "Accel Editor (descriptions)"
 msgid "Revert the scratchpad to its last saved state."
-msgstr "برگشت چرکنویس به حالت ذخیره شده اولیه."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:198
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
 msgid "Save Scratchpad as Default"
-msgstr "ذخیره چرک نویس به پیشفرض"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:199
 msgctxt "Accel Editor (descriptions)"
@@ -4700,7 +4555,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:200
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
 msgid "Clear Default Scratchpad"
-msgstr "پاک کردن چرک نویس پیشفرض"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:201
 msgctxt "Accel Editor (descriptions)"
@@ -4710,7 +4565,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:202
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
 msgid "Copy Main Background to Scratchpad"
-msgstr "رونوشت پسزمینه به چرک نویس"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:203
 msgctxt "Accel Editor (descriptions)"
@@ -4719,25 +4574,24 @@ msgid ""
 msgstr ""
 
 #: ../po/tmp/resources.xml.h:204
-#, fuzzy
 msgctxt "Menu (labels)"
 msgid "Window"
-msgstr "پنجره"
+msgstr "Asfaylu"
 
 #: ../po/tmp/resources.xml.h:205
 msgctxt "Menu→Brush (labels)"
 msgid "Brush"
-msgstr "قلم مو"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:206
 msgctxt "Menu→Brush (labels)"
 msgid "Shortcut Keys"
-msgstr "کلید های میانبر"
+msgstr "Inegzumen n unasiw"
 
 #: ../po/tmp/resources.xml.h:207
 msgctxt "Menu→Brush→Shortcut Keys (labels), Accel Editor (labels)"
 msgid "Brush Shortcut Keys Help"
-msgstr "راهنمای کلید های قلم ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:208
 msgctxt "Accel Editor (descriptions)"
@@ -4747,7 +4601,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:209
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
 msgid "Change Brush…"
-msgstr "تعویض قلم…"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:210
 msgctxt "Accel Editor (descriptions)"
@@ -4757,7 +4611,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:211
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Change Color…"
-msgstr "تغییر رنگ…"
+msgstr "Senfel ini…"
 
 #: ../po/tmp/resources.xml.h:212
 msgctxt "Accel Editor (descriptions)"
@@ -4768,7 +4622,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:213
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Change Color (fast subset)…"
-msgstr "تغیر سریع رنگ…"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:214
 msgctxt "Accel Editor (descriptions)"
@@ -4780,7 +4634,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:215
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
 msgid "Get More Brushes…"
-msgstr "دریافت قلم…"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:216
 msgctxt "Accel Editor (descriptions)"
@@ -4790,22 +4644,22 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:217
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
 msgid "Import Brushes…"
-msgstr "وارد کردن مجموعه قلم …"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:218
 msgctxt "Accel Editor (descriptions)"
 msgid "Load a brushpack from disk."
-msgstr "بارگزاری مجموعه قلم از روی رایانه."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:219
 msgctxt "Menu (labels)"
 msgid "Help"
-msgstr "راهنما"
+msgstr "Tallalt"
 
 #: ../po/tmp/resources.xml.h:220
 msgctxt "Menu→Help (labels), Accel Editor (labels)"
 msgid "Online Help"
-msgstr "راهنمای برخط"
+msgstr "Tallalt Srid"
 
 #: ../po/tmp/resources.xml.h:221
 msgctxt "Accel Editor (descriptions)"
@@ -4815,7 +4669,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:222
 msgctxt "Menu→Help (labels), Accel Editor (labels)"
 msgid "About MyPaint"
-msgstr "درباره"
+msgstr "Γef MyPaint"
 
 #: ../po/tmp/resources.xml.h:223
 msgctxt "Accel Editor (descriptions)"
@@ -4825,7 +4679,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:224
 msgctxt "Menu→Help (labels)"
 msgid "Debug"
-msgstr "خطا یابی نرم افزار"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:225
 msgctxt "Menu→Help→Debug (labels), Accel Editor (labels)"
@@ -4870,22 +4724,22 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:233
 msgctxt "Menu (labels)"
 msgid "View"
-msgstr "نمایش"
+msgstr "Sken"
 
 #: ../po/tmp/resources.xml.h:234
 msgctxt "Menu→View (labels)"
 msgid "Feedback"
-msgstr "بازخورد"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:235
 msgctxt "Menu→View (labels)"
 msgid "Adjust View"
-msgstr "تنظیمات زاویه دید"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:236
 msgctxt "Menu→View (labels), Accel Editor (labels)"
 msgid "Popup Menu"
-msgstr "پنجره منو ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:237
 msgctxt "Accel Editor (descriptions)"
@@ -4895,7 +4749,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:238
 msgctxt "Menu→View (labels), Accel Editor (labels)"
 msgid "Fullscreen"
-msgstr "تمام صفحه"
+msgstr "Agdil aččuran"
 
 #: ../po/tmp/resources.xml.h:239
 msgctxt "Accel Editor (descriptions)"
@@ -4905,7 +4759,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:240
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Edit Preferences"
-msgstr "ویرایش ترجیحات"
+msgstr "Ẓreg ismenyifen"
 
 #: ../po/tmp/resources.xml.h:241
 msgctxt "Accel Editor (descriptions)"
@@ -4915,30 +4769,27 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:242
 msgctxt "Help→Debug (labels), Accel Editor (labels)"
 msgid "Test Input Devices"
-msgstr "آزمایش دستگاه های ورودی"
+msgstr "Asenqed n ibenkan n unekcum"
 
 #: ../po/tmp/resources.xml.h:243
 msgctxt "Accel Editor (descriptions)"
 msgid "Show a dialog which captures all events your input devices send."
 msgstr ""
-"نمایش یک پنجره که در آن همه رویداد های مربوط به دستگاه های ورودی شما را نشان "
-"می دهد."
 
 #: ../po/tmp/resources.xml.h:244
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Background Chooser"
-msgstr "انتخاب پس زمینه"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:245
 msgctxt "Accel Editor (descriptions)"
 msgid "Change the background paper texture."
-msgstr "تغییر دادن تصویر پس زمینه روی پرده نقاشی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:246
-#, fuzzy
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
 msgid "Brush Settings Editor"
-msgstr "ویرایشگر تنظیمات قلم"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:247
 msgctxt "Accel Editor (descriptions)"
@@ -4948,17 +4799,17 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:248
 msgctxt "Menu→Brush (labels), Accel Editor (labels)"
 msgid "Brush Icon Editor"
-msgstr "ویرایشگر آیکون قلم"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:249
 msgctxt "Accel Editor (descriptions)"
 msgid "Edit brush icons."
-msgstr "ویرایش آیکون قلم."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:250
 msgctxt "Menu→Window (labels), Toolbar (labels), Accel Editor (labels)"
 msgid "Layers Panel"
-msgstr "پنل لایه ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:251
 msgctxt "Accel Editor (descriptions)"
@@ -4968,7 +4819,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:252
 msgctxt "Menu→Layers (labels), Accel Editor (labels)"
 msgid "Show Layers Panel"
-msgstr "نمایش پنل لایه ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:253
 msgctxt "Accel Editor (descriptions)"
@@ -4978,7 +4829,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:254
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "HCY Wheel"
-msgstr "دایره HCY"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:255
 msgctxt "Accel Editor (descriptions)"
@@ -4990,7 +4841,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:256
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Color Palette"
-msgstr "پالت رنگ"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:257
 msgctxt "Accel Editor (descriptions)"
@@ -5000,7 +4851,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:258
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "HSV Wheel"
-msgstr "دایرهHSV"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:259
 msgctxt "Accel Editor (descriptions)"
@@ -5010,7 +4861,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:260
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "HSV Triangle"
-msgstr "مثلثHSV"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:261
 msgctxt "Accel Editor (descriptions)"
@@ -5020,7 +4871,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:262
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "HSV Cube"
-msgstr "مکعبHSV"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:263
 msgctxt "Accel Editor (descriptions)"
@@ -5044,7 +4895,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:266
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Component Sliders"
-msgstr "موئلفه های رنگ"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:267
 msgctxt "Accel Editor (descriptions)"
@@ -5054,7 +4905,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:268
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Liquid Wash"
-msgstr "مایع مواج"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:269
 msgctxt "Accel Editor (descriptions)"
@@ -5064,7 +4915,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:270
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Concentric Rings"
-msgstr "دوایر هم مرکز"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:271
 msgctxt "Accel Editor (descriptions)"
@@ -5074,7 +4925,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:272
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Crossed Bowl"
-msgstr "جعبه رنگ چلیپای"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:273
 msgctxt "Accel Editor (descriptions)"
@@ -5084,7 +4935,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:274
 msgctxt "Menu→Window (labels), Accel Editor (labels)"
 msgid "Scratchpad Panel"
-msgstr "پنل چرک نویس"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:275
 msgctxt "Accel Editor (descriptions)"
@@ -5094,7 +4945,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:276
 msgctxt "Menu→Scratchpad (labels), Accel Editor (labels)"
 msgid "Show Scratchpad Panel"
-msgstr "نمایش پنل چرک نویس"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:277
 msgctxt "Accel Editor (descriptions)"
@@ -5104,7 +4955,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:278
 msgctxt "Menu→Window (labels), Toolbar (labels), Accel Editor (labels)"
 msgid "Preview Panel"
-msgstr "پنل پیش نمایش"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:279
 msgctxt "Accel Editor (descriptions)"
@@ -5114,7 +4965,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:280
 msgctxt "Menu→View (labels), Accel Editor (labels)"
 msgid "Preview"
-msgstr "پیش نمایش"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:281
 msgctxt "Accel Editor (descriptions)"
@@ -5124,7 +4975,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:282
 msgctxt "Menu→Window (labels), Toolbar (labels), Accel Editor (labels)"
 msgid "Tool Options Panel"
-msgstr "پنل تنظیمات ابزار"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:283
 msgctxt "Accel Editor (descriptions)"
@@ -5134,7 +4985,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:284
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Show Tool Options Panel"
-msgstr "نمایش پنل تنظیمات ابزار"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:285
 msgctxt "Accel Editor (descriptions)"
@@ -5144,7 +4995,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:286
 msgctxt "Menu→Window (labels), Toolbar (labels), Accel Editor (labels)"
 msgid "Brush & Color History Panel"
-msgstr "پنل تاریخچه رنگ ها و قلم ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:287
 msgctxt "Accel Editor (descriptions)"
@@ -5154,7 +5005,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:288
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Recent Brushes & Colors"
-msgstr "رنگ ها و قلم های اخیر"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:289
 msgctxt "Accel Editor (descriptions)"
@@ -5164,7 +5015,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:290
 msgctxt "Menu→View (labels), Accel Editor (labels)"
 msgid "Hide Controls in Fullscreen"
-msgstr "مخفی بودن کنترلگر ها در حالت تمام صفحه"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:291
 msgctxt "Accel Editor (descriptions)"
@@ -5174,7 +5025,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:292
 msgctxt "Menu→View→Feedback (labels), Accel Editor (labels)"
 msgid "Show Zoom Level"
-msgstr "نمایش مقدار"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:293
 msgctxt "Accel Editor (descriptions)"
@@ -5184,7 +5035,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:294
 msgctxt "Menu→View→Feedback (labels), Accel Editor (labels)"
 msgid "Show Last Painting Position"
-msgstr "نمیش آخرین نقطه اتصال قلم و بوم"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:295
 msgctxt "Accel Editor (descriptions)"
@@ -5194,22 +5045,22 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:296
 msgctxt "Menu→View (labels)"
 msgid "Display Filter"
-msgstr "صافی های نمایش"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:297
 msgctxt "Menu→View→Display Filter (labels), Accel Editor (labels)"
 msgid "Display Colors Normally"
-msgstr "نمیش رنگ ها به صورت طبیعی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:298
 msgctxt "Accel Editor (descriptions)"
 msgid "Filter colors: show colors unchanged."
-msgstr "صافی رنگ ها: نمایش رنگ های تغییر نیافته."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:299
 msgctxt "Menu→View→Display Filter (labels), Accel Editor (labels)"
 msgid "Display Colors as Greyscale"
-msgstr "نمایش رنگ ها در مقیاس خاکستری"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:300
 msgctxt "Accel Editor (descriptions)"
@@ -5219,7 +5070,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:301
 msgctxt "Menu→View→Display Filter (labels), Accel Editor (labels)"
 msgid "Display Colors Inverted"
-msgstr "نمایش معکوس رنگ ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:302
 msgctxt "Accel Editor (descriptions)"
@@ -5229,7 +5080,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:303
 msgctxt "Menu→View→Display Filter (labels), Accel Editor (labels)"
 msgid "Display Colors with Simulated Insensitivity to Red"
-msgstr "شبیه سازی رنگ ها بدون حساسیت به قرمز"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:304
 msgctxt "Accel Editor (descriptions)"
@@ -5240,7 +5091,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:305
 msgctxt "Menu→View→Display Filter (labels), Accel Editor (labels)"
 msgid "Display Colors with Simulated Insensitivity to Green"
-msgstr "شبیه سازی رنگ ها بدون حساسیت به سبز"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:306
 msgctxt "Accel Editor (descriptions)"
@@ -5250,7 +5101,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:307
 msgctxt "Menu→View→Display Filter (labels), Accel Editor (labels)"
 msgid "Display Colors with Simulated Insensitivity to Blue"
-msgstr "شبیه سازی رنگ ها بدون حساسیت به آبی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:308
 msgctxt "Accel Editor (descriptions)"
@@ -5260,132 +5111,132 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:309
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Freehand"
-msgstr "دست آزاد"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:310
 msgctxt "Toolbar (short labels)"
 msgid "Freehand"
-msgstr "دست آزاد"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:311
 msgctxt "Toolbar (tooltips)"
 msgid "Freehand: draw and paint freely, without geometric constraints."
-msgstr "دست آزاد :رسم و نقاشی به صورت آزاد, بدون محدودیت هندسی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:312
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Freehand"
-msgstr "دست آزاد"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:313
 msgctxt "Accel Editor (descriptions)"
 msgid "Draw and paint freely, without geometric constraints."
-msgstr "رسم و نقاشی به صورت آزاد, بدون محدودیت هندسی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:314
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Pan View"
-msgstr "نمایش سراسری"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:315
 msgctxt "Toolbar (short labels)"
 msgid "Pan"
-msgstr "سراسری"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:316
 msgctxt "Toolbar (tooltips)"
 msgid "Pan View: move your view of the canvas horizontally or vertically."
-msgstr "نمایش سراسری: حرکت تعاملی دید شما به صورت عمودی یا افقی روی بوم نقاشی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:317
 msgctxt "Menu→View (labels), Accel Editor (labels)"
 msgid "Pan View"
-msgstr "نمایش سراسری"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:318
 msgctxt "Accel Editor (descriptions)"
 msgid "Interactively move your view of the canvas horizontally or vertically."
-msgstr "حرکت تعاملی دید شما به صورت عمودی یا افقی روی بوم نقاشی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:319
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Rotate View"
-msgstr "نمایش چرخشی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:320
 msgctxt "Toolbar (short labels)"
 msgid "Rotate"
-msgstr "چرخش"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:321
 msgctxt "Toolbar (tooltips)"
 msgid "Rotate View: tilt your view of the canvas."
-msgstr "نمایش چرخشی: حالت شیب دار دید شما روی بوم نقاشی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:322
 msgctxt "Menu→View (labels), Accel Editor (labels)"
 msgid "Rotate View"
-msgstr "نمایش چرخشی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:323
 msgctxt "Accel Editor (descriptions)"
 msgid "Interactively rotate your view of the canvas."
-msgstr "چرخش تعاملی دید شما روی بوم نقاشی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:324
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Zoom View"
-msgstr "نمیش دره بینی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:325
 msgctxt "Toolbar (short labels)"
 msgid "Zoom"
-msgstr "بزرگنمای"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:326
 msgctxt "Toolbar (tooltips)"
 msgid "Zoom View: zoom into or out of the canvas."
-msgstr "نمایش بزرگنمای: بزرگنمای تعاملی به داخل یا خارج بوم نقاشی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:327
 msgctxt "Menu→View (labels), Accel Editor (labels)"
 msgid "Zoom View"
-msgstr "نمایش ذره بینی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:328
 msgctxt "Accel Editor (descriptions)"
 msgid "Interactively zoom into or out of the canvas."
-msgstr "بزرگنمای تعاملی به داخل یا خارج بوم نقاشی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:329
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Lines and Curves"
-msgstr "خط ها و منحنی ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:330
 msgctxt "Toolbar (short labels)"
 msgid "Lines"
-msgstr "خط ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:331
 msgctxt "Toolbar (tooltips)"
 msgid "Lines and Curves: draw straight or curved lines."
-msgstr "خطوط و منحنی ها: کشیدن خطوط مستقیم یا منحنی شکل."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:332
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Lines and Curves"
-msgstr "خط ها و منحنی ها"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:333
 msgctxt "Accel Editor (descriptions)"
 msgid "Draw straight or curved lines."
-msgstr "کشیدن خطوط مستقیم یا منحنی شکل."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:334
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Connected Lines"
-msgstr "خطوط متصل"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:335
 msgctxt "Toolbar (short labels)"
@@ -5395,87 +5246,87 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:336
 msgctxt "Toolbar (tooltips)"
 msgid "Connected Lines: draw sequences of straight or curved lines."
-msgstr "خطوط متصل: کشیدن خط های مستقیم یا منحنی شکل متصل به هم."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:337
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Connected Lines"
-msgstr "خطوط متصل"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:338
 msgctxt "Accel Editor (descriptions)"
 msgid "Draw sequences of straight or curved lines."
-msgstr "کشیدن خط های مستقیم یا منحنی شکل متصل به هم."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:339
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Ellipses and Circles"
-msgstr "دایره و بیضی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:340
 msgctxt "Toolbar (short labels)"
 msgid "Ellipse"
-msgstr "بیضی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:341
 msgctxt "Toolbar (tooltips)"
 msgid "Ellipses and Circles: draw rounded shapes."
-msgstr "منحنی ها و دایره ها: کشیدن اشکال گرد شده."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:342
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Ellipses and Circles"
-msgstr "رسم دایره و بیضی"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:343
 msgctxt "Accel Editor (descriptions)"
 msgid "Draw circles and ellipses."
-msgstr "کشیدن دایره ها و منحنی ها."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:344
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Inking"
-msgstr "طراحی برداری"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:345
 msgctxt "Toolbar (short labels)"
 msgid "Ink"
-msgstr "بردار"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:346
 msgctxt "Toolbar (tooltips)"
 msgid "Inking: draw smooth controlled lines."
-msgstr "طراحی برداری: کشیدا خطوط کنترل شده صاف."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:347
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Inking"
-msgstr "رسم برداری"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:348
 msgctxt "Accel Editor (descriptions)"
 msgid "Draw smooth controlled lines."
-msgstr "کشیدن خطوط کنترل شده صاف."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:349
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Reposition Layer"
-msgstr "جابجای طرح لایه"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:350
 msgctxt "Toolbar (short labels)"
 msgid "Layer Pos."
-msgstr "جابجای طرح لایه."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:351
 msgctxt "Toolbar (tooltips)"
 msgid "Reposition Layer: move the current layer on the canvas."
-msgstr "جابجای طرح لایه: حرکت دادن طراحی درون لایه روی بوم نقاشی."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:352
 msgctxt "Menu→Layer (labels), Accel Editor (labels)"
 msgid "Reposition Layer"
-msgstr "جابجای طرح لایه"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:353
 msgctxt "Accel Editor (description)"
@@ -5485,12 +5336,12 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:354
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Edit Frame"
-msgstr "ویرایش قاب"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:355
 msgctxt "Toolbar (short labels)"
 msgid "Frame"
-msgstr "قاب"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:356
 msgctxt "Toolbar (tooltips)"
@@ -5501,7 +5352,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:357
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Edit Frame"
-msgstr "قاب ویرایش"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:358
 msgctxt "Accel Editor (descriptions)"
@@ -5512,22 +5363,22 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:359
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Edit Painting Symmetry"
-msgstr "ویرایش نقاشی متقارن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:360
 msgctxt "Toolbar (short labels)"
 msgid "Symmetry"
-msgstr "تقارن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:361
 msgctxt "Toolbar (tooltips)"
 msgid "Edit Painting Symmetry: adjust the axis used for symmetrical painting."
-msgstr "ویرایش نقاشی متقارن: adjust the axis used for symmetrical painting."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:362
 msgctxt "Menu→File (labels), Accel Editor (labels)"
 msgid "Edit Painting Symmetry"
-msgstr "نقاشی متقارن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:363
 msgctxt "Accel Editor (description)"
@@ -5537,12 +5388,12 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:364
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Pick Color"
-msgstr "تشخیص رنگ"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:365
 msgctxt "Toolbar (short labels)"
 msgid "Pick Col."
-msgstr "تشخیص رنگ."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:366
 msgctxt "Toolbar (tooltips)"
@@ -5552,7 +5403,7 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:367
 msgctxt "Menu→Color (labels), Accel Editor (labels)"
 msgid "Pick Color"
-msgstr "انتخاب رنگ"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:368
 msgctxt "Accel Editor (descriptions)"
@@ -5562,24 +5413,24 @@ msgstr ""
 #: ../po/tmp/resources.xml.h:369
 msgctxt "Menu→Edit→Current Mode (labels)"
 msgid "Flood Fill"
-msgstr "پر کردن(سطل)"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:370
 msgctxt "Toolbar (short labels)"
 msgid "Fill"
-msgstr "پر کردن"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:371
 msgctxt "Toolbar (tooltips)"
 msgid "Flood Fill: fill an area with color."
-msgstr "پر کردن: پرکردن یک ناحیه با رنگ."
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:372
 msgctxt "Menu→Edit (labels), Accel Editor (labels)"
 msgid "Flood Fill"
-msgstr "پر کردن(سطل)"
+msgstr ""
 
 #: ../po/tmp/resources.xml.h:373
 msgctxt "Accel Editor (descriptions)"
 msgid "Fill an area with color."
-msgstr "پر کردن یک ناحیه با رنگ."
+msgstr ""

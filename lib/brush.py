@@ -5,6 +5,7 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
+
 from __future__ import division, print_function
 
 import mypaintlib
@@ -17,18 +18,28 @@ import json
 
 from lib import brushsettings
 
+
+# Module constants:
+
 STRING_VALUE_SETTINGS = set((
     "parent_brush_name",
     "group",  # Possibly obsolete group field (replaced by order.conf?)
-    "comment", # MyPaint uses this as an explanation of what the file is
+    "comment",  # MyPaint uses this to explanation what the file is
     "notes",  # Brush developer's notes field, multiline
-    "description", # Short, user-facing description field, single line
+    "description",  # Short, user-facing description field, single line
 ))
 OLDFORMAT_BRUSHFILE_VERSION = 2
 
 BRUSH_SETTINGS = set([s.cname for s in brushsettings.settings])
 ALL_SETTINGS = BRUSH_SETTINGS.union(STRING_VALUE_SETTINGS)
 
+_BRUSHINFO_MATCH_IGNORES = [
+    "color_h", "color_s", "color_v",
+    "parent_brush_name",
+]
+
+
+# Helper funcs for quoting and unquoting:
 
 def brushinfo_quote(string):
     """Quote a string for serialisation of brushes.
@@ -60,6 +71,110 @@ def brushinfo_unquote(quoted):
     u8bytes = urllib.unquote(quoted)
     return unicode(u8bytes.decode("utf-8"))
 
+
+# Exceptions raised during brush parsing:
+
+class ParseError (Exception):
+    pass
+
+
+class Obsolete (ParseError):
+    pass
+
+
+# Helper functions for parsing the old brush format:
+
+def _oldfmt_parse_value(rawvalue, cname, version):
+    """Parses a raw setting value.
+
+    This code handles a format that cnahged over time, so the
+    parse is for a given setting name and brushfile version.
+
+    """
+    if cname in STRING_VALUE_SETTINGS:
+        string = brushinfo_unquote(rawvalue)
+        return [(cname, string)]
+    elif version <= 1 and cname == 'color':
+        rgb = [int(c) / 255.0 for c in rawvalue.split(" ")]
+        h, s, v = helpers.rgb_to_hsv(*rgb)
+        return [
+            ('color_h', [h, {}]),
+            ('color_s', [s, {}]),
+            ('color_v', [v, {}]),
+        ]
+    elif version <= 1 and cname == 'change_radius':
+        if rawvalue == '0.0':
+            return []
+        raise Obsolete('change_radius is not supported any more')
+    elif version <= 2 and cname == 'adapt_color_from_image':
+        if rawvalue == '0.0':
+            return []
+        raise Obsolete(
+            'adapt_color_from_image is obsolete, ignored;'
+            ' use smudge and smudge_length instead'
+        )
+    elif version <= 1 and cname == 'painting_time':
+        return []
+
+    if version <= 1 and cname == 'speed':
+        cname = 'speed1'
+    parts = rawvalue.split('|')
+    basevalue = float(parts[0])
+    input_points = {}
+    for part in parts[1:]:
+        inputname, rawpoints = part.strip().split(' ', 1)
+        if version <= 1:
+            points = _oldfmt_parse_points_v1(rawpoints)
+        else:
+            points = _oldfmt_parse_points_v2(rawpoints)
+        assert len(points) >= 2
+        input_points[inputname] = points
+    return [(cname, [float(basevalue), input_points])]
+
+
+def _oldfmt_parse_points_v1(rawpoints):
+    """Parses the points list format from v1"""
+    points_seq = [float(f) for f in rawpoints.split()]
+    points = [(0, 0)]
+    while points_seq:
+        x = points_seq.pop(0)
+        y = points_seq.pop(0)
+        if x == 0:
+            break
+        assert x > points[-1][0]
+        points.append((x, y))
+    return points
+
+
+def _oldfmt_parse_points_v2(rawpoints):
+    """Parses the newer points list format of v2 and beyond."""
+    points = []
+    for s in rawpoints.split(', '):
+        s = s.strip()
+        if not (s.startswith('(') and s.endswith(')') and ' ' in s):
+            return '(x y) expected, got "%s"' % s
+        s = s[1:-1]
+        try:
+            x, y = [float(ss) for ss in s.split(' ')]
+        except:
+            print(s)
+            raise
+        points.append((x, y))
+    return points
+
+
+def _oldfmt_transform_y(valuepair, func):
+    """Used during migration from earlier versions."""
+    basevalue, input_points = valuepair
+    basevalue = func(basevalue)
+    input_points_new = {}
+    for inputname, points in input_points.iteritems():
+        points_new = [(x, func(y)) for x, y in points]
+        input_points_new[inputname] = points_new
+    return [basevalue, input_points_new]
+
+
+# Class defs:
 
 class BrushInfo (object):
     """Fully parsed description of a brush.
@@ -113,12 +228,6 @@ class BrushInfo (object):
         self.settings[cname] = [basevalue, input_points]
         for f in self.observers:
             f(set([cname]))
-
-    class ParseError(Exception):
-        pass
-
-    class Obsolete(ParseError):
-        pass
 
     def to_json(self):
         settings = dict(self.settings)
@@ -189,85 +298,9 @@ class BrushInfo (object):
 
         for f in self.observers:
             f(ALL_SETTINGS)
-        self.cache_str = settings_str   # Maybe. It could still be old format...
+        self.cache_str = settings_str
 
     def _load_old_format(self, settings_str):
-
-        def parse_value(rawvalue, cname, version):
-            """Parses a setting value, for a given setting name and brushfile version."""
-            if cname in STRING_VALUE_SETTINGS:
-                string = brushinfo_unquote(rawvalue)
-                return [(cname, string)]
-            elif version <= 1 and cname == 'color':
-                rgb = [int(c)/255.0 for c in rawvalue.split(" ")]
-                h, s, v = helpers.rgb_to_hsv(*rgb)
-                return [('color_h', [h, {}]), ('color_s', [s, {}]), ('color_v', [v, {}])]
-            elif version <= 1 and cname == 'change_radius':
-                if rawvalue == '0.0':
-                    return []
-                raise Obsolete('change_radius is not supported any more')
-            elif version <= 2 and cname == 'adapt_color_from_image':
-                if rawvalue == '0.0':
-                    return []
-                raise Obsolete('adapt_color_from_image is obsolete, ignored;' +
-                               ' use smudge and smudge_length instead')
-            elif version <= 1 and cname == 'painting_time':
-                return []
-
-            if version <= 1 and cname == 'speed':
-                cname = 'speed1'
-            parts = rawvalue.split('|')
-            basevalue = float(parts[0])
-            input_points = {}
-            for part in parts[1:]:
-                inputname, rawpoints = part.strip().split(' ', 1)
-                if version <= 1:
-                    points = parse_points_v1(rawpoints)
-                else:
-                    points = parse_points_v2(rawpoints)
-                assert len(points) >= 2
-                input_points[inputname] = points
-            return [(cname, [float(basevalue), input_points])]
-
-        def parse_points_v1(rawpoints):
-            """Parses the points list format from versions prior to version 2."""
-            points_seq = [float(f) for f in rawpoints.split()]
-            points = [(0, 0)]
-            while points_seq:
-                x = points_seq.pop(0)
-                y = points_seq.pop(0)
-                if x == 0:
-                    break
-                assert x > points[-1][0]
-                points.append((x, y))
-            return points
-
-        def parse_points_v2(rawpoints):
-            """Parses the newer points list format of v2 and beyond."""
-            points = []
-            for s in rawpoints.split(', '):
-                s = s.strip()
-                if not (s.startswith('(') and s.endswith(')') and ' ' in s):
-                    return '(x y) expected, got "%s"' % s
-                s = s[1:-1]
-                try:
-                    x, y = [float(ss) for ss in s.split(' ')]
-                except:
-                    print(s)
-                    raise
-                points.append((x, y))
-            return points
-
-        def transform_y(valuepair, func):
-            """Used during migration from earlier versions."""
-            basevalue, input_points = valuepair
-            basevalue = func(basevalue)
-            input_points_new = {}
-            for inputname, points in input_points.iteritems():
-                points_new = [(x, func(y)) for x, y in points]
-                input_points_new[inputname] = points_new
-            return [basevalue, input_points_new]
-
         # Split out the raw settings and grab the version we're dealing with
         rawsettings = []
         errors = []
@@ -294,18 +327,23 @@ class BrushInfo (object):
 
         # Parse each pair
         self.load_defaults()
-        # compatibility hack: keep disabled for old brushes, but still use non-zero default
+        # compatibility hack: keep disabled for old brushes,
+        # but still use non-zero default
         self.settings['anti_aliasing'][0] = 0.0
         num_parsed = 0
         for rawcname, rawvalue in rawsettings:
             try:
-                cnamevaluepairs = parse_value(rawvalue, rawcname, version)
+                cnamevaluepairs = _oldfmt_parse_value(
+                    rawvalue,
+                    rawcname,
+                    version,
+                )
                 num_parsed += 1
                 for cname, value in cnamevaluepairs:
                     if cname in brushsettings.settings_migrate:
                         cname, func = brushsettings.settings_migrate[cname]
                         if func:
-                            value = transform_y(value, func)
+                            value = _oldfmt_transform_y(value, func)
                     self.settings[cname] = value
             except Exception as e:
                 line = "%s %s" % (rawcname, rawvalue)
@@ -331,7 +369,8 @@ class BrushInfo (object):
 
     def _save_old_format(self):
         res = '# mypaint brush file\n'
-        res += '# you can edit this file and then select the brush in mypaint (again) to reload\n'
+        res += '# you can edit this file and then '
+        res += 'select the brush in mypaint (again) to reload\n'
         res += 'version %d\n' % OLDFORMAT_BRUSHFILE_VERSION
 
         for cname, data in self.settings.iteritems():
@@ -473,7 +512,7 @@ class BrushInfo (object):
     def is_colorize(self):
         return self.has_large_base_value("colorize")
 
-    def matches(self, other, ignore=["color_h", "color_s", "color_v", "parent_brush_name"]):
+    def matches(self, other, ignore=_BRUSHINFO_MATCH_IGNORES):
         s1 = self.settings.copy()
         s2 = other.settings.copy()
         for k in ignore:
