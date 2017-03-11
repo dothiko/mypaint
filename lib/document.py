@@ -1205,11 +1205,6 @@ class Document (object):
         self.do(command.MergeLayerDown(self, merge_only_opaque=only_opaque))
         return True
 
-    def merge_current_layer_down_opaque(self):
-        """Merge the current layer into the one below,
-        only on opaque area"""
-        return self.merge_current_layer_down(only_opaque=True)
-
     def merge_visible_layers(self):
         """Merge all visible layers into one & discard originals."""
         self.do(command.MergeVisibleLayers(self))
