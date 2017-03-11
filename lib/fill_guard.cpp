@@ -583,19 +583,19 @@ class _GapFiller: public Tilecache<char> {
             char tile_info = _get_tile_info(CENTER_TILE_INDEX);
 
 #ifdef HEAVY_DEBUG
-            assert((tile_info & VOID_TILE_FLAG) == 0);
             assert(gap_radius <= MAX_OPERATION_SIZE);
 #endif
 
-            if ((tile_info & DILATED_TILE_FLAG) != 0)
+            if ((tile_info & DILATED_TILE_FLAG) != 0
+                || (tile_info & VOID_TILE_FLAG) != 0)
                 return;
 
             char flag = EXIST_FLAG;
             
             // start -1 and  end +1 is need to dilate
             // edge pixels of center tile.
-            for (int y = -1; y < MYPAINT_TILE_SIZE+1; y++) {
-                for (int x = -1; x < MYPAINT_TILE_SIZE+1; x++) {
+            for (int y = -gap_radius; y < MYPAINT_TILE_SIZE+gap_radius; y++) {
+                for (int x = -gap_radius; x < MYPAINT_TILE_SIZE+gap_radius; x++) {
                     char* pixel = get_cached_pixel(x, y, false);
                     if (pixel != NULL   
                         && (*pixel & PROCESSED_FLAG) != 0) {
@@ -625,7 +625,6 @@ class _GapFiller: public Tilecache<char> {
             // Only center tile should be eroded.
             char tile_info = _get_tile_info(CENTER_TILE_INDEX);
 #ifdef HEAVY_DEBUG
-            assert((tile_info & VOID_TILE_FLAG) == 0);
             assert(gap_radius <= MAX_OPERATION_SIZE);
 #endif
 
@@ -737,10 +736,6 @@ class _GapFiller: public Tilecache<char> {
                 }
             }
 
-
-#ifdef HEAVY_DEBUG            
-            assert(m_cache_tiles[CENTER_TILE_INDEX] != NULL);
-#endif
         }
 
     public:
