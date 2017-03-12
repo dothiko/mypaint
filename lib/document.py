@@ -871,7 +871,8 @@ class Document (object):
     ## Other painting/drawing
 
     def flood_fill(self, x, y, color, tolerance=0.1,
-                   sample_merged=False, make_new_layer=False):
+                   sample_merged=False, make_new_layer=False,
+                   dilation_size=0):
         """Flood-fills a point on the current layer with a color
 
         :param x: Starting point X coordinate
@@ -884,6 +885,8 @@ class Document (object):
         :type sample_merged: bool
         :param make_new_layer: Write output to a new layer on top
         :type make_new_layer: bool
+        :param dilation_size: Post-processing dilation size of filled area.
+        :type dilation_size: int
 
         Filling an infinite canvas requires limits. If the frame is
         enabled, this limits the maximum size of the fill, and filling
@@ -907,7 +910,8 @@ class Document (object):
         elif not self.frame_enabled:
             bbox.expandToIncludePoint(x, y)
         cmd = command.FloodFill(self, x, y, color, bbox, tolerance,
-                                sample_merged, make_new_layer)
+                                sample_merged, make_new_layer, 
+                                dilation_size)
         self.do(cmd)
 
     ## Graphical refresh

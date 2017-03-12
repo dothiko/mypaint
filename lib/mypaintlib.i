@@ -28,6 +28,7 @@ typedef struct { int x, y, w, h; } Rect;
 %include "colorchanger_crossed_bowl.hpp"
 %include "fastpng.hpp"
 %include "fill.hpp"
+%include "fill_dilate.hpp"
 %include "brushsettings.hpp"
 
 %include "gdkpixbuf2numpy.hpp"

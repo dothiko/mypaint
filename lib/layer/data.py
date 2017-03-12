@@ -304,7 +304,8 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
 
     ## Flood fill
 
-    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None):
+    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None,
+                   dilation_size=0):
         """Fills a point on the surface with a color
 
         See `PaintingLayer.flood_fill() for parameters and semantics. This
@@ -1312,7 +1313,8 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
     ## Flood fill
 
-    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None):
+    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None,
+                   dilation_size=0):
         """Fills a point on the surface with a color
 
         :param x: Starting point X coordinate
@@ -1325,6 +1327,8 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         :type tolerance: float [0.0, 1.0]
         :param dst_layer: Optional target layer (default is self!)
         :type dst_layer: PaintingLayer
+        :param dilation_size: Post-processing dilation size of filled area.
+        :type dilation_size: int
 
         The `tolerance` parameter controls how much pixels are permitted to
         vary from the starting color.  We use the 4D Euclidean distance from
@@ -1339,7 +1343,9 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
             dst_layer = self
         dst_layer.autosave_dirty = True   # XXX hmm, not working?
         self._surface.flood_fill(x, y, color, bbox, tolerance,
-                                 dst_surface=dst_layer._surface)
+                                 dst_surface=dst_layer._surface,
+                                 dilation_size=dilation_size
+                                 )
 
     ## Painting
 
