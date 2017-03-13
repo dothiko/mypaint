@@ -626,33 +626,7 @@ class _GapCloser: public Tilecache<STATUS_PIXEL> {
 
             _set_tile_info(CENTER_TILE_INDEX, DILATED_TILE_FLAG);
         }
-#if 0
-        void _erode_contour(int gap_radius)
-        {
-            // Only center tile should be eroded.
-            STATUS_PIXEL tile_info = _get_tile_info(CENTER_TILE_INDEX);
-#ifdef HEAVY_DEBUG
-            assert(gap_radius <= MAX_OPERATION_SIZE);
-#endif
-
-            if ((tile_info & ERODED_TILE_FLAG) != 0)
-                return;
-
-            STATUS_PIXEL flag = DILATED_FLAG;
-            for (int y = -gap_radius; y < gap_radius + MYPAINT_TILE_SIZE; y++) {
-                for (int x = -gap_radius; x < gap_radius + MYPAINT_TILE_SIZE; x++) {
-                    STATUS_PIXEL* pixel = get_cached_pixel(x, y, false);
-                    if (pixel != NULL && (*pixel & DILATED_FLAG) != 0) {
-                        if ( ! _search_kernel(x, y, gap_radius, &flag, false)) {
-                            _put_flag(x, y, ERODED_FLAG);
-                        }
-                    }
-                }
-            }
-
-            _set_tile_info(CENTER_TILE_INDEX, ERODED_TILE_FLAG);
-        }
-#endif
+        
         // Convert(and initialize) color pixel tile into 8bit status tile.
         // status tile updated with 'EXISTED' flag, but not cleared.
         // So exisitng status tile can keep dilated/eroded flags,

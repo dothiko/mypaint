@@ -1075,7 +1075,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
     filled = {}
     tileq = [
         ((tx, ty),
-        [(px, py, 1)]),
+        [(px, py, int(gap_radius)+1)]),
     ]
     # The 0 of 'seed' in tileq is ignore_contour flag.
     # It is for when starting flood-fill pixel is already inside
@@ -1150,9 +1150,9 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
                 fill_r, fill_g, fill_b,
                 min_x, min_y, max_x, max_y,
                 tolerance,
-                eroded_contour,
-                ignore_contour
-            )
+                eroded_contour)
+          #     ignore_contour
+          # )
             seeds_n, seeds_e, seeds_s, seeds_w = overflows
 
            #if dilation_size > 0 and start_inner_contour == False:

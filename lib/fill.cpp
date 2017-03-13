@@ -60,7 +60,7 @@ _floodfill_color_match(const fix15_short_t c1_premult[4],
     // When floodfill search pixel touches dilated contour status pixel,
     // it is treated same as color match failed case.
     if(retvalue > 0
-       && ignore_contour == 0
+       && ignore_contour <= 0
        && (status_flag & DILATED_FLAG) != 0) {
             // Normal fill guard: reject when scan touch dilated contour.
             return 0;
@@ -92,7 +92,7 @@ _floodfill_should_fill(const fix15_short_t src_col[4], // premult RGB+A
 typedef struct {
     unsigned int x;
     unsigned int y;
-    int ignore_contour;
+    int ignore_contour_cnt;
 } _floodfill_point;
 
 
@@ -107,10 +107,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                  double fill_r, double fill_g, double fill_b,
                  int min_x, int min_y, int max_x, int max_y,
                  double tol,  /* [0..1] */
-                 PyObject *status,    /* status pixel tile of uint8.*/
-                 int override_ignore_contour) /* overriding ignore_contour, 
-                                                 this disables gap-closing
-                                                 feature temporally */
+                 PyObject *status)    /* status pixel tile of uint8.*/
 {
     // Scale the fractional tolerance arg
     const fix15_t tolerance = (fix15_t)(  MIN(1.0, MAX(0.0, tol))
@@ -127,10 +124,6 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
     PyArrayObject *dst_arr = ((PyArrayObject *)dst);
     if(status == Py_None)
        status = NULL;
-  //PyArrayObject *sts_arr = NULL;
-  //
-  //if(status != Py_None)
-  //    sts_arr = ((PyArrayObject *)status);
 
     // Dimensions are [y][x][component]
 #ifdef HEAVY_DEBUG
@@ -159,7 +152,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
     // Populate a working queue with seeds
     int x = 0;
     int y = 0;
-    int seed_ignore_contour = 0;
+    int ignore_contour_cnt = 0;
 
     GQueue *queue = g_queue_new();   /* Of tuples, to be exhausted */
     for (int i=0; i<PySequence_Size(seeds); ++i) {
@@ -168,7 +161,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
         assert(PySequence_Size(seed_tup) == 3);
 #endif
         if (! PyArg_ParseTuple(seed_tup, "iii", 
-                               &x, &y, &seed_ignore_contour)) {
+                               &x, &y, &ignore_contour_cnt)) {
             continue;
         }
         Py_DECREF(seed_tup);
@@ -178,12 +171,12 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
         const fix15_short_t *dst_pixel = _floodfill_getpixel(dst_arr, x, y);
         short status_flag = get_status_flag(status, x, y);
         if (_floodfill_should_fill(src_pixel, dst_pixel, targ, 
-                                   tolerance, status_flag, seed_ignore_contour)) {
+                                   tolerance, status_flag, ignore_contour_cnt)) {
             _floodfill_point *seed_pt = (_floodfill_point*)
                                           malloc(sizeof(_floodfill_point));
             seed_pt->x = x;
             seed_pt->y = y;
-            seed_pt->ignore_contour = seed_ignore_contour;
+            seed_pt->ignore_contour_cnt = ignore_contour_cnt;
             g_queue_push_tail(queue, seed_pt);
         }
     }
@@ -198,13 +191,13 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
         _floodfill_point *pos = (_floodfill_point*) g_queue_pop_head(queue);
         int x0 = pos->x;
         int y = pos->y;
-        int ignore_contour = pos->ignore_contour;
+        int ignore_contour_cnt = pos->ignore_contour_cnt;
         free(pos);
         
-        // Override ignore_contour flag when it is 0x02.
+        // Override ignore_contour_cnt flag when it is 0x02.
         // Otherwise, use queued seed's flag.
-      //if (override_ignore_contour == 0x02)
-      //    ignore_contour = 1;
+      //if (override_ignore_contour_cnt == 0x02)
+      //    ignore_contour_cnt = 1;
 
         // Find easternmost and westernmost points of the same colour
         // Westwards loop includes (x,y), eastwards ignores it.
@@ -226,7 +219,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
 
                     if (! _floodfill_should_fill(src_pixel, dst_pixel,
                                                  targ, tolerance, status_flag,
-                                                 ignore_contour))
+                                                 ignore_contour_cnt))
                     {
                         set_status_flag(status, x, y, BORDER_FLAG);
                         break;
@@ -234,14 +227,18 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
 
                 }
                 
-                if ( ignore_contour != 0 
-                     && (status_flag & DILATED_FLAG) == 0)
-                {
-                    // In ignore_contour mode, finally, 
-                    // we reach "normal" pixel!
-                    ignore_contour = 0;
-                    // From now on, generated seeds would be cancelled
-                    // ignore_contour mode.
+                if ( ignore_contour_cnt > 0) {
+                    if ((status_flag & DILATED_FLAG) == 0) {
+                        // In ignore_contour_cnt mode, finally, 
+                        // we reach "normal" pixel!
+                        ignore_contour_cnt = 0;
+                        // From now on, generated seeds would be cancelled
+                        // ignore_contour_cnt mode.
+                    }
+                    else
+                    {
+                        ignore_contour_cnt--;
+                    }
                 }
                     
                 // Also halt if we're outside the bbox range
@@ -253,7 +250,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                 if (tolerance > 0) {
                     alpha = _floodfill_color_match(targ, src_pixel,
                                                    tolerance, status_flag,
-                                                   ignore_contour);
+                                                   ignore_contour_cnt);
                     // Since we use the output array to mark where we've been
                     // during the fill, we can't store an alpha of zero.
                     if (alpha == 0) {
@@ -278,7 +275,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                     bool match_above = _floodfill_should_fill(
                                          src_pixel_above, dst_pixel_above,
                                          targ, tolerance, status_flag_above,
-                                         ignore_contour
+                                         ignore_contour_cnt
                                        );
                     if (match_above) {
                         if (look_above) {
@@ -288,7 +285,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                                                   );
                             p->x = x;
                             p->y = y-1;
-                            p->ignore_contour = ignore_contour;
+                            p->ignore_contour_cnt = ignore_contour_cnt-1;
                             g_queue_push_tail(queue, p);
                             look_above = false;
                         }
@@ -303,7 +300,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                     // Scanlining not possible here: pixel is over the border.
                     PyObject *s = Py_BuildValue("iii", 
                                                 x, MYPAINT_TILE_SIZE-1, 
-                                                0);
+                                                ignore_contour_cnt);
                     PyList_Append(result_n, s);
                     Py_DECREF(s);
 #ifdef HEAVY_DEBUG
@@ -322,7 +319,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                     bool match_below = _floodfill_should_fill(
                                          src_pixel_below, dst_pixel_below,
                                          targ, tolerance, status_flag_below,
-                                         ignore_contour
+                                         ignore_contour_cnt
                                        );
                     if (match_below) {
                         if (look_below) {
@@ -332,7 +329,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                                                   );
                             p->x = x;
                             p->y = y+1;
-                            p->ignore_contour = ignore_contour;
+                            p->ignore_contour_cnt = ignore_contour_cnt-1;
                             g_queue_push_tail(queue, p);
                             look_below = false;
                         }
@@ -347,7 +344,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                     // Scanlining not possible here: pixel is over the border.
                     PyObject *s = Py_BuildValue("iii", 
                                                 x, 0, 
-                                                0);
+                                                ignore_contour_cnt);
                     PyList_Append(result_s, s);
                     Py_DECREF(s);
 #ifdef HEAVY_DEBUG
@@ -359,7 +356,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                 if (x == 0) {
                     PyObject *s = Py_BuildValue("iii", 
                                                 MYPAINT_TILE_SIZE-1, y, 
-                                                0);
+                                                ignore_contour_cnt);
                     PyList_Append(result_w, s);
                     Py_DECREF(s);
 #ifdef HEAVY_DEBUG
@@ -369,7 +366,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                 else if (x == MYPAINT_TILE_SIZE-1) {
                     PyObject *s = Py_BuildValue("iii", 
                                                 0, y,
-                                                0);
+                                                ignore_contour_cnt);
                     PyList_Append(result_e, s);
                     Py_DECREF(s);
 #ifdef HEAVY_DEBUG
