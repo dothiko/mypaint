@@ -20,16 +20,6 @@
 // [(x1, y1), ...] denoting to which pixels of the next tile in the identified
 // direction the fill has overflowed. These coordinates can be fed back in to
 // tile_flood_fill() for the tile identified as seeds.
-/*
-PyObject *
-tile_flood_fill (PyObject *src,     // readonly HxWx4 array of uint16
-                 PyObject *dst,     // output HxWx4 array of uint16
-                 PyObject *seeds,   // List of 2-tuples
-                 int targ_r, int targ_g, int targ_b, int targ_a, //premult
-                 double fill_r, double fill_g, double fill_b,
-                 int min_x, int min_y, int max_x, int max_y,
-                 double tolerance);       // [0..1]
-*/
 PyObject *
 tile_flood_fill  (PyObject *src,     // readonly HxWx4 array of uint16
                   PyObject *dst,     // output HxWx4 array of uint16
@@ -39,7 +29,7 @@ tile_flood_fill  (PyObject *src,     // readonly HxWx4 array of uint16
                   int min_x, int min_y, int max_x, int max_y,
                   double tolerance,  // [0..1]
                   PyObject *status,   // Status tile, HxWx1 array of char
-                  bool fragment_mode // small fragment of contour filling mode
+                  int ignore_contour // small fragment of contour filling mode
                   );       
 
 

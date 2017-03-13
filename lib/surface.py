@@ -178,9 +178,9 @@ class TileRequestWrapper (TileAccessible):
             self._obj.composite_tile(tile, True, tx, ty, **self._opts)
         return tile
 
-    def fetch_surrounding_tiles(self, tx, ty):
-        """Fetch surrounding 8 tiles around (tx, ty)
-        This method is for 'overflow prevention' of flood-fill.
+    def ensure_surrounding_tiles(self, tx, ty):
+        """Ensure surrounding 8 tiles, around (tx, ty)
+        This method is created for 'gap-closing' of flood-fill.
         """
         for oy in (-1, 0, 1):
             for ox in (-1, 0, 1):

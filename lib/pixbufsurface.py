@@ -156,7 +156,7 @@ class Surface (TileAccessible, TileBlittable):
         assert src.shape[2] == 4, 'alpha required'
         mypaintlib.tile_convert_rgba8_to_rgba16(src, dst)
 
-    def fetch_surrounding_tiles(self, tx, ty):
+    def ensure_surrounding_tiles(self, tx, ty):
         # This class already have tile_memory_dict. it seems no need for fetch.
         pass
 

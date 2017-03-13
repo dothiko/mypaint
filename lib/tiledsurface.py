@@ -393,7 +393,7 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
                     return
             mypaintlib.tile_combine(mode, src, dst, dst_has_alpha, opacity)
 
-    def fetch_surrounding_tiles(self, tx, ty):
+    def ensure_surrounding_tiles(self, tx, ty):
         pass
 
    #@property
@@ -611,7 +611,7 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         return _TiledSurfaceMove(self, x, y, sort=sort)
 
     def flood_fill(self, x, y, color, bbox, tolerance, dst_surface, 
-                   dilation_size, gap_size):
+                   dilation_size, gap_radius):
         """Fills connected areas of this surface into another
 
         :param x: Starting point X coordinate
@@ -626,13 +626,13 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         :type dst: lib.tiledsurface.MyPaintSurface
         :param dilation_size: dilating pixel count.
         :type dilation_size: int [0, MYPAINT_TILE_SIZE / 2]
-        :param gap_size: Overflow-preventing closable gap size.
-        :type gap_size: int [0, MYPAINT_TILE_SIZE / 2]
+        :param gap_radius: Overflow-preventing closable gap size.
+        :type gap_radius: int [0, MYPAINT_TILE_SIZE / 2]
 
         See also `lib.layer.Layer.flood_fill()` and `fill.flood_fill()`.
         """
         flood_fill(self, x, y, color, bbox, tolerance, dst_surface,
-                   dilation_size, gap_size)
+                   dilation_size, gap_radius)
 
     def get_smallest_mipmap(self):
         """ Get smallest mipmap, to generate layer thumbnail. """
@@ -1014,7 +1014,7 @@ class Background (Surface):
             return super(Background, self).load_from_numpy(arr, x, y)
 
 def flood_fill(src, x, y, color, bbox, tolerance, dst, 
-               dilation_size, gap_size):
+               dilation_size, gap_radius):
     """Fills connected areas of one surface into another
 
     :param src: Source surface-like object
@@ -1032,8 +1032,8 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
     :param dilation_size: Size of dialating pixels.
                           Theorically limit is same as tilesize(64px)
     :type dilation_size: int [0, MYPAINT_TILE_SIZE / 2 - 1]
-    :param gap_size: Overflow-preventing closable gap size. 
-    :type gap_size: int [0, MYPAINT_TILE_SIZE / 2 - 1]
+    :param gap_radius: Overflow-preventing closable gap size. 
+    :type gap_radius: int [0, MYPAINT_TILE_SIZE / 2 - 1]
 
     See also `lib.layer.Layer.flood_fill()`.
     """
@@ -1075,13 +1075,21 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
     filled = {}
     tileq = [
         ((tx, ty),
-         [(px, py)]) 
+        [(px, py, 1)]),
     ]
+    # The 0 of 'seed' in tileq is ignore_contour flag.
+    # It is for when starting flood-fill pixel is already inside
+    # gap-closing contour. 
+    # It is bit-flag, so use interger.
+    # Initially the ignore_contour flag is always set to 1.
+    # If the starting point is actually not contour, 
+    # this flag immidiately cleared, so no problem.
+
     dilated = {} # for dilated tiles
     status = {} # for status tiles
     eroded_contour = None
-    is_first_call = True # to detect first call of detect_contour
-    fragment_mode = False  
+    is_first_loop = True # to detect first loop of detect_contour
+    ignore_contour = 0
 
     while len(tileq) > 0:
         (tx, ty), seeds = tileq.pop(0)
@@ -1107,33 +1115,29 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
         # Flood-fill one tile
         with src.tile_request(tx, ty, readonly=True) as src_tile:
 
-            if gap_size > 0: 
-                # fetch surrounding tiles, to support 
+            if gap_radius > 0: 
+                # ensure(fetch) surrounding tiles, to support 
                 # dynamic allocated psuedo surface object
                 # such as TileRequestWrapper.
-                src.fetch_surrounding_tiles(tx, ty)
-                mypaintlib.fill_gap(
+                src.ensure_surrounding_tiles(tx, ty)
+                mypaintlib.close_gap(
                         status,
                         src.tiledict,
                         tx, ty,
                         targ_r, targ_g, targ_b, targ_a,
                         tolerance,
-                        int(gap_size));
+                        int(gap_radius));
                 eroded_contour = status.get((tx, ty), None)
-                # XXX is below codes still needed...??
-                if is_first_call:
-                    if eroded_contour is not None:
-                        status_flag = eroded_contour[py][px]
-                        if (status_flag & 0x04) != 0:
-                            # status flag is already in contour area!
-                            # This might happen when there is narrower area
-                            # than gap size setting, and end user want to
-                            # fill such area.
-                            # If so, use special flag to notify it
-                            # to tile_flood_fill().
-                            fragment_mode = True
-                    is_first_call = False
-
+               #if is_first_loop:
+               #    # Detect whether we start flood-fill from 
+               #    # gap-closing thick contour or not.
+               #    if eroded_contour is not None:
+               #        status_flag = eroded_contour[py][px]
+               #        if (status_flag & 0x02) != 0:
+               #            ignore_contour = 0x02 # 'Override' flag.
+               #    is_first_loop = False
+               #elif ignore_contour != 0:
+               #    ignore_contour = 0 # clear override flag.
 
             dst_tile = filled.get((tx, ty), None)
             if dst_tile is None:
@@ -1147,14 +1151,12 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
                 min_x, min_y, max_x, max_y,
                 tolerance,
                 eroded_contour,
-                fragment_mode
+                ignore_contour
             )
             seeds_n, seeds_e, seeds_s, seeds_w = overflows
 
-           #if dilation_size > 0 and fragment_mode == False:
-            if dilation_size > 0:
-                # XXX TEST: when limited_mode is activated,
-                # we get better result without dilation.
+           #if dilation_size > 0 and start_inner_contour == False:
+            if dilation_size > 0 and gap_radius == 0:
                 mypaintlib.dilate_filled_tile(
                         dilated,
                         dst_tile,
@@ -1177,6 +1179,53 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
             tpos = (tx+1, ty)
             tileq.append((tpos, seeds_e))
 
+    # gap-closing post-process.
+    if gap_radius > 0: 
+        assert len(dilated) == 0
+        # Fill entire dilated thick contour area, with color pixel.
+        # It merges flood-filled area and gap-closing contour.
+        cnt = 1 # To pass initial while check.
+        while cnt > 0:
+            cnt = 0 # Then, initialize cnt with right value(0).
+            for (tx, ty), sts_tile in status.iteritems():
+                # First of all, ensure that tile is completely dilated.
+                # (Some tile might not completely dilated even 
+                # it is partially dilated)
+                mypaintlib.ensure_dilate_tile(
+                        status,
+                        tx, ty,
+                        sts_tile,
+                        int(gap_radius))
+
+                # After that , if there 
+                dst_tile = filled.get((tx, ty), None)
+                if dst_tile is None:
+                    dst_tile = np.zeros((N, N, 4), 'uint16')
+                    filled[(tx, ty)] = dst_tile
+
+                # Finally fill that contour.
+                cnt+=mypaintlib.contour_fill(status, tx, ty, dst_tile,
+                                             targ_r, targ_g, targ_b, targ_a)
+
+        # Erode all filled tiles with half of gap-closing size. 
+        # it would be adjusted with requested dilation size.
+        # and the result color pixel tiles become 'dilated' tiles.
+        # that 'dilated(actually, eroded!)' tiles are combined later.
+        erosion_size = gap_radius 
+        if dilation_size > 0:
+            erosion_size -= dilation_size
+
+        if erosion_size > 0:
+            for (tx, ty), src_tile in filled.iteritems():
+                dst_tile = np.zeros((N, N, 4), 'uint16')
+                dilated[(tx, ty)] = dst_tile
+                mypaintlib.erode_filled_tile(
+                        filled,
+                        dst_tile,
+                        tx, ty,
+                        fill_r, fill_g, fill_b, 
+                        int(erosion_size)
+                        )
 
     mode = mypaintlib.CombineNormal
     # Composite filled and dilated tiles into the destination surface
@@ -1191,21 +1240,22 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
     dst.notify_observers(*bbox)
 
     # XXX DEBUG CODES, To serialize current status tile
-   #basedir = '/tmp/tiles'
-   #import time
-   #lt = time.localtime()
-   #curtimedir="%04d%02d%02d-%02d%02d%02d" % lt[0:6]
-   #basedir = os.path.join(basedir, curtimedir[2:])
-   #os.makedirs(basedir)
-   #for ck in status:
-   #    arr = status[ck]
-   #    np.save(os.path.join(basedir, "%d_%d.npy" % ck), arr)
-   #import json
-   #with open(os.path.join(basedir, "info.json"), 'wt') as ofp:
-   #    info = {}
-   #    info["tolerance"] = tolerance
-   #    info["gap_size"] = gap_size
-   #    json.dump(info, ofp)
+    return
+    basedir = '/tmp/tiles'
+    import time
+    lt = time.localtime()
+    curtimedir="%04d%02d%02d-%02d%02d%02d" % lt[0:6]
+    basedir = os.path.join(basedir, curtimedir[2:])
+    os.makedirs(basedir)
+    for ck in status:
+        arr = status[ck]
+        np.save(os.path.join(basedir, "%d_%d.npy" % ck), arr)
+    import json
+    with open(os.path.join(basedir, "info.json"), 'wt') as ofp:
+        info = {}
+        info["tolerance"] = tolerance
+        info["gap_radius"] = gap_radius
+        json.dump(info, ofp)
 
 class PNGFileUpdateTask (object):
     """Piecemeal callable: writes to or replaces a PNG file
