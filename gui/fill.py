@@ -286,7 +286,8 @@ class FloodFillOptionsWidget (Gtk.Grid):
         row += 1
         label = Gtk.Label()
         label.set_markup(_("Gap Radius:")) 
-        label.set_tooltip_text(_("To prevent overflow, Flood Fill does not go "
+        label.set_tooltip_text(_("Gap closing radius."
+                                 "To prevent overflow, Flood Fill does not go "
                                  "through gaps within this radius."))
         label.set_alignment(1.0, 0.5)
         label.set_hexpand(False)

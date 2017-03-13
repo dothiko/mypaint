@@ -18,7 +18,6 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #define NO_IMPORT_ARRAY
 #include <numpy/arrayobject.h>
-
 #include <glib.h>
 #include <mypaint-tiled-surface.h>
 
@@ -289,6 +288,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                                                   );
                             p->x = x;
                             p->y = y-1;
+                            p->ignore_contour = ignore_contour;
                             g_queue_push_tail(queue, p);
                             look_above = false;
                         }
@@ -332,6 +332,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                                                   );
                             p->x = x;
                             p->y = y+1;
+                            p->ignore_contour = ignore_contour;
                             g_queue_push_tail(queue, p);
                             look_below = false;
                         }
