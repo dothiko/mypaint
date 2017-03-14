@@ -1215,6 +1215,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
     dst.notify_observers(*bbox)
 
     # XXX DEBUG CODES, To serialize current status tile
+    return
     basedir = '/tmp/tiles'
     import time
     lt = time.localtime()
