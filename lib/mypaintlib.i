@@ -34,7 +34,7 @@ typedef struct { int x, y, w, h; } Rect;
 %include "brushsettings.hpp"
 %include "gdkpixbuf2numpy.hpp"
 
-%include "fill_guard.hpp"
+%include "gapclose.hpp"
 
 %init %{
 import_array();
