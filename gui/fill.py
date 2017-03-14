@@ -9,6 +9,7 @@
 
 ## Imports
 from __future__ import division, print_function
+import math
 
 import gi
 from gi.repository import Gtk
@@ -17,6 +18,7 @@ from gettext import gettext as _
 
 import gui.mode
 import gui.cursor
+import lib.mypaintlib
 
 
 ## Class defs
@@ -101,7 +103,9 @@ class FloodFillMode (gui.mode.ScrollableModeMixin,
         tdw.doc.flood_fill(x, y, color.get_rgb(),
                            tolerance=opts.tolerance,
                            sample_merged=opts.sample_merged,
-                           make_new_layer=make_new_layer)
+                           make_new_layer=make_new_layer,
+                           dilation_size=opts.dilation_size,
+                           gap_size=opts.gap_size)
         opts.make_new_layer = False
         return False
 
@@ -165,10 +169,14 @@ class FloodFillOptionsWidget (Gtk.Grid):
     TOLERANCE_PREF = 'flood_fill.tolerance'
     SAMPLE_MERGED_PREF = 'flood_fill.sample_merged'
     # "make new layer" is a temportary toggle, and is not saved to prefs
+    DILATION_SIZE_PREF = 'flood_fill.dilate_size'
+    GAP_SIZE_PREF = 'flood_fill.gap_size'
 
     DEFAULT_TOLERANCE = 0.05
     DEFAULT_SAMPLE_MERGED = False
     DEFAULT_MAKE_NEW_LAYER = False
+    DEFAULT_DILATION_SIZE = 0
+    DEFAULT_GAP_SIZE = 0
 
     def __init__(self):
         Gtk.Grid.__init__(self)
@@ -241,6 +249,56 @@ class FloodFillOptionsWidget (Gtk.Grid):
         self._make_new_layer_toggle = checkbut
 
         row += 1
+        label = Gtk.Label()
+        label.set_markup(_("Dilation Size:")) 
+        label.set_tooltip_text(_("How many pixels the filled area to be dilated."))
+        label.set_alignment(1.0, 0.5)
+        label.set_hexpand(False)
+        self.attach(label, 0, row, 1, 1)
+        value = prefs.get(self.DILATION_SIZE_PREF, self.DEFAULT_DILATION_SIZE)
+        value = float(value)
+        # Theorically 'dilation fill' would accepts maximum 
+        # mypaintlib.TILE_SIZE pixel as dilation size.
+        # but, another 'closing gap' functionality needs to limit dilation/erode
+        # size to (a half of TILE_SIZE - 1), to limit(save) processing time and
+        # memory usage by using tile cache.
+        # And 'gap fill' and 'dilation fill' share same logic for dilation morphology,
+        # so this limitation also must be shared.
+        # Therefore, the upper value of this adjustment set to TILESIZE/2-1.
+        adj = Gtk.Adjustment(value=value, lower=0.0, 
+                             upper=lib.mypaintlib.TILE_SIZE / 2 - 1,
+                             step_increment=1, page_increment=4,
+                             page_size=0)
+        adj.connect("value-changed", self._dilation_size_changed_cb)
+        self._dilation_size_adj = adj
+        spinbtn = Gtk.SpinButton()
+        spinbtn.set_hexpand(True)
+        spinbtn.set_adjustment(adj)
+        self.attach(spinbtn, 1, row, 1, 1)
+
+        row += 1
+        label = Gtk.Label()
+        label.set_markup(_("Gap Closing Radius:")) 
+        label.set_tooltip_text(_("Gap closing radius."
+                                 "To prevent overflow, Flood Fill does not go "
+                                 "through gaps within this radius."))
+        label.set_alignment(1.0, 0.5)
+        label.set_hexpand(False)
+        self.attach(label, 0, row, 1, 1)
+        value = prefs.get(self.GAP_SIZE_PREF, self.DEFAULT_GAP_SIZE)
+        value = float(value)
+        adj = Gtk.Adjustment(value=value, lower=0.0, 
+                             upper=lib.mypaintlib.TILE_SIZE / 2 - 1,
+                             step_increment=1, page_increment=4,
+                             page_size=0)
+        adj.connect("value-changed", self._gap_size_changed_cb)
+        self._gap_size_adj = adj
+        spinbtn = Gtk.SpinButton()
+        spinbtn.set_hexpand(True)
+        spinbtn.set_adjustment(adj)
+        self.attach(spinbtn, 1, row, 1, 1)
+
+        row += 1
         align = Gtk.Alignment.new(0.5, 1.0, 1.0, 0.0)
         align.set_vexpand(True)
         button = Gtk.Button(label=_("Reset"))
@@ -248,6 +306,7 @@ class FloodFillOptionsWidget (Gtk.Grid):
         button.set_tooltip_text(_("Reset options to their defaults"))
         align.add(button)
         self.attach(align, 0, row, 2, 1)
+
 
     @property
     def tolerance(self):
@@ -265,6 +324,14 @@ class FloodFillOptionsWidget (Gtk.Grid):
     def sample_merged(self):
         return bool(self._sample_merged_toggle.get_active())
 
+    @property
+    def dilation_size(self):
+        return math.floor(self._dilation_size_adj.get_value())
+
+    @property
+    def gap_size(self):
+        return math.floor(self._gap_size_adj.get_value())
+
     def _tolerance_changed_cb(self, adj):
         self.app.preferences[self.TOLERANCE_PREF] = self.tolerance
 
@@ -275,3 +342,12 @@ class FloodFillOptionsWidget (Gtk.Grid):
         self._tolerance_adj.set_value(self.DEFAULT_TOLERANCE)
         self._make_new_layer_toggle.set_active(self.DEFAULT_MAKE_NEW_LAYER)
         self._sample_merged_toggle.set_active(self.DEFAULT_SAMPLE_MERGED)
+        self._dilation_size_adj.set_value(self.DEFAULT_DILATION_SIZE)
+        self._gap_size_adj.set_value(self.DEFAULT_GAP_SIZE)
+
+    def _dilation_size_changed_cb(self, adj):
+        self.app.preferences[self.DILATION_SIZE_PREF] = self.dilation_size
+
+    def _gap_size_changed_cb(self, adj):
+        self.app.preferences[self.GAP_SIZE_PREF] = self.gap_size
+

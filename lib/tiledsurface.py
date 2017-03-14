@@ -393,6 +393,17 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
                     return
             mypaintlib.tile_combine(mode, src, dst, dst_has_alpha, opacity)
 
+    def ensure_surrounding_tiles(self, tx, ty):
+        pass
+
+   #@property
+   #def tiledict(self):
+    # This class has tiledict attribute. so property is not needed.
+    # And, tiledict attribute of this class holds _Tile instances in tiledict, 
+    # instead of numpy tile.
+    # It is automatically detected and treated correctly in
+    # _Morphology_contour C++ class.
+
     ## Snapshotting
 
     def save_snapshot(self):
@@ -599,7 +610,8 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         """
         return _TiledSurfaceMove(self, x, y, sort=sort)
 
-    def flood_fill(self, x, y, color, bbox, tolerance, dst_surface):
+    def flood_fill(self, x, y, color, bbox, tolerance, dst_surface, 
+                   dilation_size, gap_radius):
         """Fills connected areas of this surface into another
 
         :param x: Starting point X coordinate
@@ -612,10 +624,19 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         :type tolerance: float [0.0, 1.0]
         :param dst: Target surface
         :type dst: lib.tiledsurface.MyPaintSurface
+        :param dilation_size: dilating pixel count.
+        :type dilation_size: int [0, MYPAINT_TILE_SIZE / 2]
+        :param gap_radius: Overflow-preventing closable gap size.
+        :type gap_radius: int [0, MYPAINT_TILE_SIZE / 2]
 
         See also `lib.layer.Layer.flood_fill()` and `fill.flood_fill()`.
         """
-        flood_fill(self, x, y, color, bbox, tolerance, dst_surface)
+        flood_fill(self, x, y, color, bbox, tolerance, dst_surface,
+                   dilation_size, gap_radius)
+
+    def get_smallest_mipmap(self):
+        """ Get smallest mipmap, to generate layer thumbnail. """
+        return self._mipmaps[-1]
 
 
 class _TiledSurfaceMove (object):
@@ -992,8 +1013,8 @@ class Background (Surface):
         else:
             return super(Background, self).load_from_numpy(arr, x, y)
 
-
-def flood_fill(src, x, y, color, bbox, tolerance, dst):
+def flood_fill(src, x, y, color, bbox, tolerance, dst, 
+               dilation_size, gap_radius):
     """Fills connected areas of one surface into another
 
     :param src: Source surface-like object
@@ -1008,6 +1029,11 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst):
     :type tolerance: float [0.0, 1.0]
     :param dst: Target surface
     :type dst: lib.tiledsurface.MyPaintSurface
+    :param dilation_size: Size of dialating pixels.
+                          Theorically limit is same as tilesize(64px)
+    :type dilation_size: int [0, MYPAINT_TILE_SIZE / 2 - 1]
+    :param gap_radius: Overflow-preventing closable gap size. 
+    :type gap_radius: int [0, MYPAINT_TILE_SIZE / 2 - 1]
 
     See also `lib.layer.Layer.flood_fill()`.
     """
@@ -1049,8 +1075,15 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst):
     filled = {}
     tileq = [
         ((tx, ty),
-         [(px, py)])
+        [(px, py)]),
     ]
+
+    dilated = {} # for dilated tiles
+    state_tiles = {} # for state_tiles tiles
+    closed_contour = None
+    is_first_loop = True # to detect first loop of detect_contour
+    fill_single_tile = False
+
     while len(tileq) > 0:
         (tx, ty), seeds = tileq.pop(0)
         # Bbox-derived limits
@@ -1074,18 +1107,72 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst):
             max_y = max_py
         # Flood-fill one tile
         with src.tile_request(tx, ty, readonly=True) as src_tile:
+
+            if gap_radius > 0: 
+                # ensure(fetch) surrounding tiles, to support 
+                # dynamic allocated psuedo surface object
+                # such as TileRequestWrapper.
+                src.ensure_surrounding_tiles(tx, ty)
+                mypaintlib.gapclose_close_gap(
+                    state_tiles,
+                    src.tiledict,
+                    tx, ty,
+                    targ_r, targ_g, targ_b, targ_a,
+                    tolerance,
+                    int(gap_radius)
+                    )
+                closed_contour = state_tiles.get((tx, ty), None)
+                if is_first_loop:
+                    # Detect whether we start flood-fill from 
+                    # gap-closing thick contour or not.
+                    if closed_contour is not None:
+                        state_tiles_flag = closed_contour[py][px]
+                        if (state_tiles_flag & 
+                                mypaintlib.gapclose_DILATED_FLAG) != 0:
+                            # Starting point is already in contour!!
+                            # we need valid starting point.
+                            found_pt = search_start_point(
+                                src, 
+                                tx, ty, 
+                                min_tx, min_ty, max_tx, max_ty, 
+                                px, py,
+                                min_px, min_py, max_px, max_py,
+                                targ_r, targ_g, targ_b, targ_a, 
+                                tolerance, gap_radius,
+                                state_tiles
+                                )
+                            if found_pt is not None:
+                                tx, ty, seeds_src, closed_contour = found_pt
+                                seeds = [seeds_src, ]
+                            else:
+                                # We failed to find valid stating point!
+                                # Thus,fill single tile without contour, and exit.
+                                fill_single_tile = True
+                                closed_contour = None
+                                gap_radius = 0
+
+                    is_first_loop = False
+
+            # Flood-fill main processing
             dst_tile = filled.get((tx, ty), None)
             if dst_tile is None:
                 dst_tile = np.zeros((N, N, 4), 'uint16')
                 filled[(tx, ty)] = dst_tile
+
             overflows = mypaintlib.tile_flood_fill(
                 src_tile, dst_tile, seeds,
                 targ_r, targ_g, targ_b, targ_a,
                 fill_r, fill_g, fill_b,
                 min_x, min_y, max_x, max_y,
-                tolerance
-            )
+                tolerance,
+                closed_contour)
+
+            # When failed to find valid stating point, exit loop 
+            if fill_single_tile:
+                break
+
             seeds_n, seeds_e, seeds_s, seeds_w = overflows
+
         # Enqueue overflows in each cardinal direction
         if seeds_n and ty > min_ty:
             tpos = (tx, ty-1)
@@ -1100,15 +1187,135 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst):
             tpos = (tx+1, ty)
             tileq.append((tpos, seeds_e))
 
-    # Composite filled tiles into the destination surface
+    # Dilating filled tiles.
+    # This is also gap-closing post-process.
+    if dilation_size > 0:
+        dilation_size += gap_radius
+    else:
+        dilation_size = gap_radius
+        
+    if dilation_size > 0:
+        for (tx, ty), src_tile in filled.iteritems():
+            mypaintlib.gapclose_dilate_filled_tile(
+                dilated,
+                src_tile,
+                tx, ty,
+                fill_r, fill_g, fill_b, 
+                int(dilation_size)
+                )
+
     mode = mypaintlib.CombineNormal
+    # Composite filled and dilated tiles into the destination surface
+    if len(dilated) > 0:
+        filled = dilated
     for (tx, ty), src_tile in filled.iteritems():
         with dst.tile_request(tx, ty, readonly=False) as dst_tile:
             mypaintlib.tile_combine(mode, src_tile, dst_tile, True, 1.0)
         dst._mark_mipmap_dirty(tx, ty)
+
     bbox = lib.surface.get_tiles_bbox(filled)
     dst.notify_observers(*bbox)
 
+
+def search_start_point(src, 
+                       tx, ty, 
+                       min_tx, min_ty, max_tx, max_ty, 
+                       px, py,
+                       min_px, min_py, max_px, max_py,
+                       targ_r, targ_g, targ_b, targ_a, 
+                       tolerance, gap_radius,
+                       state_tiles):
+    """ Search valid flood-fill start point.
+    'valid' means, it is not in 'dilated contour' of state tiles
+    and also not in contour itself.
+
+    all parameters are same as variables in flood_fill() function.
+    """
+    # XXX code duplication, same algorithm with tile_flood_fill
+
+    # search loop loop
+    tileq = [
+        ((tx, ty),
+        [(px, py, int(gap_radius * 1.5))]), 
+    ]
+    # multiply gap_radius with 1.5 for search pixel count, 
+    # because the search function cannot walk over pixels 
+    # to diagonal direction.
+    # So it takes 2 counts for diagonal move.
+    # Therefore, multiply that count with 1.5 would produce
+    # good result.
+
+    closed_contour = state_tiles.get((tx, ty), None)
+    cnt=0
+
+    while len(tileq) > 0:
+        (tx, ty), seeds = tileq.pop(0)
+        # Bbox-derived limits
+        if tx > max_tx or ty > max_ty:
+            continue
+        if tx < min_tx or ty < min_ty:
+            continue
+        # Pixel limits within this tile...
+        min_x = 0
+        min_y = 0
+        max_x = N-1
+        max_y = N-1
+        # ... vary at the edges
+        if tx == min_tx:
+            min_x = min_px
+        if ty == min_ty:
+            min_y = min_py
+        if tx == max_tx:
+            max_x = max_px
+        if ty == max_ty:
+            max_y = max_py
+
+        # search one tile
+        with src.tile_request(tx, ty, readonly=True) as src_tile:
+
+            # Initial closed_contour is already generated.
+            if closed_contour is None:
+                src.ensure_surrounding_tiles(tx, ty)
+                # close_gap result stored into 'state_tiles' dict,
+                # so this search might be reused later, not waste.
+                # and closed_gap immidiately return 
+                # if state_tiles-flag tile of (tx, ty) is already 
+                # completely generated.
+                mypaintlib.gapclose_close_gap(
+                        state_tiles,
+                        src.tiledict,
+                        tx, ty,
+                        targ_r, targ_g, targ_b, targ_a,
+                        tolerance,
+                        int(gap_radius)
+                        )
+                closed_contour = state_tiles.get((tx, ty), None)
+
+            results = mypaintlib.gapclose_search_start_point(
+                closed_contour,
+                seeds,
+                min_x, min_y, max_x, max_y)
+
+            if len(results) == 2:
+                # starting point found!!
+                return (tx, ty, tuple(results), closed_contour)
+            else:
+                seeds_n, seeds_e, seeds_s, seeds_w = results
+                closed_contour = None
+
+        # Enqueue overflows in each cardinal direction
+        if seeds_n and ty > min_ty:
+            tpos = (tx, ty-1)
+            tileq.append((tpos, seeds_n))
+        if seeds_w and tx > min_tx:
+            tpos = (tx-1, ty)
+            tileq.append((tpos, seeds_w))
+        if seeds_s and ty < max_ty:
+            tpos = (tx, ty+1)
+            tileq.append((tpos, seeds_s))
+        if seeds_e and tx < max_tx:
+            tpos = (tx+1, ty)
+            tileq.append((tpos, seeds_e))
 
 class PNGFileUpdateTask (object):
     """Piecemeal callable: writes to or replaces a PNG file

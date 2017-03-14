@@ -32,6 +32,8 @@ typedef struct { int x, y, w, h; } Rect;
 
 %include "gdkpixbuf2numpy.hpp"
 
+%include "gapclose.hpp"
+
 %init %{
 import_array();
 %}

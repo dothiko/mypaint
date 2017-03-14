@@ -25,3 +25,4 @@
 #include "fastpng.hpp"
 #include "fill.hpp"
 #include "brushsettings.hpp"
+#include "gapclose.hpp"

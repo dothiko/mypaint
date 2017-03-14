@@ -707,7 +707,8 @@ class LayerBase (TileBlittable, TileCompositable):
 
     ## Flood fill
 
-    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None):
+    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None,
+                   dilation_size=0, gap_size=0):
         """Fills a point on the surface with a color
 
         See PaintingLayer.flood_fill() for parameters and semantics.

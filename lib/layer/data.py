@@ -304,7 +304,8 @@ class SurfaceBackedLayer (core.LayerBase, lib.autosave.Autosaveable):
 
     ## Flood fill
 
-    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None):
+    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None,
+                   dilation_size=0, gap_size=0):
         """Fills a point on the surface with a color
 
         See `PaintingLayer.flood_fill() for parameters and semantics. This
@@ -1312,7 +1313,8 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
     ## Flood fill
 
-    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None):
+    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None, 
+                   dilation_size=0, gap_size=0):
         """Fills a point on the surface with a color
 
         :param x: Starting point X coordinate
@@ -1339,7 +1341,9 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
             dst_layer = self
         dst_layer.autosave_dirty = True   # XXX hmm, not working?
         self._surface.flood_fill(x, y, color, bbox, tolerance,
-                                 dst_surface=dst_layer._surface)
+                                 dst_surface=dst_layer._surface,
+                                 dilation_size=dilation_size,
+                                 gap_size=gap_size)
 
     ## Painting
 

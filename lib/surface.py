@@ -155,12 +155,12 @@ class TileRequestWrapper (TileAccessible):
         """
         if not readonly:
             raise ValueError("Only readonly tile requests are supported")
-        tile = self._cache.get((tx, ty), None)
-        if tile is None:
-            tile = np.zeros((N, N, 4), 'uint16')
-            self._cache[(tx, ty)] = tile
-            self._obj.composite_tile(tile, True, tx, ty, **self._opts)
-        yield tile
+       #tile = self._cache.get((tx, ty), None)
+       #if tile is None:
+       #    tile = np.zeros((N, N, 4), 'uint16')
+       #    self._cache[(tx, ty)] = tile
+       #    self._obj.composite_tile(tile, True, tx, ty, **self._opts)
+        yield self._request_single_tile(tx, ty)
 
     def get_bbox(self):
         """Explicit passthrough of get_bbox"""
@@ -170,6 +170,28 @@ class TileRequestWrapper (TileAccessible):
         """Pass through calls to other methods"""
         return getattr(self._obj, attr)
 
+    def _request_single_tile(self, tx, ty):
+        tile = self._cache.get((tx, ty), None)
+        if tile is None:
+            tile = np.zeros((N, N, 4), 'uint16')
+            self._cache[(tx, ty)] = tile
+            self._obj.composite_tile(tile, True, tx, ty, **self._opts)
+        return tile
+
+    def ensure_surrounding_tiles(self, tx, ty):
+        """Ensure surrounding 8 tiles, around (tx, ty)
+        This method is created for 'gap-closing' of flood-fill.
+        """
+        for oy in (-1, 0, 1):
+            for ox in (-1, 0, 1):
+                self._request_single_tile(tx+ox, ty+oy)
+
+    @property
+    def tiledict(self):
+        """ Return cache dict. but you will need preceding call 
+        of fetch_surrounding_tiles() to work this dictionary correctly.
+        """
+        return self._cache
 
 def get_tiles_bbox(tcoords):
     """Convert tile coords to a data bounding box
@@ -334,3 +356,6 @@ def save_as_png(surface, filename, *rect, **kwargs):
         # Other possible exceptions include TypeError, ValueError, but
         # those indicate incorrect coding usually; just raise them
         # normally.
+    finally:
+        if writer_fp:
+            writer_fp.close()
