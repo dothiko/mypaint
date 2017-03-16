@@ -25,6 +25,8 @@
 #define gapclose_DILATED_FLAG 0x02 // This means the pixel is just dilated pixel,
                                    // not sure original source pixel.
                                    // it might be empty pixel in source tile.
+#define gapclose_FILLED_FLAG   0x04
+#define gapclose_MASK_FLAG   0x08
                           
 //// Utility functions for c++ modules
 
@@ -63,12 +65,32 @@ gapclose_dilate_filled_tile(
     const int dilation_size // dilating pixel radius.
     );
 
+// search valid flood-fill start point.
 PyObject *
 gapclose_search_start_point(
     PyObject *py_flag_tile, // the flag tiles.
     PyObject *seeds,
     int min_x, int min_y, 
     int max_x, int max_y);
+
+#if 0
+PyObject*
+gapclose_convert_tile_flag(
+    PyObject *py_color_tile,
+    PyObject *py_flag_tile,
+    const int flag);
+#endif
+
+// Different from gapclose_search_start_point,
+// gapclose_search_empty_startpt is for
+// searching sub empty fragment area left.
+PyObject *
+gapclose_search_empty_startpt(
+    PyObject *py_color_tiles, 
+    PyObject *py_state_tiles, 
+    PyObject *py_mask_tiles,
+    const int tx, const int ty
+    ); 
 
 #endif
 

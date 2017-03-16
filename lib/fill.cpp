@@ -47,7 +47,8 @@ static inline fix15_t
 _floodfill_color_match(const fix15_short_t c1_premult[4],
                        const fix15_short_t c2_premult[4],
                        const fix15_t tolerance,
-                       const int state_flag)
+                       const int state_flag,
+                       const int target_flag)
 {
     // To share original _floodfill_color_match function with dilate.cpp, 
     // original code moved into fill.hpp as renamed 'floodfill_color_match()'
@@ -58,7 +59,7 @@ _floodfill_color_match(const fix15_short_t c1_premult[4],
     // When floodfill search pixel touches dilated contour state pixel,
     // it is treated same as color match failed case.
     if(retvalue > 0
-       && (state_flag & gapclose_DILATED_FLAG) != 0) {
+       && (state_flag & target_flag) != 0) {
             // Normal fill guard: reject when scan touch dilated contour.
             return 0;
     }
@@ -74,13 +75,14 @@ _floodfill_should_fill(const fix15_short_t src_col[4], // premult RGB+A
                        const fix15_short_t dst_col[4], // premult RGB+A
                        const fix15_short_t targ_col[4],  // premult RGB+A
                        const fix15_t tolerance,  // prescaled to range
-                       const int state_flag)
+                       const int state_flag,
+                       const int target_flag)
 {
     if (dst_col[3] != 0) {
         return false;   // already filled
     }
     return _floodfill_color_match(src_col, targ_col, 
-                                  tolerance, state_flag) > 0;
+                                  tolerance, state_flag, target_flag) > 0;
 }
 
 // A point in the fill queue
@@ -100,7 +102,8 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                  double fill_r, double fill_g, double fill_b,
                  int min_x, int min_y, int max_x, int max_y,
                  double tol,  /* [0..1] */
-                 PyObject *state)    /* state pixel tile of uint8.*/
+                 PyObject *state,  /* state pixel tile of uint8.*/
+                 int target_flag)    
 {
     // Scale the fractional tolerance arg
     const fix15_t tolerance = (fix15_t)(  MIN(1.0, MAX(0.0, tol))
@@ -160,9 +163,9 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
         y = MAX(0, MIN(y, MYPAINT_TILE_SIZE-1));
         const fix15_short_t *src_pixel = _floodfill_getpixel(src_arr, x, y);
         const fix15_short_t *dst_pixel = _floodfill_getpixel(dst_arr, x, y);
-        short state_flag = gapclose_get_state_flag(state, x, y);
+        char state_flag = gapclose_get_state_flag(state, x, y);
         if (_floodfill_should_fill(src_pixel, dst_pixel, targ, 
-                                   tolerance, state_flag)) {
+                                   tolerance, state_flag, target_flag)) {
             _floodfill_point *seed_pt = (_floodfill_point*)
                                           malloc(sizeof(_floodfill_point));
             seed_pt->x = x;
@@ -202,7 +205,7 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                 if (x != x0) { // Test was already done for queued pixels
                     if (! _floodfill_should_fill(src_pixel, dst_pixel,
                                                  targ, tolerance, 
-                                                 state_flag)) {
+                                                 state_flag, target_flag)) {
                         break;
                     }
                 }
@@ -215,7 +218,8 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
                 fix15_t alpha = fix15_one;
                 if (tolerance > 0) {
                     alpha = _floodfill_color_match(targ, src_pixel,
-                                                   tolerance, state_flag);
+                                                   tolerance, state_flag,
+                                                   target_flag);
                     // Since we use the output array to mark where we've been
                     // during the fill, we can't store an alpha of zero.
                     if (alpha == 0) {
@@ -240,7 +244,8 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
 
                     bool match_above = _floodfill_should_fill(
                                          src_pixel_above, dst_pixel_above,
-                                         targ, tolerance, state_flag_above);
+                                         targ, tolerance, state_flag_above,
+                                         target_flag);
                     if (match_above) {
                         if (look_above) {
                             // Enqueue the pixel to the north
@@ -280,7 +285,8 @@ tile_flood_fill (PyObject *src, /* readonly HxWx4 array of uint16 */
 
                     bool match_below = _floodfill_should_fill(
                                          src_pixel_below, dst_pixel_below,
-                                         targ, tolerance, state_flag_below);
+                                         targ, tolerance, state_flag_below,
+                                         target_flag);
                     if (match_below) {
                         if (look_below) {
                             // Enqueue the pixel to the South
