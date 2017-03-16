@@ -79,8 +79,9 @@ def _render_polygon_to_layer(model, target_layer, shape, nodes,
                  * NOT layer composite mode*
     """
     sx, sy, w, h = bbox
-    w = int(w)
-    h = int(h)
+    # + 1 as margin
+    w = int(w) + 1
+    h = int(h) + 1
 
     # convert to adapt library
     sx = int(sx)
@@ -402,29 +403,28 @@ class PolyfillMode (OncanvasEditMixin,
         return cls._gradient_ctrl
 
     ## Redraws
-    
-
     def redraw_item_cb(self, erase=False):
         """ Frontend method,to redraw curve from outside this class"""
         pass # do nothing for now
 
     def _queue_redraw_item(self, tdw=None):
+        if tdw == None:
+            for tdw in self._overlays:
+                self._queue_redraw_item(tdw)
+                return
 
-        for tdw in self._overlays:
-            
-            if len(self.nodes) < 2:
-                continue
+        if len(self.nodes) < 2:
+            return
 
-            sdx, sdy = self.drag_offset.get_display_offset(tdw)
-            tdw.queue_draw_area(
-                    *self._shape.get_maximum_rect(tdw, self, sdx, sdy))
+        sdx, sdy = self.drag_offset.get_display_offset(tdw)
+        tdw.queue_draw_area(
+                *self._shape.get_maximum_rect(tdw, self, sdx, sdy))
 
-    def _queue_draw_node(self, i, offsets=None, tdws=None):
+    def _queue_draw_node(self, tdw, i, offsets=None):
         """This method might called from baseclass,
         so we need to call HandleNodeUserMixin method explicitly.
         """
-        return self._queue_draw_handle_node(i, offsets, tdws)
-
+        return self._queue_draw_handle_node(tdw, i, offsets)
 
     def is_drawn_handle(self, i, hi):
         return self._shape.accept_handle

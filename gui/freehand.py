@@ -694,21 +694,9 @@ class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
             self.attach(label, 0, row, 1, 1)
             self.attach(scale, 1, row, 1, 1)
 
-       #cname = "slow_tracking"
-       #label = Gtk.Label()
-       ##TRANSLATORS: Short alias for "Slow position tracking". This is
-       ##TRANSLATORS: used on the options panel.
-       #label.set_text(_("Smooth:"))
-       #label.set_alignment(1.0, 0.5)
-       #label.set_hexpand(False)
-       #self.adjustable_settings.add(cname)
-       #adj = self.app.brush_adjustment[cname]
-       #scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL, adj)
-       #scale.set_draw_value(False)
-       #scale.set_hexpand(True)
-       #self.attach(label, 0, row, 1, 1)
-       #self.attach(scale, 1, row, 1, 1)
-       #row += 1
+        #TRANSLATORS: "Smooth:" is label widget text,  
+        #TRANSLATORS: Short alias for "Slow position tracking". This is
+        #TRANSLATORS: used on the options panel.
         create_scale_widget("slow_tracking", _("Smooth:"), None)
         row += 1
 
@@ -723,7 +711,7 @@ class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
         row += 1
 
         # Add VBox for Assistant area
-        box = self.app.assistmanager.init_options_presenter_box()
+        box = self.app.assistmanager.presenter_grid
         self.attach(box, 0, row, 2, 1)
         row += 1
 

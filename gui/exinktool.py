@@ -262,20 +262,23 @@ class ExInkingMode (PressureEditableMixin,
         size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
         tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
 
-    def _queue_draw_node(self, idx):
+    def _queue_draw_node(self, tdw, idx):
         """ For compatibility """
+        if tdw is None:
+            for tdw in self._overlays:
+                self._queue_draw_node(tdw, idx)
+            return 
+
         if self.current_node_index != None:
             basept = self.nodes[self.current_node_index]
         else:
             basept = None
 
-
-        for tdw in self._overlays:
-            model_radius = gui.ui_utils.display_to_model_distance(tdw, 
-                    self.range_radius)
-            self._queue_draw_ink_node(tdw, idx, basept,
-                    model_radius,
-                    self._generate_offset_vector())
+        model_radius = gui.ui_utils.display_to_model_distance(tdw, 
+                self.range_radius)
+        self._queue_draw_ink_node(tdw, idx, basept,
+            model_radius,
+            self._generate_offset_vector())
 
     def _queue_draw_selected_nodes(self):
         """ Override mixin """
@@ -473,7 +476,6 @@ class ExInkingMode (PressureEditableMixin,
 
 
                 # queue new node here.
-               #self._queue_draw_node(pressed_segment[0] + 1)
                 
                 self._bypass_phase(_Phase.ADJUST)
                 self.doc.app.show_transient_message(_("Create a new node on stroke"))
@@ -517,7 +519,7 @@ class ExInkingMode (PressureEditableMixin,
             else:
                 node = self._get_event_data(tdw, event)
                 self.nodes.append(node)
-                self._queue_draw_node(0)
+                self._queue_draw_node(tdw, 0)
                 self._last_node_evdata = (event.x, event.y, event.time)
                 self._last_event_node = node
         else:
@@ -558,7 +560,7 @@ class ExInkingMode (PressureEditableMixin,
                     )
                 if append_node:
                     self.nodes.append(node)
-                    self._queue_draw_node(len(self.nodes)-1)
+                    self._queue_draw_node(tdw, len(self.nodes)-1)
                     self._queue_redraw_item()
                     self._last_node_evdata = evdata
                 self._last_event_node = node
@@ -601,7 +603,7 @@ class ExInkingMode (PressureEditableMixin,
                 # For now, I define nodes are 'too close' 
                 # when their distance is less than MAX_INTERNODE_DISTANCE_MIDDLE / 5
                 if d < mid_d / 5.0:
-                    self._queue_draw_node(len(self.nodes)-1) # To avoid glitch
+                    self._queue_draw_node(tdw, len(self.nodes)-1) # To avoid glitch
                     del self.nodes[-1]
             
                 self.nodes.append(node)
@@ -720,7 +722,7 @@ class ExInkingMode (PressureEditableMixin,
         changing_pos = bool({"x", "y"}.intersection(kwargs))
         oldnode = self.nodes[i]
         if changing_pos:
-            self._queue_draw_node(i)
+            self._queue_draw_node(None, i)
         self.nodes[i] = oldnode._replace(**kwargs)
         # FIXME: The curve redraw is a bit flickery.
         #   Perhaps dragging to adjust should only draw an
@@ -728,7 +730,7 @@ class ExInkingMode (PressureEditableMixin,
         #   the stop handler.
         self._queue_redraw_item()
         if changing_pos:
-            self._queue_draw_node(i)
+            self._queue_draw_node(None, i)
 
     def can_delete_node(self, i):
         """ Override mixin method.
@@ -751,7 +753,7 @@ class ExInkingMode (PressureEditableMixin,
         assert self.can_delete_node(i), "Can't delete endpoints"
         # Redraw old locations of things while the node still exists
         self._queue_draw_buttons()
-        self._queue_draw_node(i)
+        self._queue_draw_node(None, i)
 
         self._pop_node(i)
 
@@ -772,7 +774,7 @@ class ExInkingMode (PressureEditableMixin,
 
         self._queue_draw_buttons()
         for idx in self.selected_nodes:
-            self._queue_draw_node(idx)
+            self._queue_draw_node(None, idx)
 
         new_nodes = [self.nodes[0]]
         for idx,cn in enumerate(self.nodes[1:-1]):
@@ -799,7 +801,7 @@ class ExInkingMode (PressureEditableMixin,
         assert self.can_insert_node(i), "Can't insert back of the endpoint"
         # Redraw old locations of things while the node still exists
         self._queue_draw_buttons()
-        self._queue_draw_node(i)
+        self._queue_draw_node(None, i)
         # Create the new node
         cn = self.nodes[i]
         nn = self.nodes[i+1]

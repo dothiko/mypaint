@@ -176,6 +176,9 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     # Node value adjustment settings
     MIN_INTERNODE_TIME = 1/200.0   # seconds (used to manage adjusting)
 
+    # Node drawing margin, which is dropping shadows
+    NODE_SIZE = int(math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE) + 
+                    math.ceil(gui.style.DROP_SHADOW_BLUR)) + 1
 
     ## Class attributes
  
@@ -457,12 +460,12 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             if new_target_node_index != self.target_node_index:
                 # Redrawing old target node.
                 if self.target_node_index is not None:
-                    self._queue_draw_node(self.target_node_index)
+                    self._queue_draw_node(tdw, self.target_node_index)
                     self.node_leave_cb(tdw, self.nodes[self.target_node_index]) 
 
                 self.target_node_index = new_target_node_index
                 if self.target_node_index is not None:
-                    self._queue_draw_node(self.target_node_index)
+                    self._queue_draw_node(tdw, self.target_node_index)
                     self.node_enter_cb(tdw, self.nodes[self.target_node_index]) 
 
             self.current_node_handle = new_handle_idx
@@ -554,33 +557,45 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 x, y = pos
                 tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
 
-    def _queue_draw_node(self, idx, offsets=None):
+    def _queue_draw_node(self, tdw, idx, offsets=None):
         """ queue an oncanvas item to draw."""
+        if tdw is None:
+            for tdw in self._overlays:
+                self._queue_draw_node(tdw, idx, offsets)
+            return
+
         cn = self.nodes[idx]
         if offsets == None:
             dx=dy=0
         else:
             dx,dy = offsets
-        for tdw in self._overlays:
-            x, y = tdw.model_to_display(cn.x + dx, cn.y + dy)
-            x = math.floor(x)
-            y = math.floor(y)
-            size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
-            tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
 
-    def _queue_draw_selected_nodes(self):
+        x, y = tdw.model_to_display(cn.x + dx, cn.y + dy)
+        x = math.floor(x)
+        y = math.floor(y)
+        size = self.NODE_SIZE
+        tdw.queue_draw_area(x-size/2, y-size/2, 
+                            size, size)
+
+    def _queue_draw_selected_nodes(self, tdw):
+        if tdw is None:
+            for tdw in self._overlays:
+                self._queue_draw_selected_nodes(tdw)
+            return
+
         offsets = self.drag_offset.get_model_offset()
         for i in self.selected_nodes:
-            self._queue_draw_node(i, offsets=offsets) 
+            self._queue_draw_node(tdw, i, offsets=offsets) 
 
     def _queue_redraw_all_nodes(self):
         """Redraws all nodes on all known view TDWs"""
         offsets = self.drag_offset.get_model_offset()
-        for i in xrange(len(self.nodes)):
-            if i in self.selected_nodes:
-                self._queue_draw_node(i, offsets=offsets)
-            else:
-                self._queue_draw_node(i)
+        for tdw in self._overlays:
+            for i in xrange(len(self.nodes)):
+                if i in self.selected_nodes:
+                    self._queue_draw_node(tdw, i, offsets=offsets)
+                else:
+                    self._queue_draw_node(tdw, i)
 
     ## Redrawing task management
 
@@ -810,11 +825,11 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             if self._dragged_node_start_pos:
 
                 # To erase old-positioned nodes.
-                self._queue_draw_selected_nodes()
+                self._queue_draw_selected_nodes(tdw)
 
                 x, y = tdw.display_to_model(event.x, event.y)
                 self.drag_offset.end(x, y)
-                self._queue_draw_selected_nodes()
+                self._queue_draw_selected_nodes(tdw)
 
                 self._queue_redraw_item()
 
@@ -832,7 +847,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             # Finalize dragging motion to selected nodes.
             if self._dragged_node_start_pos:
  
-                self._queue_draw_selected_nodes() # to ensure erase them
+                self._queue_draw_selected_nodes(tdw) # to ensure erase them
                 dx, dy = self.drag_offset.get_model_offset()
 
                 if dx != 0 or dy != 0:
@@ -842,7 +857,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
  
                 self.drag_offset.reset()
 
-                self._queue_draw_selected_nodes() # to ensure erase them
+                self._queue_draw_selected_nodes(tdw) # to ensure erase them
                 self._queue_redraw_item()
                 self._queue_draw_buttons()
  
@@ -973,7 +988,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                     self.selected_nodes.append(idx)
 
             if update_gui:
-                self._queue_draw_node(idx)
+                self._queue_draw_node(None, idx)
 
         if len(self.selected_nodes) == 0:
             self.target_node_index = None
@@ -994,14 +1009,14 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             # Without this, garbage pixel remained screen
             # when there is some other visual objects (such as 'bezier handle')
             # around current node.
-            self._queue_draw_node(self.current_node_index) 
+            self._queue_draw_node(None, self.current_node_index) 
 
         self.current_node_index = new_index
         self.current_node_changed(new_index)
         self.options_presenter.target = (self, new_index)
         for i in (old_index, new_index):
             if i is not None:
-                self._queue_draw_node(i)
+                self._queue_draw_node(None, i)
  
     @lib.observable.event
     def current_node_changed(self, index):
@@ -1204,7 +1219,7 @@ class PressureEditableMixin(OncanvasEditMixin,
 
     def node_drag_start_cb(self, tdw, event):
         if self.phase == PressPhase.ADJUST_PRESSURE_ONESHOT:
-                self._queue_draw_selected_nodes()
+                self._queue_draw_selected_nodes(tdw)
         elif self.phase == PressPhase.ADJUST_PRESSURE:
                 self._queue_redraw_all_nodes()
         elif self.phase == PressPhase.CAPTURE:
@@ -1545,7 +1560,7 @@ class HandleNodeUserMixin(NodeUserMixin):
 
         return (targidx, node_handle)
 
-    def _queue_draw_handle_node(self, i, offsets=None, tdws=None):
+    def _queue_draw_handle_node(self, tdw, i, offsets=None):
         """Redraws a specific control node on all known view TDWs
 
         You must call this method from your class of _queue_draw_node(),
@@ -1555,57 +1570,63 @@ class HandleNodeUserMixin(NodeUserMixin):
         Python Multiple inheritance cannot override methods of OncanvasEditMixin
         with this mixin.
         """
+        if tdw==None:
+            for tdw in self._overlays:
+                self._queue_draw_handle_node(tdw, i, offsets)
+            return
 
-        def get_area(nx, ny, radius, old_area=None):
+        def get_area(nx, ny, radius, expanded_area=None):
             x, y = tdw.model_to_display(nx, ny)
 
             x = math.ceil(x)
             y = math.ceil(y)
-            sx = x-radius-2
-            sy = y-radius-2
-            ex = x+radius+2
-            ey = y+radius+2
-            if not old_area:
+            sx = x-radius-1
+            sy = y-radius-1
+            ex = x+radius+1
+            ey = y+radius+1
+            if not expanded_area:
                 return (sx, sy, ex, ey)
             else:
-                return (min(old_area[0], sx),
-                        min(old_area[1], sy),
-                        max(old_area[2], ex),
-                        max(old_area[3], ey))
+                return (min(expanded_area[0], sx),
+                        min(expanded_area[1], sy),
+                        max(expanded_area[2], ex),
+                        max(expanded_area[3], ey))
 
 
         node = self.nodes[i]
-        radius = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE)
+        radius = self.NODE_SIZE / 2 + 1
         dx = dy = 0
 
-        if i in self.selected_nodes:
-            if offsets == None:
-                dx, dy = self.drag_offset.get_model_offset()
-            else:
-                dx, dy = offsets
+       #if i in self.selected_nodes:
+       #    if offsets == None:
+       #        dx, dy = self.drag_offset.get_model_offset()
+       #    else:
+       #        dx, dy = offsets
+        if offsets is not None:
+            dx, dy = offsets
 
-        if tdws==None:
-            tdws=self._overlays
+        area = get_area(node.x+dx, node.y+dy, radius)
 
-        for tdw in tdws:
-            area = get_area(node.x+dx, node.y+dy, radius)
+        # Only CURRENT NODE can be manipulated control handles.
+        # NOT SELECTED NODES.
+        if i == self.current_node_index:
+        
+            # Active control handles also should be queued.
+            for hi in (0,1):
+                # But,the first node only shows 2nd(index 1) handle.
+                if self.is_drawn_handle(i, hi):
+                    handle = node.get_control_handle(hi)
+                    area = get_area( 
+                        handle.x+dx, handle.y+dy, 
+                        gui.style.DRAGGABLE_POINT_HANDLE_SIZE+1,
+                        area)
 
-            # Only CURRENT NODE can be manipulated control handles.
-            # NOT SELECTED NODES.
-            if i == self.current_node_index:
-            
-                # Active control handles also should be queued.
-                for hi in (0,1):
-                    # But,the first node only shows 2nd(index 1) handle.
-                    if self.is_drawn_handle(i, hi):
-                        handle = node.get_control_handle(hi)
-                        area = get_area( 
-                            handle.x+dx, handle.y+dy, 
-                            radius, area)
+       #print("queue area")
+       #print("%d:%.4f, %.4f" % (i, area[0], area[1]))
 
-            tdw.queue_draw_area(area[0], area[1], 
-                    area[2] - area[0] + 1, 
-                    area[3] - area[1] + 1)
+        tdw.queue_draw_area(area[0], area[1], 
+                area[2] - area[0] + 1, 
+                area[3] - area[1] + 1)
 
 
     def is_drawn_handle(self, node_idx, hndl_idx):

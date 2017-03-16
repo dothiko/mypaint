@@ -493,14 +493,14 @@ class BezierMode (PressureEditableMixin,
         self._queue_draw_buttons() 
 
         if self.current_node_index != None:
-            self._queue_draw_node(self.current_node_index) # To Erase
+            self._queue_draw_node(None, self.current_node_index) # To Erase
 
         self.current_node_index = new_index
         self.current_node_changed(new_index)
         self.options_presenter.target = (self, new_index)
         for i in (old_index, new_index):
             if i is not None:
-                self._queue_draw_node(i)
+                self._queue_draw_node(None, i)
 
         self._queue_draw_buttons()
 
@@ -613,16 +613,27 @@ class BezierMode (PressureEditableMixin,
    #    # Fallthrough: return None when failed.
 
     ## Redraws
-    def _queue_draw_node(self, i, offsets=None, tdws=None):
+   #def _queue_draw_node(self, i, offsets=None, tdws=None):
+    def _queue_draw_node(self, tdw, i, offsets=None):
         """This method might called from baseclass,
         so we need to call HandleNodeUserMixin method explicitly.
         """
-        return self._queue_draw_handle_node(i, offsets, tdws)
+        if offsets is None:
+            if i in self.selected_nodes:
+                offsets = self.drag_offset.get_model_offset() 
 
-    # def _queue_draw_selected_nodes(self):
-    # def _queue_redraw_all_nodes(self):
-    # are defined at HandleNodeUserMixin of gui/oncanvas.py.
+        return self._queue_draw_handle_node(tdw, i, offsets)
 
+    def _queue_draw_selected_nodes(self, tdw):
+        if tdw is None:
+            for tdw in self._overlays:
+                self._queue_draw_selected_nodes(tdw)
+            return
+
+        offsets = self.drag_offset.get_model_offset() 
+
+        for i in self.selected_nodes:
+            self._queue_draw_node(tdw, i, offsets)
 
     def redraw_item_cb(self, erase=False):
         """ Frontend method,to redraw item (for example, it is stroke curve
@@ -872,7 +883,7 @@ class BezierMode (PressureEditableMixin,
                     # inkscape-like node creation.
                     self.current_node_handle = 1 
 
-                    self._queue_draw_node(idx)
+                    self._queue_draw_node(tdw, idx)
 
                     # Actually, this drag_offset.start() call is not to start,
                     # but to disable offset during handle manipulation.
@@ -896,11 +907,11 @@ class BezierMode (PressureEditableMixin,
         elif self.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
             node = self._last_event_node
             if self._last_event_node:
-                self._queue_draw_node(self.current_node_index, tdws=(tdw,))# to erase
+                self._queue_draw_node(tdw, self.current_node_index)# to erase
                 node.set_control_handle(self.current_node_handle,
                         mx, my,
                         shift_state)
-                self._queue_draw_node(self.current_node_index, tdws=(tdw,))# to update
+                self._queue_draw_node(tdw, self.current_node_index)# to update
             self._queue_redraw_item()
         else:
             super(BezierMode, self).node_drag_update_cb(tdw, event, dx, dy)
@@ -933,16 +944,16 @@ class BezierMode (PressureEditableMixin,
                 # initial value = False.
                 node.curve = False
 
-            self._queue_draw_node(self.current_node_index) # to erase
+            self._queue_draw_node(tdw, self.current_node_index) # to erase
 
             self._queue_redraw_item()
             if len(self.nodes) > 1:
                 self._queue_draw_buttons()
             self.phase = _Phase.ADJUST
-            self._queue_draw_node(self.current_node_index) # to refrect new phase visual
+            self._queue_draw_node(tdw, self.current_node_index) 
         
         elif self.phase == _Phase.ADJUST_POS:
-            self._queue_draw_selected_nodes() # to ensure erase them
+            self._queue_draw_selected_nodes(tdw) # to ensure erase them
             dx, dy = self.drag_offset.get_model_offset()
         
             for idx in self.selected_nodes:
@@ -953,7 +964,7 @@ class BezierMode (PressureEditableMixin,
             self._dragged_node_start_pos = None
             self._queue_redraw_item()
             self._queue_draw_buttons()
-            self._queue_draw_selected_nodes() 
+            self._queue_draw_selected_nodes(tdw) 
             self.phase = _Phase.ADJUST
         elif self.phase in (_Phase.ADJUST_PRESSURE, 
                             _Phase.ADJUST_PRESSURE_ONESHOT): 
@@ -1061,7 +1072,7 @@ class BezierMode (PressureEditableMixin,
         assert self.can_insert_node(i), "Can't insert back of the endpoint"
         # Redraw old locations of things while the node still exists
         self._queue_draw_buttons()
-        self._queue_draw_node(i)
+        self._queue_draw_node(None, i)
         # Create the new node
         cn = self.nodes[i]
         nn = self.nodes[i+1]
@@ -1150,7 +1161,7 @@ class BezierMode (PressureEditableMixin,
         # First of all,queue redraw area.
         self._queue_draw_buttons()
         for idx in self.selected_nodes:
-            self._queue_draw_node(idx)
+            self._queue_draw_node(None, idx)
 
         self._queue_redraw_item()
 
@@ -1208,7 +1219,7 @@ class BezierMode (PressureEditableMixin,
         if 'time' in kwargs:
             node.pressure = kwargs['time']
 
-        self._queue_draw_node(i)
+        self._queue_draw_node(None, i)
         self._queue_redraw_item()
 
 
@@ -1577,10 +1588,10 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking,
         beziermode, node_idx = self.target
         if beziermode:
             if 0 <= node_idx < len(beziermode.nodes):
-                beziermode._queue_draw_node(node_idx) 
+                beziermode._queue_draw_node(None, node_idx) 
                 beziermode._queue_redraw_item()
                 beziermode.nodes[node_idx].curve = button.get_active()
-                beziermode._queue_draw_node(node_idx) 
+                beziermode._queue_draw_node(None, node_idx) 
                 beziermode._queue_redraw_item()
 
 

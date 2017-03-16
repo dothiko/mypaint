@@ -988,13 +988,6 @@ Vocabulary
       <!-- }}} -->
       <!-- {{{ Stamptool actions -->
       <child>
-        <object class="GtkAction" id="StampRandomize">
-          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Randomize stamp</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Randomize stamp tile index.</property>
-          <signal name="activate" handler="stamp_randomize_cb"/>
-        </object>
-      </child>
-      <child>
         <object class="GtkAction" id="StampFillAtop">
           <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Stamp Fill Atop</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Draw stamps over opaque area of current layer.</property>

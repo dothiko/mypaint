@@ -9,6 +9,7 @@ from gi.repository import Gdk
 from gui.oncanvas import *
 import gui.gradient
 from gui.beziertool import detect_on_stroke, _Control_Handle, _Node_Bezier
+import gui.style
 
 class _EditZone(EditZoneMixin):
     """Enumeration of what the pointer is on in the ADJUST phase"""
@@ -39,7 +40,7 @@ class Shape(object):
     TYPE_RECTANGLE = 2
     TYPE_ELLIPSE = 3
 
-    MARGIN = 3
+    MARGIN = int(math.ceil(gui.style.DROP_SHADOW_BLUR))
     accept_handle = False
 
     def generate_node(self):
@@ -261,7 +262,8 @@ class Shape_Bezier(Shape):
     
                         if mode.current_node_handle != None:
                             mode.phase = _Phase.ADJUST_HANDLE
-                            mode._queue_draw_node(mode.current_node_index) 
+                            mode._queue_draw_node(tdw,
+                                                  mode.current_node_index) 
                         else:
                             mode.phase = _Phase.ADJUST_POS
                             do_reset = self.alt_state
@@ -269,7 +271,7 @@ class Shape_Bezier(Shape):
         
                             if do_reset:
                                 # To avoid old selected nodes still lit.
-                                mode._queue_draw_selected_nodes() 
+                                mode._queue_draw_selected_nodes(tdw) 
                                #mode._reset_selected_nodes(mode.current_node_index)
                                 mode.select_node(mode.current_node_index, True)
 
@@ -348,7 +350,7 @@ class Shape_Bezier(Shape):
                     mode.current_node_handle = 1 
 
                     mode.current_node_index=idx
-                    mode._queue_draw_node(idx)
+                    mode._queue_draw_node(tdw, idx)
 
                     # Actually, cancel select node.
                     mode.drag_offset.start(mx, my)
@@ -373,19 +375,19 @@ class Shape_Bezier(Shape):
             mode._queue_redraw_item(tdw)# to erase item - because it uses overlay.  
             node = mode._last_event_node
             if node:
-                mode._queue_draw_node(mode.current_node_index)# to erase
+                mode._queue_draw_node(tdw, mode.current_node_index)# to erase
                 node.set_control_handle(mode.current_node_handle,
                         mx, my,
                         self.shift_state)
-                mode._queue_draw_node(mode.current_node_index)
+                mode._queue_draw_node(tdw, mode.current_node_index)
             mode._queue_redraw_item(tdw)
                 
         elif mode.phase == _Phase.ADJUST_POS:
             if len(mode.selected_nodes) > 0:
                 mode._queue_redraw_item(tdw)  
-                mode._queue_draw_selected_nodes()
+                mode._queue_draw_selected_nodes(tdw)
                 mode.drag_offset.end(mx, my)
-                mode._queue_draw_selected_nodes()
+                mode._queue_draw_selected_nodes(tdw)
                 mode._queue_redraw_item(tdw)
 
     def drag_stop_cb(self, mode, tdw):
@@ -514,7 +516,7 @@ class Shape_Polyline(Shape_Bezier):
                     mode._last_event_node = node
                     mode.current_node_index = len(mode.nodes)-1
                     mode.select_node(mode.current_node_index, True)
-                    mode._queue_draw_node(mode.current_node_index)
+                    mode._queue_draw_node(tdw, mode.current_node_index)
                     mode.phase = _Phase.ADJUST_POS
                     mode.drag_offset.start(mx, my)
         else:
@@ -523,6 +525,20 @@ class Shape_Polyline(Shape_Bezier):
 
 
 class Shape_Rectangle(Shape):
+    """Rectangular shape class.
+    For this type of shape, always contains 4 nodes
+    it is clockwise, 0 = upper-left, 1 = upper-right,
+    2 = lower-right, 3 = lower-left.
+
+    TODO : Still this class(and ellipse) does not support
+    screen rotation. It is not good, so it should be 
+    supported in near future.
+
+    To support screen rotation, this class remember the
+    initial right-angled vertical vector, and when modifying
+    rectangle corners, it follows the vertical vector of 
+    creation time.
+    """
 
     name = _("Rectangle")
 
@@ -532,7 +548,7 @@ class Shape_Rectangle(Shape):
     def draw_node_polygon(self, cr, tdw, nodes, selected_nodes=None, 
             color=None, gradient=None,
             dx=0, dy=0, ox=0, oy=0, stroke=False, fill=True):
-        """ draw cairo polygon
+        """ draw the shape consist from nodes with cairo
         :param color: color object of mypaint
         :param gradient: Gradient object. cairo.LinearGradient or something
 
@@ -596,6 +612,8 @@ class Shape_Rectangle(Shape):
             cr.restore()
 
     def paint_nodes(self, cr, tdw, mode, radius):
+        """Called from Overlay class
+        """
         if len(mode.nodes) >= 4:
             dx, dy = mode.drag_offset.get_display_offset(tdw)
             sx, sy, ex, ey = self._setup_node_area(tdw, mode, dx, dy)
@@ -628,7 +646,7 @@ class Shape_Rectangle(Shape):
             sy, ey = ey, sy
 
         if tdw:
-            margin = Shape.MARGIN
+            margin = Shape.MARGIN + 1 
             sx -= margin
             sy -= margin
             ex += margin
@@ -660,9 +678,10 @@ class Shape_Rectangle(Shape):
         """
         Setup nodes as rectangle.
 
+        if tdw is valid(not None), 
+        dx and dy MUST be display coordinate.
+
         :param dx: offset of currently selected nodes.
-                   if tdw is not none, dx and dy MUST be
-                   display coordinate.
         :param dy: offset of currently selected nodes.
         """
         sx, sy = mode.nodes[0]
@@ -690,17 +709,28 @@ class Shape_Rectangle(Shape):
 
         return (sx, sy, ex, ey)
 
+    def _queue_redraw_all_nodes(self, mode):
+        """Specialized version of redrawing nodes
+        of this shape class.
+        Redraws all nodes on all known view TDWs.
+        
+        For this type shape, moving a node would also
+        move another side of node.
+        i.e. if you move upper-right node vertically,
+        the upper-left node would also move.
+        And, if move upper-right one horizontally,
+        the lower-left node would move.
+        """
 
-    def queue_redraw_nodes(self, tdw, mode):
-        dx, dy = mode.drag_offset.get_display_offset(tdw)
-        sx, sy, ex, ey = self._setup_node_area(tdw, mode, dx, dy)
+        radius = mode.NODE_SIZE + 1
 
-        size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
-
-        for i, x, y in gui.ui_utils.enum_area_point(sx, sy, ex, ey):
-            x = math.floor(x)
-            y = math.floor(y)
-            tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
+        for tdw in mode._overlays:
+            offsets = mode.drag_offset.get_display_offset(tdw)
+            area = self._setup_node_area(tdw, mode, *offsets)
+            for i, x, y in gui.ui_utils.enum_area_point(*area):
+                tdw.queue_draw_area(x-radius, y-radius,
+                                    radius*2,
+                                    radius*2)
 
     def button_press_cb(self, mode, tdw, event):
         mx, my = tdw.display_to_model(event.x, event.y)
@@ -720,10 +750,7 @@ class Shape_Rectangle(Shape):
                     mode.accept_button_cb(tdw)
                 self.ensure_mode_nodes(mode, mx, my)
 
-
             # FALLTHRU: *do* start a drag 
-
-
 
     def button_release_cb(self, mode, tdw, event):
 
@@ -734,8 +761,6 @@ class Shape_Rectangle(Shape):
         if mode.phase == _Phase.PLACE_NODE:
             mode._queue_redraw_item(tdw) 
             mode.phase = _Phase.ADJUST
-
-
 
     def drag_start_cb(self, mode, tdw, event):
         # Basically,all sections should do fall-through.
@@ -751,11 +776,10 @@ class Shape_Rectangle(Shape):
                 else:
                     # New node added!
                     mode.current_node_index=0
-                   #mode._reset_selected_nodes(mode.current_node_index)
                     mode.select_node(mode.current_node_index, True)
                     mode.drag_offset.start(mx, my)
                     mode._queue_redraw_item(tdw)  
-                    mode._queue_redraw_all_nodes()
+                    self._queue_redraw_all_nodes(mode)
 
         elif mode.phase == _Phase.ADJUST_POS:
             if len(mode.selected_nodes) > 0:
@@ -767,17 +791,17 @@ class Shape_Rectangle(Shape):
         mx, my = tdw.display_to_model(event.x, event.y)
 
         if mode.phase == _Phase.ADJUST:
-            self.queue_redraw_nodes(tdw, mode)
+            self._queue_redraw_all_nodes(mode)
             mode._queue_redraw_item(tdw)  
             mode.drag_offset.end(mx, my)
-            self.queue_redraw_nodes(tdw, mode)
+            self._queue_redraw_all_nodes(mode)
             mode._queue_redraw_item(tdw)  
         elif mode.phase == _Phase.ADJUST_POS:
             if len(mode.selected_nodes) > 0:
                 mode._queue_redraw_item(tdw)  
-                mode._queue_redraw_all_nodes()
+                self._queue_redraw_all_nodes(mode)
                 mode.drag_offset.end(mx, my)
-                mode._queue_redraw_all_nodes()
+                self._queue_redraw_all_nodes(mode)
                 mode._queue_redraw_item(tdw)
 
     def drag_stop_cb(self, mode, tdw):
@@ -792,7 +816,7 @@ class Shape_Rectangle(Shape):
             self.set_area(mode, sx, sy, ex, ey)
 
             mode._queue_redraw_item(tdw)
-            mode._queue_redraw_all_nodes()
+            self._queue_redraw_all_nodes(mode)
             mode._queue_draw_buttons()
             mode._reset_adjust_data()
             
@@ -825,7 +849,7 @@ class Shape_Rectangle(Shape):
             mode.drag_offset.reset()
             mode._queue_redraw_item(tdw)
             mode._queue_draw_buttons()
-            mode._queue_redraw_all_nodes()
+            self._queue_redraw_all_nodes(mode) # self method
             mode.phase = _Phase.ADJUST
             mode._reset_adjust_data()
 
@@ -901,9 +925,10 @@ class Shape_Ellipse(Shape_Rectangle):
             # ... but almost okay?
             # code from:
             # http://stackoverflow.com/questions/14169234/the-relation-of-the-bezier-curve-and-ellipse
-            hw = w / 2.0
-            hh = h / 2.0
-            tw = w * (2.0 / 3.0)
+            hw = math.floor(w / 2.0)
+            hh = math.floor(h / 2.0)
+            # To avoid arithmetic error, not use w, but hw * 2.0
+            tw = (hw * 2.0) * (2.0 / 3.0) 
             x = sx + hw
             y = sy + hh
 

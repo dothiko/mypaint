@@ -42,9 +42,10 @@ class AssistManager(object):
         self._blend_modes_action={}
         app.brushmanager.brush_selected += self.brush_selected_cb
         self._current_blend = None
-        self._presenter_box = None
         self._empty_box = Gtk.VBox()
         self._brushlookup = {}
+        self._presenter_grid = None
+        self._assistant_combo = None
 
     @property
     def current(self):
@@ -55,6 +56,14 @@ class AssistManager(object):
         force_redraw_overlay() # To clear old overlay contents.
 
         self._current = assistant
+
+        # When options presenter is not displayed by default,
+        # assitant_combo is not generated yet. so generate it now.
+        # After this, when presenter_grid property accessed from
+        # another line, that method just returns already generated
+        # grid widget immidiately.
+        if self._assistant_combo is None:
+            grid = self.presenter_grid # generate with this
         combo = self._assistant_combo
 
         binfo = self.app.doc.model.brush.brushinfo
@@ -65,57 +74,17 @@ class AssistManager(object):
             self._activate_presenter(None)
         else:
             self._current.reset()
-
             combo_model = combo.get_model()
             for row in combo_model:
                 if combo_model.get(row.iter,0)[0] == self._current.name:
                    combo.set_active_iter(row.iter)
-
             self._activate_presenter(self._current.options_presenter) 
 
         self._brushlookup[brush_name] = assistant
 
-
-    def get_assistant_from_label(self, label):
-        """ Get assistant from label, i.e. 'combobox' text == assistant.name
-        not 'Gtk.Action' name.
-        :rtype tuple: the tuple of (action name, assistant)
-        """
-        for item in self._assistants.items():
-            action_name, assistant = item
-            if assistant and assistant.name == label:
-                return item
-
-        return (None, None)
-
-
-    def enable_assistant(self, action_name):
-        """ Enable assistant.
-        
-        :param action_name: the Gtk.Action name of assistant. 
-        if this is None, assistant disabled.
-        """
-        assert action_name in self._assistants.keys()
-
-        # With setting up current assistant through the property
-        # "current", internal _brushlookup list also updated.
-        self.current = self._assistants[action_name]
-
-    def brush_selected_cb(self, bm, managed_brush, brushinfo):
-        """ Anyway, reset current assistant.
-        """
-        if managed_brush.name in self._brushlookup:
-            assistant = self._brushlookup[managed_brush.name]
-        else:
-            assistant = None
-        self.current = assistant
-
-
-
-    # Options presenter
-
-    def init_options_presenter_box(self):
-        """ Option presenter initialize method.
+    @property
+    def presenter_grid(self):
+        """Getting assistants Option presenter property.
         With this method, Gtk.Alignment(self._assistant_options_bin) has been 
         created, and Options-presenter of each assistant classes are shown
         inside that Gtk.Alignment.
@@ -123,6 +92,9 @@ class AssistManager(object):
         This should be called from FreehandOptionsWidget.init_specialized_widgets
         of gui/freehand.py 
         """ 
+        if self._presenter_grid is not None:
+            return self._presenter_grid
+
         grid = Gtk.Grid(column_spacing=8, row_spacing=6, 
                 hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
         grid.margin = 4
@@ -159,6 +131,39 @@ class AssistManager(object):
         grid.show_all()
         return grid
 
+    def get_assistant_from_label(self, label):
+        """ Get assistant from label, i.e. 'combobox' text == assistant.name
+        not 'Gtk.Action' name.
+        :rtype tuple: the tuple of (action name, assistant)
+        """
+        for item in self._assistants.items():
+            action_name, assistant = item
+            if assistant and assistant.name == label:
+                return item
+
+        return (None, None)
+
+    def enable_assistant(self, action_name):
+        """ Enable assistant.
+        
+        :param action_name: the Gtk.Action name of assistant. 
+        if this is None, assistant disabled.
+        """
+        assert action_name in self._assistants.keys()
+
+        # With setting up current assistant through the property
+        # "current", internal _brushlookup list also updated.
+        self.current = self._assistants[action_name]
+
+    def brush_selected_cb(self, bm, managed_brush, brushinfo):
+        """ Anyway, reset current assistant.
+        """
+        if managed_brush.name in self._brushlookup:
+            assistant = self._brushlookup[managed_brush.name]
+        else:
+            assistant = None
+        self.current = assistant
+
     ## Presenter codes
 
     @property
@@ -174,7 +179,6 @@ class AssistManager(object):
             widget = self._empty_box
         else:
             widget = presenter.get_box_widget()
-
 
         bin = self._assistant_options_bin
         old_option = bin.get_child()
