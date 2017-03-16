@@ -28,7 +28,8 @@ tile_flood_fill  (PyObject *src,     // readonly HxWx4 array of uint16
                   double fill_r, double fill_g, double fill_b,
                   int min_x, int min_y, int max_x, int max_y,
                   double tolerance,  // [0..1]
-                  PyObject *status   // Status tile, HxWx1 array of char
+                  PyObject *status,   // Status tile, HxWx1 array of char
+                  int target_flag
                   );       
 
 
