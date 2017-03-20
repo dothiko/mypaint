@@ -856,7 +856,8 @@ class OverlayPolyfill (OverlayBezier):
         """Draw adjustable nodes to the screen"""
         mode = self._mode
         alloc = self._tdw.get_allocation()
-        dx, dy = mode.drag_offset.get_display_offset(self._tdw)
+       #dx, dy = mode.drag_offset.get_display_offset(self._tdw)
+        dx, dy = mode.drag_offset.get_model_offset()
         shape = mode.shape
 
         # drawing path
