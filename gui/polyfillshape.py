@@ -103,7 +103,7 @@ class Shape_Bezier(Shape):
                 elif color:
                     cr.set_source_rgb(*color.get_rgb())
 
-            for i, node in enumerate(nodes):#self._get_onscreen_nodes():
+            for i, node in enumerate(nodes):
 
                 if i==len(nodes)-1 and len(nodes) < 3:
                     break
@@ -115,14 +115,8 @@ class Shape_Bezier(Shape):
 
                 x-=ox
                 y-=oy
-
                 n = (i+1) % len(nodes)
 
-               #if tdw:
-               #    x1, y1 = tdw.model_to_display(*node.get_control_handle(1))
-               #    x2, y2 = tdw.model_to_display(*nodes[n].get_control_handle(0))
-               #    x3, y3 = tdw.model_to_display(nodes[n].x, nodes[n].y)
-               #else:
                 x1, y1 = node.get_control_handle(1)
                 x2, y2 = nodes[n].get_control_handle(0)
                 x3, y3 = nodes[n].x, nodes[n].y
@@ -135,13 +129,11 @@ class Shape_Bezier(Shape):
                 y3-=oy
 
                 if selected_nodes:
-
                     if i in selected_nodes:
                         x += dx
                         y += dy
                         x1 += dx
                         y1 += dy
-
                     if n in selected_nodes:
                         x2 += dx
                         y2 += dy
@@ -156,10 +148,7 @@ class Shape_Bezier(Shape):
                 if fill or i < len(nodes)-1:
                     if i==0:
                         cr.move_to(x,y)
-
                     cr.curve_to(x1, y1, x2, y2, x3, y3)
-
-
 
             if fill and len(nodes) > 2 and (gradient or color):
                 cr.close_path()
@@ -174,9 +163,7 @@ class Shape_Bezier(Shape):
                     cr.curve_to(x1, y1, x2, y2, x3, y3)
                     Shape.draw_dash(cr, 10)
 
-
             cr.restore()
-
 
     def get_maximum_rect(self, tdw, mode, dx=0, dy=0):
         """ get possible maximum rectangle
@@ -204,9 +191,6 @@ class Shape_Bezier(Shape):
 
             return (min(sx, cx - margin), min(sy, cy - margin),
                     max(ex, cx + margin), max(ey, cy + margin))
-
-
-
 
         # Get boundary rectangle of each segment
         # and return the maximum
@@ -239,9 +223,7 @@ class Shape_Bezier(Shape):
 
         return (sx, sy, abs(ex - sx) + 1, abs(ey - sy) + 1)
 
-
     def button_press_cb(self, mode, tdw, event):
-
 
         if mode.phase in (_Phase.ADJUST, _Phase.ADJUST_POS):
             # Remember, the base class (of mode instance) might
@@ -465,11 +447,6 @@ class Shape_Polyline(Shape_Bezier):
                     cr.set_source_rgb(*color.get_rgb())
 
             for i, node in enumerate(nodes):
-
-               #if tdw:
-               #    x, y = tdw.model_to_display(node.x, node.y)
-               #else:
-               #    x, y = node
                 x, y = node
 
                 x-=ox
@@ -488,8 +465,6 @@ class Shape_Polyline(Shape_Bezier):
                     cr.move_to(x, y)
                 else:
                     cr.line_to(x, y)
-
-
 
             if fill and len(nodes) > 2 and (gradient or color):
                 cr.close_path()
@@ -587,11 +562,6 @@ class Shape_Rectangle(Shape):
 
             cnt = 0
             for i, x, y in self._iter_edges_raw(nodes, dx, dy, selidx):
-               #if tdw:
-               #    x, y = tdw.model_to_display(x, y)
-               #else:
-               #    x -= ox
-               #    y -= oy
                 x -= ox
                 y -= oy
 
@@ -626,7 +596,7 @@ class Shape_Rectangle(Shape):
 
     def _iter_edges_raw(self, nodes, dx, dy, cidx):
         """Iter all edges , with offset adjustment.
-        This method create to support canvas rotation. 
+        This method create to support canvas rotation.
 
         :param dx, dy: offsets in MODEL COODINATE
         """
@@ -682,10 +652,6 @@ class Shape_Rectangle(Shape):
         """Called from Overlay class
         """
         if len(mode.nodes) >= 4:
-           #dx, dy = mode.drag_offset.get_display_offset(tdw)
-           #sx, sy, ex, ey = self._setup_node_area(tdw, mode, dx, dy)
-           #
-           #for i, x, y in gui.ui_utils.enum_area_point(sx, sy, ex, ey):
             for i, x, y in self._iter_edges(mode):
                 x, y = tdw.model_to_display(x, y)
                 if i == mode.current_node_index:
@@ -698,7 +664,6 @@ class Shape_Rectangle(Shape):
                     color=color,
                     radius=radius)
 
-
     def get_maximum_rect(self, tdw, mode, dx=0, dy=0):
         """
         Get maximum rectangle area:
@@ -710,25 +675,8 @@ class Shape_Rectangle(Shape):
         """
         sx = ex = mode.nodes[0].x
         sy = ey = mode.nodes[0].y
-       #for cn in mode.nodes[1:]:
-       #    sx = min(cn.x, sx)
-       #    sy = min(cn.y, sy)
-       #    ex = max(cn.x, ex)
-       #    ey = max(cn.y, ey)
-       #
-       #sx, sy, ex, ey = self._setup_node_area(tdw, mode, dx, dy)
-       #if sx > ex:
-       #    sx, ex = ex, sx
-       #if sy > ey:
-       #    sy, ey = ey, sy
-       #for cn in mode.nodes[1:]:
-       #    sx = min(cn.x, sx)
-       #    sy = min(cn.y, sy)
-       #    ex = max(cn.x, ex)
-       #    ey = max(cn.y, ey)
-
         if tdw:
-            sx , sy = tdw.model_to_display(mode.nodes[0].x, 
+            sx , sy = tdw.model_to_display(mode.nodes[0].x,
                                            mode.nodes[0].y)
         else:
             sx , sy = mode.nodes[0].x, mode.nodes[0].y
@@ -771,7 +719,6 @@ class Shape_Rectangle(Shape):
         for i in xrange(4):
             mode.nodes[i].x = x
             mode.nodes[i].y = y
-
 
     def _setup_node_area(self, tdw, mode, dx, dy):
         """
@@ -820,16 +767,7 @@ class Shape_Rectangle(Shape):
         And, if move upper-right one horizontally,
         the lower-left node would move.
         """
-
         radius = mode.NODE_SIZE + 1
-
-       #for tdw in mode._overlays:
-       #    offsets = mode.drag_offset.get_display_offset(tdw)
-       #    area = self._setup_node_area(tdw, mode, *offsets)
-       #    for i, x, y in gui.ui_utils.enum_area_point(*area):
-       #        tdw.queue_draw_area(x-radius, y-radius,
-       #                            radius*2,
-       #                            radius*2)
         for tdw in mode._overlays:
             for i, x, y in self._iter_edges(mode):
                 x, y = tdw.model_to_display(x, y)
@@ -953,23 +891,6 @@ class Shape_Rectangle(Shape):
                     cn.move(cn.x + dx, cn.y + dy)
             else:
                 # Otherwise, only one node could move.
-               #dx, dy = mode.drag_offset.get_display_offset()
-               #sn = mode.nodes[0]
-               #en = mode.nodes[2]
-               #sx, sy = tdw.model_to_display(sn.x, sn.y)
-               #ex, ey = tdw.model_to_display(en.x, en.y)
-               #
-               #if mode.current_node_index in (0, 3):
-               #    sx += dx
-               #else:
-               #    ex += dx
-               #
-               #if mode.current_node_index in (0, 1):
-               #    sy += dy
-               #else:
-               #    ey += dy
-               #
-               #self.set_area(mode, tdw, sx, sy, ex, ey)
                 cn = mode.nodes[mode.current_node_index]
                 cn.x += dx
                 cn.y += dy
@@ -997,27 +918,12 @@ class Shape_Rectangle(Shape):
                 nn.x = nx * top_length + cn.x
                 nn.y = ny * top_length + cn.y
 
-               #if mode.current_node_index == 0:
-               #    cur = mode.nodes[0]
-               #    follow_p = mode.nodes[3]
-               #    follow_n = mode.nodes[1]
-               #    cur.x += dx
-               #    cur.y += dy
-               #    follow_p.x += dx
-               #    follow_n.y += dy
-
-
-
-
-
             mode.drag_offset.reset()
             mode._queue_redraw_item(tdw)
             mode._queue_draw_buttons()
             self._queue_redraw_all_nodes(mode) # self method
             mode.phase = _Phase.ADJUST
             mode._reset_adjust_data()
-
-
 
 class Shape_Ellipse(Shape_Rectangle):
 
@@ -1112,5 +1018,4 @@ class Shape_Ellipse(Shape_Rectangle):
 if __name__ == '__main__':
 
     pass
-
 
