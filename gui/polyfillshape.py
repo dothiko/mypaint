@@ -560,7 +560,7 @@ class Shape_Rectangle(Shape):
                 elif color:
                     cr.set_source_rgb(*color.get_rgb())
 
-            cnt = 0
+            sx = None
             for i, x, y in self._iter_edges_raw(nodes, dx, dy, selidx):
                 x -= ox
                 y -= oy
@@ -568,13 +568,12 @@ class Shape_Rectangle(Shape):
                 if tdw:
                     x, y = tdw.model_to_display(x, y)
 
-                if cnt == 0:
+                if sx is None:
                    cr.move_to(x, y)
                    sx = x
                    sy = y
                 else:
                    cr.line_to(x, y)
-                cnt+=1
             cr.line_to(sx, sy)
 
             if fill and (gradient or color):
@@ -860,8 +859,6 @@ class Shape_Rectangle(Shape):
         if mode.phase == _Phase.ADJUST:
             # For this class, ADJUST phase means
             # "Initially set up the shape"
-           #sx, sy = tdw.display_to_model(
-           #        mode.start_x, mode.start_y)
             sx, sy = mode.start_x, mode.start_y
             dx, dy = mode.drag_offset.get_display_offset(tdw)
 
@@ -951,18 +948,6 @@ class Shape_Ellipse(Shape_Rectangle):
             else:
                 selidx = -1
 
-            if tdw:
-                sx, sy = tdw.model_to_display(*nodes[0])
-                ex, ey = tdw.model_to_display(*nodes[2])
-            else:
-                sx, sy = nodes[0]
-                ex, ey = nodes[2]
-                sx -= ox
-                ex -= ox
-                sy -= oy
-                ey -= oy
-
-
             cr.save()
             cr.set_line_width(1)
             if fill:
@@ -971,42 +956,24 @@ class Shape_Ellipse(Shape_Rectangle):
                 elif color:
                     cr.set_source_rgb(*color.get_rgb())
 
-            if selidx > -1:
-                if selidx in (0, 3):
-                    sx += dx
+            cnt = 0
+            for i, x, y in self._iter_edges_raw(nodes, dx, dy, selidx):
+                x -= ox
+                y -= oy
+
+                if tdw:
+                    x, y = tdw.model_to_display(x, y)
+
+                if cnt == 0:
+                   cr.move_to(x, y)
+                   sx = x
+                   sy = y
                 else:
-                    ex += dx
+                   cr.line_to(x, y)
+                cnt+=1
+            cr.line_to(sx, sy)
 
-                if selidx in (0, 1):
-                    sy += dy
-                else:
-                    ey += dy
-
-            w = abs(ex - sx) + 1
-            h = abs(ey - sy) + 1
-
-            if sx > ex:
-                sx = ex
-
-            if sy > ey:
-                sy = ey
-
-            # XXX This 'emulated ellipse' is not circle actually
-            # ... but almost okay?
-            # code from:
-            # http://stackoverflow.com/questions/14169234/the-relation-of-the-bezier-curve-and-ellipse
-            hw = math.floor(w / 2.0)
-            hh = math.floor(h / 2.0)
-            # To avoid arithmetic error, not use w, but hw * 2.0
-            tw = (hw * 2.0) * (2.0 / 3.0)
-            x = sx + hw
-            y = sy + hh
-
-            cr.move_to(x, y - hh);
-            cr.curve_to(x + tw, y - hh, x + tw, y + hh, x, y + hh)
-            cr.curve_to(x - tw, y + hh, x - tw, y - hh, x, y - hh)
-
-            if fill and len(nodes) > 2 and (gradient or color):
+            if fill and (gradient or color):
                 cr.close_path()
                 cr.fill_preserve()
 
@@ -1014,6 +981,76 @@ class Shape_Ellipse(Shape_Rectangle):
                 Shape.draw_dash(cr, 4)
 
             cr.restore()
+
+       #if len(nodes) >= 4:
+       #    if selected_nodes and len(selected_nodes) >= 1:
+       #        selidx = selected_nodes[0]
+       #    else:
+       #        selidx = -1
+       #
+       #    if tdw:
+       #        sx, sy = tdw.model_to_display(*nodes[0])
+       #        ex, ey = tdw.model_to_display(*nodes[2])
+       #    else:
+       #        sx, sy = nodes[0]
+       #        ex, ey = nodes[2]
+       #        sx -= ox
+       #        ex -= ox
+       #        sy -= oy
+       #        ey -= oy
+       #
+       #
+       #    cr.save()
+       #    cr.set_line_width(1)
+       #    if fill:
+       #        if gradient:
+       #            cr.set_source(gradient)
+       #        elif color:
+       #            cr.set_source_rgb(*color.get_rgb())
+       #
+       #    if selidx > -1:
+       #        if selidx in (0, 3):
+       #            sx += dx
+       #        else:
+       #            ex += dx
+       #
+       #        if selidx in (0, 1):
+       #            sy += dy
+       #        else:
+       #            ey += dy
+       #
+       #    w = abs(ex - sx) + 1
+       #    h = abs(ey - sy) + 1
+       #
+       #    if sx > ex:
+       #        sx = ex
+       #
+       #    if sy > ey:
+       #        sy = ey
+       #
+       #    # XXX This 'emulated ellipse' is not circle actually
+       #    # ... but almost okay?
+       #    # code from:
+       #    # http://stackoverflow.com/questions/14169234/the-relation-of-the-bezier-curve-and-ellipse
+       #    hw = math.floor(w / 2.0)
+       #    hh = math.floor(h / 2.0)
+       #    # To avoid arithmetic error, not use w, but hw * 2.0
+       #    tw = (hw * 2.0) * (2.0 / 3.0)
+       #    x = sx + hw
+       #    y = sy + hh
+       #
+       #    cr.move_to(x, y - hh);
+       #    cr.curve_to(x + tw, y - hh, x + tw, y + hh, x, y + hh)
+       #    cr.curve_to(x - tw, y + hh, x - tw, y - hh, x, y - hh)
+       #
+       #    if fill and len(nodes) > 2 and (gradient or color):
+       #        cr.close_path()
+       #        cr.fill_preserve()
+       #
+       #    if stroke:
+       #        Shape.draw_dash(cr, 4)
+       #
+       #    cr.restore()
 
 if __name__ == '__main__':
 
