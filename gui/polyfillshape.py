@@ -569,11 +569,11 @@ class Shape_Rectangle(Shape):
                     x, y = tdw.model_to_display(x, y)
 
                 if sx is None:
-                   cr.move_to(x, y)
-                   sx = x
-                   sy = y
+                    cr.move_to(x, y)
+                    sx = x
+                    sy = y
                 else:
-                   cr.line_to(x, y)
+                    cr.line_to(x, y)
             cr.line_to(sx, sy)
 
             if fill and (gradient or color):
@@ -955,25 +955,27 @@ class Shape_Ellipse(Shape_Rectangle):
                     cr.set_source_rgb(*color.get_rgb())
 
             modified_nodes = {}
-            moved = False
+            px = None
+            py = None
+            size_defining = False
             for i, x, y in self._iter_edges_raw(nodes, dx, dy, selidx):
                 x -= ox
                 y -= oy
-                if len(nodes) < 4:
+                modified_nodes[i] = (x,y)
+                if px == x and py == y:
+                    # This is , Initial size-defining !
                     if tdw:
-                        x, y = tdw.model_to_display(x, y)
-                    if not moved:
-                        cr.move_to(x, y)
-                        moved = True
-                    else:
-                        cr.line_to(x, y)
-                else:
-                    modified_nodes[i]=(x,y)
+                        if size_defining == False:
+                            cr.move_to(*tdw.model_to_display(x, y))
+                            size_defining = True
+                px = x
+                py = y
 
-            if len(modified_nodes) == 4: 
+            if len(modified_nodes) == 4 and size_defining == False: 
                 fx, fy = modified_nodes[0]
                 nx, ny = modified_nodes[1]
                 px, py = modified_nodes[3]
+
 
                 height, nvx, nvy = length_and_normal(fx, fy,
                                                      px, py)
@@ -983,7 +985,6 @@ class Shape_Ellipse(Shape_Rectangle):
 
                 ex = nvx * height * 0.5 + nx
                 ey = nvy * height * 0.5 + ny
-
 
                 width, cnx, cny = length_and_normal(sx, sy,
                                                     ex, ey)
@@ -1024,6 +1025,10 @@ class Shape_Ellipse(Shape_Rectangle):
                     ncx, ncy = tdw.model_to_display(ncx, ncy)
                     sx, sy = tdw.model_to_display(sx, sy)
                 cr.curve_to(fcx, fcy, ncx, ncy, sx, sy)
+            else:
+                # Drawing size-defining line gui 
+                if tdw:
+                    cr.line_to(*tdw.model_to_display(x, y))
 
             if fill and (gradient or color):
                 cr.close_path()
