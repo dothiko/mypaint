@@ -8,10 +8,7 @@
 
 # NOTE: This file based on linemode.py ,freehand.py, inktool.py
 
-
-
 ## Imports
-
 import math
 import logging
 logger = logging.getLogger(__name__)
@@ -53,7 +50,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         "RotateViewMode",
     ])
 
-    pointer_behavior = gui.mode.Behavior.PAINT_CONSTRAINED
+    pointer_behavior = gui.mode.Behavior.EDIT_OBJECTS
     scroll_behavior = gui.mode.Behavior.CHANGE_VIEW
 
     @property
@@ -93,6 +90,25 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         super(SizechangeMode, self).enter(doc, **kwds)
         self.app = self.doc.app
         self.base_x = None
+        
+        # _in_nonpainting flag :
+        # 
+        # This flag means 'the behavior of device 
+        # which activate this mode is set as NON_PAINTING'
+        # If so, the gui.document does not fire the 
+        # button_release_cb. Thus you cannot exit this
+        # mode even release the device button.
+        # So when non_painting behavior detected,
+        # This mode actually does not do anything
+        # until PAINTING device button1 pressed.
+        #
+        # This flag is THREE-STATE,
+        # when True, nothing would be done.
+        # for False, size-setting is done.(it is normal behavior)
+        # for None, size-setting is done, and pop up when 
+        # the another device(i.e. stylus button) released.
+        self._in_non_painting = False
+
         if not self._is_active():
             # This mode is not in modestack - this means 
             # XXX never called?
@@ -122,15 +138,32 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         
     def button_press_cb(self, tdw, event):
         # getting returning point of cursor,in screen coordinate
-
         self._queue_draw_brush() # erase previous brush circle (if exists)
-        if self.base_x == None:
+        if self.base_x is None:
             self._initial_radius = self.get_cursor_radius(tdw)
             self.base_x = event.x
             self.base_y = event.y
 
-        super(SizechangeMode, self).button_press_cb(tdw, event)
+        mon = self.app.device_monitor
+        dev = event.get_source_device()
+        dev_settings = mon.get_device_settings(dev)
+        if not (dev_settings.usage_mask & self.pointer_behavior):
+            self._in_non_painting = True
+        else:
+            if self._in_non_painting == True:
+                self._in_non_painting = None
+            else:
+                self._in_non_painting = False
 
+        return super(SizechangeMode, self).button_press_cb(tdw, event)
+
+    def button_release_cb(self, tdw, event):
+        # Some button(such as Bamboo pad) might not report release event!
+        result = super(SizechangeMode, self).button_release_cb(tdw, event)
+        if self._in_non_painting is None:
+            self._in_non_painting = False
+            self.doc.modes.pop()
+        return result
 
     def drag_start_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
@@ -138,26 +171,26 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         super(SizechangeMode, self).drag_start_cb(tdw, event)
 
     def drag_update_cb(self, tdw, event, dx, dy):
-
         self._ensure_overlay_for_tdw(tdw)
-        self._queue_draw_brush()
-        
-        adj = self.app.brush_adjustment['radius_logarithmic']
-        cur_value = adj.get_value() + (dx / 120.0)
-        adj.set_value(cur_value)
-        self._queue_draw_brush()
-
-        return super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
+            
+        if not self._in_non_painting:
+            self._queue_draw_brush()
+            adj = self.app.brush_adjustment['radius_logarithmic']
+            cur_value = adj.get_value() + (dx / 120.0)
+            adj.set_value(cur_value)
+            self._queue_draw_brush()
+        super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
 
     def drag_stop_cb(self, tdw):
         self._ensure_overlay_for_tdw(tdw)
-        self._queue_draw_brush()
-        self.start_drag = False
-         
-        self.base_x = None
-        self.base_y = None
+        if not self._in_non_painting:
+            self._queue_draw_brush()
+            self.start_drag = False
+             
+            self.base_x = None
+            self.base_y = None
         super(SizechangeMode, self).drag_stop_cb(tdw)
-
+        
 
     ## Overlays
 
@@ -221,27 +254,31 @@ class _Overlay (gui.overlays.Overlay):
 
     def __init__(self, sizemode, tdw):
         super(_Overlay, self).__init__()
-        self._sizemode = weakref.proxy(sizemode)
-        self._tdw = weakref.proxy(tdw)
+        self._sizemode = weakref.ref(sizemode)
+        self._tdw = weakref.ref(tdw)
 
     def paint(self, cr):
         """Draw brush size to the screen"""
 
         cr.save()
        #color = gui.style.ACTIVE_ITEM_COLOR
-        cr.set_source_rgb(0, 0, 0)
-        cr.set_line_width(1)
-        if self._sizemode.base_x != None:
-            cr.arc( self._sizemode.base_x,
-                    self._sizemode.base_y,
-                    self._sizemode.get_cursor_radius(self._tdw),
-                    0.0,
-                    2*math.pi)
-        cr.stroke_preserve()
-        cr.set_dash( (10,) )
-        cr.set_source_rgb(1, 1, 1)
-        cr.stroke()
-        cr.restore()
+        mode = self._sizemode()
+        tdw = self._tdw()
+
+        if mode is not None and tdw is not None:
+            cr.set_source_rgb(0, 0, 0)
+            cr.set_line_width(1)
+            if mode.base_x != None:
+                cr.arc( mode.base_x,
+                        mode.base_y,
+                        mode.get_cursor_radius(tdw),
+                        0.0,
+                        2*math.pi)
+            cr.stroke_preserve()
+            cr.set_dash( (10,) )
+            cr.set_source_rgb(1, 1, 1)
+            cr.stroke()
+            cr.restore()
 
 class _SizeChangerOptionWidget(gui.mode.PaintingModeOptionsWidgetBase):
     """ Because OncanvasSizeMode use from dragging + modifier
