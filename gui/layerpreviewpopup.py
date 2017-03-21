@@ -6,6 +6,7 @@
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 
+from gettext import gettext as _
 from gi.repository import Gtk
 from gi.repository import Gdk
 import cairo
@@ -87,19 +88,20 @@ class PreviewPopup (windowing.PopupWindow):
 
     def leave(self, reason):
         if self.active:
-           #del self._cairo_surface
             self._cairo_surface = None
             self._pixbuf = None
         self.hide()
 
     def button_press_cb(self, widget, event):
-        if event.button == Gdk.BUTTON_SECONDARY: 
+        if event.button > 0:
             model = self.app.doc.model
             target_layer = self._target_layer_ref()
             if target_layer:
                 model.select_layer(layer = target_layer)
+                self.app.show_transient_message(_('Active layer is changed to "%s"') % target_layer.name)
             else:
                 logger.warning('layer %s weakref cannot solved!' % self._layer_name)
+                self.app.show_transient_message(_("This layer is already removed or merged."))
             self.hide()
 
     def button_release_cb(self, widget, event):
