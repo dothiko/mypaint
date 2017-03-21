@@ -9,14 +9,15 @@ import os
 import os.path
 import sys
 import textwrap
-from distutils.core import setup
-from distutils.core import Extension
-from distutils.core import Command
-from distutils.command.build import build as _build
-from distutils.command.install_scripts import install_scripts as _install_scrs
-from distutils.command.build_ext import build_ext as _build_ext
 
-import numpy
+from distutils.command.build import build
+from distutils.command.clean import clean
+
+from setuptools import setup
+from setuptools import Extension
+from setuptools import Command
+from setuptools.command.build_ext import build_ext
+from setuptools.command.install_scripts import install_scripts
 
 
 # Helper classes and routines:
@@ -60,9 +61,9 @@ class BuildTranslations (Command):
         if needs_update:
             cmd = ("msgfmt", src, "-o", targ)
             if self.dry_run:
-                self.announce("would run %s" % (" ".join(cmd),))
+                self.announce("would run %s" % (" ".join(cmd),), level=2)
                 return []
-            self.announce("running %s" % (" ".join(cmd),))
+            self.announce("running %s" % (" ".join(cmd),), level=2)
 
             self.mkpath(targ_dir)
             subprocess.check_call(cmd)
@@ -71,7 +72,7 @@ class BuildTranslations (Command):
         return [(install_dir, [targ])]
 
 
-class Build (_build):
+class Build (build):
     """Custom build (build_ext 1st for swig, run build_translations)
 
     distutils.command.build.build doesn't generate the extension.py for
@@ -85,13 +86,13 @@ class Build (_build):
     """
 
     sub_commands = (
-        [(a, b) for (a, b) in _build.sub_commands if a == 'build_ext'] +
-        [(a, b) for (a, b) in _build.sub_commands if a != 'build_ext'] +
+        [(a, b) for (a, b) in build.sub_commands if a == 'build_ext'] +
+        [(a, b) for (a, b) in build.sub_commands if a != 'build_ext'] +
         [("build_translations", None)]
     )
 
 
-class BuildExt (_build_ext):
+class BuildExt (build_ext):
     """Custom build_ext (extra --debug flags)."""
 
     def build_extension(self, ext):
@@ -99,6 +100,9 @@ class BuildExt (_build_ext):
         linkflags = ext.extra_link_args
 
         if self.debug:
+            for flag in ["-DNDEBUG"]:
+                if flag in ccflags:
+                    ccflags.remove(flag)
             ccflags.extend([
                 "-O0",
                 "-g",
@@ -111,10 +115,27 @@ class BuildExt (_build_ext):
             linkflags.append("-O3")
             ccflags.append("-O3")
 
-        return _build_ext.build_extension(self, ext)
+        return build_ext.build_extension(self, ext)
 
 
-class RunBuild (Command):
+class Clean (clean):
+    """Custom clean: also remove swig-generated wrappers.
+
+    distutils's clean has always left these lying around in the source,
+    and they're a perpetual trip hazard when sharing the same source
+    tree with a Windows VM.
+
+    """
+
+    def run(self):
+        build_temp_files = glob.glob("lib/mypaintlib_wrap.c*")
+        for file in build_temp_files:
+            self.announce("removing %r" % (file,), level=2)
+            os.unlink(file)
+        return clean.run(self)
+
+
+class Demo (Command):
     """Builds, and then does a MyPaint test run from the build."""
 
     description = "Rebuild, and then run inside the build tree."
@@ -129,21 +150,30 @@ class RunBuild (Command):
     def run(self):
         build = self.get_finalized_command("build")
         build.run()
-        cmd = [os.path.join(build.build_scripts, "mypaint.py")]
+
+        build_scripts = self.get_finalized_command("build_scripts")
+        cmd = [
+            build_scripts.executable,
+            os.path.join(build.build_scripts, "mypaint.py"),
+        ]
+
+        self.announce("Running %r..." % (" ".join(cmd),), level=2)
+        if self.dry_run:
+            return
+
         env = os.environ.copy()
         env["PYTHONPATH"] = os.path.pathsep.join([
             os.path.abspath(build.build_lib),
             os.path.abspath(build.build_purelib),
             os.path.abspath(build.build_platlib),
         ])
-        self.announce("Running %r..." % (" ".join(cmd),))
         subprocess.check_call(
             cmd,
             env=env,
         )
 
 
-class InstallScripts (_install_scrs):
+class InstallScripts (install_scripts):
     """Install scripts with ".py" suffix removal and version headers.
 
     Bakes version information into each installed script.
@@ -188,7 +218,7 @@ class InstallScripts (_install_scrs):
         if strip_ext and targ_basename.endswith(".py"):
             targ_basename = targ_basename[:-3]
         targ = os.path.join(self.install_dir, targ_basename)
-        self.announce("installing %s as %s" % (src, targ_basename))
+        self.announce("installing %s as %s" % (src, targ_basename), level=2)
         if self.dry_run:
             return []
         with open(src, "rU") as in_fp:
@@ -207,7 +237,7 @@ class InstallScripts (_install_scrs):
                     print(line, file=out_fp)
         if set_mode:
             mode = ((os.stat(targ).st_mode) | 0o555) & 0o7777
-            self.announce("changing mode of %s to %o" % (targ, mode))
+            self.announce("changing mode of %s to %o" % (targ, mode), level=2)
             os.chmod(targ, mode)
         return [targ]
 
@@ -258,130 +288,136 @@ def pkgconfig(packages, **kwopts):
     return kwopts
 
 
-# Compile+link args:
+def get_ext_modules():
+    """Return a list of binary Extensions for setup() to process."""
 
-extra_compile_args = [
-    '-Wall',
-    '-Wno-sign-compare',
-    '-Wno-write-strings',
-    '-D_POSIX_C_SOURCE=200809L',
-    "-DNO_TESTS",  # FIXME: we're building against shared libmypaint now
-    '-g',  # always include symbols, for profiling
-]
-extra_link_args = []
+    import numpy
 
-if sys.platform != "darwin":
-    extra_link_args.append("-fopenmp")
-    extra_compile_args.append("-fopenmp")
+    extra_compile_args = [
+        '-Wall',
+        '-Wno-sign-compare',
+        '-Wno-write-strings',
+        '-D_POSIX_C_SOURCE=200809L',
+        "-DNO_TESTS",  # FIXME: we're building against shared libmypaint now
+        '-g',  # always include symbols, for profiling
+    ]
+    extra_link_args = []
 
-if sys.platform == "darwin":
-    pass
-elif sys.platform == "win32":
-    pass
-elif sys.platform == "msys":
-    pass
-elif sys.platform == "linux2":
-    # Look up libraries dependencies relative to the library.
-    extra_link_args.append('-Wl,-z,origin')
-    extra_link_args.append('-Wl,-rpath,$ORIGIN')
+    if sys.platform != "darwin":
+        extra_link_args.append("-fopenmp")
+        extra_compile_args.append("-fopenmp")
 
+    if sys.platform == "darwin":
+        pass
+    elif sys.platform == "win32":
+        pass
+    elif sys.platform == "msys":
+        pass
+    elif sys.platform == "linux2":
+        # Look up libraries dependencies relative to the library.
+        extra_link_args.append('-Wl,-z,origin')
+        extra_link_args.append('-Wl,-rpath,$ORIGIN')
 
-# Binary extension module:
+    mypaintlib_opts = pkgconfig(
+        packages=[
+            "pygobject-3.0",
+            "glib-2.0",
+            "libpng",
+            "lcms2",
+            "gtk+-3.0",
+            "libmypaint",
+        ],
+        include_dirs=[
+            numpy.get_include(),
+        ],
+        extra_link_args=extra_link_args,
+        extra_compile_args=extra_compile_args,
+    )
 
-mypaintlib_opts = pkgconfig(
-    packages=[
-        "pygobject-3.0",
-        "glib-2.0",
-        "libpng",
-        "lcms2",
-        "gtk+-3.0",
-        "libmypaint",
-    ],
-    include_dirs=[
-        numpy.get_include(),
-    ],
-    extra_link_args=extra_link_args,
-    extra_compile_args=extra_compile_args,
-)
+    mypaintlib_swig_opts = ['-Wall', '-noproxydel', '-c++']
+    mypaintlib_swig_opts.extend([
+        "-I" + d
+        for d in mypaintlib_opts["include_dirs"]
+    ])
+    # FIXME: building against the new shared lib, omit old test code
+    mypaintlib_swig_opts.extend(['-DNO_TESTS'])
 
-mypaintlib = Extension(
-    '_mypaintlib',
-    [
-        'lib/mypaintlib.i',
-        'lib/fill.cpp',
-        'lib/gdkpixbuf2numpy.cpp',
-        'lib/pixops.cpp',
-        'lib/fastpng.cpp',
-        'lib/brushsettings.cpp',
-    ],
-    swig_opts=(
-        ['-Wall', '-noproxydel', '-c++']
-        + ["-I" + d for d in mypaintlib_opts["include_dirs"]]
-
-        # FIXME: since we're building against the shared lib, omit test code
-        + ['-DNO_TESTS']
-    ),
-    language='c++',
-    **mypaintlib_opts
-)
-
-
-# Data files:
-
-# Target paths are relative to $base/share, assuming setup.py's
-# default value for install-data.
-
-data_files = [
-    # TARGDIR, SRCFILES
-    ("appdata", ["desktop/mypaint.appdata.xml"]),
-    ("applications", ["desktop/mypaint.desktop"]),
-    ("thumbnailers", ["desktop/mypaint-ora.thumbnailer"]),
-    ("mypaint/brushes", ["brushes/order.conf"]),
-]
+    mypaintlib = Extension(
+        '_mypaintlib',
+        [
+            'lib/mypaintlib.i',
+            'lib/fill.cpp',
+            'lib/gdkpixbuf2numpy.cpp',
+            'lib/pixops.cpp',
+            'lib/fastpng.cpp',
+            'lib/brushsettings.cpp',
+        ],
+        swig_opts=mypaintlib_swig_opts,
+        language='c++',
+        **mypaintlib_opts
+    )
+    return [mypaintlib]
 
 
-# Append paths which can only derived from globbing the source tree.
+def get_data_files():
+    """Return a list of data_files entries for setup() to process."""
 
-data_file_patts = [
-    # SRCDIR, SRCPATT, TARGDIR
-    ("desktop/icons", "hicolor/*/*/*", "icons"),
-    ("backgrounds", "*.*", "mypaint/backgrounds"),
-    ("backgrounds", "*/*.*", "mypaint/backgrounds"),
-    ("brushes", "*/*.*", "mypaint/brushes"),
-    ("palettes", "*.gpl", "mypaint/palettes"),
-    ("pixmaps", "*.png", "mypaint/pixmaps"),
-]
-for (src_pfx, src_patt, targ_pfx) in data_file_patts:
-    for src_file in glob.glob(os.path.join(src_pfx, src_patt)):
-        file_rel = os.path.relpath(src_file, src_pfx)
-        targ_dir = os.path.join(targ_pfx, os.path.dirname(file_rel))
-        data_files.append((targ_dir, [src_file]))
+    # Target paths are relative to $base/share, assuming setup.py's
+    # default value for install-data.
+    data_files = [
+        # TARGDIR, SRCFILES
+        ("appdata", ["desktop/mypaint.appdata.xml"]),
+        ("applications", ["desktop/mypaint.desktop"]),
+        ("thumbnailers", ["desktop/mypaint-ora.thumbnailer"]),
+        ("mypaint/brushes", ["brushes/order.conf"]),
+    ]
+
+    # Paths which can only derived from globbing the source tree.
+    data_file_patts = [
+        # SRCDIR, SRCPATT, TARGDIR
+        ("desktop/icons", "hicolor/*/*/*", "icons"),
+        ("backgrounds", "*.*", "mypaint/backgrounds"),
+        ("backgrounds", "*/*.*", "mypaint/backgrounds"),
+        ("brushes", "*/*.*", "mypaint/brushes"),
+        ("palettes", "*.gpl", "mypaint/palettes"),
+        ("pixmaps", "*.png", "mypaint/pixmaps"),
+    ]
+    for (src_pfx, src_patt, targ_pfx) in data_file_patts:
+        for src_file in glob.glob(os.path.join(src_pfx, src_patt)):
+            file_rel = os.path.relpath(src_file, src_pfx)
+            targ_dir = os.path.join(targ_pfx, os.path.dirname(file_rel))
+            data_files.append((targ_dir, [src_file]))
+
+    return data_files
 
 
 # Setup script "main()":
 
 setup(
     name='MyPaint',
-    version='1.3.0-alpha',
+    version='1.3.0a0',
     description='Simple painting program for use with graphics tablets.',
     author='Andrew Chadwick',
     author_email='a.t.chadwick@gmail.com',
+    license="GPLv2+",
+    url="http://mypaint.org",
+
     packages=['lib', 'lib.layer', 'gui', 'gui.colors'],
     package_data={
         "gui": ['*.xml', '*.glade'],
     },
-    data_files=data_files,
-    cmdclass= {
+    data_files=get_data_files(),
+    cmdclass={
         "build": Build,
         "build_ext": BuildExt,
         "build_translations": BuildTranslations,
-        "run_build": RunBuild,
-        "testdrive": RunBuild,
+        "demo": Demo,
         "install_scripts": InstallScripts,
+        "clean": Clean,
     },
     scripts=[
         "mypaint.py",
         "desktop/mypaint-ora-thumbnailer.py",
     ],
-    ext_modules=[mypaintlib],
+    ext_modules=get_ext_modules(),
 )
