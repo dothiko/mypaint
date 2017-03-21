@@ -11,9 +11,10 @@
 #
 # This is for experimental version of Inkingtool, mostly based on
 # inktool.py.
-# This file is for ,not only 'to keep surely working/trusted inktool 
-# even adding any experimental feature', but also
-# 'to avoid many of conflicts and correction when git-pulling master'
+# This file is for, not only 'by remaining inktool.py, I can keep 
+# using surely working/trusted inktool even adding any experimental 
+# feature', but also  'to avoid many of conflicts and correcting them
+# when git-pulling master'
 
 ## Imports
 from __future__ import print_function
@@ -44,6 +45,7 @@ import gui.widgets
 from gui.linemode import *
 import gui.ui_utils
 from gui.oncanvas import *
+from gui.inktool import _Node
 
 ## Module constants
 
@@ -86,38 +88,23 @@ def _nodes_deletion_decorator(method):
 
 ## Class defs
 
-
-
-#class _Phase(PhaseMixin):
-#    """Enumeration of the states that an ExInkingMode can be in"""
-#    ADJUST_PRESSURE = 11
-#    ADJUST_PRESSURE_ONESHOT = 12
-
+# _Phase is currently same as base PressPhase
 _Phase = PressPhase
-
 
 _NODE_FIELDS = ("x", "y", "pressure", "xtilt", "ytilt", "time")
 
-
-class _Node (collections.namedtuple("_Node", _NODE_FIELDS)):
-    """Recorded control point, as a namedtuple.
-
-    Node tuples have the following 6 fields, in order
-
-    * x, y: model coords, float
-    * pressure: float in [0.0, 1.0]
-    * xtilt, ytilt: float in [-1.0, 1.0]
-    * time: absolute seconds, float
-    """
-
-
-#lass _EditZone(EditZone_Mixin):
-#   """Enumeration of what the pointer is on in the ADJUST phase"""
-#  #EMPTY_CANVAS = 0  #: Nothing, empty space
-#  #CONTROL_NODE = 1  #: Any control node; see target_node_index
-#  #REJECT = 2  #: On-canvas button that abandons the current line
-#  #ACCEPT = 3  #: On-canvas button that commits the current line
-   
+# Copied from 
+#class _Node (collections.namedtuple("_Node", _NODE_FIELDS)):
+#    """Recorded control point, as a namedtuple.
+#
+#    Node tuples have the following 6 fields, in order
+#
+#    * x, y: model coords, float
+#    * pressure: float in [0.0, 1.0]
+#    * xtilt, ytilt: float in [-1.0, 1.0]
+#    * time: absolute seconds, float
+#    """
+# _EditZone is currently same as base EditZoneMixin
 _EditZone = EditZoneMixin
 _ActionButton = ActionButtonMixin
 
