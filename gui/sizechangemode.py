@@ -91,24 +91,6 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         self.app = self.doc.app
         self.base_x = None
         
-        # _in_nonpainting flag :
-        # 
-        # This flag means 'the behavior of device 
-        # which activate this mode is set as NON_PAINTING'
-        # If so, the gui.document does not fire the 
-        # button_release_cb. Thus you cannot exit this
-        # mode even release the device button.
-        # So when non_painting behavior detected,
-        # This mode actually does not do anything
-        # until PAINTING device button1 pressed.
-        #
-        # This flag is THREE-STATE,
-        # when True, nothing would be done.
-        # for False, size-setting is done.(it is normal behavior)
-        # for None, size-setting is done, and pop up when 
-        # the another device(i.e. stylus button) released.
-        self._in_non_painting = False
-
         if not self._is_active():
             # This mode is not in modestack - this means 
             # XXX never called?
@@ -133,7 +115,6 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         r = base_radius
        #r += 2 * base_radius * b.get_base_value('offset_by_random')
         r *= tdw.scale
-        #r += 0.5
         return r
         
     def button_press_cb(self, tdw, event):
@@ -144,25 +125,11 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
             self.base_x = event.x
             self.base_y = event.y
 
-        mon = self.app.device_monitor
-        dev = event.get_source_device()
-        dev_settings = mon.get_device_settings(dev)
-        if not (dev_settings.usage_mask & self.pointer_behavior):
-            self._in_non_painting = True
-        else:
-            if self._in_non_painting == True:
-                self._in_non_painting = None
-            else:
-                self._in_non_painting = False
-
         return super(SizechangeMode, self).button_press_cb(tdw, event)
 
     def button_release_cb(self, tdw, event):
         # Some button(such as Bamboo pad) might not report release event!
         result = super(SizechangeMode, self).button_release_cb(tdw, event)
-        if self._in_non_painting is None:
-            self._in_non_painting = False
-            self.doc.modes.pop()
         return result
 
     def drag_start_cb(self, tdw, event):
@@ -173,22 +140,20 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
     def drag_update_cb(self, tdw, event, dx, dy):
         self._ensure_overlay_for_tdw(tdw)
             
-        if not self._in_non_painting:
-            self._queue_draw_brush()
-            adj = self.app.brush_adjustment['radius_logarithmic']
-            cur_value = adj.get_value() + (dx / 120.0)
-            adj.set_value(cur_value)
-            self._queue_draw_brush()
+        self._queue_draw_brush()
+        adj = self.app.brush_adjustment['radius_logarithmic']
+        cur_value = adj.get_value() + (dx / 120.0)
+        adj.set_value(cur_value)
+        self._queue_draw_brush()
         super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
 
     def drag_stop_cb(self, tdw):
         self._ensure_overlay_for_tdw(tdw)
-        if not self._in_non_painting:
-            self._queue_draw_brush()
-            self.start_drag = False
-             
-            self.base_x = None
-            self.base_y = None
+        self._queue_draw_brush()
+        self.start_drag = False
+         
+        self.base_x = None
+        self.base_y = None
         super(SizechangeMode, self).drag_stop_cb(tdw)
         
 
