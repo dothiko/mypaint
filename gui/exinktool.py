@@ -1,11 +1,19 @@
 # This file is part of MyPaint.
-# Copyright (C) 2015 by Andrew Chadwick <a.t.chadwick@gmail.com>
+# Copyright (C) 2016 by dothiko <dothiko@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 
+
+# EX-Inktool (EXperimental Inktool)
+#
+# This is for experimental version of Inkingtool, mostly based on
+# inktool.py.
+# This file is for ,not only 'to keep surely working/trusted inktool 
+# even adding any experimental feature', but also
+# 'to avoid many of conflicts and correction when git-pulling master'
 
 ## Imports
 from __future__ import print_function
