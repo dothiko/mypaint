@@ -12,22 +12,18 @@
 
 #include <Python.h>
 
-// This Module is for implementing 'Dilating filled area' and 
-// 'overflow prevention' functionality for flood_fill (fill.cpp)
-// This module uses 'morphology.hpp' internally.
-
-#include <mypaint-tiled-surface.h>
-
-                          
+// This Module is for implementing 'Dilating filled area' 
 
 //// Interface functions
 
+// Initialize dilation. 
+// Call this before calling dilation_process_tile.
 PyObject*
 dilation_init(
     const double fill_r, const double fill_g, const double fill_b, 
     const int dilation_size);    
 
-// dilate filled tile
+// Dilate filled tile.
 PyObject *
 dilation_process_tile(
     PyObject *py_ctx, // dilation context, returned from dilation_init().
@@ -36,6 +32,8 @@ dilation_process_tile(
     const int tx, const int ty  // the position of py_filled_tile
     );
 
+// Finalize dilation.
+// Call this after dilating operation completed.
 PyObject*
 dilation_finalize(PyObject *py_ctx);
 
