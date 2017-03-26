@@ -26,4 +26,4 @@
 #include "fill.hpp"
 #include "brushsettings.hpp"
 
-#include "gapclose.hpp"
+#include "dilation.hpp"

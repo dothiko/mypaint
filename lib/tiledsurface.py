@@ -1109,14 +1109,20 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size=0):
             tileq.append((tpos, seeds_e))
 
     if dilation_size > 0:
+        ctx = mypaintlib.dilation_init(
+            fill_r, fill_g, fill_b,
+            int(dilation_size)
+        )
+        
         for (tx, ty), src_tile in filled.iteritems():
-            mypaintlib.gapclose_dilate_filled_tile(
+            mypaintlib.dilation_process_tile(
+                ctx,
                 dilated,
                 src_tile,
-                tx, ty,
-                fill_r, fill_g, fill_b,
-                int(dilation_size)
+                tx, ty
             )
+
+        mypaintlib.dilation_finalize(ctx)
 
     # Composite filled tiles into the destination surface
     mode = mypaintlib.CombineNormal

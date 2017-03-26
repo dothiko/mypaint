@@ -7,7 +7,7 @@
  * (at your option) any later version.
  */
 
-#include "gapclose.hpp"
+#include "dilation.hpp"
 #include "common.hpp"
 #include "fix15.hpp"
 #include "fill.hpp"
@@ -32,12 +32,8 @@
 #define GET_TX_FROM_INDEX(tx, idx) ((tx) + (((idx) % 3) - 1))
 #define GET_TY_FROM_INDEX(ty, idx) ((ty) + (((idx) / 3) - 1))
 
-// the _Tile wrapper object surface-cache attribute name.
-#define ATTR_NAME_RGBA "rgba"
-
 // Maximum operation size. i.e. 'gap-radius'
 #define MAX_OPERATION_SIZE ((MYPAINT_TILE_SIZE / 2) - 1)
-
 
 //// Utility functions
 
@@ -51,67 +47,12 @@ inline char *get_tile_pixel(PyArrayObject *tile, const int x, const int y)
             + (x * xstride));
 }
 
-inline void _convert_color_to_fix15(
-        fix15_short_t* buf,
-        const double fill_r,
-        const double fill_g,
-        const double fill_b,
-        const double fill_a)
-{
-    double alpha=(double)fix15_one * fill_a;
-    buf[0] = (fix15_short_clamp)(fill_r * alpha);
-    buf[1] = (fix15_short_clamp)(fill_g * alpha);
-    buf[2] = (fix15_short_clamp)(fill_b * alpha);
-    buf[3] = (fix15_short_clamp)(alpha);
-}
+typedef struct {
+    unsigned int offset;
+    unsigned int length;
+} _kernel_line;
+
             
-
-/** gapclose_get_state_flag:
- *
- * @sts_tile : a numpy array of state flag tile.
- * @x, y : position of pixel. it should be 0= < x < MYPAINT_TILE_SIZE
- * returns: an integer value. if sts_tile is invalid, returns 0 
- *
- * Get state flag value of specified position.
- *
- * Actually that state flag tile is array of STATE_PIXEL type
- * (currently it is char), but this returns integer value
- * to share this function with python.
- *
- * This function is NULL safe & Py_None safe.
- */
-int gapclose_get_state_flag(PyObject *sts_tile, const int x, const int y)
-{
-    if(sts_tile && sts_tile != Py_None) {
-        return (int)*(get_tile_pixel((PyArrayObject*)sts_tile,x, y));
-    }
-    return 0;
-}
-
-/** gapclose_set_state_flag:
- *
- * @sts_tile : a numpy array of state flag tile.
- * @x, y : position of pixel. it should be 0= < x < MYPAINT_TILE_SIZE
- * @ flag: the flag value to do 'logical OR' with specified pixel.
- * returns: No return value.
- *
- * Set state flag value of specified position.
- * This function do logical OR, so cannot entirely write change
- * the flag.(nealy write once)
- * But it is enough for gap-closing flood-fill state tile. 
- *
- * This function is NULL safe & Py_None safe.
- */
-void gapclose_set_state_flag(PyObject *sts_tile, 
-                            const int x, const int y, 
-                            const char flag)
-{
-    if(sts_tile && sts_tile != Py_None) {
-        char *flagptr = get_tile_pixel((PyArrayObject*)sts_tile, x, y);
-        *flagptr |= flag;
-    }
-}
-
 /** 
  * @ Tilecache
  *
@@ -148,10 +89,14 @@ class Tilecache
         // current target tiledict.
         PyObject *m_targ_dict;
 
+        // kernel line elements.
+        _kernel_line *m_kern;
+        int m_kernel_size;
+
         // --- Tilecache management methods
 
-        PyObject *_generate_cache_key(int tx, int ty)
-        {
+        PyObject *_tile_request_cache_key(int tx, int ty)
+        {   
             PyObject *pytx = PyInt_FromLong(tx);
             PyObject *pyty = PyInt_FromLong(ty);
             PyObject *key = PyTuple_Pack(2, pytx, pyty);
@@ -169,15 +114,15 @@ class Tilecache
         // Get target(to be put dilated pixels) tile from relative offsets.
         // Parameter otx, oty have relative values ranging from -1 to 1,
         // they are relative offsets from center tile.
-        PyObject *_get_cached_tile(int otx, int oty, bool generate=true) 
+        PyObject *_get_cached_tile(int otx, int oty, bool tile_request=true) 
         {
-            return _get_cached_tile_from_index(GET_TILE_INDEX(otx, oty), generate);
+            return _get_cached_tile_from_index(GET_TILE_INDEX(otx, oty), tile_request);
         }
 
-        PyObject *_get_cached_tile_from_index(int index, bool generate)
+        PyObject *_get_cached_tile_from_index(int index, bool tile_request)
         {
             if (m_cache_tiles[index] == NULL) {
-                if (generate == true) {
+                if (tile_request == true) {
                     PyObject *dst_tile = _generate_tile();
                     m_cache_tiles[index] = dst_tile;
 #ifdef HEAVY_DEBUG
@@ -213,28 +158,22 @@ class Tilecache
         // So use 'target_result' parameter to share codes between
         // these different operations.
         inline bool _search_kernel(const int cx, const int cy, 
-                                    const int size,
-                                    USER_PARAM_TYPE user_param)
+                                   USER_PARAM_TYPE user_param)
         {
-            int cw;
-            double rad;
+#ifdef HEAVY_DEBUG
+            assert(m_kern != NULL);
+#endif
 
-            for (int dy = 0;dy <= size; dy++) {
-                rad = asin((double)(dy-1) / (double)size);
-                cw = (int)(cos(rad) * (double)size);
-                for (int dx = 0; dx <= cw; dx++) {
-                    if (is_match_pixel(cx + dx, cy + dy, user_param))
+            int sx = cx - m_kernel_size;
+            int sy = cy - m_kernel_size;
+            for (int y = 0;y <= m_kernel_size * 2; ++y) {
+                for (int x=0 ;
+                         x < m_kern[y].length ;
+                         ++x) {
+                    if (is_match_pixel( sx + x + m_kern[y].offset,
+                                        sy + y,
+                                        user_param)) {
                         return true;
-
-                    if (dx > 0 || dy > 0) {
-                        if (is_match_pixel(cx + dx, cy - dy, user_param))
-                            return true;
-
-                        if (is_match_pixel(cx - dx, cy - dy, user_param))
-                            return true;
-
-                        if (is_match_pixel(cx - dx, cy + dy, user_param))
-                            return true;
                     }
                 }
             }
@@ -243,7 +182,8 @@ class Tilecache
 
     public:
 
-        Tilecache(int npy_type, int dimension_cnt) : m_targ_dict(NULL)
+        Tilecache(int npy_type, int dimension_cnt) 
+            : m_targ_dict(NULL), m_kern(NULL)
         {
             // Tile type and dimension are used in _generate_tile(),
             // when a new tile requested.
@@ -253,6 +193,8 @@ class Tilecache
         }
         virtual ~Tilecache()
         {
+            if (m_kern != NULL)
+                delete [] m_kernel_line;
         }
         
         // Initialize/finalize cache tile
@@ -267,13 +209,13 @@ class Tilecache
             for (int y=-1; y <= 1; y++) {
                 for (int x=-1; x <= 1; x++) {
                     int idx = GET_TILE_INDEX(x, y);
-                    PyObject *key = _generate_cache_key(tx+x, ty+y);
+                    PyObject *key = _tile_request_cache_key(tx+x, ty+y);
                     PyObject *dst_tile = PyDict_GetItem(py_tiledict, key);
                     if (dst_tile) {
                         Py_INCREF(dst_tile); 
                         // With PyDict_GetItem(), tile is just borrowed. 
                         // so incref here.
-                        // On the other hand, key object is always generated
+                        // On the other hand, key object is always tile_requestd
                         // above line, so does not need incref.
 #ifdef HEAVY_DEBUG
                         assert(dst_tile->ob_refcnt >= 2);
@@ -328,10 +270,10 @@ class Tilecache
         T* get_pixel(const int cache_index,
                      const unsigned int x, 
                      const unsigned int y,
-                     bool generate)
+                     bool tile_request)
         {
             PyArrayObject *tile = (PyArrayObject*)_get_cached_tile_from_index(
-                                                    cache_index, generate);
+                                                    cache_index, tile_request);
             if (tile) 
                 return (T*)get_tile_pixel(tile, x, y);
             
@@ -387,6 +329,33 @@ class Tilecache
 #endif
             return (PyArrayObject*)m_cache_tiles[cache_index];
         }
+
+        // setting kernel size means 'kernel raster information setup'.
+        void set_kernel_size(int size)
+        {
+            int cw;
+            double rad;
+
+            if (m_kern != NULL)
+                delete[] m_kern;
+
+            m_kernel_size = size;
+            int max_line = size * 2 + 1;
+            m_kern = new _kernel_line[max_line];
+
+            for (int dy = 0;dy < size; dy++) {
+                rad = asin((double)(size-dy) / (double)size);
+                cw = (int)(cos(rad) * (double)size);
+                m_kern[dy].offset = size - cw;
+                m_kern[dy].length = cw * 2 + 1;
+                m_kern[max_line-dy-1].offset = size - cw;
+                m_kern[max_line-dy-1].length = cw * 2 + 1;
+            }
+            // the last center line
+            //cw = (int)(cos(asin(0.0)) * (double)size);
+            m_kern[size].offset = 0; //size - cw;
+            m_kern[size].length = max_line;
+        }
         
 };
 
@@ -402,6 +371,10 @@ class Tilecache
 class _Dilation_color : public Tilecache<fix15_short_t, PyArrayObject*> {
 
     protected:
+
+        fix15_short_t m_fill_r;
+        fix15_short_t m_fill_g;
+        fix15_short_t m_fill_b;
 
         virtual bool is_match_pixel(const int cx, const int cy, 
                                     PyArrayObject *target_tile) 
@@ -427,28 +400,37 @@ class _Dilation_color : public Tilecache<fix15_short_t, PyArrayObject*> {
             fix15_short_t *dst_pixel = get_cached_pixel(cx, cy, true);
 
             if (dst_pixel[3] == 0) { // rejecting already dilated pixel 
-                dst_pixel[0] = pixel[0];
-                dst_pixel[1] = pixel[1];
-                dst_pixel[2] = pixel[2];
+                dst_pixel[0] = m_fill_r;
+                dst_pixel[1] = m_fill_g;
+                dst_pixel[2] = m_fill_b;
                 dst_pixel[3] = (fix15_short_t)fix15_one; 
             }
         }
 
     public:
-        _Dilation_color() : Tilecache(NPY_UINT16, 4)
+        _Dilation_color(const double fill_r,
+                        const double fill_g,
+                        const double fill_b)
+            : Tilecache(NPY_UINT16, 4)
         {
+            double alpha=(double)fix15_one;
+            m_fill_r = (fix15_short_clamp)(fill_r * alpha);
+            m_fill_g = (fix15_short_clamp)(fill_g * alpha);
+            m_fill_b = (fix15_short_clamp)(fill_b * alpha);
         }
 
         int dilate(PyObject *py_filled_tile, // the filled src tile. 
-                   const fix15_short_t *fill_pixel,
-                   int size)
+                   const fix15_short_t *fill_pixel)
         {
             int dilated_cnt = 0;
 
-            for (int cy=-size; cy < MYPAINT_TILE_SIZE+size; cy++) {
-                for (int cx=-size; cx < MYPAINT_TILE_SIZE+size; cx++) {
-                    // target pixel is unused.
-                    if (_search_kernel(cx, cy, size, 
+            for (int cy=-m_kernel_size; 
+                     cy < MYPAINT_TILE_SIZE+m_kernel_size; 
+                     ++cy) {
+                for (int cx=-m_kernel_size; 
+                         cx < MYPAINT_TILE_SIZE+m_kernel_size; 
+                         ++cx) {
+                    if (_search_kernel(cx, cy,  
                                        (PyArrayObject*)py_filled_tile)) { 
                         _put_pixel(cx, cy, fill_pixel);
                         dilated_cnt++;
@@ -460,6 +442,36 @@ class _Dilation_color : public Tilecache<fix15_short_t, PyArrayObject*> {
         }
 };
 
+//// Interface functions
+/**
+* @dilation_init
+* initialize dilation
+*
+* @param desc_of_parameter
+* @return PyCapsule dilation context object.
+* @detail 
+* This function initialize the _Dilation_color class object.
+* call this function before using dilation_process_tile().
+*/
+
+PyObject*
+dilation_init(
+    const double fill_r, const double fill_g, const double fill_b, 
+    const int dilation_size)    
+{
+    _Dilation_color *d = new _Dilation_color(
+                            fill_r,
+                            fill_g,
+                            fill_b);
+
+    d->set_kernel_size(dilation_size);
+             
+    PyObject *cap = PyCapsule_New(
+                        (void *)d, 
+                        NULL, 
+                        NULL);// does not use python-gc
+    return cap;
+}
 
 
 /** gapclose_dilate_filled_tile:
@@ -485,40 +497,52 @@ class _Dilation_color : public Tilecache<fix15_short_t, PyArrayObject*> {
 
 // dilate color filled tile. postprocess of flood_fill.
 PyObject*
-gapclose_dilate_filled_tile(
+dilation_process_tile(
+    PyObject *py_ctx,
     PyObject *py_dilated, 
     PyObject *py_filled_tile, 
-    const int tx, const int ty,  
-    const double fill_r, const double fill_g, const double fill_b, 
-    const int dilation_size)    
+    const int tx, const int ty)  
 {
-    // Morphology object defined as static. 
-    // Because this function called each time before a tile flood-filled,
-    // so constructing/destructing cost would not be ignored.
-    static _Dilation_color d;
-
 #ifdef HEAVY_DEBUG            
+    assert(py_ctx != NULL);
     assert(py_dilated != NULL);
     assert(py_filled_tile != NULL);
-    assert(dilation_size <= MAX_OPERATION_SIZE);
+    assert(PyCapsule_IsValid(py_ctx, NULL));
 #endif
-
+    _Dilation_color *d = (_Dilation_color*)PyCapsule_GetPointer(py_ctx, 
+                                                                NULL);
     
-    // Actually alpha value is not used currently.
-    // for future use.
-    fix15_short_t fill_pixel[4];
-    _convert_color_to_fix15(fill_pixel, fill_r, fill_g, fill_b, 1.0);
-    
-    // _Dilation_fix15 class is specialized dilating filled pixels,
-    // and uses 'current pixel' for dilation, not fixed/assigned pixel.
-    // Therefore this class does not need internal pixel member,
-    // dummy pixel is passed to setup_morphology_params().
-
-    d.init_cached_tiles(py_dilated, tx, ty);
-    d.dilate(py_filled_tile, fill_pixel, dilation_size);
-    d.finalize_cached_tiles();
+    // XXX each time we need initialize dilation class.
+    // but this can be more efficient to look up tx&ty
+    // inside init_cached_tiles.
+    d->init_cached_tiles(py_dilated, tx, ty);
+    d->dilate(py_filled_tile, dilation_size);
+    d->finalize_cached_tiles();
 
     Py_RETURN_NONE;
 }
 
+/**
+* @dilation_finalize 
+* finalize dilation operation.
+*
+* @param desc_of_parameter
+* @return desc_of_return
+* @detail 
+* This function delete the dilation object immidiately. 
+*/
+
+PyObject*
+dilation_finalize(PyObject *py_ctx)
+{
+#ifdef HEAVY_DEBUG            
+    assert(py_ctx != NULL);
+    assert(PyCapsule_IsValid(py_ctx, NULL));
+#endif
+    _Dilation_color *d = (_Dilation_color*)PyCapsule_GetPointer(py_ctx, 
+                                                                NULL);
+    delete d;
+    Py_DECREF(py_ctx);
+
+}
 

@@ -7,8 +7,8 @@
  * (at your option) any later version.
  */
 
-#ifndef GAPCLOSE_HPP
-#define GAPCLOSE_HPP
+#ifndef DILATION_HPP
+#define DILATION_HPP
 
 #include <Python.h>
 
@@ -22,16 +22,22 @@
 
 //// Interface functions
 
+PyObject*
+dilation_init(
+    const double fill_r, const double fill_g, const double fill_b, 
+    const int dilation_size);    
 
 // dilate filled tile
 PyObject *
-gapclose_dilate_filled_tile(
+dilation_process_tile(
+    PyObject *py_ctx, // dilation context, returned from dilation_init().
     PyObject *py_dilated, // the tiledict for dilated color tiles.
     PyObject *py_filled_tile, // the filled color src tile. 
-    const int tx, const int ty,  // the position of py_filled_tile
-    const double fill_r, const double fill_g, const double fill_b, 
-    const int dilation_size // dilating pixel radius.
+    const int tx, const int ty  // the position of py_filled_tile
     );
+
+PyObject*
+dilation_finalize(PyObject *py_ctx);
 
 #endif
 

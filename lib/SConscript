@@ -216,7 +216,7 @@ module_src = [
         'pixops.cpp',
         'fastpng.cpp',
         'brushsettings.cpp',
-        'gapclose.cpp',
+        'dilation.cpp',
     ]
 module = build_py_module(
     env,
