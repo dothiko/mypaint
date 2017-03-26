@@ -145,6 +145,9 @@ class Tilecache
         int m_tx; 
         int m_ty; 
 
+        // current target tiledict.
+        PyObject *m_targ_dict;
+
         // --- Tilecache management methods
 
         PyObject *_generate_cache_key(int tx, int ty)
@@ -193,7 +196,10 @@ class Tilecache
 
         // Virtual handler method: used from _search_kernel
         virtual bool is_match_pixel(const int cx, const int cy, 
-                                    USER_PARAM_TYPE user_param) = 0;
+                                    USER_PARAM_TYPE user_param)
+        {
+            return false;
+        }
 
         // Utility method: check pixel existance inside circle-shaped kernel
         // for morphology operation.
@@ -208,32 +214,26 @@ class Tilecache
         // these different operations.
         inline bool _search_kernel(const int cx, const int cy, 
                                     const int size,
-                                    USER_PARAM_TYPE user_param,
-                                    bool target_result)
+                                    USER_PARAM_TYPE user_param)
         {
             int cw;
             double rad;
-            bool result;
 
             for (int dy = 0;dy <= size; dy++) {
                 rad = asin((double)(dy-1) / (double)size);
                 cw = (int)(cos(rad) * (double)size);
                 for (int dx = 0; dx <= cw; dx++) {
-                    result = is_match_pixel(cx + dx, cy + dy, user_param);
-                    if (result == target_result) 
+                    if (is_match_pixel(cx + dx, cy + dy, user_param))
                         return true;
 
                     if (dx > 0 || dy > 0) {
-                        result = is_match_pixel(cx + dx, cy - dy, user_param);
-                        if (result == target_result) 
+                        if (is_match_pixel(cx + dx, cy - dy, user_param))
                             return true;
 
-                        result = is_match_pixel(cx - dx, cy - dy, user_param);
-                        if (result == target_result) 
+                        if (is_match_pixel(cx - dx, cy - dy, user_param))
                             return true;
 
-                        result = is_match_pixel(cx - dx, cy + dy, user_param);
-                        if (result == target_result) 
+                        if (is_match_pixel(cx - dx, cy + dy, user_param))
                             return true;
                     }
                 }
@@ -243,7 +243,7 @@ class Tilecache
 
     public:
 
-        Tilecache(int npy_type, int dimension_cnt)
+        Tilecache(int npy_type, int dimension_cnt) : m_targ_dict(NULL)
         {
             // Tile type and dimension are used in _generate_tile(),
             // when a new tile requested.
@@ -261,6 +261,7 @@ class Tilecache
         {
             m_tx = tx;
             m_ty = ty;
+            m_targ_dict = py_tiledict;
 
             // fill the cache array with current dilated dict.
             for (int y=-1; y <= 1; y++) {
@@ -287,7 +288,7 @@ class Tilecache
         }
         
         // Call this and finalize cache before exiting interface function.
-        unsigned int finalize_cached_tiles(PyObject *py_tiledict)
+        unsigned int finalize_cached_tiles()
         {
             unsigned int updated_cnt = 0;
             PyObject *key;
@@ -301,7 +302,7 @@ class Tilecache
                 // m_cache_tiles might not have actual tile.be careful.
                 if (m_cache_tiles[idx] != NULL) {
                     PyObject *dst_tile = (PyObject*)m_cache_tiles[idx];
-                    if (PyDict_SetItem(py_tiledict, key, dst_tile) == 0) {
+                    if (PyDict_SetItem(m_targ_dict, key, dst_tile) == 0) {
                         updated_cnt++;
                     }
                     Py_DECREF(dst_tile);
@@ -318,6 +319,7 @@ class Tilecache
             
             }
 
+            m_targ_dict = NULL;
             return updated_cnt;
         }
 
@@ -389,17 +391,15 @@ class Tilecache
 };
 
 
-// Morphology operation class for fix15_short_t pixels.
-//
-// CAUTION:
-//   Cached tile is different for each morphology operation.
-//   When doing dilation, we set write TARGET tiles into tile-cache.
-//   and need only one tile for read-only reference source(flood-filled) tile.
-//
-//   When doing erosion, we set read-only SOURCE tiles into tile-cache.
-//   and need only one tile for write target.
-//
-class _Dilation_fix15 : public Tilecache<fix15_short_t, PyArrayObject*> {
+/**
+* @class _Dilation_color
+* @brief Morphology operation class for fix15_short_t color pixels.
+*
+* Dilate from a filled color tile to another new tile.
+*
+*/
+
+class _Dilation_color : public Tilecache<fix15_short_t, PyArrayObject*> {
 
     protected:
 
@@ -435,12 +435,11 @@ class _Dilation_fix15 : public Tilecache<fix15_short_t, PyArrayObject*> {
         }
 
     public:
-        _Dilation_fix15() : Tilecache(NPY_UINT16, 4)
+        _Dilation_color() : Tilecache(NPY_UINT16, 4)
         {
         }
 
         int dilate(PyObject *py_filled_tile, // the filled src tile. 
-                   int tx, int ty,  // the position of py_filled_tile
                    const fix15_short_t *fill_pixel,
                    int size)
         {
@@ -450,8 +449,7 @@ class _Dilation_fix15 : public Tilecache<fix15_short_t, PyArrayObject*> {
                 for (int cx=-size; cx < MYPAINT_TILE_SIZE+size; cx++) {
                     // target pixel is unused.
                     if (_search_kernel(cx, cy, size, 
-                                       (PyArrayObject*)py_filled_tile, 
-                                       true)) {
+                                       (PyArrayObject*)py_filled_tile)) { 
                         _put_pixel(cx, cy, fill_pixel);
                         dilated_cnt++;
                     }
@@ -463,574 +461,6 @@ class _Dilation_fix15 : public Tilecache<fix15_short_t, PyArrayObject*> {
 };
 
 
-// _GapCloser : Specialized class for detecting contour, to fill-gap.
-// This is for STATE_PIXEL *type,flag_based erode/dilate operation.
-//
-// in new flood_fill(), we use tiles of 8bit bitflag to figure out 
-// original contour, not-filled pixels area(gapclose_EXIST_FLAG) , 
-// and dilated area from original contour(gapclose_DILATED_FLAG). 
-
-// STATE_PIXEL type might changed from char. for future expansion.
-#define STATE_PIXEL char
-#define STATE_PIXEL_NUMPY NPY_UINT8
-// when changing STATE_PIXEL type, DO NOT FORGET TO UPDATE
-// NUMPY ARRAY TYPE IN CONSTRUCTOR!!
-
-class _GapCloser: public Tilecache<STATE_PIXEL, STATE_PIXEL> {
-
-    protected:
-        // pixel state information flag are now defined as 
-        // preprocessor constants, to easily share it with other modules.
-
-        inline void _put_flag(const int cx, const int cy, 
-                              const STATE_PIXEL flag)
-        {
-            STATE_PIXEL *dst_pixel = (STATE_PIXEL*)get_cached_pixel(
-                                                        cx, cy, true);
-            *dst_pixel |= flag;
-        }
-
-        virtual bool is_match_pixel(const int cx, const int cy, 
-                                    STATE_PIXEL target_pixel) 
-        {
-            STATE_PIXEL *dst_pixel = (STATE_PIXEL*)get_cached_pixel(
-                                                        cx, cy, false);
-            return ! (dst_pixel == NULL 
-                      || (*dst_pixel & target_pixel) == 0); 
-        }
-
-
-        // Dilate entire center tile and some area of surrounding 8 tiles, 
-        // to ensure center state tile can get complete dilation.
-        void _dilate_contour(int gap_radius) 
-        {         
-#ifdef HEAVY_DEBUG
-            assert(gap_radius <= MAX_OPERATION_SIZE);
-#endif
-            // Tile infomation flag check has done before this method called.
-
-            for (int y=-gap_radius ;
-                 y < MYPAINT_TILE_SIZE+gap_radius ;
-                 y++) 
-            {
-                for (int x=-gap_radius ; 
-                     x < MYPAINT_TILE_SIZE+gap_radius ; 
-                     x++) 
-                {
-                    STATE_PIXEL *pixel = get_cached_pixel(x, y, false);
-                    if (pixel != NULL   
-                        && (*pixel & gapclose_DILATED_FLAG) != 0) {
-                        // pixel exists, but it already dilated.
-                        // = does nothing
-                        //
-                        // otherwise, pixel is not dilated
-                        // or, pixel does not exist(==NULL)
-                        // we might place pixel.
-                    }
-                    else if ( _search_kernel(x, y, 
-                                gap_radius, gapclose_EXIST_FLAG, true)) {
-                        // If pixel is NULL, the tile that pixel should be contained 
-                        // is also NULL.
-                        // so generate it, by passing true to get_cached_pixel().
-                        if (pixel == NULL)
-                            pixel = get_cached_pixel(x, y, true);
-            
-                        *pixel |= gapclose_DILATED_FLAG;
-                    }
-                }
-            }
-
-            set_tile_info(CENTER_TILE_INDEX, DILATED_TILE_FLAG);
-        }
-        
-        // Convert(and initialize) color pixel tile into 8bit state tile.
-        // state tile updated with 'EXISTED' flag, but not cleared.
-        // So exisitng state tile can keep dilated/eroded flags,
-        // which is set another call of this function.
-        PyObject *_convert_state_tile(PyObject *py_state_dict, // 8bit state dict
-                                      PyArrayObject *py_surf_tile, // fix15 color tile
-                                      const fix15_short_t *targ_pixel,
-                                      const fix15_t tolerance,
-                                      PyObject *key) // a tuple of tile location
-        {
-            
-
-            PyObject *state_tile = PyDict_GetItem(py_state_dict, key);
-
-            if (state_tile == NULL) {
-                state_tile = _generate_tile();
-                PyDict_SetItem(py_state_dict, key, state_tile);
-                // No need to decref tile & key here, 
-                // it should be done at _finalize_cached_tiles()
-            }
-
-            for (int py = 0; py < MYPAINT_TILE_SIZE; py++) {
-                for (int px = 0; px < MYPAINT_TILE_SIZE; px++) {
-                    fix15_short_t *cur_pixel = 
-                        (fix15_short_t*)get_tile_pixel(py_surf_tile, px, py);
-                    if (floodfill_color_match(cur_pixel, 
-                                              targ_pixel, 
-                                              tolerance) == 0) {
-                        STATE_PIXEL *state_pixel = 
-                            (STATE_PIXEL*)get_tile_pixel(
-                                    (PyArrayObject*)state_tile, px, py);
-                        *state_pixel |= gapclose_EXIST_FLAG;
-                    }
-                }
-            }
-            
-            return state_tile;
-        }
-
-        // Before call this method, init_cached_tiles() must be already called.
-        // This method converts color tiles around (tx, ty) into state flag tiles.
-        // also, this setup function sets newly generated state tile into cache.
-        void _setup_state_tiles(PyObject *py_state_dict, // 8bit state tiles dict
-                                PyObject *py_surfdict, // source surface tiles dict
-                                const fix15_short_t *targ_pixel,
-                                const fix15_t tolerance)
-        {
-            // py_surfdict is surface tile dictionary, it is not cached in this class.
-            // this class have cache array of 'state tiles', not surface one.
-            // so,extract source color tiles with python API.
-#ifdef HEAVY_DEBUG            
-            assert(py_surfdict != NULL);
-            assert(py_surfdict != Py_None);
-#endif
-
-            for (int i=0; i < 9; i++) {
-
-                if (m_cache_tiles[i] == NULL) {
-                    PyObject *key = _get_cached_key(i);
-                    PyObject *surf_tile = PyDict_GetItem(py_surfdict, key);
-                    if (surf_tile != NULL) {
-                        Py_INCREF(surf_tile);
-
-                        // The surf_tile might not be tile, but _Tile wrapper object.
-                        // If so, extract cached tile from it.
-                        // Ensuring color tiles of _Tile wrapper object 
-                        // is done at tiledsurface.py
-                        int is_tile_obj = PyObject_HasAttrString(
-                                            surf_tile, ATTR_NAME_RGBA);
-                        if (is_tile_obj != 0) {
-                            Py_DECREF(surf_tile);// This surf_tile is _Tile
-
-                            // PyObject_GetAttrString creates new reference.
-                            // so no need to INCREF.
-                            surf_tile = PyObject_GetAttrString(surf_tile,
-                                                               ATTR_NAME_RGBA);
-#ifdef HEAVY_DEBUG            
-                            assert(surf_tile->ob_refcnt >= 2);
-#endif
-                        }
-
-                        PyObject *state_tile = 
-                            _convert_state_tile(py_state_dict, 
-                                                (PyArrayObject*)surf_tile, 
-                                                targ_pixel, 
-                                                tolerance,
-                                                key);
-                        Py_DECREF(surf_tile);
-#ifdef HEAVY_DEBUG            
-                        assert(surf_tile->ob_refcnt >= 1);
-#endif
-                        m_cache_tiles[i] = state_tile;
-                    }
-                }
-            }
-
-        }
-
-    public:
-
-        _GapCloser() : Tilecache(STATE_PIXEL_NUMPY, 1)
-        {
-        }
-
-        void close_gap(PyObject *py_state_dict, // 8bit state tiles dict
-                       PyObject *py_surfdict, // source surface tiles dict
-                       int tx, int ty, // current tile location
-                       const fix15_short_t *targ_pixel,// target pixel for conversion
-                                                      // from color tile to state tile.
-                       fix15_t tolerance,
-                       int gap_radius)
-        {
-#ifdef HEAVY_DEBUG
-            assert(gap_radius <= MAX_OPERATION_SIZE);
-#endif
-
-            init_cached_tiles(py_state_dict, tx, ty); 
-
-            STATE_PIXEL tile_info = get_tile_info(CENTER_TILE_INDEX);
-            if ((tile_info & DILATED_TILE_FLAG) == 0) {
-
-                _setup_state_tiles(py_state_dict, 
-                                   py_surfdict, 
-                                   targ_pixel,
-                                   tolerance);
-            
-                // Filling gap with dilated contour
-                // (contour = not flood-fill targeted pixel area).
-                _dilate_contour(gap_radius);
-
-            }
-
-            finalize_cached_tiles(py_state_dict); 
-        }
-
-        //// special tile information methods
-        //
-        // Special informations recorded into a tile with
-        // setting INFO_FLAG bitflag to paticular pixel.
-        // And they have various means,according to its location. 
-        //
-        // These methods are accessible from outside this class
-        // without any instance, now.
-        
-        // tile state information flags.
-        // This flag is only set to paticular location of tile pixels.
-        static const STATE_PIXEL TILE_INFO_FLAG = 0x80;
-        static const STATE_PIXEL DILATED_TILE_FLAG = 0x01;
-        static const STATE_PIXEL VALID_TILE_FLAG = 0x08;  // valid(exist) tile.
-        
-        // Additional tile state information flags.
-        // These flag is used from post-processing.
-        static const STATE_PIXEL SEARCHED_TILE_FLAG = 0x02;
-
-        // Maximum count of Tile info flags.
-        // DO NOT FORGET TO UPDATE THIS, when adding above tile flag constant!
-        // VALID_TILE_FLAG is not included to this number.
-        static const int TILE_INFO_MAX = 2; 
-
-        STATE_PIXEL get_tile_info(PyArrayObject *tile)
-        {
-            STATE_PIXEL retflag = 0;
-            STATE_PIXEL flag = 1;
-            STATE_PIXEL *pixel;
-
-#ifdef HEAVY_DEBUG
-            assert(tile != NULL);
-#endif
-            for(int i=0; i < TILE_INFO_MAX; i++) {
-                pixel = get_tile_pixel(tile, 0, i);
-                if (*pixel & TILE_INFO_FLAG)
-                    retflag |= flag;
-                flag = flag << 1;
-            }
-            return retflag | VALID_TILE_FLAG;
-        }
-
-        // Utility method.
-        // This can easily follow cached tile when it internally generated
-        // inside some method.
-        STATE_PIXEL get_tile_info(int index)
-        {
-#ifdef HEAVY_DEBUG
-            assert(index >= 0);
-            assert(index < MAX_CACHE_COUNT);
-#endif
-            if (m_cache_tiles[index] != NULL)
-                return get_tile_info((PyArrayObject*)m_cache_tiles[index]);
-            return 0;
-        }
-
-        void set_tile_info(PyArrayObject *tile, STATE_PIXEL flag)
-        {
-#ifdef HEAVY_DEBUG
-            assert(tile != NULL);
-#endif
-            STATE_PIXEL *pixel;
-            for(int i=0; i < TILE_INFO_MAX && flag != 0; i++) {
-                pixel = get_tile_pixel(tile, 0, i);
-                if (flag & 0x01)
-                    *pixel |= TILE_INFO_FLAG;
-                flag = flag >> 1;
-            }
-        }
-
-        // Utility method.
-        // This can easily follow cached tile when it internally generated
-        // inside some method.
-        void set_tile_info(int index, STATE_PIXEL flag)
-        {
-#ifdef HEAVY_DEBUG
-            assert(index >= 0);
-            assert(index < MAX_CACHE_COUNT);
-#endif
-            if (m_cache_tiles[index] != NULL)
-                set_tile_info((PyArrayObject*)m_cache_tiles[index], flag);
-        }
-        
-};
-
-/** 
- * @ PostProcessor
- *
- *
- * @detail
- *
- * To fill a area which is left for empty, do post-process dilation-like
- * operation.
- */
-
-class _PostProcessor {
-
-    protected:
-
-
-        // search start point to flood-fill small chank.
-        // it might cause spillout, but it is by design.
-        // if spilled out, it became "mask" of the painting area.
-        // and never merged.
-        inline bool _check_start_point(const int cx, const int cy)
-        {
-            STATE_PIXEL *statepix;
-            fix15_short_t *colorpix;
-            fix15_short_t *maskpix;
-            static int offsets[] = {-1, 1};
-
-            statepix = m_states.get_cached_pixel(
-                        cx, cy, false);
-            maskpix = m_masks.get_cached_pixel(
-                        cx, cy, false);
-            colorpix = m_colors.get_cached_pixel(
-                        cx, cy, false);
-
-            if ((statepix != NULL
-                     && (*statepix & gapclose_EXIST_FLAG) != 0)
-                    || (colorpix != NULL
-                        && colorpix[3] != 0)
-                    || (maskpix != NULL
-                        && maskpix[3] != 0)) {
-                return false;
-            }
-
-            for (int dy = 0;dy < 2; dy++) {
-                for (int dx = 0; dx < 2; dx++) {
-                    colorpix = m_colors.get_cached_pixel(
-                                cx+offsets[dx], cy+offsets[dy], false);
-
-                    if (colorpix != NULL 
-                            && colorpix[3] != 0) {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        }
-#if 0
-        static const STATE_PIXEL BORDER_FLAG = 0x10;
-
-        inline bool _search_pixel(const int cx, const int cy, 
-                                  const fix15_short_t *pixel)
-        {
-            int color_cnt = 0;
-            STATE_PIXEL *statepix;
-            fix15_short_t *colorpix;
-            static int offsets[] = {-1, 1};
-            int dx = 0;
-            int dy = 0;
-
-
-            for (dy = 0;dy < 2; dy++) {
-                statepix = m_states.get_cached_pixel(
-                        cx, cy+offsets[dy], false);
-                colorpix = m_colors.get_cached_pixel(
-                        cx, cy+offsets[dy], false);
-                if (colorpix != NULL && statepix != NULL) {
-                    if ((*statepix & gapclose_EXIST_FLAG) != 0)
-                        return false;
-
-                    if (colorpix[3] != 0
-                        && (*statepix & BORDER_FLAG) != 0)
-                        color_cnt++;
-                }
-            }
-
-            dy = 0;
-            for (dx = 0;dx < 2; dx++) {
-                statepix = m_states.get_cached_pixel(
-                        cx+offsets[dx], cy, false);
-                colorpix = m_colors.get_cached_pixel(
-                        cx+offsets[dx], cy, false);
-                if (colorpix != NULL && statepix != NULL) { 
-                    if ((*statepix & gapclose_EXIST_FLAG) != 0)
-                        return false;
-
-                    if (colorpix[3] != 0
-                        && (*statepix & BORDER_FLAG) != 0)
-                        color_cnt++;
-                }
-            }
-
-            return (color_cnt >= 2);
-        }
-
-
-        inline void _put_pixel(fix15_short_t *dst_pixel,
-                               const fix15_short_t *pixel,
-                               STATE_PIXEL* sts_pixel)
-        {
-            dst_pixel[0] = pixel[0];
-            dst_pixel[1] = pixel[1];
-            dst_pixel[2] = pixel[2];
-            dst_pixel[3] = (fix15_short_t)fix15_one;
-
-            *sts_pixel |= BORDER_FLAG;
-        }
-#endif 
-        _GapCloser m_states;
-        _Dilation_fix15 m_colors;
-        _Dilation_fix15 m_masks;
-
-    public:
-
-        _PostProcessor() 
-        {
-          //m_states = new _GapCloser();// reuse class.
-          //m_colors = new _Dilation_fix15();// reuse class.
-
-            // These classes mainly used just as cache manager,
-            // almost no their special methods called.
-        }
-
-        virtual ~_PostProcessor()
-        {
-          //delete m_states;
-          //delete m_colors;
-        }
-
-        // to search flood-fill starting point.
-        // prior to call this function, init_cached_tiles should be called.
-        PyObject *search_empty_start_point()
-        {
-            //PyArrayObject* color_tile = m_colors.get_tile(CENTER_TILE_INDEX);
-            //PyArrayObject* state_tile = m_states.get_tile(CENTER_TILE_INDEX);
-
-#ifdef HEAVY_DEBUG
-            //assert(color_tile != NULL);
-            //assert(state_tile != NULL);
-            // mask_tile might be NULL
-#endif
-
-
-            int tile_info = m_states.get_tile_info(CENTER_TILE_INDEX);
-            if ((tile_info & _GapCloser::SEARCHED_TILE_FLAG) != 0) 
-                return Py_None;
-
-            for (int y=0;
-                 y < MYPAINT_TILE_SIZE;
-                 y++) 
-            {
-                for (int x=0; 
-                     x < MYPAINT_TILE_SIZE; 
-                     x++) 
-                {
-                    fix15_short_t *colorpix = m_colors.get_cached_pixel(
-                                                x, y, false);
-                    if ( (colorpix == NULL 
-                          || colorpix[3] == 0) 
-                         && _check_start_point(x, y)) {
-                        return Py_BuildValue("ii", x, y);
-                    }
-                }
-            }
-
-            // If code reach here, this tile never be searched.
-            m_states.set_tile_info(
-                    CENTER_TILE_INDEX, 
-                    _GapCloser::SEARCHED_TILE_FLAG);
-
-            return Py_None;
-        }
-
-        void init_cached_tiles(PyObject *color_tiles,
-                               PyObject *state_tiles, 
-                               PyObject *mask_tiles,
-                               const int tx, const int ty)
-        {
-            m_colors.init_cached_tiles(color_tiles, tx, ty);
-            m_states.init_cached_tiles(state_tiles, tx, ty);
-            m_masks.init_cached_tiles(mask_tiles, tx, ty);
-        }
-
-        void finalize_cached_tiles(PyObject *color_tiles,
-                                   PyObject *state_tiles, 
-                                   PyObject *mask_tiles)
-        {
-            m_colors.finalize_cached_tiles(color_tiles);
-            m_states.finalize_cached_tiles(state_tiles);
-            m_masks.finalize_cached_tiles(mask_tiles);
-        }
-};
-
-
-
-//// Python Interface functions.
-//
-
-/** gapclose_close_gap:
- *
- * @py_state_dict: a Python dictinary, which stores 'state flag tiles'
- * @py_pre_filled_tile: a Numpy.array object of color tile.
- *                      This is the source of flag tile.
- * @tx, ty: the position of py_pre_filled_tile, in tile coordinate.
- * @targ_r, targ_g, targ_b, targ_a: premult target pixel color
- * @tol: tolerance,[0.0 - 1.0] same as tile_flood_fill().
- * @gap_radius: the filling gap radius.
- * returns: Nothing. returning PyNone always.
- *
- * extract contour into state tiles, 
- * and that state tile is stored into py_state_dict, with key of (tx, ty).
- * And later, this state tile used in flood_fill function, to detect
- * ignorable gaps.
- */
-
-PyObject *
-gapclose_close_gap(
-    PyObject *py_state_dict, 
-    PyObject *py_surfdict, 
-    const int tx, const int ty,  
-    const int targ_r, const int targ_g, const int targ_b, const int targ_a, 
-    const double tol,   
-    const int gap_radius) 
-{
-#ifdef HEAVY_DEBUG            
-    assert(py_state_dict != NULL);
-    assert(py_surfdict != NULL);
-    assert(0.0 <= tol);
-    assert(tol <= 1.0);
-    assert(gap_radius <= MAX_OPERATION_SIZE);
-#endif
-    // actually, this function is wrapper.
-    
-    // XXX Morphology Operation object defined as static. 
-    // Because this function called each time before a tile flood-filled,
-    // I think constructing/destructing cost cannot be ignored.
-    // Otherwise, we can use something start/end wrapper function and
-    // use PyCapsule object...
-    static _GapCloser m;
-
-
-    fix15_short_t targ_pixel[4] = {(fix15_short_t)targ_r,
-                                   (fix15_short_t)targ_g,
-                                   (fix15_short_t)targ_b,
-                                   (fix15_short_t)targ_a};
-
-    // XXX Copied from fill.cpp tile_flood_fill()
-    const fix15_t tolerance = (fix15_t)(  MIN(1.0, MAX(0.0, tol))
-                                        * fix15_one);
-
-    m.close_gap(py_state_dict, py_surfdict,
-                tx, ty, 
-                (const fix15_short_t*)targ_pixel,
-                tolerance,
-                gap_radius);
-
-    Py_RETURN_NONE;// DO NOT FORGET THIS!
-      
-}
 
 /** gapclose_dilate_filled_tile:
  *
@@ -1065,7 +495,7 @@ gapclose_dilate_filled_tile(
     // Morphology object defined as static. 
     // Because this function called each time before a tile flood-filled,
     // so constructing/destructing cost would not be ignored.
-    static _Dilation_fix15 d;
+    static _Dilation_color d;
 
 #ifdef HEAVY_DEBUG            
     assert(py_dilated != NULL);
@@ -1076,10 +506,6 @@ gapclose_dilate_filled_tile(
     
     // Actually alpha value is not used currently.
     // for future use.
-  //double alpha=(double)fix15_one;
-  //fix15_short_t fill_pixel[3] = {(fix15_short_clamp)(fill_r * alpha),
-  //                               (fix15_short_clamp)(fill_g * alpha),
-  //                               (fix15_short_clamp)(fill_b * alpha)};
     fix15_short_t fill_pixel[4];
     _convert_color_to_fix15(fill_pixel, fill_r, fill_g, fill_b, 1.0);
     
@@ -1089,381 +515,10 @@ gapclose_dilate_filled_tile(
     // dummy pixel is passed to setup_morphology_params().
 
     d.init_cached_tiles(py_dilated, tx, ty);
-    d.dilate(py_filled_tile, tx, ty, fill_pixel, dilation_size);
-    d.finalize_cached_tiles(py_dilated);
+    d.dilate(py_filled_tile, fill_pixel, dilation_size);
+    d.finalize_cached_tiles();
 
     Py_RETURN_NONE;
 }
 
 
-/** gapclose_search_start_point:
- *
- * @py_flag_tile : a numpy array of state flag tile.
- * @min_x, min_y, max_x, max_y : search limitation
- * returns: 
- * When new starting point found, it is tuple of (x, y) i.e. length is 2. 
- * if it is not found, return seed sequence, i.e. length is 4.
- * elements of seed sequence might be empty, if no further searching required.
- *
- * This function searches valid stating point of flood-fill.
- * And called when starting point of flood-fill is inside 'contour'.
- * This function is for not only starting flood-fill, but also keeping
- * more correct shape of gap-closing flood-fill pixels, because the
- * gap-closing filled area would be dilated later.
- *
- */
-
-// A point in the search queue
-typedef struct {
-    unsigned int x;
-    unsigned int y;
-    int search_cnt;
-} _search_point;
-
-PyObject*
-gapclose_search_start_point(
-    PyObject *py_flag_tile, // the flag tile.
-    PyObject *seeds,
-    int min_x, int min_y, 
-    int max_x, int max_y)
-{
-    // XXX same algorithm with fill.cpp::tile_flood_fill
-    // and copied many codes from it.
-
-#ifdef HEAVY_DEBUG
-    assert(PySequence_Check(seeds));
-#endif
-    if (min_x < 0) min_x = 0;
-    if (min_y < 0) min_y = 0;
-    if (max_x > MYPAINT_TILE_SIZE-1) max_x = MYPAINT_TILE_SIZE-1;
-    if (max_y > MYPAINT_TILE_SIZE-1) max_y = MYPAINT_TILE_SIZE-1;
-    if (min_x > max_x || min_y > max_y) {
-        return Py_BuildValue("[()()()()]");
-    }
-
-    // Populate a working queue with seeds
-    int x = 0;
-    int y = 0;
-    int search_cnt = 0;
-
-    GQueue *queue = g_queue_new();   /* Of tuples, to be exhausted */
-    for (int i=0; i<PySequence_Size(seeds); ++i) {
-        PyObject *seed_tup = PySequence_GetItem(seeds, i);
-#ifdef HEAVY_DEBUG
-        assert(PySequence_Size(seed_tup) == 3);
-#endif
-        if (! PyArg_ParseTuple(seed_tup, "iii", 
-                               &x, &y, &search_cnt)) {
-            continue;
-        }
-        Py_DECREF(seed_tup);
-
-        if (search_cnt > 0) {
-            x = MAX(0, MIN(x, MYPAINT_TILE_SIZE-1));
-            y = MAX(0, MIN(y, MYPAINT_TILE_SIZE-1));
-            STATE_PIXEL state_flag = gapclose_get_state_flag(
-                                        py_flag_tile, x, y);
-            if ((state_flag & gapclose_DILATED_FLAG) != 0) {
-                _search_point *seed_pt = (_search_point*)
-                                           malloc(sizeof(_search_point));
-                seed_pt->x = x;
-                seed_pt->y = y;
-                seed_pt->search_cnt = search_cnt;
-                g_queue_push_tail(queue, seed_pt);
-            }
-        }
-    }
-
-    PyObject *result_n = PyList_New(0);
-    PyObject *result_e = PyList_New(0);
-    PyObject *result_s = PyList_New(0);
-    PyObject *result_w = PyList_New(0);
-
-    int found_px = -1;
-    int found_py = -1;
-
-    while (! g_queue_is_empty(queue) && found_px==-1) {
-        _search_point *pos = (_search_point*) g_queue_pop_head(queue);
-        int x0 = pos->x;
-        int y = pos->y;
-        int search_cnt_base = pos->search_cnt;
-        free(pos);
-
-        // Find easternmost and westernmost points of the same colour
-        // Westwards loop includes (x,y), eastwards ignores it.
-        static const int x_delta[] = {-1, 1};
-        static const int x_offset[] = {0, 1};
-        for (int i=0; 
-             i<2 && found_px==-1 && search_cnt_base>0 ; 
-             ++i)
-        {
-            bool look_above = true;
-            bool look_below = true;
-            int search_cnt = search_cnt_base;
-            for ( int x = x0 + x_offset[i] ;
-                  x >= min_x && x <= max_x && search_cnt>0 ;
-                  x += x_delta[i] )
-            {
-                if (x != x0) { // Test was already done for queued pixels
-                    int state_flag = gapclose_get_state_flag(
-                                        py_flag_tile, x, y);
-
-                    if ((state_flag & gapclose_EXIST_FLAG) != 0) {
-                        break;
-                    }
-                    else if ((state_flag & gapclose_DILATED_FLAG) == 0) {
-                        // We reach "normal" pixel!
-                        found_px = x;
-                        found_py = y;
-                        break;
-                    } 
-                    else {
-                        search_cnt--;
-                        if (search_cnt <= 0) 
-                            break;
-                    }
-                }
-                    
-                // Also halt if we're outside the bbox range
-                if (x < min_x || y < min_y || x > max_x || y > max_y) {
-                    break;
-                }
-                
-                // In addition, enqueue the pixels above and below.
-                // Scanline algorithm here to avoid some pointless queue faff.
-                if (y > 0) {
-                    int state_flag_above = gapclose_get_state_flag(
-                                            py_flag_tile, x, y-1);
-                    if ((state_flag_above & gapclose_EXIST_FLAG) == 0) {
-                        if ((state_flag_above & gapclose_DILATED_FLAG) != 0) {
-                            if (look_above) {
-                                // Enqueue the pixel to the north
-                                _search_point *p = (_search_point *) malloc(
-                                                        sizeof(_search_point)
-                                                      );
-                                p->x = x;
-                                p->y = y-1;
-                                p->search_cnt = search_cnt-1;
-                                g_queue_push_tail(queue, p);
-                                look_above = false;
-                            }
-                        }
-                        else {
-                            found_px = x;
-                            found_py = y-1;
-                            break;
-                        }
-                    }
-                    else { // !match_above, but found!!
-                        look_above = true;
-                    }
-                }
-                else {
-                    // Overflow onto the tile to the North.
-                    // Scanlining not possible here: pixel is over the border.
-                    PyObject *s = Py_BuildValue("iii", 
-                                                x, MYPAINT_TILE_SIZE-1, 
-                                                search_cnt-1);
-                    PyList_Append(result_n, s);
-                    Py_DECREF(s);
-#ifdef HEAVY_DEBUG
-                    assert(s->ob_refcnt == 1);
-#endif
-                }
-                if (y < MYPAINT_TILE_SIZE - 1) {
-                    int state_flag_below = gapclose_get_state_flag(
-                                            py_flag_tile, x, y+1);
-                    if ((state_flag_below & gapclose_EXIST_FLAG) == 0)
-                    { 
-                        if ((state_flag_below & gapclose_DILATED_FLAG) != 0) {
-                            if (look_below) {
-                                // Enqueue the pixel to the South
-                                _search_point *p = (_search_point *) malloc(
-                                                        sizeof(_search_point)
-                                                      );
-                                p->x = x;
-                                p->y = y+1;
-                                p->search_cnt = search_cnt-1;
-                                g_queue_push_tail(queue, p);
-                                look_below = false;
-                            }
-                        }
-                        else {
-                            found_px = x;
-                            found_py = y+1;
-                            break;
-                        }
-                    }
-                    else { //!match_below
-                        look_below = true;
-                    }
-                }
-                else {
-                    // Overflow onto the tile to the South
-                    // Scanlining not possible here: pixel is over the border.
-                    PyObject *s = Py_BuildValue("iii", 
-                                                x, 0, 
-                                                search_cnt-1);
-                    PyList_Append(result_s, s);
-                    Py_DECREF(s);
-#ifdef HEAVY_DEBUG
-                    assert(s->ob_refcnt == 1);
-#endif
-                }
-                // If the fill is now at the west or east extreme, we have
-                // overflowed there too.  Seed West and East tiles.
-                if (x == 0) {
-                    PyObject *s = Py_BuildValue("iii", 
-                                                MYPAINT_TILE_SIZE-1, y, 
-                                                search_cnt-1);
-                    PyList_Append(result_w, s);
-                    Py_DECREF(s);
-#ifdef HEAVY_DEBUG
-                    assert(s->ob_refcnt == 1);
-#endif
-                }
-                else if (x == MYPAINT_TILE_SIZE-1) {
-                    PyObject *s = Py_BuildValue("iii", 
-                                                0, y,
-                                                search_cnt-1);
-                    PyList_Append(result_e, s);
-                    Py_DECREF(s);
-#ifdef HEAVY_DEBUG
-                    assert(s->ob_refcnt == 1);
-#endif
-                }
-            }
-
-        }
-
-    }
-
-
-    // Clean up working state, and return where the fill has overflowed
-    // into neighbouring tiles.
-    
-    // Different from tile_flood_fill(), this function might exit loop
-    // before all queues are consumed. so free them all here.
-    while (! g_queue_is_empty(queue)) {
-        _search_point *pos = (_search_point*) g_queue_pop_head(queue);
-        free(pos);
-    }
-    g_queue_free(queue);
-
-    PyObject *result; 
-    if ( found_px != -1 ) {
-        result = Py_BuildValue("[ii]", found_px, found_py);
-        Py_DECREF(result_n);
-        Py_DECREF(result_e);
-        Py_DECREF(result_s);
-        Py_DECREF(result_w);
-    } 
-    else {
-        result = Py_BuildValue("[OOOO]", result_n, result_e,
-                                         result_s, result_w);
-        Py_DECREF(result_n);
-        Py_DECREF(result_e);
-        Py_DECREF(result_s);
-        Py_DECREF(result_w);
-#ifdef HEAVY_DEBUG
-        assert(result_n->ob_refcnt == 1);
-        assert(result_e->ob_refcnt == 1);
-        assert(result_s->ob_refcnt == 1);
-        assert(result_w->ob_refcnt == 1);
-        assert(result->ob_refcnt == 1);
-#endif
-    }
-    return result;
-}
-#if 0
-/** gapclose_convert_tile_flag:
- *
- * @py_color_tile : a numpy array of color pixel tile.
- * @py_flag_tile : a numpy array of state flag tile.
- * @flag : the flag to be placed
- * returns: Py_None
- *
- * Find a pixel which has at least alpha value "1"
- * and write(bitwise OR) assigned flag value to flag tile. 
- *
- */
-
-PyObject*
-gapclose_convert_tile_flag(
-    PyObject *py_color_tile,
-    PyObject *py_flag_tile,
-    const int flag)
-{
-#ifdef HEAVY_DEBUG            
-    assert(py_color_tile != NULL);
-    assert(py_color_tile != Py_None);
-    assert(py_flag_tile != NULL);
-    assert(py_flag_tile != Py_None);
-#endif
-
-    for (int y=0 ;
-         y < MYPAINT_TILE_SIZE;
-         y++) 
-    {
-        for (int x=0 ; 
-             x < MYPAINT_TILE_SIZE ; 
-             x++) 
-        {
-            fix15_short_t *color = get_tile_pixel(py_color_tile, x, y);
-
-            if (color[3] != 0) {
-                STATE_PIXEL *state = get_tile_pixel(
-                                        py_flag_tile,
-                                        x, y);
-                *state_tile |= (STATE_PIXEL)flag;
-            }
-        }
-    }
-
-    Py_RETURN_NONE;
-}
-#endif
-
-/** gapclose_search_empty_startpt:
- *
- * @py_color_tiles : a dict of color pixel tile.
- * @py_state_tiles : a dict of state flag tile.
- * @py_mask_tiles : a dict of mask pixel tile.
- * @tx,ty: the tile position
- * returns: starting position in tile or Py_None
- *
- * Find a pixel which has at least alpha value "1"
- * and write(bitwise OR) assigned flag value to flag tile. 
- *
- */
-PyObject *
-gapclose_search_empty_startpt(
-    PyObject *py_color_tiles, 
-    PyObject *py_state_tiles, 
-    PyObject *py_mask_tiles,
-    const int tx, const int ty
-    ) 
-{
-    static _PostProcessor p;
-
-#ifdef HEAVY_DEBUG            
-    assert(py_color_tiles != NULL);
-    assert(py_color_tiles != Py_None);
-    assert(py_state_tiles != NULL);
-    assert(py_state_tiles != Py_None);
-    assert(py_mask_tiles != NULL);
-    assert(py_mask_tiles != Py_None);
-#endif
-
-    p.init_cached_tiles(py_color_tiles,
-                        py_state_tiles,
-                        py_mask_tiles,
-                        tx, ty);
-
-    PyObject *ret = p.search_empty_start_point();
-
-    p.finalize_cached_tiles(py_color_tiles,
-                            py_state_tiles,
-                            py_mask_tiles);
-    return ret;
-}

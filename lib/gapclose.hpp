@@ -18,41 +18,9 @@
 
 #include <mypaint-tiled-surface.h>
 
-// These constants are also referred from fill.cpp
-// So, they are not static const class member, preprocessor constant.
-
-#define gapclose_EXIST_FLAG   0x01
-#define gapclose_DILATED_FLAG 0x02 // This means the pixel is just dilated pixel,
-                                   // not sure original source pixel.
-                                   // it might be empty pixel in source tile.
-#define gapclose_FILLED_FLAG   0x04
-#define gapclose_MASK_FLAG   0x08
                           
-//// Utility functions for c++ modules
-
-// get flag of state tile pixel. 
-// this function is NULL-safe, if tile is NULL, just return 0. 
-int gapclose_get_state_flag(PyObject *sts_tile, const int x, const int y);
-
-// set flag of state tile pixel.
-// this function is NULL-safe, if tile is NULL, nothing done. 
-// 'set' means bitwise OR operation.
-void gapclose_set_state_flag(PyObject *sts_tile, 
-                     const int x, const int y, 
-                     const char flag);
 
 //// Interface functions
-
-// setup gap-closing state flag tile 
-PyObject *
-gapclose_close_gap(
-    PyObject *py_state_dict, // the tiledict for state flag tiles.
-    PyObject *py_surfdict, //  source surface tile dict.
-    const int tx, const int ty,  // the position of py_filled_tile
-    const int targ_r, const int targ_g, const int targ_b, const int targ_a, 
-    const double tol,   // pixel tolerance of filled area.
-    const int gap_size  // overflow-preventing closable gap size.
-    );
 
 
 // dilate filled tile
@@ -64,33 +32,6 @@ gapclose_dilate_filled_tile(
     const double fill_r, const double fill_g, const double fill_b, 
     const int dilation_size // dilating pixel radius.
     );
-
-// search valid flood-fill start point.
-PyObject *
-gapclose_search_start_point(
-    PyObject *py_flag_tile, // the flag tiles.
-    PyObject *seeds,
-    int min_x, int min_y, 
-    int max_x, int max_y);
-
-#if 0
-PyObject*
-gapclose_convert_tile_flag(
-    PyObject *py_color_tile,
-    PyObject *py_flag_tile,
-    const int flag);
-#endif
-
-// Different from gapclose_search_start_point,
-// gapclose_search_empty_startpt is for
-// searching sub empty fragment area left.
-PyObject *
-gapclose_search_empty_startpt(
-    PyObject *py_color_tiles, 
-    PyObject *py_state_tiles, 
-    PyObject *py_mask_tiles,
-    const int tx, const int ty
-    ); 
 
 #endif
 
