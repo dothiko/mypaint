@@ -194,7 +194,7 @@ class Tilecache
         virtual ~Tilecache()
         {
             if (m_kern != NULL)
-                delete [] m_kernel_line;
+                delete [] m_kern;
         }
         
         // Initialize/finalize cache tile
@@ -395,7 +395,7 @@ class _Dilation_color : public Tilecache<fix15_short_t, PyArrayObject*> {
             return (cur_pixel[3] != 0);
         }
         
-        inline void _put_pixel(int cx, int cy, const fix15_short_t *pixel)
+        inline void _put_pixel(int cx, int cy)
         {
             fix15_short_t *dst_pixel = get_cached_pixel(cx, cy, true);
 
@@ -419,8 +419,7 @@ class _Dilation_color : public Tilecache<fix15_short_t, PyArrayObject*> {
             m_fill_b = (fix15_short_clamp)(fill_b * alpha);
         }
 
-        int dilate(PyObject *py_filled_tile, // the filled src tile. 
-                   const fix15_short_t *fill_pixel)
+        int dilate(PyObject *py_filled_tile)
         {
             int dilated_cnt = 0;
 
@@ -432,7 +431,7 @@ class _Dilation_color : public Tilecache<fix15_short_t, PyArrayObject*> {
                          ++cx) {
                     if (_search_kernel(cx, cy,  
                                        (PyArrayObject*)py_filled_tile)) { 
-                        _put_pixel(cx, cy, fill_pixel);
+                        _put_pixel(cx, cy);
                         dilated_cnt++;
                     }
                 }
@@ -470,7 +469,8 @@ dilation_init(
                         (void *)d, 
                         NULL, 
                         NULL);// does not use python-gc
-    return cap;
+
+    return Py_BuildValue("O", cap);// need this.
 }
 
 
@@ -516,7 +516,7 @@ dilation_process_tile(
     // but this can be more efficient to look up tx&ty
     // inside init_cached_tiles.
     d->init_cached_tiles(py_dilated, tx, ty);
-    d->dilate(py_filled_tile, dilation_size);
+    d->dilate(py_filled_tile);
     d->finalize_cached_tiles();
 
     Py_RETURN_NONE;
@@ -543,6 +543,6 @@ dilation_finalize(PyObject *py_ctx)
                                                                 NULL);
     delete d;
     Py_DECREF(py_ctx);
-
+    Py_RETURN_NONE;
 }
 
