@@ -1096,15 +1096,6 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
             )
             seeds_n, seeds_e, seeds_s, seeds_w = overflows
 
-            if dilation_size > 0:
-                mypaintlib.tiledilate_dilate_tile(
-                    dilated,
-                    dst_tile,
-                    tx, ty,
-                    fill_r, fill_g, fill_b, 
-                    int(dilation_size)
-                    )
-
         # Enqueue overflows in each cardinal direction
         if seeds_n and ty > min_ty:
             tpos = (tx, ty-1)
@@ -1119,6 +1110,21 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst,
             tpos = (tx+1, ty)
             tileq.append((tpos, seeds_e))
 
+    if dilation_size > 0:
+        ctx = mypaintlib.dilation_init(
+            fill_r, fill_g, fill_b,
+            int(dilation_size)
+        )
+        
+        for (tx, ty), src_tile in filled.iteritems():
+            mypaintlib.dilation_process_tile(
+                ctx,
+                dilated,
+                src_tile,
+                tx, ty
+            )
+
+        mypaintlib.dilation_finalize(ctx)
 
     mode = mypaintlib.CombineNormal
     # Composite filled and dilated tiles into the destination surface
