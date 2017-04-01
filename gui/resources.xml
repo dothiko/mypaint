@@ -1753,6 +1753,27 @@ Vocabulary
         </object>
       </child>
       <!-- }}} -->
+      <!-- {{{ Grabcut Fill tool radio and flip actions -->
+      <child>
+        <object class="GtkRadioAction" id="GrabcutFillMode">
+          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">Grabcut Fill</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">GrabcutFill</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Grabcut Fill: fill an area with user-assigned color samples of current layer.</property>
+          <property name="icon-name">mypaint-fill-symbolic</property>
+          <property name="group">ColorPickMode</property>
+          <property name="value">12</property>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="FlipGrabcutFillMode">
+          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">Grabcut Fill</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">fill an area with user-assigned color samples of current layer.</property>
+          <property name="icon-name">mypaint-fill-symbolic</property>
+          <signal name="activate" handler="mode_flip_action_activated_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
+
     </object>
   </child>
   <!-- }}} -->

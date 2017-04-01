@@ -910,6 +910,16 @@ class Document (object):
                                 sample_merged, make_new_layer)
         self.do(cmd)
 
+    def grabcut_fill(self, layer_srcs, path):
+        """OpenCV grabcut fill
+        :param path: layer insertion path in rootlayerstack.
+        """
+
+        # Actually, that layer srcs are already painted.
+        # so this command just appends new layers into the path.
+        cmd = command.GrabcutAddLayer(self, layer_srcs, path)
+        self.do(cmd)
+
     ## Graphical refresh
 
     def _canvas_modified_cb(self, root, layer, x, y, w, h):

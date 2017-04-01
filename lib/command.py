@@ -1434,3 +1434,38 @@ class ExternalLayerEdit (Command):
     def undo(self):
         layer = self.doc.layer_stack.deepget(self._layer_path)
         layer.load_snapshot(self._before)
+
+
+class GrabcutAddLayer(Command):
+    """Inserts a new grabcut-generated (multiple) layers 
+    into the layer stack
+    That layers generated at another python file.
+
+    For some reasons, this class named as Grabcut'AddLayer', but
+    show its name as "Grabcut fill" in Mypaint GUI.
+    """
+
+    def __init__(self, doc, layers, insert_path, **kwds): 
+        super(GrabcutAddLayer, self).__init__(doc, **kwds)
+        self._insert_path = insert_path
+        self._prev_currentlayer_path = None
+        self._layers = layers
+
+    @property
+    def display_name(self):
+        # This class used as grabcut fill. but actually does not
+        # any filling operation, just add layers into rootlayerStack.
+        return _("Grabcut fill")
+
+    def redo(self):
+        layers = self.doc.layer_stack
+        self._prev_currentlayer_path = layers.get_current_path()
+        for layer in self._layers:
+            layers.deepinsert(self._insert_path, layer)
+
+    def undo(self):
+        layers = self.doc.layer_stack
+        for layer in self._layers:
+            layers.deepremove(layer)
+        layers.set_current_path(self._prev_currentlayer_path)
+        self._prev_currentlayer_path = None

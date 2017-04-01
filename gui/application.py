@@ -91,6 +91,7 @@ import gui.factoryaction  # registration only
 import gui.autorecover
 import lib.xml
 import gui.profiling
+import gui.grabcutfill
 
 
 ## Utility methods
