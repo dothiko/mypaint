@@ -275,8 +275,13 @@ class ExInkingMode (PressureEditableMixin,
             model_radius,
             self._generate_offset_vector())
 
-    def _queue_draw_selected_nodes(self):
+    def _queue_draw_selected_nodes(self, tdw):
         """ Override mixin """
+        if tdw is None:
+            for tdw in self._overlays:
+                self._queue_draw_selected_nodes(tdw)
+            return
+
         if len(self._overlays) > 0:
             if self.current_node_index != None:
                 basept = self.nodes[self.current_node_index]
@@ -284,11 +289,10 @@ class ExInkingMode (PressureEditableMixin,
                 basept = None
             offset_vec = self._generate_offset_vector()
 
-            for tdw in self._overlays:
-                model_radius = gui.ui_utils.display_to_model_distance(tdw, 
-                        self.range_radius)
-                for i in self.selected_nodes:
-                    self._queue_draw_ink_node(tdw, i, basept, model_radius, offset_vec)
+            model_radius = gui.ui_utils.display_to_model_distance(tdw, 
+                    self.range_radius)
+            for i in self.selected_nodes:
+                self._queue_draw_ink_node(tdw, i, basept, model_radius, offset_vec)
 
     def _queue_redraw_all_nodes(self):
         """ Override mixin :
