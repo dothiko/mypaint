@@ -1071,33 +1071,6 @@ Vocabulary
     </object>
   </child>
   <!--}}} /BrushModifierActions -->
-  <!-- {{{ AssistModifierActions -->
-  <child>
-    <object class="GtkActionGroup" id="AssistModifierActions">
-        <child>
-          <object class="GtkAction" id="AssistModeMenu">
-            <property name="label" translatable="yes" context="Menu→Brush (labels)">Assist Mode</property>
-            <!-- NO TOOLTIP: this is a menu -->
-          </object>
-        </child>
-        <child>
-          <object class="GtkToggleAction" id="AssistModeStabilizer">
-            <property name="icon_name">mypaint-stabilizer-symbolic</property>
-            <property name="label" translatable="yes" context="Menu→Brush→Assist Mode (labels), Accel Editor (labels)">Assist Mode: Stabilizer</property>
-            <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Apply stroke stabilizer.</property>
-            <signal name="activate" handler="assist_mode_stabilizer_cb"/>
-          </object>
-        </child>
-        <child>
-          <object class="GtkToggleAction" id="AssistModeNormal">
-            <property name="label" translatable="yes" context="Menu→Brush→Assist Mode (labels), Accel Editor (labels)">Assist Mode: Normal</property>
-            <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Normal stroke.</property>
-            <signal name="activate" handler="assist_mode_normal_cb"/>
-          </object>
-        </child>
-    </object>
-  </child>
-  <!--}}} /AssistModifierActions -->
   <!--{{{ WindowActions: actions affecting the application window and document view -->
   <child>
     <object class="GtkActionGroup" id="WindowActions">
@@ -1129,6 +1102,12 @@ Vocabulary
         <object class="GtkAction" id="EditMenu">
           <property name="label" translatable="yes" context="Menu (labels)">Edit</property>
           <!-- NO TOOLTIP: this is a menu -->
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="FreehandAssistMenu">
+          <property name="label" translatable="yes" context="Menu→View (labels)">Assisted Freehand</property>
+          <!-- NO TOOLTIP! This is a menu. -->
         </object>
       </child>
       <!-- }}} -->
@@ -2156,6 +2135,66 @@ Vocabulary
           <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">ExInking</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Draw smooth controlled lines(Experimental version).</property>
           <property name="icon-name">mypaint-tool-inking-symbolic</property>
+          <signal name="activate" handler="mode_flip_action_activated_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
+      <!-- {{{ Freehand with Stabilizer radio and flip actions -->
+      <child>
+        <object class="GtkRadioAction" id="StabilizedFreehandMode">
+          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">Stabilized Freehand</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">Stabilized</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Stabilized Freehand: draw and paint freely, with a stabilizing circle.</property>
+          <property name="icon-name">mypaint-brush-symbolic</property>
+          <property name="value">18</property>
+          <signal name="changed" handler="mode_radioaction_changed_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="FlipStabilizedFreehandMode">
+          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">Stabilized Freehand</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Draw and paint freely, with a stabilizing circle.</property>
+          <property name="icon-name">mypaint-brush-symbolic</property>
+          <signal name="activate" handler="mode_flip_action_activated_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
+      <!-- {{{ Freehand with Parallel ruler radio and flip actions -->
+      <child>
+        <object class="GtkRadioAction" id="ParallelFreehandMode">
+          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">Parallelruler Freehand</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">Parallel</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Parallel ruler Freehand: draw and paint with a parallel ruler.</property>
+          <property name="icon-name">mypaint-brush-symbolic</property>
+          <property name="value">19</property>
+          <signal name="changed" handler="mode_radioaction_changed_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="FlipParallelFreehandMode">
+          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">Parallelruler Freehand</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Draw and paint with a parallel ruler.</property>
+          <property name="icon-name">mypaint-brush-symbolic</property>
+          <signal name="activate" handler="mode_flip_action_activated_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
+      <!-- {{{ Freehand with Centerpoint ruler radio and flip actions -->
+      <child>
+        <object class="GtkRadioAction" id="CenterFreehandMode">
+          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">Centerpoint Freehand</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">Centerpoint</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Centerpoint Freehand: draw and paint with a centerpoint ruler.</property>
+          <property name="icon-name">mypaint-brush-symbolic</property>
+          <property name="value">20</property>
+          <signal name="changed" handler="mode_radioaction_changed_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="FlipCenterFreehandMode">
+          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">Centerpoint Freehand</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Draw and paint with a centerpoint ruler.</property>
+          <property name="icon-name">mypaint-brush-symbolic</property>
           <signal name="activate" handler="mode_flip_action_activated_cb"/>
         </object>
       </child>

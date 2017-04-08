@@ -91,7 +91,6 @@ import gui.factoryaction  # registration only
 import gui.autorecover
 import lib.xml
 import gui.profiling
-import assistmanager
 import sizechangemode
 import beziertool
 import polyfilltool
@@ -102,6 +101,9 @@ import stampeditor
 import exinktool
 import projectmanager
 from lib.observable import event
+import freehand_stabilized
+import freehand_parallel
+import freehand_center
 
 ## Utility methods
 
@@ -861,17 +863,6 @@ class Application (object):
 
     #--------------------------------------------------
     ### My addtion
-
-    ## Assistant
-    @property
-    def assistmanager(self):
-        try:
-            return self._assistmanager
-        except AttributeError:
-            self._assistmanager = assistmanager.AssistManager(self)
-            return self._assistmanager
-
-
 
     ## Layer Alpha-lock feature
     def _current_path_track_alphalock_cb(self, root, path):

@@ -15,10 +15,9 @@ import math
 from lib.helpers import clamp
 import logging
 from collections import deque
-logger = logging.getLogger(__name__)
-import weakref
 
 from gettext import gettext as _
+
 from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GLib
@@ -28,20 +27,6 @@ import numpy as np
 import gui.mode
 from drawutils import spline_4p
 
-from lib import mypaintlib
-import lib.helpers
-
-
-## Module settings
-
-# Which workarounds to allow for motion event compression
-EVCOMPRESSION_WORKAROUND_ALLOW_DISABLE_VIA_API = True
-EVCOMPRESSION_WORKAROUND_ALLOW_EVHACK_FILTER = True
-
-# Consts for the style of workaround in use
-EVCOMPRESSION_WORKAROUND_DISABLE_VIA_API = 1
-EVCOMPRESSION_WORKAROUND_EVHACK_FILTER = 2
-EVCOMPRESSION_WORKAROUND_NONE = 999
 logger = logging.getLogger(__name__)
 
 
@@ -49,8 +34,7 @@ logger = logging.getLogger(__name__)
 
 class FreehandMode (gui.mode.BrushworkModeMixin,
                     gui.mode.ScrollableModeMixin,
-                    gui.mode.InteractionMode,
-                    gui.mode.OverlayMixin):
+                    gui.mode.InteractionMode):
     """Freehand drawing mode
 
     To improve application responsiveness, this mode uses an internal
@@ -73,11 +57,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
     IS_LIVE_UPDATEABLE = True
 
-    
-    _X_TILT_OFFSET = 0.0    # XXX Class global tilt offsets, to
-    _Y_TILT_OFFSET = 0.0    # enable change tilt parameters for
-                            # non-tilt-sensible pen stylus.
-
     # Motion queue processing (raw data capture)
 
     # This controls processing of an internal queue of event data such
@@ -90,26 +69,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
     # possible directly handling each event received. Disconnecting
     # stroke rendering from event processing buys the user the ability
     # to quit out of a slowly/laggily rendering stroke if desired.
-
-    # Due to later versions of GTK3 (3.8+) discarding successive motion
-    # events received in the same frame (so-called "motion
-    # compression"), we employ a GDK event filter (on platforms using
-    # Xi2) to capture coordinates faster than GDK deigns to pass them on
-    # to us. Reason: we want the fidelity that GDK refuses to give us
-    # currently for a fancy Wacom device delivering motion events at
-    # ~200Hz: frame clock speeds are only 50 or 60 Hz.
-
-    # https://gna.org/bugs/?21003
-    # https://gna.org/bugs/?20822
-    # https://bugzilla.gnome.org/show_bug.cgi?id=702392
-
-    # It's hard to capture and translate tilt and pressure info in a
-    # manner that's compatible with GDK without using GDK's own private
-    # internals.  Implementing our own valuator translations would be
-    # likely to break, so for these pices of info we interpolate the
-    # values received on the clock tick-synchronized motion events GDK
-    # gives us, but position them at the x and y that Xi2 gave us.
-    # Pressure and tilt fidelities matter less than positional accuracy.
 
     ## Initialization
 
@@ -181,7 +140,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             self.last_good_raw_pressure = 0.0
             self.last_good_raw_xtilt = 0.0
             self.last_good_raw_ytilt = 0.0
-
 
         def queue_motion(self, event_data):
             """Append one raw motion event to the motion queue
@@ -261,14 +219,12 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         self._drawing_state = {}
         self._reset_drawing_state()
         self._debug = (logger.getEffectiveLevel() == logging.DEBUG)
-        self._discard_overlays()
-               
+
     def leave(self, **kwds):
         """Leave freehand mode"""
         self._reset_drawing_state()
         self._reinstate_drawing_cursor(tdw=None)
         super(FreehandMode, self).leave(**kwds)
-        self._discard_overlays()
 
     ## Special cursor state while there's pressure
 
@@ -315,7 +271,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
     def button_press_cb(self, tdw, event):
         result = False
         current_layer = tdw.doc.layer_stack.current
-
         if (current_layer.get_paintable() and event.button == 1
                 and event.type == Gdk.EventType.BUTTON_PRESS):
             # Single button press
@@ -339,13 +294,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             # Hide the cursor if configured to
             self._hide_drawing_cursor(tdw)
 
-            assistant = tdw.app.assistmanager.current
-            if assistant:
-               #assistant.fetch(tdw, event.x, event.y, 
-               #        event.get_axis(Gdk.AxisUse.PRESSURE),
-               #        event.time, drawstate.button_down)
-                assistant.button_press_cb(tdw, event) 
-
             result = True
         return (super(FreehandMode, self).button_press_cb(tdw, event)
                 or result)
@@ -358,11 +306,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             drawstate = self._get_drawing_state(tdw)
             if not drawstate.last_event_had_pressure:
                 self.motion_notify_cb(tdw, event, fakepressure=0.0)
-
-            assistant = tdw.app.assistmanager.current
-            if assistant:
-                assistant.button_release_cb(tdw, event)
-
             # Notify observers after processing the event
             self.doc.input_stroke_ended(event)
 
@@ -375,8 +318,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             self._reinstate_drawing_cursor(tdw)
 
             result = True
-
-
         return (super(FreehandMode, self).button_release_cb(tdw, event)
                 or result)
 
@@ -392,30 +333,11 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
 
         """
 
-        def queue_motion(time, x, y, pressure, xtilt, ytilt):
-            x, y = tdw.display_to_model(x, y)
-            xtilt = lib.helpers.clamp(xtilt + FreehandMode._X_TILT_OFFSET,
-                    -1.0, 1.0)
-            ytilt = lib.helpers.clamp(ytilt + FreehandMode._Y_TILT_OFFSET,
-                    -1.0, 1.0)
-            drawstate.queue_motion((time, x, y, pressure, xtilt, ytilt))
-
         # Do nothing if painting is inactivated
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
 
-#
-#
-#        # Disable or work around GDK's motion event compression
-#        if self._event_compression_supported is None:
-#            win = tdw.get_window()
-#            mc_supported = hasattr(win, "set_event_compression")
-#            self._event_compression_supported = mc_supported
-#        drawstate = self._get_drawing_state(tdw)
-#        if drawstate.event_compression_workaround is None:
-#            self._add_event_compression_workaround(tdw)
-#
         # If the device has changed and the last pressure value from the
         # previous device is not equal to 0.0, this can leave a visible
         # stroke on the layer even if the 'new' device is not pressed on
@@ -433,26 +355,11 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         # Extract the raw readings for this event
         x = event.x
         y = event.y
-
-
         time = event.time
         pressure = event.get_axis(Gdk.AxisUse.PRESSURE)
         xtilt = event.get_axis(Gdk.AxisUse.XTILT)
         ytilt = event.get_axis(Gdk.AxisUse.YTILT)
         state = event.state
-
-        # XXX added codes for assitants.
-        assistant = tdw.app.assistmanager.current
-        if assistant:
-            self._ensure_overlay_for_tdw(tdw)
-
-           #if drawstate.button_down != None:
-           #    # To erase old overlay drawings of assistant.
-           #    if assistant.motion_notify_cb(tdw, event):
-           #        return super(FreehandMode, self).motion_notify_cb(tdw, event)
-               #assistant.queue_draw_area(tdw)
-            if assistant.motion_notify_cb(tdw, event):
-                return super(FreehandMode, self).motion_notify_cb(tdw, event)
 
         # Workaround for buggy evdev behaviour.
         # Events sometimes get a zero raw pressure reading when the
@@ -542,35 +449,15 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         else:
             self._reinstate_drawing_cursor(tdw)
 
-
         # HACK: straight line mode?
         # TEST: Does this ever happen?
         if state & Gdk.ModifierType.SHIFT_MASK:
             pressure = 0.0
 
-
-        # XXX added codes for assitants.
-        if assistant:
-            # Assitant event position fetch and queue motion
-
-            assistant.fetch(x, y, pressure, time)
-            for x, y, p in assistant.enum_samples(tdw):
-                x, y = tdw.display_to_model(x, y)
-                event_data = (time, x, y, pressure, xtilt, ytilt)
-                drawstate.queue_motion(event_data)
-
-            # New positioned assistant overlay should be drawn here.
-           #if button_down is not None:
-            if fakepressure is None:
-                assistant.queue_draw_area(tdw)
-        else:
-            # Ordinary event queuing
-
-            # Queue this event
-            x, y = tdw.display_to_model(x, y)
-            event_data = (time, x, y, pressure, xtilt, ytilt)
-            drawstate.queue_motion(event_data)
-
+        # Queue this event
+        x, y = tdw.display_to_model(x, y)
+        event_data = (time, x, y, pressure, xtilt, ytilt)
+        drawstate.queue_motion(event_data)
         # Start the motion event processor, if it isn't already running
         if not drawstate.motion_processing_cbid:
             cbid = GLib.idle_add(
@@ -579,14 +466,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                 priority = self.MOTION_QUEUE_PRIORITY,
             )
             drawstate.motion_processing_cbid = cbid
-
-        # XXX In original code, motion_notify_cb() end without 
-        # calling superclass one.
-        # Is there any reasons to do so...?
-        # Anyway,we need to detect device change in this version.
-        # so call this.
-        return super(FreehandMode, self).motion_notify_cb(tdw, event)
-
 
     ## Motion queue processing
 
@@ -612,7 +491,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         drawstate = self._get_drawing_state(tdw)
         time, x, y, pressure, xtilt, ytilt = event_data
         model = tdw.doc
-
 
         # Calculate time delta for the brush engine
         last_event_time = drawstate.last_handled_event_time
@@ -667,61 +545,28 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             cls._OPTIONS_WIDGET = widget
         return cls._OPTIONS_WIDGET
 
-    ## Overlay related
-
-    def _generate_overlay(self, tdw):
-        return _Overlay_Freehand(self, tdw)
-
 
 class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
     """Configuration widget for freehand mode"""
 
     def init_specialized_widgets(self, row):
-
-        def create_scale_widget(cname, label_text, adj):
-            label = Gtk.Label()
-            label.set_text(label_text)
-            label.set_alignment(1.0, 0.5)
-            label.set_hexpand(False)
-            if cname:
-                self.adjustable_settings.add(cname)
-                adj = self.app.brush_adjustment[cname]
-            else:
-                pass
-            scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL, adj)
-            scale.set_draw_value(False)
-            scale.set_hexpand(True)
-            self.attach(label, 0, row, 1, 1)
-            self.attach(scale, 1, row, 1, 1)
-
-        #TRANSLATORS: "Smooth:" is label widget text,  
-        #TRANSLATORS: Short alias for "Slow position tracking". This is
-        #TRANSLATORS: used on the options panel.
-        create_scale_widget("slow_tracking", _("Smooth:"), None)
+        cname = "slow_tracking"
+        label = Gtk.Label()
+        # TRANSLATORS: Short alias for "Slow position tracking". This is
+        # TRANSLATORS: used on the options panel.
+        label.set_text(_("Smooth:"))
+        label.set_alignment(1.0, 0.5)
+        label.set_hexpand(False)
+        self.adjustable_settings.add(cname)
+        adj = self.app.brush_adjustment[cname]
+        scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL, adj)
+        scale.set_draw_value(False)
+        scale.set_hexpand(True)
+        self.attach(label, 0, row, 1, 1)
+        self.attach(scale, 1, row, 1, 1)
         row += 1
-
-        adj = Gtk.Adjustment(value=0.0,lower=-1.0,upper=1.0,step_incr=0.01)
-        adj.connect("value-changed", self.x_tilt_offset_adj_changed_cb)
-        create_scale_widget(None, _("X Tilt Offset:"), adj)
-        row += 1
-
-        adj = Gtk.Adjustment(value=0.0,lower=-1.0,upper=1.0,step_incr=0.01)
-        adj.connect("value-changed", self.y_tilt_offset_adj_changed_cb)
-        create_scale_widget(None, _("Y Tilt Offset:"), adj)
-        row += 1
-
-        # Add VBox for Assistant area
-        box = self.app.assistmanager.presenter_grid
-        self.attach(box, 0, row, 2, 1)
-        row += 1
-
         return row
 
-    def x_tilt_offset_adj_changed_cb(self, adj):
-        FreehandMode._X_TILT_OFFSET = adj.get_value()
-
-    def y_tilt_offset_adj_changed_cb(self, adj):
-        FreehandMode._Y_TILT_OFFSET = adj.get_value()
 
 class PressureAndTiltInterpolator (object):
     """Interpolates event sequences, filling in null pressure/tilt data
@@ -907,20 +752,6 @@ class PressureAndTiltInterpolator (object):
             for t, x, y, p, xt, yt in self._interpolate_and_step():
                 yield (t, x, y, p, xt, yt)
 
-
-class _Overlay_Freehand (gui.overlays.Overlay):
-    """Overlay for freehand mode """
-
-    def __init__(self, freehandmode, tdw):
-        super(_Overlay_Freehand, self).__init__()
-        self._freehandmode = weakref.proxy(freehandmode)
-        self._tdw = weakref.proxy(tdw)
-
-    def paint(self, cr):
-        """Draw brush size to the screen"""
-        assistant = self._tdw.app.assistmanager.current
-        if assistant:
-            assistant.draw_overlay(cr, self._tdw)
 
 ## Module tests
 

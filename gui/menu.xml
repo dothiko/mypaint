@@ -41,6 +41,11 @@
       <!-- Modes which affect drawing -->
       <separator/>
       <menuitem action='FlipFreehandMode'/>
+      <menu action='FreehandAssistMenu'>
+          <menuitem action='FlipStabilizedFreehandMode'/>
+          <menuitem action='FlipParallelFreehandMode'/>
+          <menuitem action='FlipCenterFreehandMode'/>
+      </menu>
       <menuitem action='FlipInkingMode'/>
       <menuitem action='FlipExInkingMode'/>
       <menuitem action='FlipBezierCurveMode'/>
@@ -130,11 +135,6 @@
         <menuitem action='BlendModeEraser'/>
         <menuitem action='BlendModeLockAlpha'/>
         <menuitem action='BlendModeColorize'/>
-      </menu>
-      <separator/>
-      <menu action='AssistModeMenu'>
-        <menuitem action='AssistModeNormal'/>
-        <menuitem action='AssistModeStabilizer'/>
       </menu>
       <!-- Shortcuts for settings -->
       <separator/>
