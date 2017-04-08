@@ -21,7 +21,7 @@ class RulerNode(object):
 
 class RulerController(LinearController):
     """RulerController, to manage & show parallel ruler settings
-    in parallelruler assistant of freehand mode.
+    in freehand_parallel
     """
     ACTION_NAME = "FreehandMode"
 

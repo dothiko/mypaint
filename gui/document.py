@@ -388,11 +388,6 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         self.action_group = builder.get_object('DocumentActions')
         self.modes_action_group = builder.get_object("ModeStackActions")
 
-        # assist mode actions
-       #self.assist_action_group = builder.get_object('AssistModifierActions')
-       #self.assist_stablizer_action=self.app.find_action("AssistModeStabilizer")
-       #self.app.kbm.takeover_action(self.assist_stablizer_action)
-
         # Fine-grained observation of various model objects
         cmdstack = self.model.command_stack
         layerstack = self.model.layer_stack
@@ -2318,18 +2313,6 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         if hasattr(mode, 'delete_current_item'):
             mode.delete_item()
 
-
-    ##+ Assist modifier
-
-  # def assist_mode_stabilizer_cb(self, action):
-  #     if action.get_active():
-  #         self.app.assistmanager.enable_assistant(action.get_name())
-  #     else:
-  #         self.app.assistmanager.enable_assistant(None)
-
-
-    def assist_mode_normal_cb(self, action):
-        pass
 
     ##+ Plugin related
 
