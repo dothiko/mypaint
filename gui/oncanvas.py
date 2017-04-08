@@ -196,6 +196,9 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     def __init__(self, **kwargs):
 
         super(OncanvasEditMixin, self).__init__(**kwargs)
+
+        from application import get_app
+        self.app = get_app()
  
         #+ initialize selected nodes - 
         #+ place this prior to _reset_nodes()

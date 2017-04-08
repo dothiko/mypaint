@@ -305,6 +305,13 @@ class _Phase(PressPhase):
 
 _ActionButton = ActionButtonMixin
 
+
+class _Prefname:
+    """Constants of the keys for app.preferences.
+    To share this constants between multiple classes."""
+    INITIAL_PRESSURE = "beziertool.initial_pressure"
+    DEFAULT_DTIME = 'beziertool.default_dtime'
+        
 class PressureMap(object):
     """ PressureMap wrapper object, to mapping 'pressure-variation'
     configuration to current stroke.
@@ -384,15 +391,15 @@ class BezierMode (PressureEditableMixin,
         if len(self.nodes) > 2:
             if self.phase == _Phase.INSERT_NODE:
                 self.phase = _Phase.ADJUST
-                self.doc.app.show_transient_message(_("Toggled to adjust phase."))
+                self.app.show_transient_message(_("Toggled to adjust phase."))
             else:
                 self.phase = _Phase.INSERT_NODE
-                self.doc.app.show_transient_message(_("Entering insert node phase."))
+                self.app.show_transient_message(_("Entering insert node phase."))
 
             for tdw in self._overlays:
                 self._update_cursor(tdw) 
         else:
-            self.doc.app.show_transient_message(_("There is no stroke.Cannot enter insert phase."))
+            self.app.show_transient_message(_("There is no stroke.Cannot enter insert phase."))
 
     def is_editing_phase(self):
         return self.phase in (_Phase.ADJUST,
@@ -412,13 +419,22 @@ class BezierMode (PressureEditableMixin,
         cls._DEFAULT_DTIME = new_dtime
 
     @classmethod
-    def set_default_pressure(cls, new_pressure):
-        cls._DEFAULT_PRESSURE = new_pressure
+    def set_initial_pressure(cls, new_pressure):
+        cls._INITIAL_PRESSURE = new_pressure
+
+    @property
+    def initial_pressure(self):
+        cls = self.__class__
+        if cls._INITIAL_PRESSURE is None:
+            cls._INITIAL_PRESSURE = \
+                    self.app.preferences.get(_Prefname.INITIAL_PRESSURE, 
+                                             1.0)
+        return cls._INITIAL_PRESSURE
 
     def enter(self, doc, **kwds):
         """Enters the mode: called by `ModeStack.push()` etc."""
         super(BezierMode, self).enter(doc, **kwds)
-        cursors = self.doc.app.cursors
+        cursors = self.app.cursors
         self._insert_cursor = cursors.get_action_cursor(
             self.ACTION_NAME,
             gui.cursor.Name.ADD,
@@ -430,9 +446,9 @@ class BezierMode (PressureEditableMixin,
     DRAFT_STEP = 0.01 # Draft(Editing) Bezier curve stroke step.
     FINAL_STEP = 0.005 # Final output stroke Bezier-curve step.
 
-    _DEFAULT_PRESSURE = 0.5 # default bezier pressure,this is fixed value.
-                            # because it is hard to control pressure 
-                            # for human hand at node creation.
+    _INITIAL_PRESSURE = None # default bezier pressure,this is fixed value.
+                             # because it is hard to control pressure 
+                             # for human hand at node creation.
 
     _DEFAULT_DTIME = 0.5 # default dtime value
 
@@ -473,6 +489,9 @@ class BezierMode (PressureEditableMixin,
     
     def _generate_overlay(self, tdw):
         return OverlayBezier(self, tdw)
+
+    ## Properties
+
 
     ## Options presenter
     def _generate_presenter(self):
@@ -544,76 +563,8 @@ class BezierMode (PressureEditableMixin,
         self.options_presenter.reset_stroke_history()
         self.forced_button_pos = None
 
-    ## Stroke related
-   #def _detect_on_stroke(self, x, y, allow_distance = 4.0):
-   #    """Detecting pressed point is on the stroke currently editing.
-   #    
-   #    :param x: cursor x position in MODEL coord
-   #    :param y: cursor y position in MODEL coord
-   #    :param allow_distance: the allowed distance from stroke.
-   #    :return : a tuple of (the index of 'previous' node, time parameter of stroke)
-   #    :rtype : a tuple when the pressed point is on stroke, otherwise
-   #             None.
-   #    
-   #    """
-   #
-   #    # XXX Transplant from https://gist.github.com/MadRabbit/996893
-   #    def find_x_for(p0, p1, p2, p3, tx, init):
-   #        t=init
-   #        x=t 
-   #        i=0
-   #        while i < 5: # making 5 iterations max
-   #            z = gui.drawutils.get_cubic_bezier(
-   #                    p0, p1, p2, p3, x) - tx
-   #    
-   #            if abs(z) < 0.0000001:
-   #                break # if already got close enough
-   #    
-   #            dx = gui.drawutils.get_diff_cubic_bezier(
-   #                  p0, p1, p2, p3, x)
-   #            if dx == 0.0:
-   #                break
-   #    
-   #            x = x - z / dx
-   #            i+=1
-   #    
-   #        return x # try any of x
-   #    
-   #    
-   #    
-   #    for i,cn in enumerate(self.nodes[:-1]):
-   #        # Get boundary rectangle,to reduce processing segment
-   #        nn = self.nodes[i+1]
-   #        p0 = cn.x
-   #        p1 = cn.get_control_handle(1).x
-   #        p2 = nn.get_control_handle(0).x
-   #        p3 = nn.x
-   #    
-   #        q0 = cn.y
-   #        q1 = cn.get_control_handle(1).y
-   #        q2 = nn.get_control_handle(0).y
-   #        q3 = nn.y
-   #    
-   #        sx, ex = gui.drawutils.get_minmax_bezier(p0, p1, p2, p3)
-   #        sy, ey = gui.drawutils.get_minmax_bezier(q0, q1, q2, q3)
-   #        
-   #        if sx <= x <= ex and sy <= y <= ey:
-   #            # cursor is inside the bezier segment.
-   #            c=0
-   #            t=1.0
-   #            while c < 2:
-   #                t = find_x_for(p0, p1, p2, p3, x, t)
-   #                cy = gui.drawutils.get_cubic_bezier(q0, q1, q2, q3, t)
-   #                if abs(y - cy) < allow_distance:
-   #                    # the timepoint Found!
-   #                    return (i, t)
-   #                t = 0.0
-   #                c+=1
-   #    
-   #    # Fallthrough: return None when failed.
 
     ## Redraws
-   #def _queue_draw_node(self, i, offsets=None, tdws=None):
     def _queue_draw_node(self, tdw, i, offsets=None):
         """This method might called from baseclass,
         so we need to call HandleNodeUserMixin method explicitly.
@@ -736,8 +687,6 @@ class BezierMode (PressureEditableMixin,
         
         def draw_single_segment(cur_step):
             
-           #x, y = gui.drawutils.get_cubic_bezier_segment(
-           #    p0, p1, p2, p3, cur_step, o0, o3)
             x = gui.drawutils.get_cubic_bezier(
                p0.x + o0[0] , p1.x + o0[0], 
                p2.x + o3[0] , p3.x + o3[0], cur_step)
@@ -818,12 +767,6 @@ class BezierMode (PressureEditableMixin,
 
             # FALLTHRU: *do* start a drag 
         
-       #elif self.phase == _Phase.ADJUST_PRESSURE: 
-       #    # XXX in some cases,ADJUST_PRESSURE phase come here
-       #    # without reaching drag_stop_cb.(it might due to pen tablet...)
-       #    # so ignore this for now,or something should be done here?
-       #    print('adjuting!')
-       #    pass 
         elif self.phase == _Phase.INSERT_NODE:
             mx, my = tdw.display_to_model(event.x, event.y)
             pressed_segment = detect_on_stroke(self.nodes, mx, my)
@@ -840,10 +783,10 @@ class BezierMode (PressureEditableMixin,
                #self._queue_draw_node(pressed_segment[0] + 1)
                 
                 self._bypass_phase(_Phase.ADJUST)
-                self.doc.app.show_transient_message(_("Create a new node on stroke"))
+                self.app.show_transient_message(_("Create a new node on stroke"))
                 return True # Cancel drag event
             else:
-                self.doc.app.show_transient_message(_("There is no stroke on clicked point.Creating node is failed."))
+                self.app.show_transient_message(_("There is no stroke on clicked point.Creating node is failed."))
         
         # Supercall : inside inherited class, basic operation (such as
         # moving nodes) would be done.
@@ -991,7 +934,7 @@ class BezierMode (PressureEditableMixin,
         xtilt, ytilt = self._get_event_tilt(tdw, event)
         return _Node_Bezier(
             x=x, y=y,
-            pressure=self._DEFAULT_PRESSURE,
+            pressure=self.initial_pressure,
             xtilt=xtilt, ytilt=ytilt,
             dtime=self._DEFAULT_DTIME,
             )
@@ -1114,6 +1057,7 @@ class BezierMode (PressureEditableMixin,
 
         node_length=[]
         total_length = 0.0
+        initial_pressure = self.initial_pressure
 
         for idx, cn in enumerate(self.nodes[:-1]):
             nn = self.nodes[idx + 1]
@@ -1147,8 +1091,9 @@ class BezierMode (PressureEditableMixin,
         cur_length = 0.0
         pressure_map = self.pressure_map
         for idx,cn in enumerate(self.nodes):
-           #cn.pressure = curve.get_pressure_value(cur_length / total_length)
-            cn.pressure = pressure_map.get_pressure(cur_length / total_length)
+            pressure = pressure_map.get_pressure(cur_length / total_length)
+            pressure *= initial_pressure
+            cn.pressure = pressure
             cur_length += node_length[idx]
         self._queue_redraw_item()
 
@@ -1443,6 +1388,7 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking,
                                RecallableNodePresnterMixin):
     """Presents UI for directly editing point values etc."""
 
+
     def __init__(self):
         super(OptionsPresenter_Bezier, self).__init__()
 
@@ -1479,9 +1425,9 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking,
         self._default_pressure_adj = builder.get_object("default_pressure_adj")
 
         self._default_dtime_adj.set_value(self._app.preferences.get(
-            "beziertool.default_dtime", BezierMode._DEFAULT_DTIME))
+            _Prefname.DEFAULT_DTIME, BezierMode._DEFAULT_DTIME))
         self._default_pressure_adj.set_value(self._app.preferences.get(
-            "beziertool.default_pressure", BezierMode._DEFAULT_PRESSURE))
+            _Prefname.INITIAL_PRESSURE, 1.0))
 
         self.create_recall_combobox(builder,
                                     'stroke_history_combobox',
@@ -1601,20 +1547,19 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking,
         super(OptionsPresenter_Bezier, self)._variation_preset_combo_changed_cb(widget)
         beziermode, node_idx = self.target
         if beziermode:
-           #beziermode.redraw_item_cb()
             beziermode.apply_pressure_from_curve_widget()
 
     def _default_dtime_value_changed_cb(self, adj):
         if self._updating_ui:
             return
-        self._app.preferences['beziertool.default_dtime'] = adj.get_value()
+        self._app.preferences[_Prefname.DEFAULT_DTIME] = adj.get_value()
         BezierMode.set_default_dtime(adj.get_value())
 
     def _default_pressure_value_changed_cb(self, adj):
         if self._updating_ui:
             return
-        self._app.preferences['beziertool.default_pressure'] = adj.get_value()
-        BezierMode.set_default_pressure(adj.get_value())
+        self._app.preferences[_Prefname.INITIAL_PRESSURE] = adj.get_value()
+        BezierMode.set_initial_pressure(adj.get_value())
     
 
     ## Other handlers are as implemented in superclass.  
