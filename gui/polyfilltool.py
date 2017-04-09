@@ -641,8 +641,9 @@ class PolyfillMode (OncanvasEditMixin,
         else:
             return
 
-        self._draw_polygon(composite_mode)
-        self._start_new_capture_phase(rollback=False)
+        if self._shape.is_ready(self):
+            self._draw_polygon(composite_mode)
+            self._start_new_capture_phase(rollback=False)
                
     def _draw_polygon(self, composite_mode):
         """Draw polygon (inner method)

@@ -80,6 +80,9 @@ class Shape(object):
         cr.set_dash((dot, ) )
         cr.stroke()
 
+    def is_ready(self, mode):
+        raise NotImplementedError("is_ready method is mandatory")
+
 
 class Shape_Bezier(Shape):
 
@@ -422,6 +425,9 @@ class Shape_Bezier(Shape):
             mode._queue_redraw_item(tdw)
             mode._queue_draw_buttons()
             mode.phase = _Phase.ADJUST
+
+    def is_ready(self, mode):
+        return len(mode.nodes) > 0
 
 
 class Shape_Polyline(Shape_Bezier):
@@ -927,6 +933,16 @@ class Shape_Rectangle(Shape):
             self._queue_redraw_all_nodes(mode) # self method
             mode.phase = _Phase.ADJUST
             mode._reset_adjust_data()
+
+    def is_ready(self, mode):
+        if len(mode.nodes) == 4:
+            x = mode.nodes[0].x
+            y = mode.nodes[0].y
+            for i in xrange(1, 4):
+                if (mode.nodes[i].x != x
+                        or mode.nodes[i].y != y):
+                    return True
+        return False
 
 class Shape_Ellipse(Shape_Rectangle):
 
