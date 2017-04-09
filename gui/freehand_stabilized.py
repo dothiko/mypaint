@@ -151,7 +151,8 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
         self._init_stabilize() # this should be called after _rx/_ry is set.
 
         if self.overrided:
-            if self._range_switcher:
+            if (self._range_switcher
+                    and not event.state & Gdk.ModifierType.SHIFT_MASK):
                 self._current_range = self._stabilize_range / 2
             else:
                 self._current_range = self._stabilize_range
@@ -164,11 +165,25 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
         :return : boolean flag, True to CANCEL entire freehand motion 
                   handler and call motion_notify_cb of super-superclass.
         """
-        length = math.hypot(self._cx - event.x, self._cy - event.y)
+
+        # Adding drag length to detect drawing speed.
         self._drag_length += math.hypot(event.x - self._drag_x, 
                                         event.y - self._drag_y)
         self._drag_x = event.x
         self._drag_y = event.y
+
+        # If Alt key pressed when stabilizer is in range_switcher mode
+        # and not overrided, then expand the stabilizer range immidiately.
+        if (not self.overrided 
+                and self._current_range > 0
+                and self._current_range < self._stabilize_range
+                and event.state & Gdk.ModifierType.MOD1_MASK):
+            self._current_range = self._stabilize_range
+            self.queue_draw_ui(tdw)
+
+        # If the stylus cursor is inside stabilize circle,
+        # all drawing events should be ignored.
+        length = math.hypot(self._cx - event.x, self._cy - event.y)
         return self._current_range > length
 
     def motion_notify_cb(self, tdw, event, fakepressure=None):
