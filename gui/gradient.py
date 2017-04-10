@@ -73,8 +73,8 @@ class GradientInfo(object):
         lose some special information such as 
         'use current brush color' etc.
         """
-        col = self.color # Use property, to enable overriding
-        return (col.r, col.g, col.b, self._alpha)
+        r, g, b = self.color.get_rgb() 
+        return (r, g, b, self._alpha)
 
     def get_raw_data(self):
         """get a raw color data, as a tuple.
@@ -98,7 +98,7 @@ class GradientInfo(object):
                 self._alpha = color[3]
             else:
                 raise ValueError
-        elif isinstance(color, lib.color.RGBColor):
+        elif isinstance(color, lib.color.UIColor):
             self._color = color # assume it as color object 
             self._alpha = alpha
         elif isinstance(color, Gdk.Color):
@@ -113,10 +113,10 @@ class GradientInfo(object):
     @property
     def gdk_color(self):
         if self._gdk_color is None:
-            col = self.color
-            self._gdk_color = Gdk.Color(col.r * 65535, 
-                                        col.g * 65535, 
-                                        col.b * 65535)
+            r, g, b = self.color.get_rgb() 
+            self._gdk_color = Gdk.Color(r * 65535, 
+                                        g * 65535, 
+                                        b * 65535)
         return self._gdk_color
 
 class GradientInfo_Brushcolor(GradientInfo):
