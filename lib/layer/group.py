@@ -586,6 +586,15 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
     def get_icon_name(self):
         return "mypaint-layer-group-symbolic"
 
+    ## Project-save
+    @property
+    def filename(self):
+        """Overriding filename property for project-save 
+        functionality.
+
+        Layerstack cannot have filename, so always return None.
+        """
+        return None
 
 class LayerStackSnapshot (core.LayerBaseSnapshot):
     """Snapshot of a layer stack's state"""

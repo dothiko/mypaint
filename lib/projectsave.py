@@ -1,5 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
+# This file is part of MyPaint.
+# Copyright (C) 2017 by dothiko <dothiko@gmail.com>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
 
 # To implementing Projectsave functionality, files below are rewritten.
 # 
@@ -258,7 +265,7 @@ class Versionsave(object):
 
         Currently this method checks file modified date and size.
         To strict check, we will need hash to detect difference of files
-        but it costs too much processing time...?
+        but it (might) takes too much processing time...?
 
         :rtype tuple:
         :return : a tuple of (
@@ -271,8 +278,9 @@ class Versionsave(object):
 
         srcpath = self._get_srcpath(layer_filename)
 
-        # This method(actually, queue_backup_layers()) should be 
-        # called after all current project layers saved.
+        # This method is called from _queue_backup_layers(),
+        # and that method should be called after 
+        # all current project layers saved.
         # so, every srcpath MUST exist.
         assert os.path.exists(srcpath)
 
@@ -308,32 +316,37 @@ class Versionsave(object):
 
     def _queue_backup_single_layer(self, processor, layer):
         id = layer.unique_id
-        backed_up, statinfo = self._is_already_backedup(
-                layer.filename,
-                layer.unique_id
-                )
 
-        if not backed_up:
-            self.register_layer_info(id, statinfo)
+        if layer.filename is not None:
+            # This means 'layer has its own file instance to save'
+            # (Not only FileBackedLayer, because BackgroundLayer 
+            # has also backedup file in project-save)
+            backed_up, statinfo = self._is_already_backedup(
+                    layer.filename,
+                    layer.unique_id
+                    )
 
-            for sf in layer.enum_filenames():
-                targdir = os.path.join(self.backupdir, id)
-                junk, ext = os.path.splitext(sf)
-                if not os.path.exists(targdir):
-                    os.mkdir(targdir)
-                # In contrast to the _init_version(),
-                # We MUST use shutil.copy2 here, not shutil.copy.
-                # It is because to ensure timestamp of the copied file is 
-                # same as original one.
-                # That timestamp(modified date) used to detect whether 
-                # a layer file has changed or not.
-                processor.add_work(
-                        shutil.copy2,
-                        os.path.join(self.dirbase, sf),
-                        os.path.join(targdir, 
-                                     "%d%s" % (self.version_num, ext)
-                                    )
-                        )
+            if not backed_up:
+                self.register_layer_info(id, statinfo)
+
+                for sf in layer.enum_filenames():
+                    targdir = os.path.join(self.backupdir, id)
+                    junk, ext = os.path.splitext(sf)
+                    if not os.path.exists(targdir):
+                        os.mkdir(targdir)
+                    # In contrast to the _init_version(),
+                    # We MUST use shutil.copy2 here, not shutil.copy.
+                    # It is because to ensure timestamp of the copied file is 
+                    # same as original one.
+                    # That timestamp(modified date) used to detect whether 
+                    # a layer file has changed or not.
+                    processor.add_work(
+                            shutil.copy2,
+                            os.path.join(self.dirbase, sf),
+                            os.path.join(targdir, 
+                                         "%d%s" % (self.version_num, ext)
+                                        )
+                            )
 
 
     def is_current_document_backedup(self):

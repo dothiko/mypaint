@@ -1869,7 +1869,7 @@ class Document (object):
 
                 versave = lib.projectsave.Versionsave(dirname)
 
-                # Create new version
+                # Create new version == proceeding to next version
                 versave.proceed()
 
                 # Inside queue_backup_layers method,
@@ -1973,30 +1973,32 @@ class Document (object):
 
         # Update the initially-selected flag on all layers.
         # Also, get the contents bounding box simultaneously.
-        # And furthermore, remove empty tiles to avoid misplacement
-        # of layer.
+        #
+        # And furthermore, * MOST IMPORTANTLY *,
+        # remove empty tiles to avoid misplacement of layer.
         # 
-        # Without this 'empty tiles removal'... such problems happen.
+        # Without this 'removing empty tiles'... some problems happen.
         # Usually, mypaint seems to remove transparent area when 
         # loading picture. (but not every time? I dont know exactly...)
-        # Then layer placement might completely go wrong at projectsave,
-        # after 2nd time project load, when there is unmodified layer 
-        # which has meaningless large transparent area over leftmost canvas. 
-        # 
-        # This is because, actually it modified by removing transparent 
-        # area as memory surface at loading, but dirty flag unchanged,
-        # and of course, source png file still have transparent area.
         #
-        # project-save functionality does not save layer to file
-        # when a layer is not dirty.
-        # As a result, that source png file does not changed at all
-        # even project-save has been executed.
-        # 
-        # But boundary box is calculated for a layer that has no useless 
-        # transparent tiles.
-        # so that layer placed wrong position after next loading.
+        # Under this circumstance, as an example, suppose there was a layer 
+        # with a region of large transparent pixels on the left side.
         #
-        # To avoid this, every dirty layer are removed its empty tiles
+        # Without removing empty tiles, the topleft position of that layer 
+        # is transparent area.
+        # But, that transparent area actually removed once after we load that
+        # project from the directory. And it is without setting dirty flag.
+        # So that layer would be treated as 'unchanged' one.
+        # But stack.xml position is updated as after transparent area removed.
+        # Therefore, after 2nd time project load, that layer is placed at
+        # wrong position.
+        #
+        # Even if the position of the layer in stack.xml is changed, 
+        # we cannot (or very difficult to) distinguish whether it is due to 
+        # the transparent portion being removed, or whether the relative
+        # position was changed because the dimensions of the other layer changed.
+        # 
+        # So, to avoid this, every dirty layer are removed its empty tiles
         # in this loop.
         data_bbox = helpers.Rect()
         for s_path, s_layer in root_stack.walk():
