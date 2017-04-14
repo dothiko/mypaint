@@ -23,7 +23,8 @@ grabcututil_convert_tile_to_binary(
     int dst_x, int dst_y,
     double r, double g, double b,
     int value,
-    int margin, int inverted
+    int margin, int inverted,
+    double alpha_tolerance
 );
 
 PyObject*

@@ -20,7 +20,7 @@
 
 // XXX borrowed from lib/fill.cpp
 static inline fix15_t
-_floodfill_color_match(const fix15_short_t c1_premult[4],
+_grabcutfill_color_match(const fix15_short_t c1_premult[4],
                        const fix15_short_t c2_premult[4],
                        const fix15_t tolerance)
 {
@@ -106,7 +106,8 @@ grabcututil_convert_tile_to_binary(
     int dst_x, int dst_y,
     double targ_r, double targ_g, double targ_b,
     int value,
-    int margin, int inverted)
+    int margin, int inverted,
+    double alpha_tolerance)
 {
     PyArrayObject *tile_arr = (PyArrayObject*)py_tile;
     PyArrayObject *bin_arr = (PyArrayObject*)py_binary;
@@ -138,6 +139,8 @@ grabcututil_convert_tile_to_binary(
     refcol[3] = fix15_one;
     bool pixel_hit;
     fix15_t tolerance = (fix15_t)(0.1 * (double)fix15_one);
+    const fix15_short_t alpha_t_short = 
+        (fix15_short_t)((double)fix15_one * (1.0 - alpha_tolerance));
     
 
     ystride_dst -= xstride_dst * MYPAINT_TILE_SIZE;
@@ -152,9 +155,9 @@ grabcututil_convert_tile_to_binary(
                 ++x)
         {
             
-            if (buf_src[3] == fix15_one)
+            if (buf_src[3] >= alpha_t_short)
             {
-                pixel_hit =  _floodfill_color_match(refcol,
+                pixel_hit =  _grabcutfill_color_match(refcol,
                                 buf_src,
                                 tolerance
                              ) != 0;
@@ -450,9 +453,10 @@ grabcututil_setup_cvimg(
 *
 * @param py_cvmask: Opencv mask array
 * @param py_cvimg : Opencv image array, this should be lineart.
-* @param targ_r, targ_g, targ_b: the background color of py_cvimg.
-* @param remove_lineart: if not 0, remove lineart(py_cvimg) 
-*                        opaque areas from mask.
+* @param targ_r, targ_g, targ_b: the background color(transparent part)
+*                                of py_cvimg.
+* @param remove_lineart: if not 0, remove opaque area of 
+*                        lineart(py_cvimg).
 * @return None
 * @detail
 * Remove lineart contour, which would be recognized

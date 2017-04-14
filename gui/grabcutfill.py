@@ -218,15 +218,25 @@ def grabcutfill(sample_layer, lineart_layer,
                     mask, src_tile,
                     bx, by,
                     targ_r, targ_g, targ_b,
-                    1,# surely foreground hint 
-                    margin, 0)
+                    0,# surely background hint
+                    margin, 1,
+                    0.05 # BG alpha tolerance should be lower
+                         # than FG one.
+                         # 0.05 is practical value,
+                         # 0.2 was often failed.
+                )
 
                 mypaintlib.grabcututil_convert_tile_to_binary(
                     mask, src_tile,
                     bx, by,
                     targ_r, targ_g, targ_b,
-                    0,# surely background hint
-                    margin, 1)
+                    1,# surely foreground hint 
+                    margin, 0,
+                    0.7 # Alpha tolerance. must be higher than BG one. 
+                        # If BG one is same (or less just a bit),
+                        # BG hint pixels surround FG hint.so grabcut
+                        # does not work.
+                )
 
     # Finally, execute grabCut and get image area as mask.
     cv2.grabCut(
@@ -452,30 +462,30 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
         else:
             self.app.show_transient_message(_("Grabcutfill is not executed. lineart layer might be empty?"))
 
-        if self._preview_info is not None:
-            self._queue_draw_preview(None)
-            self._preview_info = None
+       #if self._preview_info is not None:
+       #    self._queue_draw_preview(None)
+       #    self._preview_info = None
 
-    def clear_preview(self):
-        self._queue_draw_preview(None)
-        self._preview_info = None
+   #def clear_preview(self):
+   #    self._queue_draw_preview(None)
+   #    self._preview_info = None
 
     ## Overlays
     def _generate_overlay(self, tdw):
         return _Overlay_Grabcut(self, tdw)
 
-    def _queue_draw_preview(self, tdw):
-        if tdw is None:
-            for tdw in self._overlays.keys():
-                self._queue_draw_preview(tdw)
-            return
-
-        if self._preview_info:
-            surf, x, y, w, h = self._preview_info
-            x, y, w, h = model_to_display_area(
-                        tdw, x, y, w, h)
-            print((x,y,w,h))
-            tdw.queue_draw_area(x, y, w, h)
+   #def _queue_draw_preview(self, tdw):
+   #    if tdw is None:
+   #        for tdw in self._overlays.keys():
+   #            self._queue_draw_preview(tdw)
+   #        return
+   #
+   #    if self._preview_info:
+   #        surf, x, y, w, h = self._preview_info
+   #        x, y, w, h = model_to_display_area(
+   #                    tdw, x, y, w, h)
+   #        print((x,y,w,h))
+   #        tdw.queue_draw_area(x, y, w, h)
 
     ## Others
     def _get_fg_color(self):
