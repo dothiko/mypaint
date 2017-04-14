@@ -21,12 +21,11 @@ import cairo
 
 import gui.mode
 import gui.cursor
-import lib.mypaintlib
+import lib.mypaintlib as mypaintlib
 import lib.surface
 import lib.pixbufsurface
 import gui.freehand
 import lib.helpers
-from gui.additional_mixin import *
 
 """ This is a Experimental tool for graphcut fill.
 Currently using python-opencv, OpenCV2.grabCut function for graphcut.
@@ -96,90 +95,40 @@ def grabcutfill(sample_layer, lineart_layer,
                            opaque pixels of lineart removed from
                            filled area.
     :return: when failed, None.
-             when success for execute, it is a tuple of
-             (a pixbuf of layer source,
-                x position of layer,
-                y position of layer)
+             when success for execute, it is a new layer.
+             In older version, there is 'preview mode',
+             but it was rather useless so removed.
 
-             when success for preview, it is a tuple of
-            (a cairo surface,
-                x position of lineart layer,
-                y position of lineart layer,
-                width of lineart layer,
-                height of lineart layer)
-
-            all dimension values are in model coordinate.
+             all dimension values are in model coordinate.
 
     """
+
+   ## XXX DEBUGGING CODE 
+    def save_mask_image(mask, fname='/tmp/maskimg.png'):
+        import scipy.misc 
+        import Image
+        mask2 = np.where((mask==1),255,0).astype('uint8')
+        np.putmask(mask2, mask==2, 160)
+        np.putmask(mask2, mask==3, 80)
+        mask2 = np.c_[mask2, mask2, mask2]
+        scipy.misc.imsave(fname, mask2)
+
+    def save_cv_image(cvimage, fname='/tmp/cvimg.png'):
+        import scipy.misc 
+        scipy.misc.imsave(fname, cvimage)
 
     # Import cv2 here,to delay import until this function used.
     # Otherwise, this customized Mypaint cannot run
     # when Python-OpenCV2 is not installed in system
     # even never use this function.
-    import cv2
-    # Also, I cannot convert pixbuf to numpy array.
-    # I googled but nothing usable codes hit...
-    # Thus, use Python-Imaging Library for glue code.
-    from PIL import Image
-
-    # TODO Currently this code is just experiment one,
-    # so ignore about processing speed, memory/processing effeciency
-    # etc.
-
-
-    # In these converter functions,
-    # there is no need to convert BGR to RGB
-    # Because we never display OpenCV images.
-    def convert_layer_to_cvimg(layer, bbox, scaling_filter=Image.NONE):
-        if bbox is None:
-            bbox = layer.get_bbox()
-        pixbuf = layer.render_as_pixbuf(*bbox, alpha=True)
-
-        stride = pixbuf.get_rowstride()
-        width = pixbuf.get_width()
-        height = pixbuf.get_height()
-        pim = Image.frombytes("RGBA",(width,height),pixbuf.get_pixels() )
-        if preview == PreviewMethod.QUARTER:
-            pim = pim.resize((int(width/4), int(height/4)), scaling_filter)
-        pim = pim.convert("RGB")
-        return np.asarray(pim)
-
-    def convert_cvimg_to_pixbuf(cvimg, alpha=None):
-        # TODO currently, in some (rare) case,
-        # adding numpy alpha array generate invalid pixbuf
-        # and it cause coredump later.
-        # So such alpha-adding functionality removed, 
-        # currently regard pure black color pixel as 'transparent'.
-        
-        have_alpha = alpha is not None
-
-       #if have_alpha:
-       #    cvimg = np.concatenate((cvimg, alpha), axis = 2)
-       #    pim = Image.fromarray(cvimg, 'RGBA')
-       #    pixel_cnt = 4
-       #else:
-        pim = Image.fromarray(cvimg, 'RGB')
-        have_alpha = False
-        pixel_cnt = 3
-
-        t_buf=pim.tobytes()
-        width, height = pim.size
-
-        cvpixbuf = GdkPixbuf.Pixbuf.new_from_data(
-            t_buf,
-            GdkPixbuf.Colorspace.RGB,
-            have_alpha,
-            8,
-            width,
-            height,
-            width*pixel_cnt)
-
-        if not have_alpha:
-            # We need add alpha value into pixbuf, to convert it to layer.
-            # At here just use complete black as alpha mask.
-            # It is not good, only for experimental purpose.
-            cvpixbuf = cvpixbuf.add_alpha(True, 0, 0, 0)
-        return cvpixbuf
+    try:
+        import cv2
+    except ImportError:
+        from application import get_app
+        app = get_app() 
+        app.message_dialog("You need to install python binding of OpenCV2 "
+                           "for GrabcutFill.", Gtk.MessageType.ERROR)
+        return None
 
     # Original shape (prefixed with 'o') might not be same as
     # current target image(img_art). that image might be preview one.
@@ -190,73 +139,56 @@ def grabcutfill(sample_layer, lineart_layer,
         return None
 
     sample_bbox = sample_layer.get_bbox()
-    entire_bbox = lib.helpers.Rect()
-    entire_bbox.expandToIncludeRect(lineart_bbox)
-    entire_bbox.expandToIncludeRect(sample_bbox)
-    ex, ey, ew, eh = entire_bbox
+    sx, sy, sw, sh = sample_bbox
 
-    img_art = convert_layer_to_cvimg(lineart_layer, 
-                                     entire_bbox,
-                                     Image.BICUBIC)
-    img_sample = convert_layer_to_cvimg(sample_layer, 
-                                        entire_bbox,
-                                        Image.NONE)
+    margin = 8
+    N = mypaintlib.TILE_SIZE
 
-    layer_sources = []
+    # Adjust sx and sy of bbox into tile-based position.
+    sx = int(sx // N)
+    sy = int(sy // N)
 
+    # Get margin added dimension for Opencv image array.
+    w = sw + margin * 2
+    h = sh + margin * 2
 
-    w = img_art.shape[1]
-    h = img_art.shape[0]
+    # XXX Background color in img_art array
+    # In future, this should be configurable,
+    # To paint on white(bright)-colored lineart.
+    br, bg, bb = 1.0, 1.0, 1.0
 
-    # For your convinience, in mask array for cv2.grabCut,
-    # mask pixel value is, 0 for BG, 1 for FG,
-    # 2 for Probably BG and  3 for Probably FG.
-    #
-    # The 'mask' array created as zero-filled one, but
-    # actually initialized by cv2.grabCut with GC_INIT_WITH_RECT
-    # as filled by value of 2(Probable Background)
-   #mask = np.zeros(img_art.shape[:2], dtype = np.uint8) # This works for opencv,
-                                                         # but this array cannot
-                                                         # concatenate as alpha value.
-    mask = np.zeros((h,w,1), dtype = np.uint8)
+    img_art = np.zeros((h, w, 3), dtype = np.uint8)
+    mypaintlib.grabcututil_setup_cvimg(
+        img_art,
+        br, bg, bb,
+        margin)
 
-    # TODO this is only for testing.
-    # we must convert cvimg with surrounding pixel, to ensure
-    # blank area around it.
-    margin = 1
-    rect = (margin, margin, w-margin*2, h-margin*2)
+    if hasattr(lineart_layer, "_surface"):
+        src = lineart_layer._surface
+    else:
+        src = lib.surface.TileRequestWrapper(lineart_layer)
 
-    # Then, detect contours and write it to mask.
-    # This is actually labelling, but there is no labelling API
-    # until OpenCV3.
-    img_gray = cv2.cvtColor(img_sample, cv2.COLOR_BGR2GRAY)
-    ret, img_bin = cv2.threshold(img_gray, 32, 255, cv2.THRESH_BINARY)
-    contours, hierarchy = cv2.findContours(img_bin, cv2.RETR_EXTERNAL,
-                                       cv2.CHAIN_APPROX_SIMPLE)
+    for by in xrange(0, sh, N):
+        ty = int(by // N) + sy
+        for bx in xrange(0, sw, N):
+            tx = int(bx // N) + sx
+            with src.tile_request(tx, ty, readonly=True) as src_tile:
+                # Currently, complete alpha in lineart layer
+                # would be converted into pure white.
+                mypaintlib.grabcututil_convert_tile_to_image(
+                    img_art, src_tile,
+                    bx, by, 
+                    br, bg, bb,
+                    margin)
 
-    # XXX To get user-assigned sample color,
-    # use the center point(moment) of contour currently.
-    # It does not consider the contour shape is convex
-    # or concave.
-    fg_cnt = []
-    bg_cnt = []
+   #save_cv_image(img_art)
 
-    for cnt in contours:
-        M = cv2.moments(cnt)
-        cx = int(M["m10"] / M["m00"])
-        cy = int(M["m01"] / M["m00"])
-        color = tuple(img_sample[cy, cx])
-        if color == fg_color:
-            fg_cnt.append(cnt)
-        elif color == (0, 0, 0):
-            # currently ignore complete black contour.
-            pass
-        else:
-            bg_cnt.append(cnt)
+    mask = np.zeros((h, w, 1), dtype = np.uint8)
 
-    print('processing start')
+    # Initialize Opencv grabCut and mask image.
     bgdmodel = np.zeros((1,65),np.float64)
     fgdmodel = np.zeros((1,65),np.float64)
+    rect = (1, 1, w-1, h-1)
 
     cv2.grabCut(
         img_art, mask, rect,
@@ -264,18 +196,39 @@ def grabcutfill(sample_layer, lineart_layer,
         cv2.GC_INIT_WITH_RECT
     )
 
-    cv2.drawContours(mask,
-                     bg_cnt,
-                     -1,
-                     0,
-                     -1)
+    # Then, Write filling hints into mask image.
+    targ_r, targ_g, targ_b = fg_color
+    if hasattr(sample_layer, "_surface"):
+        src = sample_layer._surface
+    else:
+        src = lib.surface.TileRequestWrapper(sample_layer)
 
-    cv2.drawContours(mask,
-                     fg_cnt,
-                     -1,
-                     1,
-                     -1)
+    # TODO Actually grabcututil_convert_tile_to_binary
+    # extracts only full opaque(alpha = fix15_one) pixels.
+    # so (much) smaller areas than visible strokes are detected
+    # as hints.
+    # We need better labeling function for them.
 
+    for by in xrange(0, sh, N):
+        ty = int(by // N) + sy
+        for bx in xrange(0, sw, N):
+            tx = int(bx // N) + sx
+            with src.tile_request(tx, ty, readonly=True) as src_tile:
+                mypaintlib.grabcututil_convert_tile_to_binary(
+                    mask, src_tile,
+                    bx, by,
+                    targ_r, targ_g, targ_b,
+                    1,# surely foreground hint 
+                    margin, 0)
+
+                mypaintlib.grabcututil_convert_tile_to_binary(
+                    mask, src_tile,
+                    bx, by,
+                    targ_r, targ_g, targ_b,
+                    0,# surely background hint
+                    margin, 1)
+
+    # Finally, execute grabCut and get image area as mask.
     cv2.grabCut(
         img_art, mask, rect,
         bgdmodel, fgdmodel, iter_cnt,
@@ -283,48 +236,72 @@ def grabcutfill(sample_layer, lineart_layer,
        #cv2.GC_EVAL # <- does not work with this?
     )
 
-    mask2 = np.where((mask==1) + (mask==3),1,0).astype('uint8')
-    if remove_lineart:
-        alpha = np.where(img_art!=(0,0,0), 0, 1).astype('uint8')
-        junk, alpha = np.dsplit(alpha, [2])
-        np.putmask(mask2, alpha==0, 0)
+    cl = lib.layer.PaintingLayer(name=_("Grabcutfill Result"))
+
+    # Finalizing grabcut mask. 
+    # which is , remove detected lineart contour
+    # and convert 'probable foreground' as foreground.
+    mypaintlib.grabcututil_finalize_cvmask(
+        mask, img_art,
+        br, bg, bb,
+        int(remove_lineart))
 
     if dilation_size > 0:
         dilation_size = int(dilation_size)
-        kernshape = (dilation_size, dilation_size)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
-                                           kernshape)
-        mask2 = cv2.dilate(mask2, kernel, iterations=1)
+        neiborhood4 = np.array([[0, 1, 0],
+                                [1, 1, 1],
+                                [0, 1, 0]],
+                                np.uint8)
+        mask = cv2.dilate(mask, neiborhood4, iterations=dilation_size)
 
-    img_fill = np.zeros((h, w, 3), np.uint8)
-    img_fill[:] = fg_color
-    np.putmask(mask2, mask2==1, 255)
-    img_fill = cv2.bitwise_and(img_fill, img_fill ,mask=mask2)
+    dst = cl._surface
+    for by in xrange(0, sh, N):
+        ty = int(by // N) + sy
+        for bx in xrange(0, sw, N):
+            tx = int(bx // N) + sx
+            with dst.tile_request(tx, ty, readonly=False) as dst_tile:
+                    # Currently, complete alpha in lineart layer
+                    # would be converted into pure white.
+                if mypaintlib.grabcututil_convert_binary_to_tile(
+                        dst_tile, mask,
+                        bx, by,
+                        targ_r, targ_g, targ_b,
+                        1, 
+                        margin):
+                    dst._mark_mipmap_dirty(tx, ty)
+    bbox = (sx * N, sy * N, sw, sh)
+    dst.notify_observers(*bbox)
 
-    if preview == PreviewMethod.NO_PREVIEW:
-        layer_source = convert_cvimg_to_pixbuf(img_fill)
-
-        print('execute ended!')
-        return (layer_source, ex, ey)
-    else:
-        # make entire alpha value to half,
-        # because opaque filled area (might) hide anything below.
-        np.putmask(mask2, mask2==255, 128)
-        mask2 = mask2.reshape((h, w, 1))
-
-        img_result = cv2.cvtColor(img_fill, cv2.COLOR_BGR2RGB)
-        img_result = np.concatenate((img_result, mask2), axis=2)
-        stride = cairo.ImageSurface.format_stride_for_width (cairo.FORMAT_ARGB32, w)
-        surf = cairo.ImageSurface.create_for_data(
-            img_result,
-            cairo.FORMAT_ARGB32,
-            w, h,
-            stride
-        )
-        print('preview ended!')
-        return (surf, ex, ey, ew, eh)
+    return cl
 
 ## Class defs
+
+class OverlayMixin(object):
+    """ Overlay drawing mixin, for some modes.
+    """
+
+    def __init__(self):
+        self._overlays = {}  # keyed by tdw
+
+    def _generate_overlay(self, tdw):
+        raise NotImplementedError("You need to implement _generate_overlay,to use overlay")
+
+    #  FIXME: mostly copied from gui/inktool.py
+
+    def _ensure_overlay_for_tdw(self, tdw):
+        overlay = self._overlays.get(tdw)
+        if not overlay:
+            overlay = self._generate_overlay(tdw)
+            tdw.display_overlays.append(overlay)
+            self._overlays[tdw] = overlay
+        return overlay
+
+    def _discard_overlays(self):
+        for tdw, overlay in self._overlays.items():
+            tdw.display_overlays.remove(overlay)
+            tdw.queue_draw()
+        self._overlays.clear()
+
 class GrabcutFillMode (gui.freehand.FreehandMode,
                        OverlayMixin):
 
@@ -412,37 +389,40 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
 
     ## Execute
 
-    def _preview_fill(self):
-        layers = self.doc.model.layer_stack
-        current = layers.current
-        cur_path = layers.current_path
-        top_path = layers.path_above(cur_path, insert=False)
-        toplayer = layers.deepget(top_path)
-
-        opts = self.get_options_widget()
-        self.app.show_transient_message(_("Processing, Please wait..."))
-        info = grabcutfill(
-            current,
-            toplayer,
-            self._get_fg_color(),
-            opts.dilation_size,
-            opts.preview_method,
-            opts.remove_lineart
-        )
-
-        if info is None:
-            self.app.show_transient_message(_("Grabcutfill is not executed. lineart layer might be empty?"))
-        else:
-            self.app.show_transient_message(_("Grabcutfill Preview has completed."))
-
-        self._preview_info = info
-        self._queue_draw_preview(None)
+   #def _preview_fill(self):
+   #    layers = self.doc.model.layer_stack
+   #    current = layers.current
+   #    cur_path = layers.current_path
+   #    top_path = layers.path_above(cur_path, insert=False)
+   #    toplayer = layers.deepget(top_path)
+   #
+   #    opts = self.get_options_widget()
+   #    self.app.show_transient_message(_("Processing, Please wait..."))
+   #    info = grabcutfill(
+   #        current,
+   #        toplayer,
+   #        self._get_fg_color(),
+   #        opts.dilation_size,
+   #        opts.preview_method,
+   #        opts.remove_lineart
+   #    )
+   #
+   #    if info is None:
+   #        self.app.show_transient_message(_("Grabcutfill is not executed. lineart layer might be empty?"))
+   #    else:
+   #        self.app.show_transient_message(_("Grabcutfill Preview has completed."))
+   #
+   #    self._preview_info = info
+   #    self._queue_draw_preview(None)
 
     def _execute_fill(self):
         layers = self.doc.model.layer_stack
         current = layers.current
         cur_path = layers.current_path
         top_path = layers.path_above(cur_path, insert=False)
+        # When above layer is actually layer group, use it.
+        if len(top_path) > len(cur_path):
+            top_path = top_path[:len(cur_path)]
         toplayer = layers.deepget(top_path)
 
         if toplayer is None:
@@ -453,7 +433,7 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
 
         opts = self.get_options_widget()
         self.app.show_transient_message(_("Processing, Please wait..."))
-        layer_src_info = grabcutfill(
+        new_layer = grabcutfill(
             current,
             toplayer,
             self._get_fg_color(),
@@ -462,12 +442,11 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
             opts.remove_lineart
         )
 
-        if layer_src_info:
-            cpixbuf, ox, oy = layer_src_info
-            layers = []
-            cl = lib.layer.PaintingLayer(name=_("Grabcutfill Result"))
-            cl.load_surface_from_pixbuf(cpixbuf, int(ox), int(oy))
-            layers.append(cl)
+        if new_layer:
+            layers = [new_layer, ]
+           #cl = lib.layer.PaintingLayer(name=_("Grabcutfill Result"))
+           #cl.load_surface_from_pixbuf(cpixbuf, int(ox), int(oy))
+           #layers.append(cl)
             self.doc.model.grabcut_fill(layers, cur_path)
             self.app.show_transient_message(_("Grabcutfill has completed."))
         else:
@@ -493,7 +472,7 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
 
         if self._preview_info:
             surf, x, y, w, h = self._preview_info
-            x, y, w, h = gui.ui_utils.model_to_display_area(
+            x, y, w, h = model_to_display_area(
                         tdw, x, y, w, h)
             print((x,y,w,h))
             tdw.queue_draw_area(x, y, w, h)
@@ -501,9 +480,12 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
     ## Others
     def _get_fg_color(self):
         color = self.app.brush_color_manager.get_color()
-        return (int(color.r * 255),
-                int(color.g * 255),
-                int(color.b * 255))
+        return (color.r,
+                color.g,
+                color.b)
+       #return (int(color.r * 255),
+       #        int(color.g * 255),
+       #        int(color.b * 255))
 
 class _Overlay_Grabcut(gui.overlays.Overlay):
     """Overlay for grabcut_fill mode """
@@ -520,21 +502,8 @@ class _Overlay_Grabcut(gui.overlays.Overlay):
         if (mode is not None
                 and mode._preview_info is not None):
             surf, ox, oy, ow, oh = mode._preview_info
-           #tdw = self._tdw
-           #sx = x
-           #sy = y
-           #ex = x + w - 1
-           #ey = y + h - 1
-           #sx, sy = tdw.model_to_display(sx, sy)
-           #ex, ey = tdw.model_to_display(ex, ey)
-           #
-           #sx , ex = min(sx, ex), max(sx, ex)
-           #sy , ey = min(sy, ey), max(sy, ey)
-           #w = ex - sx + 1
-           #h = ey - sy + 1
 
-            x, y, w, h = gui.ui_utils.model_to_display_area(
-                            tdw, ox, oy, ow, oh)
+            x, y, w, h = model_to_display_area(tdw, ox, oy, ow, oh)
 
             cr.save()
             cr.translate(x, y)
@@ -557,11 +526,11 @@ class GrabFillOptionsWidget (Gtk.Grid):
     """Configuration widget for the flood fill tool"""
 
     REMOVE_LINEART_PREF = 'grabcut_fill.remove_lineart'
-    PREVIEW_FAST_PREF = 'grabcut_fill.preview_fast'
+   #PREVIEW_FAST_PREF = 'grabcut_fill.preview_fast'
     DILATION_SIZE_PREF = 'grabcut_fill.dilate_size'
 
-    DEFAULT_REMOVE_LINEART = False
-    DEFAULT_PREVIEW_FAST = False
+    DEFAULT_REMOVE_LINEART = True
+   #DEFAULT_PREVIEW_FAST = False
     DEFAULT_DILATION_SIZE = 0
 
     def __init__(self):
@@ -575,24 +544,24 @@ class GrabFillOptionsWidget (Gtk.Grid):
         prefs = self.app.preferences
         row = -1
 
-        row += 1
-        label = Gtk.Label()
-        label.set_markup(_("Preview method:"))
-        label.set_tooltip_text(_("To select Preview method."))
-        label.set_alignment(1.0, 0.5)
-        label.set_hexpand(False)
-        self.attach(label, 0, row, 1, 1)
-
-        text = _("Faster")
-        checkbut = Gtk.CheckButton.new_with_label(text)
-        checkbut.set_tooltip_text(
-            _("Generate preview in faster but not accurate method."))
-        self.attach(checkbut, 1, row, 1, 1)
-        active = prefs.get(self.PREVIEW_FAST_PREF,
-                           self.DEFAULT_PREVIEW_FAST)
-        checkbut.set_active(active)
-        checkbut.connect("toggled", self._preview_fast_toggled_cb)
-        self._preview_fast_toggle = checkbut
+       #row += 1
+       #label = Gtk.Label()
+       #label.set_markup(_("Preview method:"))
+       #label.set_tooltip_text(_("To select Preview method."))
+       #label.set_alignment(1.0, 0.5)
+       #label.set_hexpand(False)
+       #self.attach(label, 0, row, 1, 1)
+       #
+       #text = _("Faster")
+       #checkbut = Gtk.CheckButton.new_with_label(text)
+       #checkbut.set_tooltip_text(
+       #    _("Generate preview in faster but not accurate method."))
+       #self.attach(checkbut, 1, row, 1, 1)
+       #active = prefs.get(self.PREVIEW_FAST_PREF,
+       #                   self.DEFAULT_PREVIEW_FAST)
+       #checkbut.set_active(active)
+       #checkbut.connect("toggled", self._preview_fast_toggled_cb)
+       #self._preview_fast_toggle = checkbut
 
         row += 1
         label = Gtk.Label()
@@ -602,7 +571,7 @@ class GrabFillOptionsWidget (Gtk.Grid):
         label.set_hexpand(False)
         self.attach(label, 0, row, 1, 1)
 
-        text = _("Remove lineart")
+        text = _("Remove lineart area")
         checkbut = Gtk.CheckButton.new_with_label(text)
         checkbut.set_tooltip_text(
             _("Remove lineart opaque area from filled area."))
@@ -636,12 +605,12 @@ class GrabFillOptionsWidget (Gtk.Grid):
         spinbtn.set_adjustment(adj)
         self.attach(spinbtn, 1, row, 1, 1)
 
-        row += 1
-        btn = Gtk.Button()
-        btn.set_label(_("Preview"))
-        btn.connect("clicked", self._preview_clicked_cb)
-        btn.set_hexpand(True)
-        self.attach(btn, 0, row, 2, 1)
+       #row += 1
+       #btn = Gtk.Button()
+       #btn.set_label(_("Preview"))
+       #btn.connect("clicked", self._preview_clicked_cb)
+       #btn.set_hexpand(True)
+       #self.attach(btn, 0, row, 2, 1)
 
         row += 1
         btn = Gtk.Button()
@@ -659,12 +628,12 @@ class GrabFillOptionsWidget (Gtk.Grid):
     def target_mode(self, mode):
         self._mode_ref = weakref.ref(mode)
 
-    @property
-    def preview_method(self):
-        if self._preview_fast_toggle.get_active():
-            return PreviewMethod.QUARTER
-        else:
-            return PreviewMethod.EXACT
+   #@property
+   #def preview_method(self):
+   #    if self._preview_fast_toggle.get_active():
+   #        return PreviewMethod.QUARTER
+   #    else:
+   #        return PreviewMethod.EXACT
 
     @property
     def remove_lineart(self):
@@ -683,10 +652,10 @@ class GrabFillOptionsWidget (Gtk.Grid):
         if mode is not None:
             mode._execute_fill()
 
-    def _preview_clicked_cb(self, button):
-        mode = self.target_mode
-        if mode is not None:
-            mode._preview_fill()
+   #def _preview_clicked_cb(self, button):
+   #    mode = self.target_mode
+   #    if mode is not None:
+   #        mode._preview_fill()
 
     def _dilation_size_changed_cb(self, adj):
         self.app.preferences[self.DILATION_SIZE_PREF] = self.dilation_size
@@ -694,10 +663,10 @@ class GrabFillOptionsWidget (Gtk.Grid):
     def _remove_lineart_toggled_cb(self, btn):
         self.app.preferences[self.REMOVE_LINEART_PREF] = self.remove_lineart
 
-    def _preview_fast_toggled_cb(self, btn):
-        # property preview_method returns dedicated enum class value,
-        # so use get_active() of the widget.
-        self.app.preferences[self.PREVIEW_FAST_PREF] = \
-                self._preview_fast_toggle.get_active()
+   #def _preview_fast_toggled_cb(self, btn):
+   #    # property preview_method returns dedicated enum class value,
+   #    # so use get_active() of the widget.
+   #    self.app.preferences[self.PREVIEW_FAST_PREF] = \
+   #            self._preview_fast_toggle.get_active()
 
 
