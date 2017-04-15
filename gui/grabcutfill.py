@@ -26,6 +26,7 @@ import lib.surface
 import lib.pixbufsurface
 import gui.freehand
 import lib.helpers
+import drawwindow
 
 """ This is a Experimental tool for graphcut fill.
 Currently using python-opencv, OpenCV2.grabCut function for graphcut.
@@ -398,33 +399,6 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
         return cls._OPTIONS_WIDGET
 
     ## Execute
-
-   #def _preview_fill(self):
-   #    layers = self.doc.model.layer_stack
-   #    current = layers.current
-   #    cur_path = layers.current_path
-   #    top_path = layers.path_above(cur_path, insert=False)
-   #    toplayer = layers.deepget(top_path)
-   #
-   #    opts = self.get_options_widget()
-   #    self.app.show_transient_message(_("Processing, Please wait..."))
-   #    info = grabcutfill(
-   #        current,
-   #        toplayer,
-   #        self._get_fg_color(),
-   #        opts.dilation_size,
-   #        opts.preview_method,
-   #        opts.remove_lineart
-   #    )
-   #
-   #    if info is None:
-   #        self.app.show_transient_message(_("Grabcutfill is not executed. lineart layer might be empty?"))
-   #    else:
-   #        self.app.show_transient_message(_("Grabcutfill Preview has completed."))
-   #
-   #    self._preview_info = info
-   #    self._queue_draw_preview(None)
-
     def _execute_fill(self):
         layers = self.doc.model.layer_stack
         current = layers.current
@@ -454,38 +428,15 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
 
         if new_layer:
             layers = [new_layer, ]
-           #cl = lib.layer.PaintingLayer(name=_("Grabcutfill Result"))
-           #cl.load_surface_from_pixbuf(cpixbuf, int(ox), int(oy))
-           #layers.append(cl)
             self.doc.model.grabcut_fill(layers, cur_path)
             self.app.show_transient_message(_("Grabcutfill has completed."))
         else:
             self.app.show_transient_message(_("Grabcutfill is not executed. lineart layer might be empty?"))
 
-       #if self._preview_info is not None:
-       #    self._queue_draw_preview(None)
-       #    self._preview_info = None
-
-   #def clear_preview(self):
-   #    self._queue_draw_preview(None)
-   #    self._preview_info = None
 
     ## Overlays
     def _generate_overlay(self, tdw):
         return _Overlay_Grabcut(self, tdw)
-
-   #def _queue_draw_preview(self, tdw):
-   #    if tdw is None:
-   #        for tdw in self._overlays.keys():
-   #            self._queue_draw_preview(tdw)
-   #        return
-   #
-   #    if self._preview_info:
-   #        surf, x, y, w, h = self._preview_info
-   #        x, y, w, h = model_to_display_area(
-   #                    tdw, x, y, w, h)
-   #        print((x,y,w,h))
-   #        tdw.queue_draw_area(x, y, w, h)
 
     ## Others
     def _get_fg_color(self):
@@ -493,9 +444,6 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
         return (color.r,
                 color.g,
                 color.b)
-       #return (int(color.r * 255),
-       #        int(color.g * 255),
-       #        int(color.b * 255))
 
 class _Overlay_Grabcut(gui.overlays.Overlay):
     """Overlay for grabcut_fill mode """
@@ -536,11 +484,9 @@ class GrabFillOptionsWidget (Gtk.Grid):
     """Configuration widget for the flood fill tool"""
 
     REMOVE_LINEART_PREF = 'grabcut_fill.remove_lineart'
-   #PREVIEW_FAST_PREF = 'grabcut_fill.preview_fast'
     DILATION_SIZE_PREF = 'grabcut_fill.dilate_size'
 
     DEFAULT_REMOVE_LINEART = True
-   #DEFAULT_PREVIEW_FAST = False
     DEFAULT_DILATION_SIZE = 0
 
     def __init__(self):
@@ -552,28 +498,8 @@ class GrabFillOptionsWidget (Gtk.Grid):
         self.app = get_app()
         self._mode_ref = None
         prefs = self.app.preferences
-        row = -1
 
-       #row += 1
-       #label = Gtk.Label()
-       #label.set_markup(_("Preview method:"))
-       #label.set_tooltip_text(_("To select Preview method."))
-       #label.set_alignment(1.0, 0.5)
-       #label.set_hexpand(False)
-       #self.attach(label, 0, row, 1, 1)
-       #
-       #text = _("Faster")
-       #checkbut = Gtk.CheckButton.new_with_label(text)
-       #checkbut.set_tooltip_text(
-       #    _("Generate preview in faster but not accurate method."))
-       #self.attach(checkbut, 1, row, 1, 1)
-       #active = prefs.get(self.PREVIEW_FAST_PREF,
-       #                   self.DEFAULT_PREVIEW_FAST)
-       #checkbut.set_active(active)
-       #checkbut.connect("toggled", self._preview_fast_toggled_cb)
-       #self._preview_fast_toggle = checkbut
-
-        row += 1
+        row = 0
         label = Gtk.Label()
         label.set_markup(_("Output:"))
         label.set_tooltip_text(_("About output results"))
@@ -601,9 +527,10 @@ class GrabFillOptionsWidget (Gtk.Grid):
         self.attach(label, 0, row, 1, 1)
         value = prefs.get(self.DILATION_SIZE_PREF, self.DEFAULT_DILATION_SIZE)
         value = float(value)
-        # Theorically 'dilation fill' would accepts maximum
-        # mypaintlib.TILE_SIZE-1 pixel as dilation size.
-        # but it would be too large (even in 4K),
+        # To avoid confusion, maximum dilation size is
+        # same as dilation fill.(i.e. == mypaintlib.TILE_SIZE / 2 - 1)
+        # Actually, dilation of grabcutfill is executed by
+        # opencv and it is not tile-based , so there is no such limitation.
         adj = Gtk.Adjustment(value=value, lower=0.0,
                              upper=lib.mypaintlib.TILE_SIZE / 2 - 1,
                              step_increment=1, page_increment=4,
@@ -614,13 +541,6 @@ class GrabFillOptionsWidget (Gtk.Grid):
         spinbtn.set_hexpand(True)
         spinbtn.set_adjustment(adj)
         self.attach(spinbtn, 1, row, 1, 1)
-
-       #row += 1
-       #btn = Gtk.Button()
-       #btn.set_label(_("Preview"))
-       #btn.connect("clicked", self._preview_clicked_cb)
-       #btn.set_hexpand(True)
-       #self.attach(btn, 0, row, 2, 1)
 
         row += 1
         btn = Gtk.Button()
@@ -637,13 +557,6 @@ class GrabFillOptionsWidget (Gtk.Grid):
     @target_mode.setter
     def target_mode(self, mode):
         self._mode_ref = weakref.ref(mode)
-
-   #@property
-   #def preview_method(self):
-   #    if self._preview_fast_toggle.get_active():
-   #        return PreviewMethod.QUARTER
-   #    else:
-   #        return PreviewMethod.EXACT
 
     @property
     def remove_lineart(self):
@@ -662,21 +575,9 @@ class GrabFillOptionsWidget (Gtk.Grid):
         if mode is not None:
             mode._execute_fill()
 
-   #def _preview_clicked_cb(self, button):
-   #    mode = self.target_mode
-   #    if mode is not None:
-   #        mode._preview_fill()
-
     def _dilation_size_changed_cb(self, adj):
         self.app.preferences[self.DILATION_SIZE_PREF] = self.dilation_size
 
     def _remove_lineart_toggled_cb(self, btn):
         self.app.preferences[self.REMOVE_LINEART_PREF] = self.remove_lineart
-
-   #def _preview_fast_toggled_cb(self, btn):
-   #    # property preview_method returns dedicated enum class value,
-   #    # so use get_active() of the widget.
-   #    self.app.preferences[self.PREVIEW_FAST_PREF] = \
-   #            self._preview_fast_toggle.get_active()
-
 
