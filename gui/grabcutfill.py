@@ -399,6 +399,7 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
         return cls._OPTIONS_WIDGET
 
     ## Execute
+    @drawwindow.with_wait_cursor
     def _execute_fill(self):
         layers = self.doc.model.layer_stack
         current = layers.current
