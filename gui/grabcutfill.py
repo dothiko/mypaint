@@ -406,7 +406,7 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
         cur_path = layers.current_path
         top_path = layers.path_above(cur_path, insert=False)
         # When above layer is actually layer group, use it.
-        if len(top_path) > len(cur_path):
+        if top_path is not None and len(top_path) > len(cur_path):
             top_path = top_path[:len(cur_path)]
         toplayer = layers.deepget(top_path)
 
