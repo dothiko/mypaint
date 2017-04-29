@@ -15,7 +15,7 @@ import numpy as np
 import numpy.lib.stride_tricks as nptrick
 
 import gi
-from gi.repository import Gtk, Gdk, GdkPixbuf, GLib
+from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, GObject, Pango
 from gettext import gettext as _
 import cairo
 
@@ -27,6 +27,8 @@ import lib.pixbufsurface
 import gui.freehand
 import lib.helpers
 import drawwindow
+import drawutils
+import layers
 
 """ This is a Experimental tool for graphcut fill.
 Currently using python-opencv, OpenCV2.grabCut function for graphcut.
@@ -53,7 +55,18 @@ class PreviewMethod:
     QUARTER = 1  #: 1/4 size preview
     EXACT = 2 #: exactly same as final output
 
+class _Prefs:
+    """Enumeration of preferences constants"""
+    REMOVE_LINEART_PREF = 'grabcut_fill.remove_lineart_pixel'
+    REMOVE_HINT_PREF = 'grabcut_fill.remove_hint'
+    DILATION_SIZE_PREF = 'grabcut_fill.dilate_size'
+
+    DEFAULT_REMOVE_LINEART = True
+    DEFAULT_REMOVE_HINT = True
+    DEFAULT_DILATION_SIZE = 0
+
 ## Function defs
+
 def model_to_display_area(tdw, x, y, w, h):
     """ Convert model-coodinate area into display one.
     """
@@ -72,7 +85,7 @@ def model_to_display_area(tdw, x, y, w, h):
 
 def grabcutfill(sample_layer, lineart_layer,
                 fg_color, dilation_size,
-                preview, remove_lineart,
+                remove_lineart_pixel,
                 iter_cnt=3):
     """grabcutfill
 
@@ -86,27 +99,36 @@ def grabcutfill(sample_layer, lineart_layer,
                      treated as BG color hint.
     :param dilation_size: dilation size for final output region.
                           This option is useful when used with
-                          remove_lineart option.
-    :param preview: PreviewMethod value.
-    :param remove_lineart: In some case, lineart itself
+                          remove_lineart_pixel option.
+    :param remove_lineart_pixel: In some case, lineart itself
                            recognized as foreground.
                            It produces unintentional color
                            pixels around lineart.
-                           If remove_lineart is true,
+                           If remove_lineart_pixel is true,
                            opaque pixels of lineart removed from
                            filled area.
     :return: when failed, None.
              when success for execute, it is a new layer.
-             In older version, there is 'preview mode',
-             but it was rather useless so removed.
+             when success for preview, it is a tuple of
+            (a cairo surface,
+                x position of lineart layer,
+                y position of lineart layer,
+                width of lineart layer,
+                height of lineart layer)
 
-             all dimension values are in model coordinate.
+            all dimension values are in model coordinate.
 
     """
 
-   ## XXX DEBUGGING CODE 
+    def get_tile_source(layer):
+        if hasattr(layer, "_surface"):
+            return layer._surface
+        else:
+            return lib.surface.TileRequestWrapper(layer)
+
+    # XXX DEBUGGING CODE
     def save_mask_image(mask, fname='/tmp/maskimg.png'):
-        import scipy.misc 
+        import scipy.misc
         import Image
         mask2 = np.where((mask==1),255,0).astype('uint8')
         np.putmask(mask2, mask==2, 160)
@@ -115,7 +137,7 @@ def grabcutfill(sample_layer, lineart_layer,
         scipy.misc.imsave(fname, mask2)
 
     def save_cv_image(cvimage, fname='/tmp/cvimg.png'):
-        import scipy.misc 
+        import scipy.misc
         scipy.misc.imsave(fname, cvimage)
 
     # Import cv2 here,to delay import until this function used.
@@ -126,7 +148,7 @@ def grabcutfill(sample_layer, lineart_layer,
         import cv2
     except ImportError:
         from application import get_app
-        app = get_app() 
+        app = get_app()
         app.message_dialog("You need to install python binding of OpenCV2 "
                            "for GrabcutFill.", Gtk.MessageType.ERROR)
         return None
@@ -154,8 +176,10 @@ def grabcutfill(sample_layer, lineart_layer,
     h = sh + margin * 2
 
     # XXX Background color in img_art array
-    # In future, this should be configurable,
-    # To paint on white(bright)-colored lineart.
+    # In future, this should be configurable from optionspresenter,
+    # to support the case of white(bright)-colored lineart.
+    # grabCut function does not recognize alpha pixels,
+    # so we need background color anyway.
     br, bg, bb = 1.0, 1.0, 1.0
 
     img_art = np.zeros((h, w, 3), dtype = np.uint8)
@@ -164,10 +188,7 @@ def grabcutfill(sample_layer, lineart_layer,
         br, bg, bb,
         margin)
 
-    if hasattr(lineart_layer, "_surface"):
-        src = lineart_layer._surface
-    else:
-        src = lib.surface.TileRequestWrapper(lineart_layer)
+    src = get_tile_source(lineart_layer)
 
     for by in xrange(0, sh, N):
         ty = int(by // N) + sy
@@ -178,7 +199,7 @@ def grabcutfill(sample_layer, lineart_layer,
                 # would be converted into pure white.
                 mypaintlib.grabcututil_convert_tile_to_image(
                     img_art, src_tile,
-                    bx, by, 
+                    bx, by,
                     br, bg, bb,
                     margin)
 
@@ -199,22 +220,19 @@ def grabcutfill(sample_layer, lineart_layer,
 
     # Then, Write filling hints into mask image.
     targ_r, targ_g, targ_b = fg_color
-    if hasattr(sample_layer, "_surface"):
-        src = sample_layer._surface
-    else:
-        src = lib.surface.TileRequestWrapper(sample_layer)
+    src = get_tile_source(sample_layer)
 
-    # TODO Actually grabcututil_convert_tile_to_binary
-    # extracts only full opaque(alpha = fix15_one) pixels.
-    # so (much) smaller areas than visible strokes are detected
-    # as hints.
-    # We need better labeling function for them.
+    # TODO We need better labeling function for them.
+    # Or, Use completely other way to indicate where is
+    # fg or bg, such as placing nodes.
+    # Currently using some sort of trick.
 
     for by in xrange(0, sh, N):
         ty = int(by // N) + sy
         for bx in xrange(0, sw, N):
             tx = int(bx // N) + sx
             with src.tile_request(tx, ty, readonly=True) as src_tile:
+
                 mypaintlib.grabcututil_convert_tile_to_binary(
                     mask, src_tile,
                     bx, by,
@@ -224,20 +242,23 @@ def grabcutfill(sample_layer, lineart_layer,
                     0.05 # BG alpha tolerance should be lower
                          # than FG one.
                          # 0.05 is practical value,
-                         # 0.2 was often failed.
+                         # 0.2 produced failed result in many case.
                 )
 
                 mypaintlib.grabcututil_convert_tile_to_binary(
                     mask, src_tile,
                     bx, by,
                     targ_r, targ_g, targ_b,
-                    1,# surely foreground hint 
+                    1,# surely foreground hint
                     margin, 0,
-                    0.7 # Alpha tolerance. must be higher than BG one. 
+                    0.7 # FG hints alpha tolerance.
+                        # This MUST be higher than BG one.
                         # If BG one is same (or less just a bit),
-                        # BG hint pixels surround FG hint.so grabcut
-                        # does not work.
+                        # BG hint pixels would surround FG hints.
+                        # so grabcut does not work.
                 )
+
+   #save_mask_image(mask)
 
     # Finally, execute grabCut and get image area as mask.
     cv2.grabCut(
@@ -249,13 +270,13 @@ def grabcutfill(sample_layer, lineart_layer,
 
     cl = lib.layer.PaintingLayer(name=_("Grabcutfill Result"))
 
-    # Finalizing grabcut mask. 
+    # Finalizing grabcut mask.
     # which is , remove detected lineart contour
     # and convert 'probable foreground' as foreground.
     mypaintlib.grabcututil_finalize_cvmask(
         mask, img_art,
         br, bg, bb,
-        int(remove_lineart))
+        int(remove_lineart_pixel))
 
     if dilation_size > 0:
         dilation_size = int(dilation_size)
@@ -271,13 +292,13 @@ def grabcutfill(sample_layer, lineart_layer,
         for bx in xrange(0, sw, N):
             tx = int(bx // N) + sx
             with dst.tile_request(tx, ty, readonly=False) as dst_tile:
-                    # Currently, complete alpha in lineart layer
-                    # would be converted into pure white.
+                # Currently, complete alpha in lineart layer
+                # would be converted into pure white.
                 if mypaintlib.grabcututil_convert_binary_to_tile(
                         dst_tile, mask,
                         bx, by,
                         targ_r, targ_g, targ_b,
-                        1, 
+                        1,
                         margin):
                     dst._mark_mipmap_dirty(tx, ty)
     bbox = (sx * N, sy * N, sw, sh)
@@ -285,8 +306,8 @@ def grabcutfill(sample_layer, lineart_layer,
 
     return cl
 
-## Class defs
 
+## Class defs
 class OverlayMixin(object):
     """ Overlay drawing mixin, for some modes.
     """
@@ -349,6 +370,9 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
         rootstack = self.doc.model.layer_stack
         rootstack.current_path_updated += self._update_ui
         rootstack.layer_properties_changed += self._update_ui
+
+        self._lineart_layer_ref = None
+
         # We need ensure overlay here,
         # because User might do preview immidiately
         # without any action on canvas.
@@ -398,41 +422,80 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
             cls._OPTIONS_WIDGET = widget
         return cls._OPTIONS_WIDGET
 
+    @property
+    def lineart_layer(self):
+        if self._lineart_layer_ref is not None:
+            return self._lineart_layer_ref()
+
+    @lineart_layer.setter
+    def lineart_layer(self, layer):
+        if layer is not None:
+            self._lineart_layer_ref = weakref.ref(layer)
+        else:
+            self._lineart_layer_ref = None
+
     ## Execute
     @drawwindow.with_wait_cursor
     def _execute_fill(self):
+        app = self.app
+        prefs = app.preferences
         layers = self.doc.model.layer_stack
         current = layers.current
         cur_path = layers.current_path
-        top_path = layers.path_above(cur_path, insert=False)
-        # When above layer is actually layer group, use it.
-        if top_path is not None and len(top_path) > len(cur_path):
-            top_path = top_path[:len(cur_path)]
-        toplayer = layers.deepget(top_path)
 
-        if toplayer is None:
-            self.app.message_dialog(
-                _("You need a line-art layer above the current color-hint layer."),
+        lineart = self.lineart_layer
+        if lineart is None:
+            app.message_dialog(
+                _("You need to select a line-art layer(or group)"
+                  "at Options presenter."),
                 Gtk.MessageType.ERROR)
             return
 
-        opts = self.get_options_widget()
-        self.app.show_transient_message(_("Processing, Please wait..."))
+        # Getting pref options
+        remove_lineart_pixel = prefs.get(_Prefs.REMOVE_LINEART_PREF,
+                                         _Prefs.DEFAULT_REMOVE_LINEART)
+
+        remove_hint_layer_flag = prefs.get(_Prefs.REMOVE_LINEART_PREF,
+                                           _Prefs.DEFAULT_REMOVE_LINEART)
+        if remove_hint_layer_flag:
+            removed_hint_layer = current
+        else:
+            removed_hint_layer = None
+
+        dilation_size = prefs.get(_Prefs.DILATION_SIZE_PREF,
+                                  _Prefs.DEFAULT_DILATION_SIZE)
+
+        # Executing grabcutfill
+        app.show_transient_message(_("Processing, Please wait..."))
         new_layer = grabcutfill(
             current,
-            toplayer,
+            lineart,
             self._get_fg_color(),
-            opts.dilation_size,
-            PreviewMethod.NO_PREVIEW,
-            opts.remove_lineart
+            dilation_size,
+            remove_lineart_pixel
         )
 
         if new_layer:
-            layers = [new_layer, ]
-            self.doc.model.grabcut_fill(layers, cur_path)
-            self.app.show_transient_message(_("Grabcutfill has completed."))
+            self.doc.model.grabcut_fill(
+                new_layer,
+                cur_path,
+                removed_hint_layer
+            )
+            app.show_transient_message(_("Grabcutfill has completed."))
+
+            if removed_hint_layer is not None:
+                current = new_layer
+            # DON'T FORGET TO Seleting current(hint) layer again.
+            # Otherwise, when delete hint layer right after grabcut fill executed
+            # exception would be raised.
+            self.doc.model.select_layer(layer=current)
+
+
         else:
-            self.app.show_transient_message(_("Grabcutfill is not executed. lineart layer might be empty?"))
+            app.show_transient_message(
+                _("Grabcutfill is not executed."
+                  "lineart layer might be empty?")
+            )
 
 
     ## Overlays
@@ -461,8 +524,8 @@ class _Overlay_Grabcut(gui.overlays.Overlay):
         if (mode is not None
                 and mode._preview_info is not None):
             surf, ox, oy, ow, oh = mode._preview_info
-
-            x, y, w, h = model_to_display_area(tdw, ox, oy, ow, oh)
+            x, y, w, h = gui.ui_utils.model_to_display_area(
+                            tdw, ox, oy, ow, oh)
 
             cr.save()
             cr.translate(x, y)
@@ -481,17 +544,102 @@ class _Overlay_Grabcut(gui.overlays.Overlay):
             cr.paint()
             cr.restore()
 
+class LayerComboRenderer(Gtk.CellRenderer):
+    """renderer used from layer combobox"""
+
+    layer = GObject.property(type=GObject.TYPE_PYOBJECT, default=None)
+    _FONT_SIZE = None
+    MARGIN = 4
+    icon_pixbufs = {}
+
+    def __init__(self, targwidget):
+        super(LayerComboRenderer, self).__init__()
+        self.targwidget = targwidget
+
+    @property 
+    def FONT_SIZE(self):
+        cls = self.__class__
+        if cls._FONT_SIZE is None:
+            st = Gtk.ComboBox.get_default_style()
+            desc = st.font_desc
+            size_base = desc.get_size() / Pango.SCALE
+            if desc.get_size_is_absolute():
+                # True == size is in device unit
+                pass
+            else:
+                # False == size is in Point.
+                # pixel = Point * (DPI / 72.0)
+                scr = Gdk.Screen.get_default()
+                dpi = scr.get_resolution()
+                if dpi < 0:
+                    dpi = 96.0
+                size_base = math.floor(size_base * (dpi / 72.0))
+
+            cls._FONT_SIZE = size_base
+                
+        return cls._FONT_SIZE
+
+    # Gtk Property related:
+    # These are something like a idiom.
+    # DO NOT EDIT
+    def do_set_property(self, pspec, value):
+        setattr(self, pspec.name, value)
+
+    def do_get_property(self, pspec):
+        return getattr(self, pspec.name)
+
+    # Rendering
+    def do_render(self, cr, widget, background_area, cell_area, flags):
+        """
+        :param cell_area: RectangleInt class
+        """
+        cr.save()
+        cr.translate(cell_area.x, cell_area.y)
+        layer = self.layer
+        if layer is not None:
+            h = self.FONT_SIZE
+            top = (cell_area.height - h) / 2
+            cr.translate(self.MARGIN, top)
+
+            icon_name = layer.get_icon_name()
+            icon = self.icon_pixbufs.get(icon_name, None)
+            if icon is None:
+                icon = drawutils.load_symbolic_icon(
+                        icon_name,
+                        self.FONT_SIZE,
+                        fg=(0, 0, 0, 1),
+                       )
+                self.icon_pixbufs[icon_name] = icon
+
+            # Drawing icon
+            Gdk.cairo_set_source_pixbuf(cr, icon, 0 , 0)
+            cr.rectangle(0, 0, h, h)
+            cr.fill()
+            cr.translate(h, 0)
+
+            # Drawing layer name
+            cr.set_source_rgb(0.0, 0.0, 0.0)
+            cr.move_to(self.MARGIN,
+                       h)
+            cr.set_font_size(h)
+            cr.show_text(layer.name)
+
+
+        cr.restore()
+
+    def do_get_preferred_height(self,view_widget):
+        height = self.MARGIN + self.FONT_SIZE
+        return (height, height)
+    def do_get_preferred_width(self,view_widget):
+        return (96, 96)
+
+
 class GrabFillOptionsWidget (Gtk.Grid):
     """Configuration widget for the flood fill tool"""
 
-    REMOVE_LINEART_PREF = 'grabcut_fill.remove_lineart'
-    DILATION_SIZE_PREF = 'grabcut_fill.dilate_size'
-
-    DEFAULT_REMOVE_LINEART = True
-    DEFAULT_DILATION_SIZE = 0
-
     def __init__(self):
         Gtk.Grid.__init__(self)
+        self._update_ui = True
 
         self.set_row_spacing(6)
         self.set_column_spacing(6)
@@ -500,38 +648,71 @@ class GrabFillOptionsWidget (Gtk.Grid):
         self._mode_ref = None
         prefs = self.app.preferences
 
-        row = 0
-        label = Gtk.Label()
-        label.set_markup(_("Output:"))
-        label.set_tooltip_text(_("About output results"))
-        label.set_alignment(1.0, 0.5)
-        label.set_hexpand(False)
-        self.attach(label, 0, row, 1, 1)
+        def generate_label(text, tooltip):
+            label = Gtk.Label()
+            label.set_markup(text)
+            label.set_tooltip_text(tooltip)
+            label.set_alignment(1.0, 0.5)
+            label.set_hexpand(False)
+            self.attach(label, 0, row, 1, 1)
+            return label
 
-        text = _("Remove lineart area")
+        row = 0
+        label = generate_label(
+                    _("Lineart:"),
+                    _("Select Lineart layer"))
+
+        combo = self._init_layer_combo()
+        self.attach(combo, 1, row, 1, 1)
+        self._lineart_combo = combo
+
+        row += 1
+        btn = Gtk.Button()
+        btn.set_label(_("Set current layer as Lineart"))
+        btn.connect("clicked", self._execute_clicked_cb)
+        btn.set_hexpand(True)
+        self.attach(btn, 0, row, 2, 1)
+
+        row += 1
+        label = generate_label(
+                    _("Output:"),
+                    _("About output results"))
+
+        text = _("Remove lineart")
         checkbut = Gtk.CheckButton.new_with_label(text)
         checkbut.set_tooltip_text(
             _("Remove lineart opaque area from filled area."))
         self.attach(checkbut, 1, row, 1, 1)
-        active = prefs.get(self.REMOVE_LINEART_PREF ,
-                           self.DEFAULT_REMOVE_LINEART)
+        active = prefs.get(_Prefs.REMOVE_LINEART_PREF ,
+                           _Prefs.DEFAULT_REMOVE_LINEART)
         checkbut.set_active(active)
-        checkbut.connect("toggled", self._remove_lineart_toggled_cb)
-        self._remove_lineart_toggle = checkbut
+        checkbut.connect("toggled", self._remove_lineart_pixel_toggled_cb)
+        self._remove_lineart_pixel_toggle = checkbut
 
         row += 1
-        label = Gtk.Label()
-        label.set_markup(_("Dilation Size:"))
-        label.set_tooltip_text(_("How many pixels the filled area to be dilated."))
-        label.set_alignment(1.0, 0.5)
-        label.set_hexpand(False)
-        self.attach(label, 0, row, 1, 1)
-        value = prefs.get(self.DILATION_SIZE_PREF, self.DEFAULT_DILATION_SIZE)
+        text = _("Remove hint layer")
+        checkbut = Gtk.CheckButton.new_with_label(text)
+        checkbut.set_tooltip_text(
+            _("Remove current hint layer,"
+              "right after grabcut-fill is completed."))
+        self.attach(checkbut, 1, row, 1, 1)
+        active = prefs.get(_Prefs.REMOVE_HINT_PREF ,
+                           _Prefs.DEFAULT_REMOVE_HINT)
+        checkbut.set_active(active)
+        checkbut.connect("toggled", self._remove_hint_toggled_cb)
+        self._remove_hint_toggle = checkbut
+
+        row += 1
+        label = generate_label(
+                    _("Dilation Size:"),
+                    _("How many pixels the filled area to be dilated."))
+
+        value = prefs.get(_Prefs.DILATION_SIZE_PREF,
+                          _Prefs.DEFAULT_DILATION_SIZE)
         value = float(value)
-        # To avoid confusion, maximum dilation size is
-        # same as dilation fill.(i.e. == mypaintlib.TILE_SIZE / 2 - 1)
-        # Actually, dilation of grabcutfill is executed by
-        # opencv and it is not tile-based , so there is no such limitation.
+        # Theorically 'dilation fill' would accepts maximum
+        # mypaintlib.TILE_SIZE-1 pixel as dilation size.
+        # but it would be too large (even in 4K),
         adj = Gtk.Adjustment(value=value, lower=0.0,
                              upper=lib.mypaintlib.TILE_SIZE / 2 - 1,
                              step_increment=1, page_increment=4,
@@ -543,6 +724,7 @@ class GrabFillOptionsWidget (Gtk.Grid):
         spinbtn.set_adjustment(adj)
         self.attach(spinbtn, 1, row, 1, 1)
 
+
         row += 1
         btn = Gtk.Button()
         btn.set_label(_("Execute"))
@@ -550,9 +732,28 @@ class GrabFillOptionsWidget (Gtk.Grid):
         btn.set_hexpand(True)
         self.attach(btn, 0, row, 2, 1)
 
+        self._update_ui = False
+
+    def _init_layer_combo(self):
+        """Creating combobox for selecting lineart layer.
+        """
+        docmodel = self.app.doc.model
+        treemodel = layers.RootStackTreeModelWrapper(docmodel)
+        self._treemodel = treemodel
+        combo = Gtk.ComboBox()
+        combo.set_model(treemodel)
+        combo.set_hexpand(True)
+
+        cell = LayerComboRenderer(combo)
+        combo.pack_start(cell, True)
+        combo.add_attribute(cell, 'layer', 0)
+
+        combo.connect("changed", self._on_layer_combo_changed)
+        return combo
+
     @property
     def target_mode(self):
-        if self._mode_ref is not None:
+        if self._mode_ref is not None and self._update_ui==False:
             return self._mode_ref()
 
     @target_mode.setter
@@ -560,16 +761,19 @@ class GrabFillOptionsWidget (Gtk.Grid):
         self._mode_ref = weakref.ref(mode)
 
     @property
-    def remove_lineart(self):
-        return self._remove_lineart_toggle.get_active()
+    def remove_lineart_pixel(self):
+        return self._remove_lineart_pixel_toggle.get_active()
 
     @property
     def dilation_size(self):
         return math.floor(self._dilation_size_adj.get_value())
 
     def _reset_clicked_cb(self, button):
-        self._remove_lineart_toggle._set_active(self.DEFAULT_REMOVE_LINEART)
-        self._preview_fast_toggle._set_active(self.DEFAULT_PREVIEW_FAST)
+        self._remove_lineart_pixel_toggle._set_active(
+            self.DEFAULT_REMOVE_LINEART)
+
+        self._preview_fast_toggle._set_active(
+                self.DEFAULT_PREVIEW_FAST)
 
     def _execute_clicked_cb(self, button):
         mode = self.target_mode
@@ -577,8 +781,22 @@ class GrabFillOptionsWidget (Gtk.Grid):
             mode._execute_fill()
 
     def _dilation_size_changed_cb(self, adj):
-        self.app.preferences[self.DILATION_SIZE_PREF] = self.dilation_size
+        self.app.preferences[_Prefs.DILATION_SIZE_PREF] = self.dilation_size
 
-    def _remove_lineart_toggled_cb(self, btn):
-        self.app.preferences[self.REMOVE_LINEART_PREF] = self.remove_lineart
+    def _remove_lineart_pixel_toggled_cb(self, btn):
+        self.app.preferences[_Prefs.REMOVE_LINEART_PREF] = \
+                self.remove_lineart_pixel
+
+    def _remove_hint_toggled_cb(self, btn):
+        self.app.preferences[_Prefs.REMOVE_HINT_PREF] = self.remove_hint
+
+    def _on_layer_combo_changed(self, cmb):
+        mode = self.target_mode
+        if mode is not None:
+            iter = cmb.get_active_iter()
+            if iter is not None:
+                layer = self._treemodel.get_value(iter, 0)
+                mode.lineart_layer = layer
+            else:
+                mode.lineart_layer = None
 

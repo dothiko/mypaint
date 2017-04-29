@@ -1438,18 +1438,19 @@ class ExternalLayerEdit (Command):
 
 class GrabcutAddLayer(Command):
     """Inserts a new grabcut-generated (multiple) layers 
-    into the layer stack
+    into the layer stack.
     That layers generated at another python file.
-
+    
     For some reasons, this class named as Grabcut'AddLayer', but
     show its name as "Grabcut fill" in Mypaint GUI.
     """
 
-    def __init__(self, doc, layers, insert_path, **kwds): 
+    def __init__(self, doc, result, insert_path, removed_hint_layer, **kwds): 
         super(GrabcutAddLayer, self).__init__(doc, **kwds)
         self._insert_path = insert_path
         self._prev_currentlayer_path = None
-        self._layers = layers
+        self._result_layer = result
+        self._removed_hint_layer = removed_hint_layer
 
     @property
     def display_name(self):
@@ -1459,13 +1460,29 @@ class GrabcutAddLayer(Command):
 
     def redo(self):
         layers = self.doc.layer_stack
+        assert len(layers) > 0
         self._prev_currentlayer_path = layers.get_current_path()
-        for layer in self._layers:
-            layers.deepinsert(self._insert_path, layer)
+
+        layers.deepinsert(self._insert_path, self._result_layer)
+
+        if self._removed_hint_layer is not None:
+            layers.deepremove(self._removed_hint_layer)
 
     def undo(self):
         layers = self.doc.layer_stack
-        for layer in self._layers:
-            layers.deepremove(layer)
+        assert len(layers) > 0
+
+        # First of all, insert removed hint layer
+        # into the position of grabcut filled layer.
+        if self._removed_hint_layer is not None:
+            result_path = layers.deepindex(self._result_layer)
+            layers.deepinsert(result_path, self._removed_hint_layer)
+
+        # After that, remove grabcut filled layers directly. 
+        layers.deepremove(self._result_layer)
+
+        # Thus, removed_hiht_layer placed its original path.
+
         layers.set_current_path(self._prev_currentlayer_path)
         self._prev_currentlayer_path = None
+
