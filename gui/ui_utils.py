@@ -171,6 +171,21 @@ def display_to_model_distance(tdw, disp_dist):
     lx, ly = tdw.display_to_model(disp_dist, 0)
     return math.hypot(lx - bx, ly - by)
 
+def model_to_display_area(tdw, x, y, w, h):
+    """ Convert model-coodinate area into display one.
+    """
+    sx = x
+    sy = y
+    ex = x + w - 1
+    ey = y + h - 1
+    sx, sy = tdw.model_to_display(sx, sy)
+    ex, ey = tdw.model_to_display(ex, ey)
+
+    sx , ex = min(sx, ex), max(sx, ex)
+    sy , ey = min(sy, ey), max(sy, ey)
+    w = ex - sx + 1
+    h = ey - sy + 1
+    return (sx, sy, w, h)
 
 def setup_round_position(tdw, pos, count, radius):
     """ setup button position,rotating around (x,y)

@@ -964,6 +964,28 @@ class Document (object):
                                 dilation_size)
         self.do(cmd)
 
+    def grabcut_fill(self, result_layer, path, removed_hint_layer):
+        """Doing POST-PROCESS of OpenCV grabcut fill.
+
+        Actually, the result layer is already generated
+        before call this method.
+        This method (and command.GrabcutAddLayer) does just
+        inserting that result layer into current RootLayerStack.
+
+        :param result_layer: the grabcutfill result layer.
+        :param path: layer insertion path in rootlayerstack.
+        """
+
+        # Actually, that layer srcs are already painted.
+        # so this command just appends new layers into the path.
+        cmd = command.GrabcutAddLayer(
+            self, 
+            result_layer, 
+            path, 
+            removed_hint_layer
+        )
+        self.do(cmd)
+
     ## Graphical refresh
 
     def _canvas_modified_cb(self, root, layer, x, y, w, h):

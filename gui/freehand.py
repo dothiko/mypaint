@@ -216,7 +216,6 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
     def enter(self, doc, **kwds):
         """Enter freehand mode"""
         super(FreehandMode, self).enter(doc, **kwds)
-        self._drawing_state = {}
         self._reset_drawing_state()
         self._debug = (logger.getEffectiveLevel() == logging.DEBUG)
 

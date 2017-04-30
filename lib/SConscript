@@ -217,6 +217,7 @@ module_src = [
         'fastpng.cpp',
         'brushsettings.cpp',
         'dilation.cpp',
+        'grabcututil.cpp',
     ]
 module = build_py_module(
     env,

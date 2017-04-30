@@ -34,6 +34,7 @@ typedef struct { int x, y, w, h; } Rect;
 %include "gdkpixbuf2numpy.hpp"
 
 %include "dilation.hpp"
+%include "grabcututil.hpp"
 
 %init %{
 import_array();

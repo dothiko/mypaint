@@ -26,4 +26,5 @@
 #include "fill.hpp"
 #include "brushsettings.hpp"
 
+#include "grabcututil.hpp"
 #include "dilation.hpp"
