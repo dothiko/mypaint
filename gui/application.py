@@ -105,6 +105,7 @@ import grabcutfill
 import freehand_stabilized
 import freehand_parallel
 import freehand_center
+import lib.tiledsurface
 
 ## Utility methods
 
@@ -447,6 +448,10 @@ class Application (object):
 
         # Plugin initialize
         self.doc.init_plugins(self)
+
+        # Replace tiledrawwidget.flood_fill with decorated one.
+        lib.tiledsurface.flood_fill = drawwindow.with_wait_cursor(
+                                        lib.tiledsurface.flood_fill)
 
     def save_settings(self):
         """Saves the current settings to persistent storage."""
