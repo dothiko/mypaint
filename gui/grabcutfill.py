@@ -563,16 +563,18 @@ class LayerComboRenderer(Gtk.CellRenderer):
         return getattr(self, pspec.name)
 
     # Rendering
-    def do_render(self, cr, widget, background_area, cell_area, flags):
+    def do_render(self, cr, widget, bg_area, cell_area, flags):
         """
         :param cell_area: RectangleInt class
         """
         cr.save()
-        cr.translate(cell_area.x, cell_area.y)
         layer = self.layer
         if layer is not None:
+            cx, cy = cell_area.x, cell_area.y 
+            cw, ch = cell_area.width, cell_area.height 
+            cr.translate(cx, cy)
             h = self.FONT_SIZE
-            top = (cell_area.height - h) / 2
+            top = (ch - h) / 2
             cr.translate(self.MARGIN, top)
 
             icon_name = layer.get_icon_name()
@@ -592,21 +594,28 @@ class LayerComboRenderer(Gtk.CellRenderer):
             cr.translate(h, 0)
 
             # Drawing layer name
-            cr.set_source_rgb(0.0, 0.0, 0.0)
             cr.move_to(self.MARGIN,
                        h)
             cr.set_font_size(h)
+            cr.set_source_rgb(0.0, 0.0, 0.0)
             cr.show_text(layer.name)
-
+        else:
+            cr.rectangle(
+                bg_area.x, bg_area.y, 
+                bg_area.width, bg_area.height 
+            )
+            cr.fill()
 
         cr.restore()
 
-    def do_get_preferred_height(self,view_widget):
+    def do_get_preferred_height(self, widget):
         height = self.MARGIN + self.FONT_SIZE
         return (height, height)
-    def do_get_preferred_width(self,view_widget):
-        return (96, 96)
-
+    
+    def do_get_preferred_width(self, widget):
+        r = self.targwidget.get_allocation()
+        # Set natural width as 1, to avoid resizing combobox itself.
+        return (1, r.width)
 
 class GrabFillOptionsWidget (Gtk.Grid):
     """Configuration widget for the flood fill tool"""
@@ -767,9 +776,11 @@ class GrabFillOptionsWidget (Gtk.Grid):
     def _on_layer_combo_changed(self, cmb):
         mode = self.target_mode
         if mode is not None:
+            print('combo changed!!')
             iter = cmb.get_active_iter()
             if iter is not None:
                 layer = self._treemodel.get_value(iter, 0)
+                print('setting layer %s' % str(layer))
                 mode.lineart_layer = layer
             else:
                 mode.lineart_layer = None
