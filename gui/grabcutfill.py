@@ -716,7 +716,7 @@ class GrabFillOptionsWidget (Gtk.Grid):
         row += 1
         btn = Gtk.Button()
         btn.set_label(_("Set current layer as Lineart"))
-        btn.connect("clicked", self._execute_clicked_cb)
+        btn.connect("clicked", self._set_current_clicked_cb)
         btn.set_hexpand(True)
         self.attach(btn, 0, row, 2, 1)
 
@@ -797,10 +797,12 @@ class GrabFillOptionsWidget (Gtk.Grid):
 
     def _init_layer_combo(self):
         """Creating combobox for selecting lineart layer.
+        The data-model for that combobox is wrapper object of 
+        doc.model.
         """
         docmodel = self.app.doc.model
         treemodel = layers.RootStackTreeModelWrapper(docmodel)
-        self._treemodel = treemodel
+        self._model_wrapper = treemodel
         combo = Gtk.ComboBox()
         combo.set_model(treemodel)
         combo.set_hexpand(True)
@@ -837,6 +839,31 @@ class GrabFillOptionsWidget (Gtk.Grid):
         if mode is not None:
             mode._execute_fill()
 
+    def _set_current_clicked_cb(self, button):
+        mode = self.target_mode
+        if mode is not None:
+            assert mode.doc is not None
+            rootstack = mode.doc.model.layer_stack
+            assert rootstack is not None
+            assert rootstack.current is not None
+            lineart = rootstack.current
+            mode.lineart_layer = lineart
+
+            # Setting active item of combo box 
+            # as new lineart layer.
+            self._update_ui = True
+            model = self._model_wrapper
+            try:
+                iter = model.get_iter_first()
+                while iter is not None:
+                    layer = model.get_value(iter, 0)
+                    if layer == lineart:
+                        self._lineart_combo.set_active_iter(iter)
+                        break
+                    iter = model.iter_next(iter)
+            finally:
+                self._update_ui = False
+
     def _dilation_size_changed_cb(self, adj):
         self.app.preferences[_Prefs.DILATION_SIZE_PREF] = self.dilation_size
 
@@ -850,12 +877,13 @@ class GrabFillOptionsWidget (Gtk.Grid):
         self.app.preferences[_Prefs.FILL_AREA_PREF] = btn.get_active()
 
     def _on_layer_combo_changed(self, cmb):
-        mode = self.target_mode
-        if mode is not None:
-            iter = cmb.get_active_iter()
-            if iter is not None:
-                layer = self._treemodel.get_value(iter, 0)
-                mode.lineart_layer = layer
-            else:
-                mode.lineart_layer = None
+        if not self._update_ui:
+            mode = self.target_mode
+            if mode is not None:
+                iter = cmb.get_active_iter()
+                if iter is not None:
+                    layer = self._model_wrapper.get_value(iter, 0)
+                    mode.lineart_layer = layer
+                else:
+                    mode.lineart_layer = None
 
