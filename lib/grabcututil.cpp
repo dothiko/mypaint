@@ -86,6 +86,7 @@ _grabcutfill_color_match(const fix15_short_t c1_premult[4],
 * @grabcututil_convert_tile_to_binary
 * convert mypaint tile to numpy binary image
 *
+*
 * @param margin:  The margin pixels count around binary image.
 *                 This is needed for cv2.grabCut function to detect
 *                 'background'
@@ -277,7 +278,10 @@ grabcututil_convert_tile_to_image(
 * convert a Opencv binary image array into mypaint tile.
 *
 * @param py_tile: mypaint numpy tile object.
-* @param py_binary: Opencv 8bit binary array.
+* @param py_binary: opencv mask image, which should be binary numpy array
+*                   (i.e. 8bit 1byte array, value is 0 or 1)
+*                   or BGR numpy array
+*                   (i.e. 8bit 3bytes array)
 * @param targ_value: target value of binary array.
 * @return: When at least one pixel is written, return PyTrue.
 *          Otherwise, PyFalse.
@@ -344,7 +348,7 @@ grabcututil_convert_binary_to_tile(
             else {
                 buf_dst+=4;
             }
-            buf_src++;
+            buf_src+=xstride_src;
             /*
             else {
                 buf_dst+=3; // pixel unused

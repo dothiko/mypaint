@@ -46,6 +46,33 @@ unresponsive while that function is running.
 
 """
 
+## Additional & experimental mixin class.
+class OverlayMixin(object):
+    """ Overlay drawing mixin, for some modes.
+    """
+
+    def __init__(self):
+        self._overlays = {}  # keyed by tdw
+
+    def _generate_overlay(self, tdw):
+        raise NotImplementedError("You need to implement _generate_overlay,to use overlay")
+
+    #  FIXME: mostly copied from gui/inktool.py
+    #  so inktool.py should inherit this class too...
+
+    def _ensure_overlay_for_tdw(self, tdw):
+        overlay = self._overlays.get(tdw)
+        if not overlay:
+            overlay = self._generate_overlay(tdw)
+            tdw.display_overlays.append(overlay)
+            self._overlays[tdw] = overlay
+        return overlay
+
+    def _discard_overlays(self):
+        for tdw, overlay in self._overlays.items():
+            tdw.display_overlays.remove(overlay)
+            tdw.queue_draw()
+        self._overlays.clear()
 ## Enums
 
 class PreviewMethod:
@@ -56,14 +83,17 @@ class PreviewMethod:
     EXACT = 2 #: exactly same as final output
 
 class _Prefs:
-    """Enumeration of preferences constants"""
+    """Enumeration of preferences constants
+    Mainly used at Optionspresenter """
     REMOVE_LINEART_PREF = 'grabcut_fill.remove_lineart_pixel'
     REMOVE_HINT_PREF = 'grabcut_fill.remove_hint'
     DILATION_SIZE_PREF = 'grabcut_fill.dilate_size'
+    FILL_AREA_PREF = 'grabcut_fill.fill_area'
 
     DEFAULT_REMOVE_LINEART = True
     DEFAULT_REMOVE_HINT = True
     DEFAULT_DILATION_SIZE = 0
+    DEFAULT_FILL_AREA = False
 
 ## Function defs
 
@@ -86,6 +116,7 @@ def model_to_display_area(tdw, x, y, w, h):
 def grabcutfill(sample_layer, lineart_layer,
                 fg_color, dilation_size,
                 remove_lineart_pixel,
+                fill_contour = True,
                 iter_cnt=3):
     """grabcutfill
 
@@ -107,6 +138,13 @@ def grabcutfill(sample_layer, lineart_layer,
                            If remove_lineart_pixel is true,
                            opaque pixels of lineart removed from
                            filled area.
+    :param fill_contour: With removing lineart pixels,
+                         it make small holes in grabcut filled area.
+                         If this option is true, to surpass such glitch, 
+                         entire grubcut area would be detected as 'contour' 
+                         by cv2.findContours function 
+                         and filled by cv2.drawContours function.
+
     :return: when failed, None.
              when success for execute, it is a new layer.
              when success for preview, it is a tuple of
@@ -121,24 +159,27 @@ def grabcutfill(sample_layer, lineart_layer,
     """
 
     def get_tile_source(layer):
+        # Wrapper inner function to get surface from the layer,
+        # even the layer is actually layergroup 
+        # (or something layer-like object).
         if hasattr(layer, "_surface"):
             return layer._surface
         else:
             return lib.surface.TileRequestWrapper(layer)
 
-    # XXX DEBUGGING CODE
-    def save_mask_image(mask, fname='/tmp/maskimg.png'):
-        import scipy.misc
-        import Image
-        mask2 = np.where((mask==1),255,0).astype('uint8')
-        np.putmask(mask2, mask==2, 160)
-        np.putmask(mask2, mask==3, 80)
-        mask2 = np.c_[mask2, mask2, mask2]
-        scipy.misc.imsave(fname, mask2)
-
-    def save_cv_image(cvimage, fname='/tmp/cvimg.png'):
-        import scipy.misc
-        scipy.misc.imsave(fname, cvimage)
+    # XXX DEBUGGING CODES
+   #def save_mask_image(mask, fname='/tmp/maskimg.png'):
+   #    import scipy.misc
+   #    import Image
+   #    mask2 = np.where((mask==1),255,0).astype('uint8')
+   #    np.putmask(mask2, mask==2, 160)
+   #    np.putmask(mask2, mask==3, 80)
+   #    mask2 = np.c_[mask2, mask2, mask2]
+   #    scipy.misc.imsave(fname, mask2)
+   #
+   #def save_cv_image(cvimage, fname='/tmp/cvimg.png'):
+   #    import scipy.misc
+   #    scipy.misc.imsave(fname, cvimage)
 
     # Import cv2 here,to delay import until this function used.
     # Otherwise, this customized Mypaint cannot run
@@ -183,11 +224,13 @@ def grabcutfill(sample_layer, lineart_layer,
     br, bg, bb = 1.0, 1.0, 1.0
 
     img_art = np.zeros((h, w, 3), dtype = np.uint8)
+
     mypaintlib.grabcututil_setup_cvimg(
         img_art,
         br, bg, bb,
         margin)
 
+    # Create Opencv2 lineart image from the surface of the lineart layer. 
     src = get_tile_source(lineart_layer)
 
     for by in xrange(0, sh, N):
@@ -202,8 +245,6 @@ def grabcutfill(sample_layer, lineart_layer,
                     bx, by,
                     br, bg, bb,
                     margin)
-
-   #save_cv_image(img_art)
 
     mask = np.zeros((h, w, 1), dtype = np.uint8)
 
@@ -258,7 +299,6 @@ def grabcutfill(sample_layer, lineart_layer,
                         # so grabcut does not work.
                 )
 
-   #save_mask_image(mask)
 
     # Finally, execute grabCut and get image area as mask.
     cv2.grabCut(
@@ -278,6 +318,8 @@ def grabcutfill(sample_layer, lineart_layer,
         br, bg, bb,
         int(remove_lineart_pixel))
 
+
+    # Dilating the output mask, if needed.
     if dilation_size > 0:
         dilation_size = int(dilation_size)
         neiborhood4 = np.array([[0, 1, 0],
@@ -285,6 +327,30 @@ def grabcutfill(sample_layer, lineart_layer,
                                 [0, 1, 0]],
                                 np.uint8)
         mask = cv2.dilate(mask, neiborhood4, iterations=dilation_size)
+
+    # Detect 'grubcutted' and removed linearts area, 
+    # and fill entire that area, to eliminate pixel holes.
+    if remove_lineart_pixel and fill_contour:
+        contours, hierarchy = cv2.findContours( 
+                                mask,  
+                                cv2.RETR_EXTERNAL, 
+                                cv2.CHAIN_APPROX_SIMPLE)
+        
+        # We need BGR image to use drawcontour function.
+        new_mask = np.zeros((h, w, 3), dtype = np.uint8)
+        cv2.drawContours(
+            new_mask, 
+            contours, 
+            -1, 
+            (255, 255, 255),
+            -1)
+        mask = new_mask
+        # Utilize new_mask BGR image as 'mask'
+        # so target value would be changed.
+        target_value = 255
+    else:
+        # mask is Binary image, so Target value must be 1.
+        target_value = 1
 
     dst = cl._surface
     for by in xrange(0, sh, N):
@@ -294,11 +360,15 @@ def grabcutfill(sample_layer, lineart_layer,
             with dst.tile_request(tx, ty, readonly=False) as dst_tile:
                 # Currently, complete alpha in lineart layer
                 # would be converted into pure white.
+                # This function accepts mask image of different 
+                # two pixel formats.
+                # It is binary image(array of 1byte mask, 0 or 1) 
+                # or BGR image(array of 3bytes pixels).
                 if mypaintlib.grabcututil_convert_binary_to_tile(
                         dst_tile, mask,
                         bx, by,
                         targ_r, targ_g, targ_b,
-                        1,
+                        target_value,
                         margin):
                     dst._mark_mipmap_dirty(tx, ty)
     bbox = (sx * N, sy * N, sw, sh)
@@ -308,31 +378,6 @@ def grabcutfill(sample_layer, lineart_layer,
 
 
 ## Class defs
-class OverlayMixin(object):
-    """ Overlay drawing mixin, for some modes.
-    """
-
-    def __init__(self):
-        self._overlays = {}  # keyed by tdw
-
-    def _generate_overlay(self, tdw):
-        raise NotImplementedError("You need to implement _generate_overlay,to use overlay")
-
-    #  FIXME: mostly copied from gui/inktool.py
-
-    def _ensure_overlay_for_tdw(self, tdw):
-        overlay = self._overlays.get(tdw)
-        if not overlay:
-            overlay = self._generate_overlay(tdw)
-            tdw.display_overlays.append(overlay)
-            self._overlays[tdw] = overlay
-        return overlay
-
-    def _discard_overlays(self):
-        for tdw, overlay in self._overlays.items():
-            tdw.display_overlays.remove(overlay)
-            tdw.queue_draw()
-        self._overlays.clear()
 
 class GrabcutFillMode (gui.freehand.FreehandMode,
                        OverlayMixin):
@@ -362,6 +407,8 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
 
     _current_cursor = _CURSOR_FILL_PERMITTED
 
+    _lineart_layer_ref = None
+
     ## Method defs
 
     def enter(self, doc, **kwds):
@@ -370,8 +417,6 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
         rootstack = self.doc.model.layer_stack
         rootstack.current_path_updated += self._update_ui
         rootstack.layer_properties_changed += self._update_ui
-
-        self._lineart_layer_ref = None
 
         # We need ensure overlay here,
         # because User might do preview immidiately
@@ -424,15 +469,27 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
 
     @property
     def lineart_layer(self):
-        if self._lineart_layer_ref is not None:
-            return self._lineart_layer_ref()
+        """Lineart layer property.
+        Internally, this prop use weak reference to ensure & follow
+        layer existance.
+
+        Furthermore, mode object would be generated each time 
+        when grabcutfill tool is activated, even 'undo' operation
+        executed. 
+        Under this circumstance, self members are frequently initialized, 
+        so we MUST use class attribute to store lineart layer reference.
+        """
+        cls = self.__class__
+        if cls._lineart_layer_ref is not None:
+            return cls._lineart_layer_ref()
 
     @lineart_layer.setter
     def lineart_layer(self, layer):
+        cls = self.__class__
         if layer is not None:
-            self._lineart_layer_ref = weakref.ref(layer)
+            cls._lineart_layer_ref = weakref.ref(layer)
         else:
-            self._lineart_layer_ref = None
+            cls._lineart_layer_ref = None
 
     ## Execute
     @drawwindow.with_wait_cursor
@@ -457,6 +514,10 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
 
         remove_hint_layer_flag = prefs.get(_Prefs.REMOVE_LINEART_PREF,
                                            _Prefs.DEFAULT_REMOVE_LINEART)
+
+        fill_contour_flag = prefs.get(_Prefs.FILL_AREA_PREF,
+                                      _Prefs.DEFAULT_FILL_AREA)
+
         if remove_hint_layer_flag:
             removed_hint_layer = current
         else:
@@ -472,10 +533,13 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
             lineart,
             self._get_fg_color(),
             dilation_size,
-            remove_lineart_pixel
+            remove_lineart_pixel,
+            fill_contour = fill_contour_flag
         )
 
         if new_layer:
+            # Actually, this 'grabcut_fill' (i.e. Command.grabcutfill) does
+            # 'inserting the result layer into layerstack'.
             self.doc.model.grabcut_fill(
                 new_layer,
                 cur_path,
@@ -589,16 +653,18 @@ class LayerComboRenderer(Gtk.CellRenderer):
         return getattr(self, pspec.name)
 
     # Rendering
-    def do_render(self, cr, widget, background_area, cell_area, flags):
+    def do_render(self, cr, widget, bg_area, cell_area, flags):
         """
         :param cell_area: RectangleInt class
         """
         cr.save()
-        cr.translate(cell_area.x, cell_area.y)
         layer = self.layer
         if layer is not None:
+            cx, cy = cell_area.x, cell_area.y 
+            cw, ch = cell_area.width, cell_area.height 
+            cr.translate(cx, cy)
             h = self.FONT_SIZE
-            top = (cell_area.height - h) / 2
+            top = (ch - h) / 2
             cr.translate(self.MARGIN, top)
 
             icon_name = layer.get_icon_name()
@@ -618,21 +684,28 @@ class LayerComboRenderer(Gtk.CellRenderer):
             cr.translate(h, 0)
 
             # Drawing layer name
-            cr.set_source_rgb(0.0, 0.0, 0.0)
             cr.move_to(self.MARGIN,
                        h)
             cr.set_font_size(h)
+            cr.set_source_rgb(0.0, 0.0, 0.0)
             cr.show_text(layer.name)
-
+        else:
+            cr.rectangle(
+                bg_area.x, bg_area.y, 
+                bg_area.width, bg_area.height 
+            )
+            cr.fill()
 
         cr.restore()
 
-    def do_get_preferred_height(self,view_widget):
+    def do_get_preferred_height(self, widget):
         height = self.MARGIN + self.FONT_SIZE
         return (height, height)
-    def do_get_preferred_width(self,view_widget):
-        return (96, 96)
-
+    
+    def do_get_preferred_width(self, widget):
+        r = self.targwidget.get_allocation()
+        # Set natural width as 1, to avoid resizing combobox itself.
+        return (1, r.width)
 
 class GrabFillOptionsWidget (Gtk.Grid):
     """Configuration widget for the flood fill tool"""
@@ -678,6 +751,7 @@ class GrabFillOptionsWidget (Gtk.Grid):
                     _("Output:"),
                     _("About output results"))
 
+        # 'Remove layer' related
         text = _("Remove lineart")
         checkbut = Gtk.CheckButton.new_with_label(text)
         checkbut.set_tooltip_text(
@@ -688,6 +762,18 @@ class GrabFillOptionsWidget (Gtk.Grid):
         checkbut.set_active(active)
         checkbut.connect("toggled", self._remove_lineart_pixel_toggled_cb)
         self._remove_lineart_pixel_toggle = checkbut
+
+        row += 1
+        text = _("Fill extracted area")
+        checkbut = Gtk.CheckButton.new_with_label(text)
+        checkbut.set_tooltip_text(
+            _("Fill entire grabcut extracted area."))
+        self.attach(checkbut, 1, row, 1, 1)
+        active = prefs.get(_Prefs.FILL_AREA_PREF,
+                           _Prefs.DEFAULT_FILL_AREA)
+        checkbut.set_active(active)
+        checkbut.connect("toggled", self._fill_grabcut_area_toggled_cb)
+        self._fill_grabcut_area_toggle = checkbut
 
         row += 1
         text = _("Remove hint layer")
@@ -702,6 +788,7 @@ class GrabFillOptionsWidget (Gtk.Grid):
         checkbut.connect("toggled", self._remove_hint_toggled_cb)
         self._remove_hint_toggle = checkbut
 
+        # Post process morphology operation related.
         row += 1
         label = generate_label(
                     _("Dilation Size:"),
@@ -761,10 +848,6 @@ class GrabFillOptionsWidget (Gtk.Grid):
         self._mode_ref = weakref.ref(mode)
 
     @property
-    def remove_lineart_pixel(self):
-        return self._remove_lineart_pixel_toggle.get_active()
-
-    @property
     def dilation_size(self):
         return math.floor(self._dilation_size_adj.get_value())
 
@@ -784,11 +867,13 @@ class GrabFillOptionsWidget (Gtk.Grid):
         self.app.preferences[_Prefs.DILATION_SIZE_PREF] = self.dilation_size
 
     def _remove_lineart_pixel_toggled_cb(self, btn):
-        self.app.preferences[_Prefs.REMOVE_LINEART_PREF] = \
-                self.remove_lineart_pixel
+        self.app.preferences[_Prefs.REMOVE_LINEART_PREF] = btn.get_active()
 
     def _remove_hint_toggled_cb(self, btn):
-        self.app.preferences[_Prefs.REMOVE_HINT_PREF] = self.remove_hint
+        self.app.preferences[_Prefs.REMOVE_HINT_PREF] = btn.get_active()
+
+    def _fill_grabcut_area_toggled_cb(self, btn):
+        self.app.preferences[_Prefs.FILL_AREA_PREF] = btn.get_active()
 
     def _on_layer_combo_changed(self, cmb):
         mode = self.target_mode
