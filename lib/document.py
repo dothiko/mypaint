@@ -1834,32 +1834,47 @@ class Document (object):
             logger.info('project copy processor still have pending works. it is forced to finish.')
             self._projectsave_processor.finish_all()
 
+        # Create needed directories
+        if not os.path.exists(dirname):
+            os.mkdir(dirname)
+            force_write = True
+
+        for subdir in ('Thumbnails', 'data', 'backup'): 
+            subpath = os.path.join(dirname, subdir)
+            if not os.path.exists(subpath):
+                os.mkdir(subpath)
+
         try:# Actually, this 'try' is to use 'finally' section.
 
             assert kwargs != None
 
             if 'source_dir' in kwargs:
-                # This document is a project and assigned to 'save as 
-                # another project'
-                # this means "copy entire project into another directory"
+                # Current document is a project and now assigned to 'save as 
+                # another project' by user.
+                # This is same as "copy entire project into another directory"
                 
-                # so,simply copy all layer images.
-                # With calling self._queue_autosave_writes() in advance,
-                # changed layer with stroke maps are already written.
-                # And file existence is checked in _project_copy_cb(),
-                # so overwritten with old one does not happen.
+                # So, simply copy all unchanged layer images here.
+                # With calling self._queue_autosave_writes() later,
+                # changed layer (and its stroke map) should be written
+                # into new directory without any dedicated codes.
 
                 logger.info("copy save of project is initiated.")
 
-                source_dir = kwargs['source_dir']
-
-                destdirname = os.path.join(dirname, 'data')
+                dirname_src = kwargs['source_dir']
                                 
                 for path, cl in self.layer_stack.walk():
-                    if not cl.project_dirty:
-                        cl.backup(destdirname)
-                    else:
-                        logger.info('%s has marked as dirty,so not copied', cl.name)
+                    if hasattr(cl, 'enum_filenames'):
+                        if not cl.project_dirty:
+                            for cfname in cl.enum_filenames():
+                                srcpath = os.path.join(dirname_src, cfname)
+                                dstpath = os.path.join(dirname, cfname)
+                                assert os.path.exists(srcpath)
+                                # This operation might do 'overwrite', 
+                                # so there is no need to check dstpath.
+                                shutil.copy(srcpath, dstpath)
+                        else:
+                            logger.info('%s has marked as dirty,so not copied', 
+                                        cl.name)
 
                 # fallthrough.
 
@@ -1975,6 +1990,10 @@ class Document (object):
         The difference from the original is,this method (basically)
         process only 'dirty' layers. 
 
+        Directory dirname and subdirectories MUST be created
+        before call this method.
+        Practically it would be done at save_project() public method.
+
         :param int xres: nominal X resolution for the doc
         :param int yres: nominal Y resolution for the doc
         :param frame_active: True if the frame is enabled
@@ -1983,15 +2002,6 @@ class Document (object):
         """
         root_stack = self.layer_stack
 
-        if not os.path.exists(dirname):
-            os.mkdir(dirname)
-            force_write = True
-
-        # Ensure sub directories
-        for subdir in ('Thumbnails', 'data', 'backup'): 
-            subpath = os.path.join(dirname, subdir)
-            if not os.path.exists(subpath):
-                os.mkdir(subpath)
 
         # Update the initially-selected flag on all layers.
         # Also, get the contents bounding box simultaneously.

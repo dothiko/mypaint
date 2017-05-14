@@ -158,7 +158,16 @@ class Projectsaveable(lib.autosave.Autosaveable):
 
         If that attribute does not exist (probably it should be
         first save of unsaved layer), self.unique_id used.
+
+        NOTE:
+        This property is fundamental one, just to retrieve unique
+        picture filename.
+        But, some type of layer would be consist from multiple files
+        such as strokemap.
+        So when you want to do some filesystem operation,
+        do not use this property, use enum_filenames method instead.
         """
+
         if not hasattr(self, '_filename'):
             self._filename = os.path.join('data', 
                                           "%s.png" % self.unique_id)
@@ -181,8 +190,17 @@ class Projectsaveable(lib.autosave.Autosaveable):
 
         This is a generator function.
         """
-        raise StopIteration  # implementation should be done at 
-                             # deriving class.
+        # XXX Should use NotimplementError and trap it ?
+        #
+        # Currently, use dummy yield statement and
+        # it return 'empty' generator function as a default.
+        # With this , we does not need try-catch statements
+        # to use this method.
+        # 
+        # But, this codes cannot detect a bug such as 
+        # forgetting to implement this method...
+        raise StopIteration  
+        yield None # Dummy yield, to return generator function.
 
 
 class Versionsave(object):

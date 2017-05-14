@@ -201,8 +201,8 @@ Vocabulary
       </child>
       <child>
         <object class="GtkAction" id="SaveAsProject">
-          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save As Project</property>
-          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current work as a project directory, with assigning it a new name.</property>
+          <property name="label" translatable="yes" context="Menu→File (labels), Accel Editor (labels)">Save as Project</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips), Accel Editor (descriptions)">Save current non-project work as a project, or Save current project as another one.</property>
           <signal name="activate" handler="save_as_project_cb"/>
         </object>
       </child>
