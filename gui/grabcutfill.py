@@ -63,11 +63,13 @@ class _Prefs:
     REMOVE_HINT_PREF = 'grabcut_fill.remove_hint'
     DILATION_SIZE_PREF = 'grabcut_fill.dilate_size'
     FILL_AREA_PREF = 'grabcut_fill.fill_area'
+    THRESHOLD_PREF = 'grabcut_fill.alpha_threshold'
 
     DEFAULT_REMOVE_LINEART = True
     DEFAULT_REMOVE_HINT = True
     DEFAULT_DILATION_SIZE = 0
     DEFAULT_FILL_AREA = False
+    DEFAULT_THRESHOLD = 0.3
 
 ## Function defs
 
@@ -90,6 +92,7 @@ class _Prefs:
 def grabcutfill(sample_layer, lineart_layer,
                 fg_color, dilation_size,
                 remove_lineart_pixel,
+                alpha_threshold,
                 fill_contour = True,
                 iter_cnt=3):
     """grabcutfill
@@ -112,6 +115,11 @@ def grabcutfill(sample_layer, lineart_layer,
                            If remove_lineart_pixel is true,
                            opaque pixels of lineart removed from
                            filled area.
+    :param alpha_threshold: The lineart pixel thershold of alpha value.
+                            If pixel alpha is lower than this value,
+                            that pixel is ignored.
+                            This parameter should be within the range of 
+                            0.0 - 1.0.
     :param fill_contour: With removing lineart pixels,
                          it make small holes in grabcut filled area.
                          If this option is true, to surpass such glitch, 
@@ -207,18 +215,26 @@ def grabcutfill(sample_layer, lineart_layer,
     # Create Opencv2 lineart image from the surface of the lineart layer. 
     src = get_tile_source(lineart_layer)
 
+    # Convert alpha threshold to fix15_short_t
+    fix15_one = 1 << 15
+    alpha_threshold = int(fix15_one * alpha_threshold)
+    alpha_threshold = lib.helpers.clamp(alpha_threshold, 
+                                        128,
+                                        254 * 128)
+
     for by in xrange(0, sh, N):
         ty = int(by // N) + sy
         for bx in xrange(0, sw, N):
             tx = int(bx // N) + sx
             with src.tile_request(tx, ty, readonly=True) as src_tile:
-                # Currently, complete alpha in lineart layer
+                # Alpha value in lineart layer
                 # would be converted into pure white.
                 mypaintlib.grabcututil_convert_tile_to_image(
                     img_art, src_tile,
                     bx, by,
                     br, bg, bb,
-                    margin)
+                    margin,
+                    alpha_threshold)
 
     mask = np.zeros((h, w, 1), dtype = np.uint8)
 
@@ -492,6 +508,9 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
         fill_contour_flag = prefs.get(_Prefs.FILL_AREA_PREF,
                                       _Prefs.DEFAULT_FILL_AREA)
 
+        alpha_threshold = prefs.get(_Prefs.THRESHOLD_PREF,
+                                    _Prefs.DEFAULT_THRESHOLD)
+
         if remove_hint_layer_flag:
             removed_hint_layer = current
         else:
@@ -508,6 +527,7 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
             self._get_fg_color(),
             dilation_size,
             remove_lineart_pixel,
+            alpha_threshold,
             fill_contour = fill_contour_flag
         )
 
@@ -722,6 +742,23 @@ class GrabFillOptionsWidget (Gtk.Grid):
 
         row += 1
         label = generate_label(
+                    _("Threshold:"),
+                    _("Lineart layer alpha thershold"))
+
+        value = prefs.get(_Prefs.THRESHOLD_PREF, _Prefs.DEFAULT_THRESHOLD)
+        value = float(value)
+        adj = Gtk.Adjustment(value=value, lower=0.0, upper=1.0,
+                             step_increment=0.05, page_increment=0.05,
+                             page_size=0)
+        adj.connect("value-changed", self._threshold_changed_cb)
+        scale = Gtk.Scale()
+        scale.set_hexpand(True)
+        scale.set_adjustment(adj)
+        scale.set_draw_value(False)
+        self.attach(scale, 1, row, 1, 1)
+
+        row += 1
+        label = generate_label(
                     _("Output:"),
                     _("About output results"))
 
@@ -887,3 +924,5 @@ class GrabFillOptionsWidget (Gtk.Grid):
                 else:
                     mode.lineart_layer = None
 
+    def _threshold_changed_cb(self, adj):
+        self.app.preferences[_Prefs.THRESHOLD_PREF] = adj.get_value()

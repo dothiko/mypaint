@@ -185,8 +185,14 @@ grabcututil_convert_tile_to_binary(
 * @grabcututil_convert_tile_to_image
 * convert mypaint tile to part of opencv numpy image (not binary)
 *
-* @param bg_r, bg_g, bg_b:  Alpha pixel replacing background color.
-* @param margin:  The margin pixels count around binary image.
+* @param bg_r, bg_g, bg_b: background pixel color.
+* @param margin: The margin pixels count around binary image.
+* @param alpha_threshold:  The threshold alpha value of foreground pixel.
+*                          If alpha value of the pixel is lower than
+*                          this threshold,  that pixel become
+*                          background.
+*                          this value should be within the range of
+*                          128 to 32512(fix15_one - 256, i.e. 254 * 128).
 * @return: Py_None
 * @detail
 * This function converts specific colored area of mypaint tile
@@ -199,7 +205,8 @@ grabcututil_convert_tile_to_image(
     PyObject *py_tile,
     int dst_x, int dst_y,
     double bg_r, double bg_g, double bg_b,
-    int margin)
+    int margin,
+    int alpha_threshold)
 {
     PyArrayObject *tile_arr = (PyArrayObject*)py_tile;
     PyArrayObject *cv_arr = (PyArrayObject*)py_cvimg;
@@ -246,7 +253,7 @@ grabcututil_convert_tile_to_image(
                 x < MYPAINT_TILE_SIZE;
                 ++x)
         {
-            if (buf_src[3] != 0) {
+            if (buf_src[3] >= alpha_threshold) {
                 uint32_t r, g, b;
                 r = *buf_src++;
                 g = *buf_src++;

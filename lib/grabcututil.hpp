@@ -33,7 +33,8 @@ grabcututil_convert_tile_to_image(
     PyObject *py_tile,
     int dst_x, int dst_y,
     double bg_r, double bg_g, double bg_b,
-    int margin
+    int margin,
+    int alpha_threshold
 );
 
 
