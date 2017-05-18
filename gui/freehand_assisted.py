@@ -154,7 +154,7 @@ class AssistedFreehandMode (freehand.FreehandMode,
                 self.do_assist = self._override_assist
                 self._override_assist = None
 
-        self.last_button = None
+            self.last_button = None
         return super(AssistedFreehandMode, self).button_release_cb(
                 tdw, event)
 

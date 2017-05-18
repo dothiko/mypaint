@@ -334,6 +334,11 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
 
     def queue_draw_ui(self, tdw):
         """ Queue draw area for overlay """
+        if tdw is None:
+            for tdw in self._overlays:
+                self.queue_draw_ui(tdw)
+            return
+
         if self._ready:
             half_rad = int(self._current_range+ 2)
             full_rad = half_rad * 2
