@@ -1170,6 +1170,7 @@ class BackgroundLayer (SurfaceBackedLayer):
             logger.debug('%.3fs surface saving %s', t1 - t0, store_relpath)
             self.clear_project_dirty()
         else:
+            assert os.path.exists(os.path.join(projdir, self.filename))
             store_relpath = self.filename
 
         elem.attrib[self.ORA_BGTILE_LEGACY_ATTR] = store_relpath
