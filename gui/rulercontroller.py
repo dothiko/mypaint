@@ -8,6 +8,8 @@
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 
+import math
+
 from gui.linearcontroller import *
 import gui.style
 from gui.linemode import *
@@ -39,11 +41,37 @@ class RulerController(LinearController):
                 and self._end_pos is not None)
 
     def is_level(self, vx, vy, margin):
+        """Return interger value to tell whether 
+        this ruler is level (or cross) with
+        identity vector (vx, vy).
+
+        :return : interger 1 , 0 or -1.
+                  If ruler is level with (vx,vy)
+                  and has same direction, return 1.
+                  If ruler is level but has opposite
+                  direction, return -1.
+                  Otherwise, return 0.
+        """
         if self.is_ready():
-            lx, ly = self.identity_vector
-            return (lx - margin < vx < lx + margin
-                        and ly - margin < vy < ly + margin)
-        return False
+            ix, iy = self.identity_vector
+            rad = get_radian(ix, iy, vx, vy)
+            if rad < margin:
+                return 1
+            elif abs(rad - math.pi) < margin:
+                return -1
+           #return (rad < margin or
+           #        abs(rad - math.pi) < margin)
+        return 0
+
+    def snap(self, vx, vy):
+        """Rotate current ruler vector as assigned identity vector.
+        """
+        assert self.is_ready()
+        sx, sy = self._start_pos
+        ex, ey = self._end_pos
+        length = vector_length(ex-sx, ey-sy)
+        self._end_pos = (sx + length * vx,
+                         sy + length * vy)
 
     def set_start_pos(self, tdw, disp_pos):
         super(RulerController, self).set_start_pos(tdw, disp_pos)

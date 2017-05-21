@@ -829,7 +829,7 @@ def rotate_ellipse(x, y, sin, cos):
 ## Vector Math
 def get_angle(x1, y1, x2, y2):
     dot = dot_product(x1, y1, x2, y2)
-    if abs(dot) < 1.0:
+    if abs(dot) <= 1.0:
         angle = math.acos(dot) * 180/math.pi
     else:
         angle = 0.0
@@ -837,7 +837,7 @@ def get_angle(x1, y1, x2, y2):
 
 def get_radian(x1, y1, x2, y2):
     dot = dot_product(x1, y1, x2, y2)
-    if abs(dot) < 1.0:
+    if abs(dot) <= 1.0:
         radian = math.acos(dot) 
     else:
         radian = 0.0

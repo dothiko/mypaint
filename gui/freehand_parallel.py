@@ -53,6 +53,7 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
     ACTION_NAME = 'ParallelFreehandMode'
 
     _initial_cursor = None
+    _level_margin = 0.005 # in radian, practical value.
 
     ## Class variables
 
@@ -365,26 +366,51 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
         self._cx, self._cy = mpos
 
     def _update_ruler_vector(self):
-       #sx, sy = self._ruler.start_pos
-       #ex, ey = self._ruler.end_pos
-       #self._vx, self._vy = normal(sx, sy, ex, ey)
         self._vx, self._vy = self._ruler.identity_vector
 
     ## Level angle related
 
-    def set_level_vector(self):
+    def set_ruler_as_level(self, vec):
+        """Set current ruler as level 
+        """
         cls = self.__class__
         cls._level_vector = self._ruler.identity_vector
+        self.queue_draw_ui(None)
 
     def is_level_or_cross(self):
         if self._ruler.is_ready():
             vx, vy = self._ruler.identity_vector
             lx, ly = self._level_vector
-            margin = 0.01
+            margin = self._level_margin
             
             return (self._ruler.is_level(lx, ly, margin) or 
                         self._ruler.is_level(ly, lx, margin))
         return False
+
+    def snap_ruler_to_level(self):
+        if self._ruler.is_ready():
+            lx, ly = self._level_vector
+            margin = self._level_margin
+
+            ans = self._ruler.is_level(lx, ly, margin)
+
+            if ans != 0:
+                pass
+            else:
+                ans = self._ruler.is_level(ly, lx, margin)
+                if ans != 0:
+                    lx, ly = ly, lx
+                else:
+                    return
+
+            self.queue_draw_ui(None)
+
+            if ans < 0:
+                lx *= -1.0
+                ly *= -1.0
+
+            self._ruler.snap(lx, ly)
+            self.queue_draw_ui(None)
 
 class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget):
     """Configuration widget for freehand mode"""
@@ -395,6 +421,16 @@ class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget):
     def init_specialized_widgets(self, row):
         self._updating_ui = True
         row = super(ParallelOptionsWidget, self).init_specialized_widgets(row)
+
+        button = Gtk.Button(label = _("Snap to level")) 
+        button.connect('clicked', self._snap_level_clicked_cb)
+        self.attach(button, 1, row, 1, 1)
+        row += 1
+
+        button = Gtk.Button(label = _("current as level")) 
+        button.connect('clicked', self._current_level_clicked_cb)
+        self.attach(button, 1, row, 1, 1)
+        row += 1
 
         button = Gtk.Button(label = _("Clear ruler")) 
         button.connect('clicked', self._reset_clicked_cb)
@@ -411,6 +447,21 @@ class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget):
             if mode:
                 mode.queue_draw_ui(None) # To erase.
                 mode.reset_assist()
+
+    def _snap_level_clicked_cb(self, button):
+        if not self._updating_ui:
+            # To discard current(old) overlay.
+            mode = self.mode
+            if mode:
+                if mode.is_level_or_cross():
+                    mode.snap_ruler_to_level()
+
+    def _current_level_clicked_cb(self, button):
+        if not self._updating_ui:
+            # To discard current(old) overlay.
+            mode = self.mode
+            if mode:
+                mode.set_ruler_as_level()
 
 class _Overlay_Parallel(gui.overlays.Overlay):
     """Overlay for stabilized freehand mode """
