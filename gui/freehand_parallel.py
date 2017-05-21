@@ -370,7 +370,7 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
 
     ## Level angle related
 
-    def set_ruler_as_level(self, vec):
+    def set_ruler_as_level(self):
         """Set current ruler as level 
         """
         cls = self.__class__
@@ -384,7 +384,7 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
             margin = self._level_margin
             
             return (self._ruler.is_level(lx, ly, margin) or 
-                        self._ruler.is_level(ly, lx, margin))
+                        self._ruler.is_level(ly, -lx, margin))
         return False
 
     def snap_ruler_to_level(self):
@@ -399,7 +399,7 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
             else:
                 ans = self._ruler.is_level(ly, lx, margin)
                 if ans != 0:
-                    lx, ly = ly, lx
+                    lx, ly = ly, -lx
                 else:
                     return
 
