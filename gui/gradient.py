@@ -18,12 +18,6 @@ from gui.polyfillshape import _EditZone
 from gui.linearcontroller import *
 from gui.linearcontroller import _LinearPhase
 
-#class _GradientPhase:
-#    INIT_NODE = 0
-#    MOVE = 1
-#    MOVE_NODE = 2
-#    STAY = 10
-
 class GradientInfo(object):
     """ This class contains colors as lib.color.RGBColor object.
     Thats because to keep compatibility to drawutils.py functions.
@@ -340,8 +334,16 @@ class GradientController(LinearController):
             self.invalidate_cairo_gradient() # To generate new one.
         
 
-    def _shading_contents(self, cr, mode, tdw):
-        # base shading, considering for alpha transparency.
+    def _shading_contents(self, cr, tdw, mode):
+        """Shade base contents of this controller, 
+        considering for alpha transparency.
+
+        :param mode: The mode(tool) class instance, which use
+                     this class.
+                     That instance should have 'in_drag' property
+                     which tells whether this controller is dragged 
+                     just now or not.
+        """
         cr.save()
 
         cr.set_source_rgb(0.5, 0.5, 0.5) 
@@ -350,7 +352,13 @@ class GradientController(LinearController):
             cr.set_source(self.get_cairo_gradient(tdw))
         cr.stroke()
 
-        # Drawing simurated gradiation
+        # Drawing simurated gradiation.
+        # To draw 'real' gradiation with cairo, we need to re-create 
+        # cairo gradient object each time redraw controller. 
+        # And when dragging controller, there would be tremendously 
+        # large number of redraw call. 
+        # Thus, drawing real gradiation in dragging might consume
+        # too many time and memory, so just simulate it when dragged. 
         if len(self.nodes) >= 2 and mode.in_drag:
             for i, pt, cx, cy, ex, ey in self._enum_node_position(tdw):
                 if i > 0:

@@ -54,7 +54,12 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
 
     _initial_cursor = None
 
-    ## Parallel ruler constants.
+    ## Class variables
+
+    # Level vector. This tuple means x and y of identity vector.
+    # If the ruler have completely same angle with this,
+    # 'level indicator' would be shown.
+    _level_vector = (0.0, 1.0)
 
     ## Initialization
 
@@ -360,11 +365,26 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
         self._cx, self._cy = mpos
 
     def _update_ruler_vector(self):
-        sx, sy = self._ruler.start_pos
-        ex, ey = self._ruler.end_pos
-        self._vx, self._vy = normal(sx, sy, ex, ey)
+       #sx, sy = self._ruler.start_pos
+       #ex, ey = self._ruler.end_pos
+       #self._vx, self._vy = normal(sx, sy, ex, ey)
+        self._vx, self._vy = self._ruler.identity_vector
 
+    ## Level angle related
 
+    def set_level_vector(self):
+        cls = self.__class__
+        cls._level_vector = self._ruler.identity_vector
+
+    def is_level_or_cross(self):
+        if self._ruler.is_ready():
+            vx, vy = self._ruler.identity_vector
+            lx, ly = self._level_vector
+            margin = 0.01
+            
+            return (self._ruler.is_level(lx, ly, margin) or 
+                        self._ruler.is_level(ly, lx, margin))
+        return False
 
 class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget):
     """Configuration widget for freehand mode"""
@@ -410,5 +430,5 @@ class _Overlay_Parallel(gui.overlays.Overlay):
             if (ruler.is_ready() or 
                     mode._phase in (_Phase.SET_BASE, 
                                     _Phase.SET_DEST)):
-                ruler.paint(cr, None, tdw)
+                ruler.paint(cr, tdw, mode.is_level_or_cross())
 

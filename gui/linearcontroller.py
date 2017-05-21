@@ -69,69 +69,18 @@ class LinearController(object):
         self.app = app
         self._current_node_index = None
         self._target_node_index = None
-       #self._active = False
-       #self.nodes = []
-       #self.invalidate_cairo_gradient()
 
         self._radius = 6.0
         self._phase = _LinearPhase.STAY
         self._dx = self._dy = 0
-       #self._start_pos = None
-       #self._end_pos = None
         self._target_pos = None
         self._overlay_ref = None
-
-       #self._follow_brushcolor = False
-       #self._prev_brushcolor = None
 
         self._cursors = {} # GUI cursor cache.
         self._hit_area_index = None # most recent hit area index.
 
         # With reset() method, initialized some attributes.
         self.reset()
-
-   #def setup_gradient(self, datas):
-   #    """Setup gradient colors with a sequence.
-   #
-   #    This method clears all nodes information and 
-   #    controller positions.
-   #
-   #    :param colors: a sequence of linear position and color tuple.
-   #                   (linear_position, (r, g, b, a))
-   #
-   #    """
-   #    self.nodes = []
-   #    self._follow_brushcolor = False
-   #    self._prev_brushcolor = None
-   #
-   #    for i, data in enumerate(datas):
-   #        pos, color = data
-   #        alpha = 1.0
-   #        if pos is not None:
-   #            curpos = max(min(pos, 1.0), 0.0)
-   #        else:
-   #            curpos = max(min(float(i) / (len(datas)-1), 1.0), 0.0)
-   #
-   #        assert color[0] is not None
-   #
-   #        if color[0] == -1:
-   #            # Current color gradient.
-   #            self._follow_brushcolor = True
-   #            self._prev_brushcolor = self.get_current_color()
-   #            if len(color) == 2:
-   #                alpha = color[1]
-   #            self.nodes.append(
-   #                    GradientInfo_Brushcolor(self.app, curpos, alpha)
-   #                    )
-   #        elif color[0] == -2:
-   #            raise NotImplementedError("There is no background color for mypaint!")
-   #        else:
-   #            assert len(color) >= 3
-   #            self.nodes.append(
-   #                    GradientInfo(curpos, color, alpha)
-   #                    )
-   #
-   #    self.invalidate_cairo_gradient()
 
     def set_start_pos(self, tdw, disp_pos):
         """Set gradient start position, from display coordinate.
@@ -186,135 +135,12 @@ class LinearController(object):
         # (i.e. gradient or something)
         self._contents_update = False
 
-
-    # Color/gradient related
-
-   #def get_current_color(self):
-   #    """Utility method.
-   #    For future change, to add alpha component to color tuple.
-   #    (yet implemented)
-   #    Use lib.color.RGBColor object directly
-   #    for compatibility to drawutils.py functions.
-   #    """
-   #    return self.app.brush_color_manager.get_color()
-   #
-   #def refresh_current_color(self):
-   #    """Refresh selected(current) node with current brushcolor"""
-   #    if self._current_node_index is not None:
-   #        pt = self.nodes[self._current_node_index]
-   #        pt.set_color(self.get_current_color())
-   #        self.invalidate_cairo_gradient() 
-   #
-   #def follow_brushcolor(self):
-   #    """This method would be called from brush color change observer
-   #    of PolyfillMode.
-   #    If current gradient has setting to follow the brush color change
-   #    ,do it.
-   #    
-   #    :rtype : boolean
-   #    :return : True when we need update overlay visual.
-   #              On the other hand, cairo gradient update notification is 
-   #              done internally,so no need to care it.
-   #              We need 'tdw' to update overlay, so avoid to write that
-   #              code here.
-   #    """
-   #    if self._follow_brushcolor:
-   #        nc = self.get_current_color()
-   #        oc = self._prev_brushcolor
-   #        if (oc is None or nc.r != oc.r or nc.g != oc.g or nc.b != oc.b):
-   #            self.invalidate_cairo_gradient() 
-   #            return True
-   #
-   #def get_cairo_gradient(self, tdw):
-   #    """Get cairo gradient.
-   #    This is for Editing gradient.
-   #    """
-   #    if self._cairo_gradient is None:
-   #        if tdw:
-   #            sx, sy = tdw.model_to_display(*self._start_pos)
-   #            ex, ey = tdw.model_to_display(*self._end_pos)
-   #        else:
-   #            sx, sy = self._start_pos
-   #            ex, ey = self._end_pos
-   #        
-   #        self._cairo_gradient = self.generate_gradient(sx, sy, ex, ey)
-   #    return self._cairo_gradient
-   #
-   #def generate_gradient(self, sx, sy, ex, ey):
-   #    """Generate cairo gradient object from
-   #    internal datas.
-   #    Use this for Final output.
-   #    """
-   #    if len(self.nodes) >= 2:
-   #        g = cairo.LinearGradient(
-   #            sx, sy,
-   #            ex, ey
-   #            )
-   #        for pt in self.nodes:
-   #            g.add_color_stop_rgba(
-   #                    pt.linear_pos, 
-   #                    *pt.get_rgba())
-   #        return g
-   #
-   #def invalidate_cairo_gradient(self):
-   #    self._cairo_gradient = None
-
-
     # node related method
-
-  # def add_intermidiate_point(self, linear_pos, color):
-  #     # search target index from linear_pos
-  #     pass
-  #     i=0
-  #     for pt in self.nodes:
-  #         if pt.linear_pos > linear_pos:
-  #             break
-  #         i+=1
-  #
-  #     if i < len(self.nodes):
-  #         self.nodes.insert(
-  #                 i,
-  #                 GradientInfo(linear_pos, color)
-  #                 )
-  #     else:
-  #         self.nodes.append(
-  #                 GradientInfo(linear_pos, color)
-  #                 )
-  #
-  #     self._current_node_index = i
-  #
-  #
-  #     self.invalidate_cairo_gradient() 
 
     def add_control_point_from_display(self, tdw, x, y):
         """Add control point from display coordinate.
         """ 
         pass
-
-   #def add_gradient_point_from_display(self, tdw, x, y):
-   #    tx, ty = tdw.display_to_model(x, y)
-   #    sx, sy = self._start_pos
-   #    ex, ey = self._end_pos
-   #    lln, nx, ny = gui.linemode.length_and_normal(
-   #            sx, sy,
-   #            ex, ey)
-   #
-   #    tln, tnx, tny = gui.linemode.length_and_normal(
-   #            sx, sy,
-   #            tx, ty)
-   #
-   #    linear_pos = tln / lln
-   #
-   #    self.add_intermidiate_point(
-   #            linear_pos, 
-   #            self.get_current_color())
-   #    
-   #def remove_gradient_node(self, idx):
-   #    assert idx < len(self.nodes)
-   #
-   #    del self.nodes[idx]
-   #    self.set_target_node_index(None)
-   #    self.invalidate_cairo_gradient() 
 
     @property
     def current_node_index(self):
@@ -358,8 +184,6 @@ class LinearController(object):
             dist_s = math.hypot(x-sx, y-sy)
             dist_e = math.hypot(x-ex, y-ey)
 
-           #h = V * dot_product(Normalize(v), vp) / length - vp
-
             vx = ex - sx
             vy = ey - sy
 
@@ -398,7 +222,6 @@ class LinearController(object):
             self._end_pos = tdw.display_to_model(ex+self._dx, ey+self._dy)
             self._dx = 0
             self._dy = 0
-           #self.invalidate_cairo_gradient() # To generate new one.
         
     def _enum_node_position(self, tdw):
         """Enumrate nodes position with a tuple
@@ -486,9 +309,13 @@ class LinearController(object):
         return cdict[id]
 
     # Paint related  
-    def paint(self, cr, mode, tdw):
+    def paint(self, cr, tdw, mode=None):
         """Paint this controller in cairo context.
         Used from Overlay class.
+        
+        :param mode: arbitrary mode variable.
+                     This is class specific, just passed to
+                     _shading_contents method.
         """
         cr.save()
         radius = self._radius
@@ -504,47 +331,13 @@ class LinearController(object):
             # so using cr.translate() seems to be meaningless...
             sx, sy = tdw.model_to_display(*self._start_pos)
             ex, ey = tdw.model_to_display(*self._end_pos)
-           #last_node = self.nodes[-1]
 
             cr.move_to(sx + dx, sy + dy)
             cr.line_to(ex + dx, ey + dy)
             gui.drawutils.render_drop_shadow(cr)
 
             # base shading, considering for alpha transparency.
-            self._shading_contents(cr, mode, tdw)
-           #cr.set_source_rgb(0.5, 0.5, 0.5) 
-           #if not mode.in_drag:
-           #    cr.stroke_preserve()
-           #    cr.set_source(self.get_cairo_gradient(tdw))
-           #cr.stroke()
-           #
-           #if len(self.nodes) >= 2:
-           #    cr.save()
-           #
-           #    # Drawing simurated gradiation
-           #    if mode.in_drag:
-           #        for i, pt, cx, cy, ex, ey in self._enum_node_position(tdw):
-           #            if i > 0:
-           #                cr.set_source_rgba(*ppt.get_rgba())
-           #                cr.move_to(sx, sy)
-           #                cr.line_to(cx, cy)
-           #                cr.stroke()
-           #                cr.move_to(cx, cy)
-           #                cr.set_source_rgba(*pt.get_rgba())
-           #                cr.line_to(ex, ey)
-           #                cr.stroke()
-           #
-           #            ppt = pt
-           #            sx,sy = ex, ey
-           #
-           #    # Drawing nodes.
-           #    # if do this above 'simurated gradiation' loop,
-           #    # some lines overdraw node chips.
-           #    # so do that here to overdraw simulated lines.
-           #    for i, pt, cx, cy, ex, ey in self._enum_node_position(tdw):
-           #        self._draw_single_node(cr, ex, ey, i, pt)
-           #
-           #    cr.restore()
+            self._shading_contents(cr, tdw, mode)
 
         elif self.start_pos is not None:
             x, y = tdw.model_to_display(*self.start_pos)
@@ -554,18 +347,12 @@ class LinearController(object):
                     gui.style.ACTIVE_ITEM_COLOR,
                     self._radius)
 
-       #if self._target_pos is not None:
-       #    x, y = self._target_pos
-       #    gui.drawutils.render_round_floating_color_chip(
-       #            cr,
-       #            x, y,
-       #            gui.style.ACTIVE_ITEM_COLOR,
-       #            3.0)
-
         cr.restore()
 
-    def _shading_contents(self, cr, mode, tdw):
+    def _shading_contents(self, cr, tdw, mode):
         """Shading its contents.
+        :param mode: class-specific arbitrary mode variable.
+                     This might be None when this is unused.
         """            
         pass
 
@@ -705,14 +492,7 @@ class LinearController(object):
 
             self.invalidate_cairo_gradient()
             self._target_pos = None
-
         elif self._phase == _LinearPhase.MOVE_NODE:
-
-           #if self._contents_update:
-           #    # Clear cairo gradient cache,
-           #    # to invoke generation of it in paint() method.
-           #    self.invalidate_cairo_gradient()
-
             self.clear_target_node_index()
         elif self._phase == _LinearPhase.MOVE:
             self.finalize_offsets(tdw)

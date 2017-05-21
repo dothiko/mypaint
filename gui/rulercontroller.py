@@ -10,6 +10,7 @@
 
 from gui.linearcontroller import *
 import gui.style
+from gui.linemode import *
 
 class RulerNode(object):
 
@@ -24,11 +25,25 @@ class RulerController(LinearController):
     in freehand_parallel
     """
     ACTION_NAME = "FreehandMode"
+    _level_color = (0.0, 1.0, 0.5)
+
+    @property
+    def identity_vector(self):
+        sx, sy = self._start_pos
+        ex, ey = self._end_pos
+        return normal(sx, sy, ex, ey)
 
     def is_ready(self):
         # Does not use self.nodes in this class.
         return (self._start_pos is not None 
                 and self._end_pos is not None)
+
+    def is_level(self, vx, vy, margin):
+        if self.is_ready():
+            lx, ly = self.identity_vector
+            return (lx - margin < vx < lx + margin
+                        and ly - margin < vy < ly + margin)
+        return False
 
     def set_start_pos(self, tdw, disp_pos):
         super(RulerController, self).set_start_pos(tdw, disp_pos)
@@ -40,10 +55,16 @@ class RulerController(LinearController):
         if len(self.nodes) < 2:
             self.nodes.append(RulerNode(1.0))
 
-    def _shading_contents(self, cr, mode, tdw):
-        # base shading, considering for alpha transparency.
+    def _shading_contents(self, cr, tdw, mode):
+        """Shade ruler contents.
+
+        :param mode: binary flag, Which tells the ruler is level or not.
+        """
         cr.save()
-        cr.set_source_rgb(1.0, 1.0, 1.0) 
+        if mode:
+            cr.set_source_rgb(*self._level_color) 
+        else:
+            cr.set_source_rgb(1.0, 1.0, 1.0) 
         cr.stroke()
 
         # Drawing simurated gradiation

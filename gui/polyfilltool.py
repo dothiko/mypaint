@@ -879,7 +879,7 @@ class OverlayPolyfill (OverlayBezier):
             self._draw_mode_buttons(cr)
 
         if mode.gradient_ctrl.active:
-            mode.gradient_ctrl.paint(cr, mode, self._tdw)
+            mode.gradient_ctrl.paint(cr, self._tdw, mode)
 
 class GradientStore(object):
 
@@ -1513,30 +1513,5 @@ class OptionsPresenter_Polyfill (OptionsPresenter_Bezier):
             # it would show wrong (old) colors.
             polymode.refresh_gradient_controller(
                     colors)
-
-
-
-                  
-
-
-   #def mode_leave_notify_cb(self, mode):
-   #    """ Actually, this is not GTK signal.
-   #    this is called from PolyfillMode.leave()
-   #    """
-   #    self._updating_ui = True
-   #   #self._enable_ctrl_button.set_active(False)
-   #    self._updating_ui = False
-
-   #def mode_enter_notify_cb(self, mode):
-   #    """ Actually, this is not GTK signal.
-   #    this is called from PolyfillMode.enter()
-   #    """
-   #    self._updating_ui = True
-   #    # To follow actual state of gradient controller
-   #    self._enable_ctrl_button.set_active(
-   #            mode.gradient_ctrl.active:
-   #            )
-   #    self._updating_ui = False
-
 
     ## Other handlers are as implemented in superclass.  
