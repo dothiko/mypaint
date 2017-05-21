@@ -371,6 +371,9 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
         self._vx, self._vy = self._ruler.identity_vector
 
     ## Level angle related
+    def reset_ruler_level(self):
+        cls = self.__class__
+        cls._level_vector = (0.0, 1.0)
 
     def set_ruler_as_level(self):
         """Set current ruler as level 
@@ -468,6 +471,7 @@ class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget):
             mode = self.mode
             if mode:
                 mode.queue_draw_ui(None) # To erase.
+                mode.reset_ruler_level()
                 mode.reset_assist()
 
     def _snap_level_clicked_cb(self, button):
