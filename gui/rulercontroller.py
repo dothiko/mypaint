@@ -28,6 +28,12 @@ class RulerController(LinearController):
     """
     ACTION_NAME = "FreehandMode"
     _level_color = (0.0, 1.0, 0.5)
+    _level_color_rough = (0.7, 1.0, 0.9)
+
+    # level status constants
+    LEVEL = 1
+    ROUGH_LEVEL = 2
+    NOT_LEVEL = 0
 
     @property
     def identity_vector(self):
@@ -59,8 +65,6 @@ class RulerController(LinearController):
                 return 1
             elif abs(rad - math.pi) < margin:
                 return -1
-           #return (rad < margin or
-           #        abs(rad - math.pi) < margin)
         return 0
 
     def snap(self, vx, vy):
@@ -83,14 +87,16 @@ class RulerController(LinearController):
         if len(self.nodes) < 2:
             self.nodes.append(RulerNode(1.0))
 
-    def _shading_contents(self, cr, tdw, mode):
+    def _shading_contents(self, cr, tdw, level_status):
         """Shade ruler contents.
 
-        :param mode: binary flag, Which tells the ruler is level or not.
+        :param level_status: RulerController constants.
         """
         cr.save()
-        if mode:
+        if level_status == self.LEVEL:
             cr.set_source_rgb(*self._level_color) 
+        elif level_status == self.ROUGH_LEVEL:
+            cr.set_source_rgb(*self._level_color_rough) 
         else:
             cr.set_source_rgb(1.0, 1.0, 1.0) 
         cr.stroke()

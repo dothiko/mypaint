@@ -54,6 +54,8 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
 
     _initial_cursor = None
     _level_margin = 0.005 # in radian, practical value.
+    _level_margin_rough = 0.03 # in radian, practical value.
+    # 'rough' margin is to activate 'snap level' button.
 
     ## Class variables
 
@@ -378,19 +380,39 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
         self.queue_draw_ui(None)
 
     def is_level_or_cross(self):
+        """Return constant value to tell whether
+        the ruler for this class is level (or cross)
+        in rough or (mostly) precise.
+
+        :return: RulerController constants.
+                 When the ruler is roughly level,
+                 return RulerController.ROUGH_LEVEL
+                 ruler is precisely level
+                 return RulerController.LEVEL
+                 otherwise,
+                 return RulerController.NOT_LEVEL 
+        """
         if self._ruler.is_ready():
             vx, vy = self._ruler.identity_vector
             lx, ly = self._level_vector
-            margin = self._level_margin
+            margin = self._level_margin_rough
             
-            return (self._ruler.is_level(lx, ly, margin) or 
-                        self._ruler.is_level(ly, -lx, margin))
-        return False
+            # crossed vector is (ly, -lx),
+            # not just exchanged values.
+            if (self._ruler.is_level(lx, ly, margin) 
+                    or self._ruler.is_level(ly, -lx, margin)):
+                margin = self._level_margin
+                if (self._ruler.is_level(lx, ly, margin) 
+                        or self._ruler.is_level(ly, -lx, margin)):
+                    return RulerController.LEVEL
+                else:
+                    return RulerController.ROUGH_LEVEL
+        return RulerController.NOT_LEVEL
 
     def snap_ruler_to_level(self):
         if self._ruler.is_ready():
             lx, ly = self._level_vector
-            margin = self._level_margin
+            margin = self._level_margin_rough
 
             ans = self._ruler.is_level(lx, ly, margin)
 
@@ -482,4 +504,6 @@ class _Overlay_Parallel(gui.overlays.Overlay):
                     mode._phase in (_Phase.SET_BASE, 
                                     _Phase.SET_DEST)):
                 ruler.paint(cr, tdw, mode.is_level_or_cross())
+                # ruler level indicator color is defined at
+                # gui/rulercontroller.py
 
