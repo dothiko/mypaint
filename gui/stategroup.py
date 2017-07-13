@@ -206,6 +206,10 @@ class State (object):
         # Thus, We need to check both of them here.
         if (duration_time < self.max_key_hit_duration and
                 duration_time < self.autoleave_timeout):
+            logger.info(
+                'Leaving not calling %s',
+                self.on_leave.__name__,
+            )
             pass  # accept as one-time hit
         else:
             if self._outside_popup_timeout_id:
