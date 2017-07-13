@@ -549,15 +549,6 @@ class BezierMode (PressureEditableMixin,
 
 
     def _start_new_capture_phase(self, rollback=False):
-        if rollback:
-            pass
-        else:
-            if not self._stroke_from_history:
-                # This MUST be called prior to supercall.
-                # because current stroke data will be erased 
-                # at that method.
-                self.stroke_history.register(self.nodes)
-
         super(BezierMode, self)._start_new_capture_phase(rollback)
         self._stroke_from_history = False
         self.options_presenter.reset_stroke_history()
@@ -1175,6 +1166,7 @@ class BezierMode (PressureEditableMixin,
     def accept_button_cb(self, tdw):
         if (len(self.nodes) > 1):
             self._queue_redraw_item(BezierMode.FINAL_STEP) # Redraw with hi-fidely curve
+            self.stroke_history.register(self.nodes)
             self._start_new_capture_phase(rollback=False)
 
     def reject_button_cb(self, tdw):

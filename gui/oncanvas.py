@@ -1737,36 +1737,42 @@ class OverlayOncanvasMixin(gui.overlays.Overlay):
 
 class StrokeHistory(object):
     """ Stroke History class.this is singleton,stored as 
-    class attribute of RecallableNodeMixin
+    class attribute of RecallableNodeMixin.
+
+    This class HAS a Gtk.ListStore.This class itself is not
+    derived class of Gtk.ListStore.
     """
     def __init__(self, maxcount):
         self._max = maxcount
-        self._nodes = Gtk.ListStore(str,object)
-        self._nodes.append( ('------', None) )
+        self._node_store = Gtk.ListStore(str,object)
+        self._node_store.append( ('------', None) )
         
     def register(self, nodes):
         lt = time.localtime()
         timestr = '%02d:%02d:%02d-%d' % (lt.tm_hour, lt.tm_min,
                 lt.tm_sec, len(nodes))
-        self._nodes.insert(1, (timestr, nodes))
-        if len(self._nodes) > self._max:
-            del self._nodes[self._max - 1]
+        self._node_store.insert(1, (timestr, nodes))
+        if len(self._node_store) > self._max:
+            del self._node_store[self._max - 1]
 
     @property
     def liststore(self):
-        return self._nodes
+        return self._node_store
 
     def get_and_place_nodes(self, idx, x, y):
-        """ generate a copy of stroke and
-        'place' (move) it to (x,y)
+        """ Generate a copy of stroke from internal list 
+        And place/move it to assigned location(x,y),if needed.
+        This method would be called from RecallableNodeMixin.
 
         :param idx: the REVERSED index(most recent one is 0) of nodes.
+        :param x,y: replacing location.this might be None.
         """
-        assert 1 <= idx < len(self._nodes)
-        src = self._nodes[idx][1]
+        assert 1 <= idx < len(self._node_store)
+        src = self._node_store[idx][1]
+        assert len(src) > 0
 
         fn = src[0] 
-        if x != None and y != None:
+        if x is not None and y is not None:
             x = -fn.x + x
             y = -fn.y + y
         else:
@@ -1793,16 +1799,19 @@ class RecallableNodeMixin(object):
     we can recall node and re-edit it from that records.
     """
 
-    stroke_history = StrokeHistory(6) # stroke history
-
+    stroke_history = StrokeHistory(6) # Stroke history.
+                                      # This is class attribute, 
+                                      # to save memory.
     def _init_recall(self):
         self._stroke_from_history = False
 
     def recall_nodes(self, idx):
-        """ recall nodes from history
+        """ Recall editing nodes from history
 
-        CAUTION: this method reset the user class phase
+        CAUTION: This method reset the user class phase
         into PhaseMixin.ADJUST.
+
+        :param idx: The index of liststore item.
         """
         if 0 < idx < len(self.stroke_history.liststore):
             self._queue_draw_buttons()
