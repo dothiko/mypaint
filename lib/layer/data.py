@@ -241,10 +241,11 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         # Postprocess for project loading
         if 'project' in kwargs:
             # Ensure self._filename is relative path
+            self._unique_id = attrs.get(self.ORA_LAYERID_ATTR, None)
+
             if os.path.isabs(src):
                 src = os.path.relpath(oradir, src)
             self._filename = src
-            self._unique_id = attrs.get(self.ORA_LAYERID_ATTR, None)
 
     def _load_surface_from_oradir_member(self, oradir, cache_dir,
                                          src, feedback_cb, x, y):
@@ -1210,6 +1211,17 @@ class BackgroundLayer (SurfaceBackedLayer):
         """Snapshots the state of the layer, for undo purposes"""
         return BackgroundLayerSnapshot(self)
 
+    def init_unique_id(self, id):
+        """ Clear filename and uuid information.
+        This is for project-save/load functionality.
+        Background layer might be reused between
+        multiple document. If uuid is remained as
+        old document, it might cause inconsistency error
+        at saving the document.
+        """
+        self._unique_id = id
+        if hasattr(self, '_filename'):
+            del self._filename
 
 class BackgroundLayerSnapshot (core.LayerBaseSnapshot):
     """Snapshot of a root layer stack's state"""

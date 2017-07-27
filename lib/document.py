@@ -1391,10 +1391,12 @@ class Document (object):
         ``save_*()`` method is chosen to perform the save.
         """
         self.sync_pending_changes()
-        junk, ext = os.path.splitext(filename)
-        ext = ext.lower().replace('.', '')
-        if ext == '':
+       #if ext == '':
+        if self.is_project or 'project' in kwargs and kwargs['project']:
             ext = 'project'  # Incoming filename is directory name.
+        else:
+            junk, ext = os.path.splitext(filename)
+            ext = ext.lower().replace('.', '')
 
         save = getattr(self, 'save_' + ext, self._unsupported)
         result = None
@@ -1861,8 +1863,8 @@ class Document (object):
                 logger.info("copy save of project is initiated.")
 
                 dirname_src = kwargs['source_dir']
-                                
-                for path, cl in self.layer_stack.walk():
+
+                def copy_single_layer(cl):
                     if hasattr(cl, 'enum_filenames'):
                         if not cl.project_dirty:
                             for cfname in cl.enum_filenames():
@@ -1875,6 +1877,19 @@ class Document (object):
                         else:
                             logger.info('%s has marked as dirty,so not copied', 
                                         cl.name)
+                    else:
+                        logger.info(
+                            '%s has no enum_filenames method,so not copied', 
+                            cl.name
+                        )
+
+                
+                # Background layer is not included walk generator.
+                # so copy it here.
+                copy_single_layer(self.layer_stack.background_layer)
+                                
+                for path, cl in self.layer_stack.walk():
+                    copy_single_layer(cl)
 
                 # fallthrough.
 

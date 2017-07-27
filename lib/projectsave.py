@@ -22,7 +22,7 @@
 # basically, project-save functionality for layer classes are
 # implemented as Mixin(Projectsaveable). 
 # But some codes are added to existing methods,
-# such as load_from_openraster_dir()
+# such as load_from_openraster_dir() of some layer classes.
 
 
 # ABOUT VERSION BACKUP:
@@ -43,6 +43,11 @@
 # 6. if another project-save action triggered before queued task end, 
 #    mypaint would flush all queued tasks before new project-save executed, 
 #    so no problem.
+#
+# ABOUT PROJECT LOADING:
+#
+# To load a project-saved document from dirctory, Mypaint just open the
+# stack.xml file from that directory.
 
 from __future__ import absolute_import
 
@@ -177,6 +182,9 @@ class Projectsaveable(lib.autosave.Autosaveable):
     def unique_id(self):
         """This property is ORA_LAYERID_ATTR('mypaint:layer-id') 
         attribute of XML attr element.
+
+        FYI, BackgroundLayer has special method(init_unique_id) 
+        to clear the both of _unique_id and _filename attributes.
         """
         if not hasattr(self, '_unique_id') or self._unique_id == None:
             self._unique_id = str(uuid.uuid4())

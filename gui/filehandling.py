@@ -944,6 +944,7 @@ class FileHandler (object):
                     
                 else:
                     #+ this is for 'project' save.
+                    #  This lines would call self.save_file
                     filename = name   
                     if export:
                         # Do not change working file
@@ -1335,15 +1336,17 @@ class FileHandler (object):
                 
 
         if ext != "":
-            # This means 'export as project directory'
-            # but... we have nothing to do for this. for now.
+            # Current extension(document type) is not empty - 
+            # This means 'export current document as project directory'
             self.save_as_dialog(
                 self.save_file, 
                 start_in_folder=current_dirname,
                 project=True,
                 init_project=True)
-            # export flag is for exporting other filetype.
-            # exporting as directory is not for this flag.
+            # Usually save_as_dialog method uses export parameter for exporting 
+            # current document to another filetype.
+            # but, exporting as another project does not require any
+            # exporting functionality, so we do not use export flag here.
         else:
             # This means 'save a project into another directory (copy project)'
             self.save_as_dialog(

@@ -1990,10 +1990,12 @@ class RootLayerStack (group.LayerStack):
                 self._no_background = False
 
                 if 'project' in kwargs:
-                    self._background_layer._unique_id = attrs.get(
+                    self._background_layer.init_unique_id(
+                        attrs.get(
                             Projectsaveable.ORA_LAYERID_ATTR, 
                             None
-                            )
+                        )
+                    )
                 return
             except tiledsurface.BackgroundError as e:
                 logger.warning('ORA background tile not usable: %r', e)
@@ -2031,11 +2033,7 @@ class RootLayerStack (group.LayerStack):
     def save_to_project(self, projdir, path, canvas_bbox,
                            frame_bbox, force_write, **kwargs):
         """Saves the stack's data into an project directory"""
-        stack_elem = super(RootLayerStack, self).save_to_project(
-            projdir, path, canvas_bbox,
-            frame_bbox, force_write, **kwargs
-        )
-        # Save background
+        # First of all, save background.
         bg_layer = self.background_layer
         bg_layer.initially_selected = False
         bg_path = (len(self),)
@@ -2045,6 +2043,12 @@ class RootLayerStack (group.LayerStack):
             force_write,
             **kwargs
         )
+        # Then, save child layers.
+        stack_elem = super(RootLayerStack, self).save_to_project(
+            projdir, path, canvas_bbox,
+            frame_bbox, force_write, **kwargs
+        )
+        # Finally, append bg element into stack element.
         stack_elem.append(bg_elem)
         return stack_elem
 
