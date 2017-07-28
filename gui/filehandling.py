@@ -1385,6 +1385,13 @@ class FileHandler (object):
                 u"Current document is not project,you cannot revert it.",
             ))
 
+    @property
+    def recent_project_path(self):
+        return os.path.join(
+                self.app.state_dirs.user_data,
+                'recent_projects.json'
+               )
+
     def open_recent_project_cb(self, action):
         filepath = self.recent_projects_info[action.id]
         self.open_file(filepath)
@@ -1408,31 +1415,19 @@ class FileHandler (object):
         (or,create filetype such as '.project' as a placeholder file?)
         """
 
-        # loading recent project info(if exists)
-        recent_project_path = os.path.join(
-                self.app.state_dirs.user_data,
-                'recent_projects.txt')
+        import json
+        jsonfile_path = self.recent_project_path
 
+        self.PROJECT_RECENT_MAX = 5
         self.recent_projects_info = []
-        if os.path.exists(recent_project_path):
-            with open(recent_project_path, 'rt') as ifp:
-                for curdir in ifp.read().strip().split('\n'):
-                    if (os.path.exists(curdir) and 
-                            os.path.isdir(curdir) and
-                            os.path.exists(os.path.join(curdir,'stack.xml'))):
-                        self.recent_projects_info.append(
-                                curdir.decode('utf-8'))
-                    else:
-                        logger.info(
-                                'recent dir %s does not match.so rejected.' % 
-                                curdir)
+        self.project_recent_menus = []
+        self._recent_project_changed = False
 
         menu_or.set_visible(True)
         menu_sub = Gtk.Menu()
         menu_sub.set_visible(True)
-        self.PROJECT_RECENT_MAX = 5
-        self.project_recent_menus = []
 
+        # Creating empty menus. These should be updated later.
         for i in range(self.PROJECT_RECENT_MAX):
             cmenu = Gtk.MenuItem() 
             cmenu.id = i
@@ -1443,7 +1438,23 @@ class FileHandler (object):
         menu_or.set_submenu(menu_sub)
         self.menu_sub = menu_sub
 
+        # Load and validate recent project directories.
+        # That directory might be broken by file operations of other program.
+        if os.path.exists(jsonfile_path):
+            with open(jsonfile_path, 'rt') as ifp:
+                for cdir in json.load(ifp):
+                    if (os.path.exists(cdir) 
+                            and os.path.isdir(cdir)
+                            and os.path.exists(os.path.join(cdir,'stack.xml'))):
+                        self.recent_projects_info.append(cdir)
+                    else:
+                        logger.info(
+                                'recent dir %s does not match.so rejected.' % 
+                                cdir)
+                    if len(self.recent_projects_info) >= self.PROJECT_RECENT_MAX:
+                        break
 
+        # Update recent projects.
         self._refresh_recent_project_menu()
 
     def _refresh_recent_project_menu(self):
@@ -1457,34 +1468,30 @@ class FileHandler (object):
                 cmenu.set_visible(False)
 
     def register_recent_project(self, projectpath):
+        assert projectpath is not None
+        assert os.path.exists(projectpath)
         if len(self.recent_projects_info) == 0:
             self.recent_projects_info.append(projectpath)
+        elif self.recent_projects_info[0] == projectpath:
+            return
         else:
-            if (projectpath in self.recent_projects_info and
-                    self.recent_projects_info[0] != projectpath):
+            if projectpath in self.recent_projects_info:
                 self.recent_projects_info.remove(projectpath)
+            self.recent_projects_info.insert(0,projectpath)
 
-            if (self.recent_projects_info[0] != projectpath):
-                self.recent_projects_info.insert(0,projectpath)
-
+        self._recent_project_changed = True
         self._refresh_recent_project_menu()
 
     def write_recent_project_info(self):
         """
-        Write Recent Projects information.
+        Write Recent Projects information, only when it is updated.
+        In many case,we only work with current active(top) project.
+        To minimize file writing(to save SSD lifespan), avoid writing
+        in such case.
         """
-        recent_project_path = os.path.join(
-                self.app.state_dirs.user_data,
-                'recent_projects.txt')
-
-        with open(recent_project_path, 'w') as ifp:
-            try:
-                for i, cdir in enumerate(self.recent_projects_info):
-                    ifp.write(cdir) 
-                    ifp.write('\n') 
-            except Exception,e:
-                print("********** [CHANCE TO DEBUG!!] ***************")
-                print(str(e))
-                print(type(cdir))
-                print(i)
+        if self._recent_project_changed:
+            jsonfile_path = self.recent_project_path
+            import json
+            with open(jsonfile_path, 'w') as ofp:
+                json.dump(self.recent_projects_info, ofp)
 
