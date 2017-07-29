@@ -1391,12 +1391,15 @@ class Document (object):
         ``save_*()`` method is chosen to perform the save.
         """
         self.sync_pending_changes()
-       #if ext == '':
-        if self.is_project or 'project' in kwargs and kwargs['project']:
-            ext = 'project'  # Incoming filename is directory name.
+
+        if 'project' in kwargs and kwargs['project']:
+            # Project-save should have 'project' kwarg.
+            # And that valus should be True.
+            ext = 'project'  
         else:
             junk, ext = os.path.splitext(filename)
             ext = ext.lower().replace('.', '')
+            assert ext != "" # To detect older project code bug
 
         save = getattr(self, 'save_' + ext, self._unsupported)
         result = None

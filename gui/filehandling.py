@@ -840,7 +840,7 @@ class FileHandler (object):
         if not self.filename:
             self.save_as_cb(action)
         else:
-            self.save_file(self.filename)
+            self.save_file(self.filename, project=self.doc.model.is_project)
 
     def save_as_cb(self, action):
         if self.filename:
@@ -858,7 +858,10 @@ class FileHandler (object):
 
         if action.get_name() == 'Export':
             # Do not change working file
-            self.save_as_dialog(self.save_file, suggested_filename=current_filename, export=True)
+            self.save_as_dialog(self.save_file, 
+                                suggested_filename=current_filename, 
+                                export=True,
+                                project=False)
         else:
             self.save_as_dialog(self.save_file, suggested_filename=current_filename)
 
