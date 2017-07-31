@@ -88,6 +88,9 @@ _ORA_FRAME_ACTIVE_ATTR \
 _ORA_UNSAVED_PAINTING_TIME_ATTR \
     = "{%s}unsaved-painting-time" % (lib.xml.OPENRASTER_MYPAINT_NS,)
 
+_ORA_FRAME_BBOX_ATTR \
+    = "{%s}frame-bbox" % (lib.xml.OPENRASTER_MYPAINT_NS,)
+
 ## Class defs
 
 
@@ -1804,6 +1807,14 @@ class Document (object):
         )
         self.set_frame_enabled(frame_enab, user_initiated=False)
 
+        # (For project-load)
+        # Get frame bbox from xml custom attribute.
+        frame_bbox_src = image_elem.attrib.get(_ORA_FRAME_BBOX_ATTR, None),
+        if frame_bbox_src is not None:
+            frame_bbox_src = [int(x) for x in frame_bbox_src[0].split(",")]
+            assert len(frame_bbox_src) == 4
+            self.set_frame(frame_bbox_src)
+
     ## Project Related
     @property
     def is_project(self):
@@ -1904,9 +1915,11 @@ class Document (object):
             # Because if there are something drawing in layers,
             # it might change bbox, and might damage entire document.
             # (such as misplaced layers)
+
             frame_bbox = None
             if self.frame_enabled:
                 frame_bbox = tuple(self.get_frame())
+
             self._project_write(dirname, 
                     xres=self._xres if self._xres else None,
                     yres=self._yres if self._yres else None,
@@ -2067,15 +2080,25 @@ class Document (object):
 
         # Save the layer stack
         image = ET.Element('image')
-        if bbox is None:
-            bbox = data_bbox
-        x0, y0, w0, h0 = bbox
+       #if bbox is None:
+       #    bbox = data_bbox
+       #x0, y0, w0, h0 = bbox
+
+        # In project-save, frame does not have meaning except
+        # for exporting image.
+        # And, make matters worse, frame affects saving 
+        # dirty layers dimension but non dirty layers
+        # are remained as unchanged, so those dirty layers might 
+        # be misplaced after next time project loading.
+        # Therefore, frame must be ignored in project save.
+        x0, y0, w0, h0 = data_bbox
         image.attrib['w'] = str(w0)
         image.attrib['h'] = str(h0)
         root_stack_path = ()
         root_stack_elem = root_stack.save_to_project(
             dirname, root_stack_path,
-            data_bbox, bbox, force_write, 
+           #data_bbox, bbox, force_write, 
+            data_bbox, data_bbox, force_write, 
             **kwargs
         )
         image.append(root_stack_elem)
@@ -2083,6 +2106,11 @@ class Document (object):
         # Frame-enabled state
         frame_active_value = ("true" if frame_active else "false")
         image.attrib[_ORA_FRAME_ACTIVE_ATTR] = frame_active_value
+
+        if frame_active and bbox is not None:
+            # Frame is completely ignored for project-save, 
+            # so we need to save frame bbox as xml custom attribute.
+            image.attrib[_ORA_FRAME_BBOX_ATTR] = "%d,%d,%d,%d" % bbox 
 
         # Resolution info
         if xres and yres:
