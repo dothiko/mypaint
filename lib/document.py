@@ -2122,7 +2122,7 @@ class Document (object):
         image.attrib["version"] = lib.xml.OPENRASTER_VERSION
 
         # Thumbnail preview (256x256)
-        thumbnail = root_stack.render_thumbnail(bbox)
+        thumbnail = root_stack.render_thumbnail(data_bbox)
         lib.pixbuf.save(thumbnail, 
                 os.path.join(dirname, 'Thumbnails' , 'thumbnail.png'),
                 'png')
