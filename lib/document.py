@@ -1809,9 +1809,9 @@ class Document (object):
 
         # (For project-load)
         # Get frame bbox from xml custom attribute.
-        frame_bbox_src = image_elem.attrib.get(_ORA_FRAME_BBOX_ATTR, None),
+        frame_bbox_src = image_elem.attrib.get(_ORA_FRAME_BBOX_ATTR, None)
         if frame_bbox_src is not None:
-            frame_bbox_src = [int(x) for x in frame_bbox_src[0].split(",")]
+            frame_bbox_src = [int(x) for x in frame_bbox_src.split(",")]
             assert len(frame_bbox_src) == 4
             self.set_frame(frame_bbox_src)
 
@@ -2080,18 +2080,17 @@ class Document (object):
 
         # Save the layer stack
         image = ET.Element('image')
-       #if bbox is None:
-       #    bbox = data_bbox
-       #x0, y0, w0, h0 = bbox
 
         # In project-save, frame does not have meaning except
         # for exporting image.
-        # And, make matters worse, frame affects saving 
+        # Furthermore, make matters worse, frame affects saving 
         # dirty layers dimension but non dirty layers
-        # are remained as unchanged, so those dirty layers might 
-        # be misplaced after next time project loading.
-        # Therefore, frame must be ignored in project save.
+        # are remained as unchanged, so some layers might 
+        # be misplaced after next time of project loading.
+        # Therefore, frame must be ignored(i.e. always use data_bbox
+        # instead of frame bbox) in project save.
         x0, y0, w0, h0 = data_bbox
+
         image.attrib['w'] = str(w0)
         image.attrib['h'] = str(h0)
         root_stack_path = ()
@@ -2109,8 +2108,10 @@ class Document (object):
 
         if frame_active and bbox is not None:
             # Frame is completely ignored for project-save, 
-            # so we need to save frame bbox as xml custom attribute.
-            image.attrib[_ORA_FRAME_BBOX_ATTR] = "%d,%d,%d,%d" % bbox 
+            # so we need to record frame bbox as xml custom attribute.
+            bx, by, bw, bh = bbox
+            image.attrib[_ORA_FRAME_BBOX_ATTR] = \
+                "%d,%d,%d,%d" % (bx-x0, by-y0, bw, bh)
 
         # Resolution info
         if xres and yres:
