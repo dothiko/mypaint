@@ -503,10 +503,6 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         Internal: saves a rectangle of the surface to a project dir
 
         :rtype ET.element: xml element which represents of this layer.
-
-        CAUTION: THIS METHOD CLEARS project_dirty FLAG!!
-                 So you might need to reserve the flag 
-                 before call this method, under some circumstances. 
         """
         is_dirty = (self.project_dirty or force_write)
 
