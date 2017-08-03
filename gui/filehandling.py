@@ -1295,11 +1295,14 @@ class FileHandler (object):
         file_chooser.set_preview_widget_active(False)
 
     def open_project_cb(self, action):
+        old_filename = self.filename
         self._open_internal(Gtk.FileChooserAction.SELECT_FOLDER,
                 self.update_project_preview_cb,
                 None)
 
-        self.register_recent_project(self.filename)
+        if self.filename != old_filename:
+            # new Project opened successfully.
+            self.register_recent_project(self.filename)
 
     def save_current_project_cb(self, action):
         if self.doc.model.is_project == False:
