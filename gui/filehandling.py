@@ -580,7 +580,7 @@ class FileHandler (object):
             self.filename = os.path.abspath(filename)
             self.register_recent_project(self.filename)
             # As project, recent file management is inappropriate,for now
-            return 
+            return
 
         if not os.path.isfile(filename):  # failed to save
             return
@@ -721,8 +721,6 @@ class FileHandler (object):
                 #TODO display "no preview available" image?
                 file_chooser.set_preview_widget_active(False)
 
-    
-                
     def get_open_dialog(self, filename=None, start_in_folder=None, file_filters=[]):
         dialog = Gtk.FileChooserDialog(
             _("Open..."),
@@ -765,7 +763,9 @@ class FileHandler (object):
                 u"Open File",
             ),
             parent = self.app.drawWindow,
-           #action = Gtk.FileChooserAction.OPEN,
+            # XXX Changed for project-save:
+            # Use param 'action'
+            # instead of Gtk.FileChooserAction.OPEN,
             action = dialog_action,
             buttons = [
                 Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
@@ -774,9 +774,13 @@ class FileHandler (object):
         )
         dialog.set_default_response(Gtk.ResponseType.OK)
 
-        preview = Gtk.Image()
-        dialog.set_preview_widget(preview)
-        dialog.connect("update-preview", self.update_preview_cb, preview)
+        # XXX Changed for project-save:
+        # To assign specific preview callback for project-save,
+        # use preview_cb parameter instead of self.update_preview_cb
+        if preview_cb:
+            preview = Gtk.Image()
+            dialog.set_preview_widget(preview)
+            dialog.connect("update-preview", preview_cb, preview)
 
         if filters:
             _add_filters_to_dialog(self.file_filters, dialog)
@@ -858,8 +862,8 @@ class FileHandler (object):
 
         if action.get_name() == 'Export':
             # Do not change working file
-            self.save_as_dialog(self.save_file, 
-                                suggested_filename=current_filename, 
+            self.save_as_dialog(self.save_file,
+                                suggested_filename=current_filename,
                                 export=True,
                                 project=False)
         else:
@@ -875,7 +879,7 @@ class FileHandler (object):
                 prefix=prefix[:-len(number[0])]
             self.save_autoincrement_file(None, prefix+"_", main_doc=True, ext=ext)
 
-                    
+
     def save_scratchpad_as_dialog(self, export=False):
         if self.app.scratchpad_filename:
             current_filename = self.app.scratchpad_filename
@@ -883,13 +887,13 @@ class FileHandler (object):
             current_filename = ''
 
         self.save_as_dialog(self.save_scratchpad, suggested_filename=current_filename, export=export)
-        
+
     def save_as_dialog(self, save_method_reference, suggested_filename=None, start_in_folder=None, export=False, **options):
-        
+
         if not self.save_dialog:
             self.save_dialog = self.init_save_dialog(export)
         dialog = self.save_dialog
-                   
+
         # Set the filename in the dialog
         if suggested_filename:
             _dialog_set_filename(dialog, suggested_filename)
@@ -921,7 +925,7 @@ class FileHandler (object):
                                 saveformat = default_saveformat
                         else:
                             saveformat = default_saveformat
-                            
+
                     # if saveformat isn't a key, it must be SAVE_FORMAT_PNGAUTO.
                     desc, ext_format, options = self.saveformats.get(saveformat,
                         ("", ext, {'alpha': None}))
@@ -941,24 +945,24 @@ class FileHandler (object):
                         else:
                             save_method_reference(filename, **options)
                         break
-                    
+
                     ## If we get extension successfully,loop end above 'break'
                     ## Otherwise,fall-through
-                    
+
                 else:
                     #+ this is for 'project' save.
                     #  This lines would call self.save_file
-                    filename = name   
+                    filename = name
                     if export:
                         # Do not change working file
                         save_method_reference(filename, True, **options)
                     else:
                         save_method_reference(filename, **options)
                     break
-                     
-                     
+
+
                 filename = name + ext_format
-                
+
                 # trigger overwrite confirmation for the modified filename
                 _dialog_set_filename(dialog, filename)
                 dialog.response(Gtk.ResponseType.OK)
@@ -968,7 +972,7 @@ class FileHandler (object):
             dialog.destroy()  # avoid GTK crash: https://gna.org/bugs/?17902
             self.save_dialog = None
 
-            
+
     def save_scrap_cb(self, action):
         filename = self.filename
         prefix = self.get_scrap_prefix()
@@ -1024,8 +1028,8 @@ class FileHandler (object):
                 if number > maximum:
                     maximum = number
             if ext:
-                # I think no need for trailing character for version-save 
-                filename = '%s%03d' % (prefix, maximum+1) 
+                # I think no need for trailing character for version-save
+                filename = '%s%03d' % (prefix, maximum+1)
             else:
                 filename = '%s%03d_a' % (prefix, maximum+1)
 
@@ -1281,15 +1285,23 @@ class FileHandler (object):
         """
         filename = file_chooser.get_preview_filename()
         if filename:
-            thumbname = os.path.join(filename,'Thumbnails','thumbnail.png').decode('utf-8')
-            if os.path.exists(thumbname):
+            thumbname = os.path.join(
+                            filename,
+                            'Thumbnails',
+                            'thumbnail.png'
+                        ).decode('utf-8')
+            xmlname = os.path.join(filename,'stack.xml').decode('utf-8')
+            # Both of thumbnail.png and stack.xml exists,
+            # it should be project dir.
+            if os.path.exists(thumbname) and os.path.exists(xmlname):
+                # XXX Almost copied from update_preview_cb
                 pixbuf = helpers.freedesktop_thumbnail(thumbname)
                 if pixbuf:
-                    # if pixbuf is smaller than 256px in width, copy it onto a transparent 256x256 pixbuf
                     pixbuf = helpers.pixbuf_thumbnail(pixbuf, 256, 256, True)
                     preview.set_from_pixbuf(pixbuf)
                     file_chooser.set_preview_widget_active(True)
                     return
+            # Fallthrough
 
         #TODO display "no preview available" image?
         file_chooser.set_preview_widget_active(False)
@@ -1312,7 +1324,7 @@ class FileHandler (object):
 
 
     def save_as_project_cb(self, action):
-        
+
         if self.filename:
             current_dirname = os.path.dirname(self.filename)
         else:
@@ -1326,7 +1338,7 @@ class FileHandler (object):
                 if os.path.isdir(dn):
                     current_dirname = dn
                     break
-                    
+
         # With creating save dialog prior to self.save_as_dialog(),
         # we can use customized version of dialog.
         # this dialog should be destoroyed in self.save_as_dialog().
@@ -1339,24 +1351,24 @@ class FileHandler (object):
             junk, ext = os.path.splitext(self.filename)
         else:
             ext = ''
-                
+
 
         if ext != "":
-            # Current extension(document type) is not empty - 
+            # Current extension(document type) is not empty -
             # This means 'export current document as project directory'
             self.save_as_dialog(
-                self.save_file, 
+                self.save_file,
                 start_in_folder=current_dirname,
                 project=True,
                 init_project=True)
-            # Usually save_as_dialog method uses export parameter for exporting 
+            # Usually save_as_dialog method uses export parameter for exporting
             # current document to another filetype.
             # but, exporting as another project does not require any
             # exporting functionality, so we do not use export flag here.
         else:
             # This means 'save a project into another directory (copy project)'
             self.save_as_dialog(
-                self.save_file, 
+                self.save_file,
                 start_in_folder=current_dirname,
                 project=True, source_dir=self.filename)
 
@@ -1369,7 +1381,7 @@ class FileHandler (object):
 
         # new_version saving use kwargs of "backup_dir",
         # when this kwarg exists, self.save_file()->_save_doc_to_file()->
-        # doc.model.save()->doc.model.save_project() 
+        # doc.model.save()->doc.model.save_project()
         # should trigger backupping.
 
     def manage_project_cb(self, action):
@@ -1384,7 +1396,7 @@ class FileHandler (object):
             # revert button pressed, self.doc.model.load_project
             # with special kwargs is executed in manager,
             # and manager window disappear.
-            
+
         else:
             self.app.show_transient_message(C_(
                 "file handling: manage project failed (statusbar)",
@@ -1408,13 +1420,13 @@ class FileHandler (object):
         'recent directory list'.
 
         THIS IS PROVISIONAL METHOD.
-        This method created for to separete initializing codes from __init__() 
+        This method created for to separete initializing codes from __init__()
         and to ease maintainance.
         project-save functionality might change drastically, so we need this
         method.
 
         Currently Project-save use its own 'recent directory list'.
-        Ideally we should use GTK recent file list to project-save too, 
+        Ideally we should use GTK recent file list to project-save too,
         just same as ordinary MRUs.
         but it seems that GTK cannot accept a directory to 'recent file list'.
         If there is more resonable way in GTK,these codes should be changed.
@@ -1435,7 +1447,7 @@ class FileHandler (object):
 
         # Creating empty menus. These should be updated later.
         for i in range(self.PROJECT_RECENT_MAX):
-            cmenu = Gtk.MenuItem() 
+            cmenu = Gtk.MenuItem()
             cmenu.id = i
             cmenu.connect('activate', self.open_recent_project_cb)
             cmenu.set_visible(False)
@@ -1449,13 +1461,13 @@ class FileHandler (object):
         if os.path.exists(jsonfile_path):
             with open(jsonfile_path, 'rt') as ifp:
                 for cdir in json.load(ifp):
-                    if (os.path.exists(cdir) 
+                    if (os.path.exists(cdir)
                             and os.path.isdir(cdir)
                             and os.path.exists(os.path.join(cdir,'stack.xml'))):
                         self.recent_projects_info.append(cdir)
                     else:
                         logger.info(
-                                'recent dir %s does not match.so rejected.' % 
+                                'recent dir %s does not match.so rejected.' %
                                 cdir)
                     if len(self.recent_projects_info) >= self.PROJECT_RECENT_MAX:
                         break
