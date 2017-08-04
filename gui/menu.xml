@@ -265,6 +265,7 @@
       <separator/>
       <menuitem action='MergeLayerDown'/>
       <menuitem action='MergeLayerDownOpaque'/>
+      <menuitem action='CutLayerDown'/>
       <menuitem action='MergeVisibleLayers'/>
       <menuitem action='NewLayerMergedFromVisible'/>
       <menuitem action='NormalizeLayerMode'/>

@@ -1228,6 +1228,25 @@ class Document (object):
         self.do(command.MergeLayerDown(self, merge_only_opaque=only_opaque))
         return True
 
+    def cut_current_layer_down(self):
+        """Cut the current layer with the transparent area of below one."""
+        rootstack = self.layer_stack
+        cur_path = rootstack.current_path
+        if cur_path is None:
+            return False
+        dst_path = rootstack.get_cut_down_target(cur_path)
+        if dst_path is None:
+            logger.info("Cut with below layer is not possible here")
+            return False
+        self.do(
+            command.CutCurrentLayer(
+                self,
+                False, # Do 'cut with transparent area'
+                (dst_path, )
+            )
+        )
+        return True
+
     def merge_visible_layers(self):
         """Merge all visible layers into one & discard originals."""
         self.do(command.MergeVisibleLayers(self))

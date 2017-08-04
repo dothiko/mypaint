@@ -538,6 +538,13 @@ Vocabulary
         </object>
       </child>
       <child>
+        <object class="GtkAction" id="CutLayerDown">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Cut Layer with Beneath</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Cut the current layer with the transparent area of beneath layer.</property>
+          <signal name="activate" handler="cut_layer_down_opaque_cb"/>
+        </object>
+      </child>
+      <child>
         <object class="GtkAction" id="MergeVisibleLayers">
           <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Merge Visible Layers</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Consolidate all visible layers, and delete the originals.</property>

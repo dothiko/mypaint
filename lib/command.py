@@ -2032,23 +2032,39 @@ class CutCurrentLayer (Command):
     """Cut current editing layer with 
     other selected layer(s) ,by using 
     lib.mypaintlib.CombineDestinationOut (= to cut with opaque area) or 
-    lib.mypaintlib.CombineDestinationin (= to cut with transparent area) 
+    lib.mypaintlib.CombineDestinationIn (= to cut with transparent area) 
     """
 
     display_name = _("Cut Current layer")
 
-    def __init__(self, doc, opaque, layerpaths,
+    def __init__(self, doc, do_opaque_cut, layerpaths,
                  **kwds):
-        assert len(layerpaths) >= 2
+        """
+        :param boolean do_opaque_cut: the flag to do 'cut with opaque area'
+                                      Otherwise, cut with transparent area.
+
+        :param list layerpaths: the list of path of other layers 
+                                to create mask area.
+                                this list MUST include the target
+                                (current) layer. Because this param
+                                intended to assign currently selected
+                                (multiple) layers by user interface.
+                                
+        """
+        assert len(layerpaths) >= 1
         super(CutCurrentLayer, self).__init__(doc, **kwds)
 
         rootstack = self.doc.layer_stack
-        self._target_path = rootstack.current_path
-        target = rootstack.deepget(self._target_path)
+        targpath = rootstack.current_path
+        self._target_path = targpath
+        target = rootstack.deepget(targpath)
         assert not isinstance(target, lib.layer.LayerStack)
 
+        if targpath in layerpaths:
+            layerpaths.remove(targpath)
+
         self._layerpaths = layerpaths
-        self._opaque_operation = opaque
+        self._do_opaque_cut = do_opaque_cut
         self._target_snapshot = None
 
     @staticmethod
@@ -2063,7 +2079,7 @@ class CutCurrentLayer (Command):
 
         lib.surface.finalize_surface(dstsurf, tiles)
 
-    def _cut_opaque(self, target_layer, cutting_layer):
+    def _cut_do_opaque_cut(self, target_layer, cutting_layer):
         CutCurrentLayer._merge(target_layer, cutting_layer,
                 lib.mypaintlib.CombineDestinationOut)
 
@@ -2090,26 +2106,27 @@ class CutCurrentLayer (Command):
         target = rootstack.deepget(self._target_path)
         self._target_snapshot = target.save_snapshot()
 
-        if not self._opaque_operation and len(self._layerpaths) > 2:
+        if not self._do_opaque_cut and len(self._layerpaths) > 2:
             _merged_layer = lib.layer.PaintingLayer(name='')
 
+        # 'Cut with opaque area' can be done with each selected layers.
+        # But 'Cut with transparent area' needed combined final
+        # result of selected layers to cut.
         for path in self._layerpaths:
             layer = rootstack.deepget(path)
-            if layer != target:
-                if isinstance(layer, lib.layer.LayerStack):
-                    layer = rootstack.layer_new_normalized(path)
+            assert layer != target
+            if isinstance(layer, lib.layer.LayerStack):
+                layer = rootstack.layer_new_normalized(path)
 
-                if self._opaque_operation:
-                    self._cut_opaque(target, layer)
-                elif len(self._layerpaths) > 2:
-                    CutCurrentLayer._merge(_merged_layer, layer,
-                            lib.mypaintlib.CombineNormal)
-                elif len(self._layerpaths) == 2:
-                    _merged_layer = layer
-                else:
-                    raise NotImplementedError("Unknown case for cut layer")
+            if self._do_opaque_cut:
+                self._cut_do_opaque_cut(target, layer)
+            elif len(self._layerpaths) > 1:
+                CutCurrentLayer._merge(_merged_layer, layer,
+                        lib.mypaintlib.CombineNormal)
+            else:
+                _merged_layer = layer
 
-        if not self._opaque_operation:
+        if not self._do_opaque_cut:
             assert _merged_layer != None
             self._cut_transparent(target, _merged_layer)
             _merged_layer = None
@@ -2178,4 +2195,5 @@ class GrabcutAddLayer(Command):
 
         layers.set_current_path(self._prev_currentlayer_path)
         self._prev_currentlayer_path = None
+
 

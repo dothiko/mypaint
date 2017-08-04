@@ -1652,6 +1652,26 @@ class RootLayerStack (group.LayerStack):
 
         return target_path
 
+    def get_cut_down_target(self, path):
+        """Returns the target path for Cut Down, after checks
+
+        :param tuple path: Source path for the Merge Down
+        :returns: Target path for the merge, if it exists
+        :rtype: tuple (or None)
+        """
+        if not path:
+            return None
+
+        source = self.deepget(path)
+        if (source is None
+                or source.locked
+                or source.branch_locked
+                or not source.get_mode_normalizable()):
+            return None
+
+        target_path = path[:-1] + (path[-1] + 1,)
+        return target_path
+
     def layer_new_merge_down(self, path, only_opaque=False):
         """Create a new layer containg the Merge Down of two layers
 
