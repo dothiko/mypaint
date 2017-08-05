@@ -35,6 +35,8 @@
       <separator/>
       <menuitem action='CutLayerWithSelectedOpaque'/>
       <menuitem action='CutLayerWithSelectedTransparent'/>
+      <separator/>
+      <menuitem action='ClearLayerSelection'/>
     </placeholder>
     <separator/>
     <placeholder name="AdvancedListActions"/>

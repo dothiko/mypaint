@@ -1483,6 +1483,12 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             raise NotImplementedError("Unknown action %r" % action_name)
         self.layerblink_state.activate(action)
 
+    def clear_layer_selection_cb(self, action):
+        rootstack = self.model.layer_stack
+        selected_layers = rootstack.get_selected_layers()
+        if len(selected_layers) > 1:
+            self.model.clear_layer_selection(selected_layers)
+
     ## Brush settings callbacks
 
     def brush_bigger_cb(self, action):

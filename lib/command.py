@@ -2036,6 +2036,35 @@ class SetMultipleLayersLocked (Command):
         else:
             return _("Unlock Selected Layers")
 
+class ClearLayerSelection(Command):
+    """Clear selection states of multiple layers"""
+
+    display_name = _("Clear Layers Selection")
+    automatic_undo = True
+
+    def __init__(self, doc, path, **kwds):
+        assert path is not None
+        assert len(path) >= 2
+        super(ClearLayerSelection, self).__init__(doc, **kwds)
+        layers = self.doc.layer_stack
+        self.current_layer = layers.deepget(layers.get_current_path())
+        self.selected_paths = path
+
+    def redo(self):
+        layers = self.doc.layer_stack
+        layers.set_selected_layers(None, None)
+
+        idx = layers.deepindex(self.current_layer)
+        layers.set_current_path(idx)
+
+    def undo(self):
+        layers = self.doc.layer_stack
+        layers.set_selected_layers(None, None)
+        layers.set_selected_layers(self.selected_paths)
+
+        idx = layers.deepindex(self.current_layer)
+        layers.set_current_path(idx)
+
 
 class CutCurrentLayer (Command):
     """Cut current editing layer with 

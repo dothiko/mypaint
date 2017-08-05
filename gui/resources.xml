@@ -684,6 +684,13 @@ Vocabulary
           <signal name="activate" handler="cut_layer_with_selected_cb"/>
         </object>
       </child>
+      <child>
+        <object class="GtkAction" id="ClearLayerSelection">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Clear Layers Selection States.</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Clear multiple layers selection states</property>
+          <signal name="activate" handler="clear_layer_selection_cb"/>
+        </object>
+      </child>
       <!-- }}} -->
       <!-- {{{ View manipulation -->
       <child>

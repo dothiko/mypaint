@@ -948,8 +948,9 @@ class RootStackTreeView (Gtk.TreeView):
             selection.select_all()
         else:
             for cp in selected_list:
-                gp = Gtk.TreePath(cp)
-                selection.select_path(gp)
+                if not isinstance(cp, Gtk.TreePath):
+                    cp = Gtk.TreePath(cp)
+                selection.select_path(cp)
 
         return False
 

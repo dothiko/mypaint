@@ -2175,11 +2175,14 @@ class RootLayerStack (group.LayerStack):
     @event
     def multiple_layers_selected(self, selected_list):
         """Select multiple layer from the path list.
-        This notification is mainly used from gui.layers.RootStackTree
+        This notification is mainly used from
+        gui.layers.RootStackTree._multiple_layers_selected_cb
 
         :param selected_list: a list of layer paths.
+                              path is any one of tuple or string
+                              or Gtk.TreePath instance.
                               if This is empty or None,
-                              all selection is cancelled.
+                              all selection is cancelled(cleared).
         """
 
 class RootLayerStackSnapshot (group.LayerStackSnapshot):

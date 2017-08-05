@@ -1285,6 +1285,13 @@ class Document (object):
         else:
             logger.warning("cut_current_layer called for layergroup.this should not be happen.")
 
+    def clear_layer_selection(self, selected_paths=None):
+        if selected_paths is None:
+            rootstack = self.layer_stack
+            selected_paths = rootstack.get_selected_layers()
+        if selected_paths is not None and len(selected_paths) >= 2:
+            self.do(command.ClearLayerSelection(self, selected_paths))
+
     ## Layer import/export
 
     def load_layer_from_pixbuf(self, pixbuf, x=0, y=0):
