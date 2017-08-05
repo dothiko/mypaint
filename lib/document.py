@@ -315,7 +315,6 @@ class Document (object):
         # And begin in a known state
         self.clear()
 
-
     def __repr__(self):
         bbox = self.get_bbox()
         nlayers = len(list(self.layer_stack.deepenumerate()))
@@ -1357,7 +1356,6 @@ class Document (object):
         assert len(layers) >= 2
         cmd = command.SetMultipleLayersLocked(self, locked, layers)
         self.do(cmd)
-
 
     def set_current_layer_opacity(self, opacity):
         """Sets the opacity of the current layer

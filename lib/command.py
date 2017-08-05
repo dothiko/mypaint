@@ -1870,49 +1870,60 @@ class RestackMultipleLayers (Command):
 class GroupSelectedLayers(Command):
     """Group the selected layers into a new layer"""
 
-    display_name = _("Merge Selected Layers")
+    display_name = _("Group Selected Layers")
 
     def __init__(self, doc, selected_path_list, **kwds):
         super(GroupSelectedLayers, self).__init__(doc, **kwds)
-        rootstack = doc.layer_stack
         self.selected_path = selected_path_list
         self._after_group_pos = None
         self._group = None
-        self._before_pop_path = None
+        self._before_pop_info = None
 
     def _fetch_selected_layers(self):
-        """ setup internal status from self.selected_path
+        """Setup internal status from self.selected_path
+
+        CAUTION: this method cancells all selection status.
         """
         rootstack = self.doc.layer_stack
         self._first_layer_path = self.selected_path[0]
-        before_pop_path = []
+        before_pop_info = []
         after_path = []
 
+        # The RootstackTreeView(inherit from Gtk.Treeview)
+        # changes selection by doing rootstack.deeppop().
+        # It also affects visible states of layers by
+        # invoking event observer callbacks.
+        # So, instead of modifying callbacks, simply just
+        # unselect all layers before deeppop.
+        # And,select layers again at redo.
+        rootstack.set_selected_layers(None, None)
+
+        # Then, record selected(target) layers
+        # as object, not path.
         for cpath in self.selected_path:
             layer_obj = rootstack.deepget(cpath)
             self._group.append(layer_obj)
 
         # We need to re-get layer path each time
-        # because pop/remove might changes layer's path.
+        # because (deep)pop/remove changes layer's path.
         for clayer in self._group:
             layer_path = rootstack.deepindex(clayer)
-            before_pop_path.append( (layer_path, clayer) )
+            before_pop_info.append( (layer_path, clayer) )
             rootstack.deeppop(layer_path)
 
-        self._before_pop_path = sorted(before_pop_path, reverse=True)
-
+        # With doing Undo in reversed order,
+        # We can simply reconstruct current layer stack again.
+        self._before_pop_info = sorted(before_pop_info, reverse=True)
 
     def _do_insert_group(self):
-        if self._group == None:
-            self._group = lib.layer.LayerStack()
-        else:
-            self._group.clear()
+        if self._group != None:
+            del self._group
+        self._group = lib.layer.LayerStack()
 
         self._fetch_selected_layers()
         rootstack = self.doc.layer_stack
         rootstack.deepinsert(self._first_layer_path, self._group)
         self._after_group_pos = rootstack.deepindex(self._group)
-
 
     def redo(self):
         rootstack = self.doc.layer_stack
@@ -1921,13 +1932,14 @@ class GroupSelectedLayers(Command):
 
     def undo(self):
         rootstack = self.doc.layer_stack
-        group = rootstack.deeppop(self._after_group_pos)
+        junk = rootstack.deeppop(self._after_group_pos)
 
-        for before_path, layer in self._before_pop_path:
+        for before_path, layer in self._before_pop_info:
             rootstack.deepinsert(before_path, layer)
 
+        rootstack.set_selected_layers(None, None) # deselect all as first
+        rootstack.set_selected_layers(self.selected_path)
         rootstack.current_path = self._first_layer_path
-
 
 class MergeSelectedLayers (GroupSelectedLayers):
     """Merge the selected layers into a new layer"""
@@ -1936,7 +1948,6 @@ class MergeSelectedLayers (GroupSelectedLayers):
 
     def __init__(self, doc, selected_path_list, **kwds):
         super(MergeSelectedLayers, self).__init__(doc, selected_path_list, **kwds)
-        self._merged_layer = None
 
     def redo(self):
         rootstack = self.doc.layer_stack
@@ -1944,17 +1955,15 @@ class MergeSelectedLayers (GroupSelectedLayers):
         
         group_path = self._after_group_pos
         new_layer = rootstack.layer_new_normalized(group_path)
-        parent = rootstack.deepget(group_path[:-1])
         new_layer.name = _('Merged Layer')
         new_layer.name = rootstack.get_unique_name(new_layer)
+
+        parent = rootstack.deepget(group_path[:-1])
         parent[group_path[-1]] = new_layer
-        self._merged_layer = new_layer
-        self._merged_layer.autosave_dirty = True
+        new_layer.autosave_dirty = True
+        self._group = None # Already flatten
 
         rootstack.current_path = self._first_layer_path
-
-    # undo is same as GroupSelectedLayers
-
 
 class SetMultipleLayersVisibility (Command):
     """Sets the visibility status of Selected layers.

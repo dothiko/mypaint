@@ -2091,8 +2091,26 @@ class RootLayerStack (group.LayerStack):
 
     def get_selected_layers(self):
         selected_list=[]
-        self.query_selected_layers(selected_list)
+        # Actual selected layers query would be done
+        # in the event 'selected_layers_queried'
+        # which would call RootstackTreeView callback method.
+        self.selected_layers_queried(selected_list)
         return selected_list
+
+    def set_selected_layers(self, paths=None, layers=None):
+        """Set layers selection states from path or layer list.
+        :param paths: a list of path tuple. used prior to param 'layers'.
+        :param layers: a list of layer objects. used when paths is None.
+
+        If Both of paths and layers are None, all selection except for
+        current layer (of RootStackTreeView) would be cancelled.
+        """
+        if paths is None:
+            if layers is not None:
+                paths = []
+                for cl in layers:
+                    paths.append(self.deepindex(cl))
+        self.multiple_layers_selected(paths)
 
     ## Notification mechanisms
 
@@ -2146,11 +2164,23 @@ class RootLayerStack (group.LayerStack):
         """Snapshots the state of the layer, for undo purposes"""
         return RootLayerStackSnapshot(self)
 
+    ### Events for multiple layer selection
+
     @event
-    def query_selected_layers(self, selected_list):
-        """ Query currently selected layers and 
+    def selected_layers_queried(self, selected_list):
+        """Query currently selected layers and
         add/filter them into argument selected_list.
         This notification is mainly used from gui.layers.RootStackTree"""
+
+    @event
+    def multiple_layers_selected(self, selected_list):
+        """Select multiple layer from the path list.
+        This notification is mainly used from gui.layers.RootStackTree
+
+        :param selected_list: a list of layer paths.
+                              if This is empty or None,
+                              all selection is cancelled.
+        """
 
 class RootLayerStackSnapshot (group.LayerStackSnapshot):
     """Snapshot of a root layer stack's state"""

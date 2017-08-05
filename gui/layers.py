@@ -342,7 +342,8 @@ class RootStackTreeView (Gtk.TreeView):
         root.collapse_layer += self._collapse_layer_cb
         root.layer_content_changed += self._layer_content_changed_cb
         root.current_layer_solo_changed += lambda *a: self.queue_draw()
-        root.query_selected_layers += self._query_selected_layer_cb
+        root.selected_layers_queried += self._selected_layer_queried_cb
+        root.multiple_layers_selected += self._multiple_layers_selected_cb
 
         # View behaviour and appearance
         self.set_headers_visible(False)
@@ -788,15 +789,6 @@ class RootStackTreeView (Gtk.TreeView):
         self._drag_dest_path = None
         self.drag_ended()
 
-    def _query_selected_layer_cb(self, rootstack, selected_list):
-        """ to query selected layers from rootstack(lib.document.layer_stack).
-        """
-        selection = self.get_selection()
-        current = selection.get_selected_rows()
-        if current:
-            selected_list+=current[1]
-        return False
-
     ## Model compat
 
     def do_drag_data_delete(self, context):
@@ -934,6 +926,32 @@ class RootStackTreeView (Gtk.TreeView):
                     self._hover_preview_timer_cb,
                     dest_layer
                 )
+
+    def _selected_layer_queried_cb(self, rootstack, selected_list):
+        """To query selected layers from rootstack(lib.document.layer_stack).
+        """
+        selection = self.get_selection()
+        current = selection.get_selected_rows()
+        if current:
+            selected_list+=current[1]
+        return False
+
+    def _multiple_layers_selected_cb(self, rootstack, selected_list):
+        """To select layers from rootstack(lib.document.layer_stack).
+
+        :param selected_list: a list of path tuple.
+        """
+        selection = self.get_selection()
+        if (selected_list is None or len(selected_list) == 0):
+            selection.unselect_all()
+        elif selected_list == "all":
+            selection.select_all()
+        else:
+            for cp in selected_list:
+                gp = Gtk.TreePath(cp)
+                selection.select_path(gp)
+
+        return False
 
     ## Layer Alpha-lock related
     @event
