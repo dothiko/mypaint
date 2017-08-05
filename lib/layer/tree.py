@@ -2012,7 +2012,7 @@ class RootLayerStack (group.LayerStack):
                 if 'project' in kwargs:
                     self._background_layer.init_unique_id(
                         attrs.get(
-                            Projectsaveable.ORA_LAYERID_ATTR, 
+                            Projectsaveable.ORA_LAYERID_ATTR,
                             None
                         )
                     )
@@ -2111,6 +2111,22 @@ class RootLayerStack (group.LayerStack):
                 for cl in layers:
                     paths.append(self.deepindex(cl))
         self.multiple_layers_selected(paths)
+        self.multiple_layers_selection_updated()
+
+    def add_selected_layers(self, path, layer=None):
+        """Add a layer to selected layers"""
+        if path is None:
+            if layer is not None:
+                path = self.deepindex(layer)
+        self.multiple_layers_selection_added(path)
+        self.multiple_layers_selection_updated()
+
+    def remove_selected_layers(self, path, layer=None):
+        if path is None:
+            if layer is not None:
+                path = self.deepindex(layer)
+        self.multiple_layers_selection_removed(path)
+        self.multiple_layers_selection_updated()
 
     ## Notification mechanisms
 
@@ -2175,14 +2191,37 @@ class RootLayerStack (group.LayerStack):
     @event
     def multiple_layers_selected(self, selected_list):
         """Select multiple layer from the path list.
-        This notification is mainly used from
-        gui.layers.RootStackTree._multiple_layers_selected_cb
+        This event is actually not notifier, mainly used
+        to indicate to select layers from code.
+        This would call gui.layers.RootStackTree._multiple_layers_selected_cb
 
-        :param selected_list: a list of layer paths.
+        CAUTION: This method is for SELECTING multiple layers
+        from code, not for user interact notification.
+        For such purpose,
+        use multiple_layers_selection_updated event.
+
+        :param selected_list: a list of layer paths to be selected.
                               path is any one of tuple or string
                               or Gtk.TreePath instance.
-                              if This is empty or None,
+
+                              If This is empty or None,
                               all selection is cancelled(cleared).
+        """
+
+
+    @event
+    def multiple_layers_selection_added(self, path):
+        """Add a layer to current selection, with path.
+        """
+
+    @event
+    def multiple_layers_selection_removed(self, path):
+        """Remove a layer to current selection, with path.
+        """
+
+    @event
+    def multiple_layers_selection_updated(self):
+        """Notification event, to tell layer selection state changed.
         """
 
 class RootLayerStackSnapshot (group.LayerStackSnapshot):

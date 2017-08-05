@@ -440,6 +440,10 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             self._update_external_layer_edit_actions: [
                 layerstack.current_path_updated,
             ],
+            self._update_muliple_layer_select_actions: [
+                layerstack.multiple_layers_selection_updated,
+                layerstack.layer_deleted,
+            ],
         }
         for observer_method, events in observed_events.items():
             for event in events:
@@ -1173,6 +1177,17 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         app.find_action("SelectLayerAbove").set_sensitive(has_predecessor)
         app.find_action("SelectLayerBelow").set_sensitive(has_successor)
 
+    def _update_muliple_layer_select_actions(self, *_ignored):
+        """Updates the multiple layer selected actions"""
+        app = self.app
+        root = self.model.layer_stack
+        layers = root.get_selected_layers()
+        flag = False
+        if layers is not None and len(layers) >= 2:
+            flag = True
+        self.app.find_action("ClearLayerSelection").set_sensitive(flag)
+        self.app.find_action("MergeSelectedLayers").set_sensitive(flag)
+
     ## Current layer's opacity
 
     def layer_increase_opacity(self, action):
@@ -1406,6 +1421,8 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         can_merge = (current is not rootstack
                      and bool(rootstack.get_merge_down_target(current)))
         app.find_action("MergeLayerDown").set_sensitive(can_merge)
+        app.find_action("CutLayerDown").set_sensitive(can_merge)
+        app.find_action("MergeLayerDownOpaque").set_sensitive(can_merge)
 
     def duplicate_layer_cb(self, action):
         """``DuplicateLayer`` GtkAction callback: clone the current layer"""

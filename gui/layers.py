@@ -342,8 +342,13 @@ class RootStackTreeView (Gtk.TreeView):
         root.collapse_layer += self._collapse_layer_cb
         root.layer_content_changed += self._layer_content_changed_cb
         root.current_layer_solo_changed += lambda *a: self.queue_draw()
+
         root.selected_layers_queried += self._selected_layer_queried_cb
         root.multiple_layers_selected += self._multiple_layers_selected_cb
+        root.multiple_layers_selection_added += \
+                self._multiple_layers_selection_added_cb
+        root.multiple_layers_selection_removed += \
+                self._multiple_layers_selection_removed_cb
 
         # View behaviour and appearance
         self.set_headers_visible(False)
@@ -415,7 +420,7 @@ class RootStackTreeView (Gtk.TreeView):
         self.set_enable_tree_lines(True)
         self.set_expander_column(self._name_col)
 
-        # Context menu workaround 
+        # Context menu workaround
         self._context_menu_leave = False # to detect exitting context menu
 
     ## Low-level GDK event handlers
@@ -463,7 +468,7 @@ class RootStackTreeView (Gtk.TreeView):
                     continue
                 if handler(event, click_layer, click_layerpath):
                     return True
- 
+
         # Clicks that fall thru the above cause a layer change.
         if click_layerpath != self._docmodel.layer_stack.current_path:
             self._docmodel.select_layer(path=click_layerpath)
@@ -487,6 +492,7 @@ class RootStackTreeView (Gtk.TreeView):
             # this action should be cancel multiple selection,
             # only this layer should be selected.
             self.cancel_multiple_selection()
+            self._docmodel.select_layer(path=path)
         else:
             self.current_layer_rename_requested()
         return True
@@ -501,40 +507,74 @@ class RootStackTreeView (Gtk.TreeView):
         selection = self.get_selection()
         current = selection.get_selected_rows()
         if current:
-            selected = current[1]
+            junk, selected = current
         else:
             seleted = None
         rootstack = self._docmodel.layer_stack
 
+        # At here, we do not directly change the treeview selection,
+        # But use rootstack method to change layers selection
+        # states.
+        # That method would fire events at rootstack, and RootStackTreeView
+        # callback would be called again. treeview update would be done
+        # at callback.
+        # It is rather roundabout, but we can reduce codes and bug with this.
+
         if ((event.state & (Gdk.ModifierType.CONTROL_MASK |
                        Gdk.ModifierType.SHIFT_MASK)) != 0):
             # It might be Multiple selection management.
-            tpath = Gtk.TreePath(path)
+            gtkpath = Gtk.TreePath(path)
             if event.state & Gdk.ModifierType.CONTROL_MASK:
-                if tpath in selected:
+                if gtkpath in selected:
                     if rootstack.current_path != path:
-                        selection.unselect_path(tpath)
+                        rootstack.remove_selected_layers(path)
                     return True
-                selection.select_path(tpath)
+                rootstack.add_selected_layers(path)
                 return True
             elif event.state & Gdk.ModifierType.SHIFT_MASK:
                 if selected:
-                    selection.select_range(selected[0], tpath)
+                    # XXX There is a problem.
+                    # Gtk select_range algorithm might be changed
+                    # in future.
+                    # so, if we implement range selection by
+                    # our hand, it might be 'strange, not follow
+                    # gtk way' one. We might need keep updating
+                    # this codes rather meaninglessly...
+                    # Therefore, I use gtk method to select
+                    # layers here.
+                    # And call(fire) rootstack event here to
+                    # refrect selection states.
+                    # It looks not good for me,but not so bad...?
+
+                    selection.select_range(selected[0], gtkpath)
+                    result = selection.get_selected_rows()
+                    selection = None
+                    if result is not None:
+                        junk, selection = result
+                    rootstack.multiple_layers_selection_updated()
+                    self._processing_model_updates = False
                 else:
-                    selection.select_path(tpath)
+                    rootstack.add_selected_layers(path)
                 return True
 
         elif len(selected) > 1:
-            tpath = Gtk.TreePath(path)
-            if tpath in selected:
+            # Without modifier, but there are selected layers.
+            # i.e. new layer selected = old selection might be cleared.
+            gtkpath = Gtk.TreePath(path)
+            if gtkpath in selected:
                 if path != rootstack.current_path:
-                    # It is change of 'active layer' inside selected layers
-                    # but not cancel selection.
+                    # It is change of 'current(active) layer'
+                    # inside selected layers.
+                    # so, we do not clear existing selection.
                     self._docmodel.select_layer(path=path)
                     self.current_layer_changed()
                 return True # so Ignore this action for later processing
 
-        # Otherwise, handler does nothing, so return False
+        # Otherwise, this handler does nothing.
+        # new layer would be selected as single active layer,
+        # and existing layer selection would be cleared,
+        # but it would be automatically done.
+        # so return False
         return False
 
     def _handle_visible_col_click(self, event, layer, path):
@@ -572,11 +612,11 @@ class RootStackTreeView (Gtk.TreeView):
                 # because command will be issued asychronously.
                 # Methods which refer to very 'current' state of layer object
                 # is not match for this processing.
-                # 
+                #
                 # Therefore, notify clicked event to app instance
                 # via event decorator directly.
-                # 
-                # Currently, this event connected to 
+                #
+                # Currently, this event connected to
                 # app.current_layer_alphalock_changed_cb
                 # (it is connected at the constructor of lib.layerswindow.LayersTool)
                 self.current_layer_alpha_lock_changed(layer, new_locked)
@@ -584,7 +624,7 @@ class RootStackTreeView (Gtk.TreeView):
                 # Otherwise, We can use get_app() function at command.SetLayerAlphaLocked,
                 # and invoke application class callback from there.
                 # With this way, we can fire the callback at right timing,
-                # but using get_app() inside command.py is not good...? 
+                # but using get_app() inside command.py is not good...?
 
         return True
 
@@ -832,18 +872,31 @@ class RootStackTreeView (Gtk.TreeView):
         if not layerpath:
             sel.unselect_all()
             return
-        gtkpath = Gtk.TreePath(layerpath) 
+        gtkpath = Gtk.TreePath(layerpath)
+
+        # Multiple layer selection support,
+        # For checking 'current layer' is valid or not.
         old_layerpath = None
         model, selected_paths = sel.get_selected_rows()
         if len(selected_paths) > 0:
             old_treepath = selected_paths[0]
             if old_treepath:
                 old_layerpath = tuple(old_treepath.get_indices())
+        else:
+            selected_paths = None # To ease check path list later
+
         if layerpath == old_layerpath:
+            # There is no need to update. exitting.
             return
-        elif selected_paths and gtkpath in selected_paths:
+        elif selected_paths is not None and gtkpath in selected_paths:
+            # If 'current layer' is included to selected layers...
+            # In this case, we need to leave selected layers unchanged
+            # but must change 'current layer'
+            # so, continue processing.
             pass
         else:
+            # current layer is new, but not multiple layer selected.
+            # then, unselect all to initialize.
             sel.unselect_all()
 
         if len(layerpath) > 1:
@@ -886,12 +939,12 @@ class RootStackTreeView (Gtk.TreeView):
     ## Hover preview related.
     @event
     def hover_over_layer(self, layer):
-        """Event: mouse pointer just hovers over a layer, 
+        """Event: mouse pointer just hovers over a layer,
         with no dragging or pressing buttons."""
 
     @event
     def hover_leave(self):
-        """Event: mouse pointer exitting the treeview, 
+        """Event: mouse pointer exitting the treeview,
         after valid hover event activated."""
 
     def _stop_hover_preview_timer(self):
@@ -941,7 +994,11 @@ class RootStackTreeView (Gtk.TreeView):
 
         :param selected_list: a list of path tuple.
         """
+        if self._processing_model_updates:
+            return False
+
         selection = self.get_selection()
+        self._processing_model_updates = True
         if (selected_list is None or len(selected_list) == 0):
             selection.unselect_all()
         elif selected_list == "all":
@@ -951,8 +1008,19 @@ class RootStackTreeView (Gtk.TreeView):
                 if not isinstance(cp, Gtk.TreePath):
                     cp = Gtk.TreePath(cp)
                 selection.select_path(cp)
+        self._processing_model_updates = False
 
-        return False
+    def _multiple_layers_selection_added_cb(self, rootstack, path):
+        selection = self.get_selection()
+        if not isinstance(path, Gtk.TreePath):
+            path = Gtk.TreePath(path)
+        selection.select_path(path)
+
+    def _multiple_layers_selection_removed_cb(self, rootstack, path):
+        selection = self.get_selection()
+        if not isinstance(path, Gtk.TreePath):
+            path = Gtk.TreePath(path)
+        selection.unselect_path(path)
 
     ## Layer Alpha-lock related
     @event
@@ -970,16 +1038,20 @@ class RootStackTreeView (Gtk.TreeView):
         """ Cancel(Clear) multiple selection,
         and select only currently active layer.
         """
-        self._processing_model_updates = True
+       #self._processing_model_updates = True
+       #root = self._docmodel.layer_stack
+       #oldcurrent = root.current
+       #sel = self.get_selection()
+       #sel.unselect_all()
+       #root.current_path = root.deepindex(oldcurrent)
+       #root.multiple_layers_selection_updated()
+       #self._processing_model_updates = False
         root = self._docmodel.layer_stack
-        oldcurrent = root.current
-        sel = self.get_selection()
-        sel.unselect_all()
-        root.current_path = root.deepindex(oldcurrent)
-        self._processing_model_updates = False
+        root.set_selected_layers(None, None)
 
 
-        
+
+
 
 
 

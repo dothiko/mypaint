@@ -399,6 +399,7 @@ class LayersTool (SizedVBoxToolWidget):
         else:
             time = event.time
             button = event.button
+
         self._menu.popup(None,None, None, None, button, time)
 
     ## Hover-preview callbacks
