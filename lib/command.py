@@ -915,11 +915,10 @@ class MergeLayerDown (Command):
         self._lower_layer = None
         self._merged_layer = None
 
-        # using 'merge' prefix for keyword argument, 
+        # using `merge` prefix for keyword argument,
         # because it would not use in superclass constructor.
         self._only_opaque =  ('merge_only_opaque' in kwds 
                                and kwds['merge_only_opaque'] == True)
-
     def redo(self):
         rootstack = self.doc.layer_stack
         merged = self._merged_layer
@@ -1815,7 +1814,7 @@ class RestackMultipleLayers (Command):
                 affected.append(targ_parent)
 
 
-        # We need newest 'after' path of sources.
+        # We need newest `after` path of sources.
         # so refreshing it here.
         # but,we need the list reverse, to restore the tree structure.
         self._src_path_after = sorted(
@@ -2078,7 +2077,7 @@ class CutCurrentLayer (Command):
     def __init__(self, doc, do_opaque_cut, layerpaths,
                  **kwds):
         """
-        :param boolean do_opaque_cut: the flag to do 'cut with opaque area'
+        :param boolean do_opaque_cut: the flag to do `cut with opaque area`
                                       Otherwise, cut with transparent area.
 
         :param list layerpaths: the list of path of other layers 
@@ -2147,8 +2146,8 @@ class CutCurrentLayer (Command):
         if not self._do_opaque_cut and len(self._layerpaths) > 2:
             _merged_layer = lib.layer.PaintingLayer(name='')
 
-        # 'Cut with opaque area' can be done with each selected layers.
-        # But 'Cut with transparent area' needed combined final
+        # `Cut with opaque area` can be done with each selected layers.
+        # But `cut with transparent area` needed combined final
         # result of selected layers to cut.
         for path in self._layerpaths:
             layer = rootstack.deepget(path)
@@ -2189,8 +2188,8 @@ class GrabcutAddLayer(Command):
     into the layer stack.
     That layers generated at another python file.
     
-    For some reasons, this class named as Grabcut'AddLayer', but
-    show its name as "Grabcut fill" in Mypaint GUI.
+    For some reasons, this class named as Grabcut`AddLayer`, but
+    show its name as `Grabcut fill` in Mypaint GUI.
     """
 
     def __init__(self, doc, result, insert_path, removed_hint_layer, **kwds): 

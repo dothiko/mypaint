@@ -875,7 +875,7 @@ class RootStackTreeView (Gtk.TreeView):
         gtkpath = Gtk.TreePath(layerpath)
 
         # Multiple layer selection support,
-        # For checking 'current layer' is valid or not.
+        # For checking `current layer` is valid or not.
         old_layerpath = None
         model, selected_paths = sel.get_selected_rows()
         if len(selected_paths) > 0:
@@ -889,9 +889,9 @@ class RootStackTreeView (Gtk.TreeView):
             # There is no need to update. exitting.
             return
         elif selected_paths is not None and gtkpath in selected_paths:
-            # If 'current layer' is included to selected layers...
+            # If `current layer` is included to selected layers...
             # In this case, we need to leave selected layers unchanged
-            # but must change 'current layer'
+            # but must change `current layer`
             # so, continue processing.
             pass
         else:
@@ -1038,21 +1038,8 @@ class RootStackTreeView (Gtk.TreeView):
         """ Cancel(Clear) multiple selection,
         and select only currently active layer.
         """
-       #self._processing_model_updates = True
-       #root = self._docmodel.layer_stack
-       #oldcurrent = root.current
-       #sel = self.get_selection()
-       #sel.unselect_all()
-       #root.current_path = root.deepindex(oldcurrent)
-       #root.multiple_layers_selection_updated()
-       #self._processing_model_updates = False
         root = self._docmodel.layer_stack
         root.set_selected_layers(None, None)
-
-
-
-
-
 
 
 ## Helpers for views
