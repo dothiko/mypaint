@@ -1224,7 +1224,10 @@ class Document (object):
         if dst_path is None:
             logger.info("Merge Down is not possible here")
             return False
-        self.do(command.MergeLayerDown(self, merge_only_opaque=only_opaque))
+        if only_opaque:
+            self.do(command.MergeLayerDownOpaque(self))
+        else:
+            self.do(command.MergeLayerDown(self))
         return True
 
     def cut_current_layer_down(self):
@@ -1238,11 +1241,7 @@ class Document (object):
             logger.info("Cut with below layer is not possible here")
             return False
         self.do(
-            command.CutCurrentLayer(
-                self,
-                False, # Do 'cut with transparent area'
-                (dst_path, )
-            )
+            command.CutLayerDown(self, dst_path)
         )
         return True
 

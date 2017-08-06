@@ -914,6 +914,7 @@ class MergeLayerDown (Command):
         self._upper_layer = None
         self._lower_layer = None
         self._merged_layer = None
+        self._only_opaque = False
 
         # using `merge` prefix for keyword argument,
         # because it would not use in superclass constructor.
@@ -1414,8 +1415,6 @@ class RestackLayer (Command):
         # Redraws
         redraw_bboxes = [a.get_full_redraw_bbox() for a in affected]
         self._notify_canvas_observers(redraw_bboxes)
-
-
 
 
 class RenameLayer (Command):
@@ -2182,6 +2181,33 @@ class CutCurrentLayer (Command):
         # Redraw target layer 
         self._notify_canvas_observers( (target.get_full_redraw_bbox(), ) )
 
+
+class CutLayerDown(CutCurrentLayer):
+    """Cut current editing layer transparent area of below layer.
+
+    This class utilize CutCurrentLayer.
+    """
+
+    display_name = _("Cut With Benath")
+
+    def __init__(self, doc, path, **kwds):
+        super(CutLayerDown, self).__init__(
+            doc, 
+            False, 
+            (path,), 
+            **kwds
+        )
+
+class MergeLayerDownOpaque(MergeLayerDown):
+    """Merge current editing layer into opaque area of below.
+
+    This class utilize MergeLayerDown.
+    """
+    display_name = _("Merge Down on Opaque")
+
+    def __init__(self, doc, **kwds):
+        super(MergeLayerDownOpaque, self).__init__(doc, **kwds)
+        self._only_opaque = True
 
 class GrabcutAddLayer(Command):
     """Inserts a new grabcut-generated (multiple) layers 
