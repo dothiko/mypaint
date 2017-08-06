@@ -1966,8 +1966,10 @@ class MergeSelectedLayers (GroupSelectedLayers):
 class SetMultipleLayersVisibility (Command):
     """Sets the visibility status of Selected layers.
 
-    Different from a single layer,it is difficult to support same criteria 
-    with multiple layers.so we would need another command class,like this.
+    Different from a single layer command(SetLayerVisibility),
+    To change multiple layers visibility,
+    we need to store different visible states for each layers.
+    So we need this dedicated command class.
     """
 
     def __init__(self, doc, visible, layerpaths,**kwds):

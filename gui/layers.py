@@ -504,12 +504,7 @@ class RootStackTreeView (Gtk.TreeView):
         # But with holding control or shift key, some multiple
         # selection related activity might done.
 
-        selection = self.get_selection()
-        current = selection.get_selected_rows()
-        if current:
-            junk, selected = current
-        else:
-            seleted = None
+        selected = self.get_selected_layer_paths()
         rootstack = self._docmodel.layer_stack
 
         # At here, we do not directly change the treeview selection,
@@ -587,13 +582,33 @@ class RootStackTreeView (Gtk.TreeView):
             rootstack.current_layer_solo = False
         else:
             new_visible = not layer.visible
-            self._docmodel.set_layer_visibility(new_visible, layer)
+            # param `path` is mypaint tuple path.
+            # We need to check whether it exist in `selected`,
+            selected = self.get_selected_layer_paths(in_mypaint_path=True)
+            if (selected is not None 
+                    and len(selected) >= 2
+                    and path in selected):
+                self._docmodel.set_selected_layers_visibility(
+                    new_visible, 
+                    selected
+                )
+            else:
+                self._docmodel.set_layer_visibility(new_visible, layer)
         return True
 
     def _handle_lock_col_click(self, event, layer, path):
         """Toggle the clicked layer's visibility."""
         new_locked = not layer.locked
-        self._docmodel.set_layer_locked(new_locked, layer)
+        selected = self.get_selected_layer_paths(in_mypaint_path=True)
+        if (selected is not None 
+                and len(selected) >= 2
+                and path in selected):
+            self._docmodel.set_selected_layers_locked(
+                new_locked, 
+                selected
+            )
+        else:
+            self._docmodel.set_layer_locked(new_locked, layer)
         return True
 
     def _handle_alpha_lock_col_click(self, event, layer, path):
@@ -983,10 +998,11 @@ class RootStackTreeView (Gtk.TreeView):
     def _selected_layer_queried_cb(self, rootstack, selected_list):
         """To query selected layers from rootstack(lib.document.layer_stack).
         """
-        selection = self.get_selection()
-        current = selection.get_selected_rows()
-        if current:
-            selected_list+=current[1]
+       #selection = self.get_selection()
+       #current = selection.get_selected_rows()
+       #if current:
+       #    selected_list+=current[1]
+        selected_list += self.get_selected_layer_paths()
         return False
 
     def _multiple_layers_selected_cb(self, rootstack, selected_list):
@@ -1040,6 +1056,35 @@ class RootStackTreeView (Gtk.TreeView):
         """
         root = self._docmodel.layer_stack
         root.set_selected_layers(None, None)
+
+    def get_selected_layer_paths(self, in_mypaint_path=False):
+        """Get selected layer paths.
+        returned paths are usually Gtk.TreePath instance.
+
+        This method is to ease getting selected
+        layer paths.
+        Also, ensure returning None when no any
+        layer selected.
+
+        :param in_mypaint_path: convert paths into mypaint tuple path. 
+        """
+        selection = self.get_selection()
+        current = selection.get_selected_rows()
+        if current:
+            junk, selected = current
+            if in_mypaint_path:
+                selected = self._convert_mypaint_path(selected)
+            return selected
+        else:
+            return None
+
+    def _convert_mypaint_path(self, gtkpath_list):
+        """Convert from list of Gtk.TreePath to mypaint tuple path.
+        """
+        retlst = []
+        for gp in gtkpath_list:
+            retlst.append(tuple(gp.get_indices()))
+        return retlst
 
 
 ## Helpers for views
