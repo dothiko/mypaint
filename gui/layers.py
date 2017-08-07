@@ -541,11 +541,8 @@ class RootStackTreeView (Gtk.TreeView):
                     # refrect selection states.
                     # It looks not good for me,but not so bad...?
 
+                    selection = self.get_selection()
                     selection.select_range(selected[0], gtkpath)
-                    result = selection.get_selected_rows()
-                    selection = None
-                    if result is not None:
-                        junk, selection = result
                     rootstack.multiple_layers_selection_updated()
                     self._processing_model_updates = False
                 else:
