@@ -999,7 +999,7 @@ class RootStackTreeView (Gtk.TreeView):
        #current = selection.get_selected_rows()
        #if current:
        #    selected_list+=current[1]
-        selected_list += self.get_selected_layer_paths()
+        selected_list += self.get_selected_layer_paths(in_mypaint_path=True)
         return False
 
     def _multiple_layers_selected_cb(self, rootstack, selected_list):
