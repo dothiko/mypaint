@@ -197,25 +197,47 @@ class State (object):
                 self.leave()
 
     def _keyup_cb(self, widget, event):
-        if not self.active:
-            return
         self.keydown = False
-        duration_time = event.time/1000.0 - self._enter_time 
-        # Now self.autoleave_timeout configurable,
-        # So it might be less than self.max_key_hit_duration.
-        # Thus, We need to check both of them here.
-        if (duration_time < self.max_key_hit_duration and
-                duration_time < self.autoleave_timeout):
-            logger.info(
-                'Leaving not calling %s',
-                self.on_leave.__name__,
-            )
-            pass  # accept as one-time hit
+        duration_time = event.time/1000.0 - self._enter_time
+        # With making self.autoleave_timeout as configurable,
+        # The autoleave_timeout setting might be less than
+        # self.max_key_hit_duration.
+        # So, We need to check duration time against
+        # both of autoleave_timeout and max_key_hit_duration.
+        #
+        # Also, there is another problem caused by configurable
+        # autoleave_timeout.
+        # It is rare, but actually happen,
+        # autoleave_timeout timer is triggered before duration_time
+        # exceeds autoleave_timeout.
+        # In such case, _autoleave_timeout_cb does nothing because
+        # key is still pressed when it is triggerred,
+        # and also _keyup_cb does nothing because duration_time
+        # is still shorter than both of timeout values.
+        #
+        # I assume that this lag would come from garbage collecter
+        # or timer precision of gtk...?
+        #
+        # Anyway, to deal with this, we need to see _autoleave_timeout_id
+        # in addition to max_key_hit_duration and autoleave_timeout.
+
+        if self.max_key_hit_duration > self.autoleave_timeout:
+            if self._autoleave_timeout_id is None:
+                # This case should not be happen, but we meet this rarely.
+                timeout = -1 # Ensure to trigger `self.leave`
+            else:
+                timeout = self.autoleave_timeout
         else:
+            timeout = self.max_key_hit_duration
+
+        if (duration_time >= timeout):
+
             if self._outside_popup_timeout_id:
                 self.leave('outside')
             else:
                 self.leave('keyup')
+        else:
+            pass  # accept as one-time hit
 
     ## Auto-leave timeout
 
@@ -235,13 +257,9 @@ class State (object):
         )
 
     def _autoleave_timeout_cb(self):
+        self._autoleave_timeout_id = None
         if not self.keydown:
             self.leave('timeout')
-        else:
-            # We need to stop timer, but it would be done
-            # just returning False.
-            # So, only clear _autoleave_timeout_id.
-            self._autoleave_timeout_id = None
         return False
 
     ## Outside-popup timer
