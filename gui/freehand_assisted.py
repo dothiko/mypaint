@@ -55,6 +55,13 @@ class AssistedFreehandMode (freehand.FreehandMode,
 
     _app = None
 
+    # The modifier key, used to activate assistant.
+    # This might be alt(MOD1_MASK) or Windows-key(SUPER_MASK)
+    # Mac command key(META_MASK).
+    # Shift and ctrl are used in mypaint already and frequently, 
+    # so should not used for assistant.
+    ASSITANT_MODIFIER = Gdk.ModifierType.MOD1_MASK 
+
     ## Initialization
 
     def __init__(self, ignore_modifiers=True, **args):
@@ -121,7 +128,7 @@ class AssistedFreehandMode (freehand.FreehandMode,
             #         and event.type == Gdk.EventType.BUTTON_PRESS):
             # event.type check removed for modifier.
 
-            if event.state & Gdk.ModifierType.MOD1_MASK:
+            if event.state & self.ASSITANT_MODIFIER:
                 # Override Assistant feature by ALT key modifier.
                 self._override_assist = self.do_assist
                 self.do_assist = True
