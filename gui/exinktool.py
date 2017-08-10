@@ -570,11 +570,11 @@ class ExInkingMode (PressureEditableMixin,
                 self._node_dragged = True
 
                 # To erase old-positioned nodes.
-                self._queue_draw_selected_nodes()
+                self._queue_draw_selected_nodes(tdw)
 
                 x, y = tdw.display_to_model(event.x, event.y)
                 self.drag_offset.end(x, y)
-                self._queue_draw_selected_nodes()
+                self._queue_draw_selected_nodes(tdw)
 
                 if self.range_radius > 0:
                     self._queue_range_radius()
@@ -622,7 +622,7 @@ class ExInkingMode (PressureEditableMixin,
             # Finalize dragging motion to selected nodes.
             if self._node_dragged:
  
-                self._queue_draw_selected_nodes() # to ensure erase them
+                self._queue_draw_selected_nodes(tdw) # to ensure erase them
  
                 for i, cn, x, y in self.nodes_position_iter(tdw, convert_to_display=False):
                     if cn.x != x or cn.y != y:
