@@ -1043,8 +1043,13 @@ class RemoveLayer (Command):
         self._before_current_path = Gtk.TreePath(rootstack.current_path)
         assert self._before_current_path != None
 
-        self._unwanted_paths = rootstack.get_selected_layers()
-        assert self._before_current_path in self._unwanted_paths
+        # This command use `prev` methods of Gtk.TreePath
+        selected_layers = rootstack.get_selected_layers()
+        assert selected_layers is not None
+        assert len(selected_layers) >= 1
+        uwp = [Gtk.TreePath(cp) for cp in selected_layers]
+        self._unwanted_paths = uwp
+        assert self._before_current_path in uwp
 
         self._removed_rootstack = None
         self._before_remove_paths = None
