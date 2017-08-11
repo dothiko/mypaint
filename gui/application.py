@@ -106,6 +106,7 @@ import freehand_stabilized
 import freehand_parallel
 import freehand_center
 import lib.tiledsurface
+import oncanvas
 
 ## Utility methods
 
@@ -473,6 +474,7 @@ class Application (object):
         self._apply_pressure_mapping_settings()
         self._apply_button_mapping_settings()
         self._apply_autosave_settings()
+        self._apply_other_settings()
         self.preferences_window.update_ui()
 
     def load_settings(self):
@@ -656,6 +658,11 @@ class Application (object):
         model = self.doc.model
         model.autosave_backups = active
         model.autosave_interval = interval
+
+    def _apply_other_settings(self):
+        # Setting oncanvas modifier
+        modifier = self.preferences.get("ui.oncanvas_modifier", 'alt')
+        oncanvas.OncanvasEditMixin.set_oncanvas_modifier(modifier)
 
     def save_gui_config(self):
         Gtk.AccelMap.save(join(self.user_confpath, 'accelmap.conf'))

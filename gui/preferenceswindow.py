@@ -25,7 +25,6 @@ import accelmap
 import gui.device
 import gui.stategroup
 
-
 RESPONSE_REVERT = 1
 
 
@@ -205,6 +204,13 @@ class PreferencesWindow (windowing.Dialog):
         blink_interval = p.get("ui.blink_interval", default_timeout) 
         blink_interval_adj.set_value(blink_interval * 1000.0)
 
+        # Other configurations
+        oncanvas_modifier_combo = getobj("combobox_oncanvas_modifier")
+        self.oncanvas_modifier_combo = oncanvas_modifier_combo
+        modifier_id = p.get("ui.oncanvas_modifier", 'alt')
+       #assert modifier_id in ('alt', 'windows', 'meta')
+        oncanvas_modifier_combo.set_active_id(modifier_id)
+
         self.in_update_ui = False
 
     ## Callbacks for widgets that manipulate settings
@@ -336,4 +342,18 @@ class PreferencesWindow (windowing.Dialog):
             interval = round(adj.get_value()) / 1000.0
             self.app.preferences["ui.blink_interval"] = interval
             gui.stategroup.State.autoleave_timeout = interval
+
+    def combobox_oncanvas_modifier_changed_cb(self, combobox):
+        self.app.preferences["ui.oncanvas_modifier"] = combobox.get_active_id()
+
+    def combobox_oncanvas_modifier_button_release_event_cb(self, widget, event):
+        import gui.oncanvas
+        mixin = gui.oncanvas.OncanvasEditMixin
+        cmb = self.oncanvas_modifier_combo
+        for ck, cv in mixin.MODIFIER_TABLE.iteritems():
+            if event.state & cv == cv:
+                cmb.set_active_id(ck)
+                # Exit when the first modifier found.
+                # So do not press combination.
+                break
 

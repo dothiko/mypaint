@@ -134,13 +134,12 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     scroll_behavior = gui.mode.Behavior.CHANGE_VIEW
 
 
-
     ## Metadata methods
 
     @property
     def inactive_cursor(self):
         return None
- 
+
  
     ## Override action
     #
@@ -179,6 +178,31 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     # Node drawing margin, which is dropping shadows
     NODE_SIZE = int(math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE) + 
                     math.ceil(gui.style.DROP_SHADOW_BLUR)) + 1
+
+    # Oncanvas editing modifier
+    ONCANVAS_MODIFIER_MASK = Gdk.ModifierType.MOD1_MASK
+    MODIFIER_TABLE = {
+            'mod1' : Gdk.ModifierType.MOD1_MASK,
+            'mod2' : Gdk.ModifierType.MOD2_MASK,
+            'mod3' : Gdk.ModifierType.MOD3_MASK,
+            'mod4' : Gdk.ModifierType.MOD4_MASK,
+            'mod5' : Gdk.ModifierType.MOD5_MASK,
+            'shift' : Gdk.ModifierType.SHIFT_MASK,
+            'super' : Gdk.ModifierType.SUPER_MASK,
+            'hyper' : Gdk.ModifierType.HYPER_MASK,
+            'meta' : Gdk.ModifierType.META_MASK
+    }
+
+    @classmethod
+    def set_oncanvas_modifier(cls, new_modifier):
+        """
+        :param new_modifier: new modifier id string.
+                             currently, preferences.glade limits this
+                             'alt', 'windows' and 'meta'.
+                             other ids are reserved for future expansion.
+        """
+        assert new_modifier in cls.MODIFIER_TABLE
+        cls.ONCANVAS_MODIFIER_MASK = cls.MODIFIER_TABLE[new_modifier]
 
     ## Class attributes
  
@@ -657,7 +681,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         # Update workaround state for evdev dropouts
         self._button_down = event.button
 
-        shift_state =  event.state & Gdk.ModifierType.SHIFT_MASK != 0
         ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK != 0
 
         if self.zone == EditZoneMixin.ACTION_BUTTON:
@@ -1140,9 +1163,7 @@ class PressureEditableMixin(OncanvasEditMixin,
 
     # Pressure editing key modifiers,single node and with nearby nodes.
     # these can be hard-coded,but we might need some customizability later.
-    _PRESSURE_MOD_MASK = Gdk.ModifierType.SHIFT_MASK
     _ADD_SELECTION_MASK = Gdk.ModifierType.CONTROL_MASK
-
 
     def is_pressure_modifying(self):
         return self.phase in (PressPhase.ADJUST_PRESSURE,
@@ -1190,8 +1211,8 @@ class PressureEditableMixin(OncanvasEditMixin,
                 if button == 1 and self.zone == EditZoneMixin.CONTROL_NODE:
 
                     if self.current_node_index is not None:
-                        if (event.state & cls._PRESSURE_MOD_MASK ==
-                            cls._PRESSURE_MOD_MASK):
+                        if (event.state & cls.ONCANVAS_MODIFIER_MASK ==
+                            cls.ONCANVAS_MODIFIER_MASK):
                         
                             self.phase = PressPhase.ADJUST_PRESSURE_ONESHOT
                             # Fallthrough
