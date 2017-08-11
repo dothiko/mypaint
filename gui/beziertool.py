@@ -725,9 +725,11 @@ class BezierMode (PressureEditableMixin,
 
         shift_state = event.state & Gdk.ModifierType.SHIFT_MASK
         ctrl_state = event.state & Gdk.ModifierType.CONTROL_MASK
+        mod_state = event.state & self.ONCANVAS_MODIFIER_MASK
         if self.phase == _Phase.CAPTURE:
-            # In this class, we can add nodes
-            # everytime we want.
+            # Quick hack.
+            # In this class, different from inktool, 
+            # we can add nodes everytime we want.
             # so actually there is no 'CAPTURE' phase.
             self._start_new_capture_phase(rollback=False)
             self.phase = _Phase.ADJUST
@@ -746,6 +748,9 @@ class BezierMode (PressureEditableMixin,
                         self.forced_button_pos = (event.x, event.y)
                         self._bypass_phase(_Phase.ADJUST)
 
+                    elif mod_state:
+                        self.phase = _Phase.INSERT_NODE
+
                     ## Otherwise,fallthrough to supercall line. 
                     ## Then, a new node created and phase changed. 
 
@@ -758,7 +763,7 @@ class BezierMode (PressureEditableMixin,
 
             # FALLTHRU: *do* start a drag 
         
-        elif self.phase == _Phase.INSERT_NODE:
+        if self.phase == _Phase.INSERT_NODE:
             mx, my = tdw.display_to_model(event.x, event.y)
             pressed_segment = detect_on_stroke(self.nodes, mx, my)
             if pressed_segment:
