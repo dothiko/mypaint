@@ -432,22 +432,36 @@ class ExInkingMode (PressureEditableMixin,
 
     ## Raw event handling (prelight & zone selection in adjust phase)
     def mode_button_press_cb(self, tdw, event):
+        mod_state = event.state & self.ONCANVAS_MODIFIER_MASK
+        detected_stroke = None
+
         if self.phase == _Phase.ADJUST:
             if event.button == 1:
                 if self.zone == EditZoneMixin.EMPTY_CANVAS:
-                    self._start_new_capture_phase(rollback=False)
-                    assert self.phase == PhaseMixin.CAPTURE
-        elif self.phase == _Phase.INSERT_NODE:
-            mx, my = tdw.display_to_model(event.x, event.y)
-            detected_info = self._detect_on_stroke(mx, my)
-            if detected_info:
+                    if not mod_state:
+                        self._start_new_capture_phase(rollback=False)
+                        assert self.phase == PhaseMixin.CAPTURE
+                    else:
+                        mx, my = tdw.display_to_model(event.x, event.y)
+                        detected_stroke = self._detect_on_stroke(mx, my)
+                        if detected_stroke:
+                            self.phase = _Phase.INSERT_NODE
+
+                    # Fallthrough
+
+        if self.phase == _Phase.INSERT_NODE or detected_stroke:
+            if detected_stroke is None:
+                mx, my = tdw.display_to_model(event.x, event.y)
+                detected_info = self._detect_on_stroke(mx, my)
+
+            if detected_stroke:
                 # pressed_segment is a tuple which contains
                 # (node index of start of segment, stroke step)
 
                 # To erase buttons 
                 self._queue_draw_buttons() 
 
-                idx, t, x, y = detected_info
+                idx, t, x, y = detected_stroke
                 new_pressure = self.nodes[idx].pressure
                 new_xtilt = self.nodes[idx].xtilt
                 new_ytilt = self.nodes[idx].ytilt
