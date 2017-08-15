@@ -97,12 +97,6 @@ class AssistedFreehandMode (freehand.FreehandMode,
     def prev_button(self):
         return self._prev_button
 
-    ## Override (temporally enable) assitant feature. 
-    @property
-    def overrided(self):
-        """This property intended to mistakenly overwrite the flag.
-        """
-        return self._override_assist
 
     ## Mode stack & current mode
 
@@ -125,17 +119,19 @@ class AssistedFreehandMode (freehand.FreehandMode,
         # immidiately.
         current_layer = tdw.doc.layer_stack.current
         if (current_layer.get_paintable() and event.button == 1):
-            #         and event.type == Gdk.EventType.BUTTON_PRESS):
-            # event.type check removed for modifier.
 
             if event.state & self.ASSITANT_MODIFIER:
                 # Override Assistant feature by ALT key modifier.
                 self._override_assist = self.do_assist
                 self.do_assist = True
             else:
-                self._override_assist = None
+                self._override_assist = False
 
             if self.do_assist:
+                # Do basic assistant setup here.
+                # But we still need each assistant specific
+                # setup. It would be done in drag_start_cb 
+                # of each assistant classes.
                 self._ensure_overlay_for_tdw(tdw)
                 self.last_button = event.button
                 if not self.drag_start_cb(tdw, event, 
@@ -155,11 +151,13 @@ class AssistedFreehandMode (freehand.FreehandMode,
             if self.do_assist:
                 self.queue_draw_ui(tdw) # To erase. call this first.
                 if self.last_button is not None:
+                    # We would need assistant specific finalization
+                    # codes in drag_stop_cb of each assistant classes.
                     self.drag_stop_cb(tdw, event)
 
-            if self._override_assist is not None:
+            if self._override_assist:
                 self.do_assist = self._override_assist
-                self._override_assist = None
+                self._override_assist = False
 
             self.last_button = None
         return super(AssistedFreehandMode, self).button_release_cb(

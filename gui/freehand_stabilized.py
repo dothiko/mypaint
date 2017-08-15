@@ -90,7 +90,7 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
 
     _average_previous = None
     _stabilize_range = None
-    _range_switcher = None
+    _activate_by_mod = None
     _force_tapering = None
 
     # About Stabilizer attributes:
@@ -121,7 +121,7 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
             cls = self.__class__
             cls._average_previous = pref.get(self._AVERAGE_PREF_KEY, True)
             cls._stabilize_range = pref.get(self._STABILIZE_RANGE_KEY, 48)
-            cls._range_switcher = pref.get(self._ACTIVATE_BY_MOD_KEY, True)
+            cls._activate_by_mod = pref.get(self._ACTIVATE_BY_MOD_KEY, True)
             cls._force_tapering = pref.get(self._FORCE_TAPERING_KEY, False)
 
         # Ignore the additional arg that flip actions feed us
@@ -149,12 +149,9 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
 
         self._init_stabilize() # this should be called after _rx/_ry is set.
 
-        if self.overrided:
-            if (self._range_switcher
-                    and not event.state & Gdk.ModifierType.SHIFT_MASK):
-                self._current_range = self._stabilize_range / 2
-            else:
-                self._current_range = self._stabilize_range
+        if (self._activate_by_mod 
+                and event.state & self.ASSITANT_MODIFIER):
+            self._activate_stabilizer(tdw, event.state)
 
     def drag_update_cb(self, tdw, event, pressure):
         """ motion notify callback for assisted freehand drawing
@@ -168,14 +165,12 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
         self._drag_x = event.x
         self._drag_y = event.y
 
-        # If Alt key pressed when stabilizer is in range_switcher mode
-        # and not overrided, then expand the stabilizer range immidiately.
-        if (not self.overrided 
-                and self._current_range > 0
-                and self._current_range < self._stabilize_range
-                and event.state & Gdk.ModifierType.MOD1_MASK):
-            self._current_range = self._stabilize_range
-            self.queue_draw_ui(tdw)
+        # If Modifier key pressed, preference set as `activate by modifier`,
+        # and not activated yet, then expand the stabilizer range immidiately.
+        if (self._activate_by_mod 
+                and event.state & self.ASSITANT_MODIFIER
+                and self._current_range < self._stabilize_range):
+            self._activate_stabilizer(tdw, event.state)
 
         # If the stylus cursor is inside stabilize circle,
         # all drawing events should be ignored.
@@ -199,7 +194,7 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
                           event.time, 
                           x, y)
 
-        if self._range_switcher:
+        if self._activate_by_mod:
             self._drag_length = 0
             self._current_range = 0
             self._drag_x = 0
@@ -217,13 +212,14 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
             cls._OPTIONS_WIDGET.set_mode(self)
         return cls._OPTIONS_WIDGET
 
+    ## Stabilizer/Assistant related
                 
     def enum_samples(self):
 
         if self._phase == _Phase.INIT:
-            # Drawing initial pressure, to avoid heading glitch.
+            # Drawing with initial pressure, to avoid heading glitch.
             # That value would be 0.0 in normal.
-            # However, When auto-range adjust is enabled,
+            # However, When `modifier activation` is enabled,
             # drawing stroke is already undergo. in such case,
             # 'initial pressure' would be the pressure of current stylus input,
             # not 0.0. Therefore, not use constant(0.0) for initial pressure.
@@ -297,7 +293,7 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
         self._phase = phase
         self._actual_drawn_length = 0.0
         self._drag_length = 0.0
-        if self._range_switcher:
+        if self._activate_by_mod:
             self._start_time = time.time()
             self._current_range = 0.0
         else:
@@ -316,6 +312,20 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
         self._rx = x
         self._ry = y
 
+    def _activate_stabilizer(self, tdw, state):
+        """Inner utility method to activate stabilizer.
+
+        :param state: the event.state attribute.
+                      This would be bitwise conbination of
+                      Gdk.ModifierType.*_MASK
+        """
+        if (state & Gdk.ModifierType.SHIFT_MASK
+                and self._current_range < self._stabilize_range):
+            self._current_range = self._stabilize_range
+        else:
+            self._current_range = self._stabilize_range / 2
+        self.queue_draw_ui(tdw)
+
     ## Overlay related
 
     def _generate_overlay(self, tdw):
@@ -333,6 +343,7 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
             full_rad = half_rad * 2
             tdw.queue_draw_area(self._cx - half_rad, self._cy - half_rad,
                     full_rad, full_rad)
+
 
     ## Stabilizer configuration related
     @property
@@ -364,12 +375,12 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
 
     @property
     def range_switcher(self):
-        return self._range_switcher
+        return self._activate_by_mod
     
     @range_switcher.setter
     def range_switcher(self, flag):
         cls = self.__class__
-        cls._range_switcher = flag
+        cls._activate_by_mod = flag
         self.app.preferences[self._ACTIVATE_BY_MOD_KEY] = flag
 
     @property
@@ -444,7 +455,7 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
         checkbox = Gtk.CheckButton(_("Activate by modifier"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
         checkbox.set_active(mode.range_switcher) 
-        checkbox.connect('toggled', self._range_switcher_toggled_cb)
+        checkbox.connect('toggled', self._activate_by_mod_toggled_cb)
         self.attach(checkbox, 0, row, 2, 1)
         row += 1
 
@@ -474,7 +485,7 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
         if not self._updating_ui:
             self.mode.stabilize_range = adj.get_value()
 
-    def _range_switcher_toggled_cb(self, checkbox):
+    def _activate_by_mod_toggled_cb(self, checkbox):
         if not self._updating_ui:
             self.mode.range_switcher = checkbox.get_active()
 
