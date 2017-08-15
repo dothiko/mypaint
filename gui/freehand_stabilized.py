@@ -82,7 +82,7 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
     
     _AVERAGE_PREF_KEY = "assisted.stabilizer.average_previous"
     _STABILIZE_RANGE_KEY = "assisted.stabilizer.range"
-    _RANGE_SWITCHER_KEY = "assisted.stabilizer.range_switcher"
+    _ACTIVATE_BY_MOD_KEY = "assisted.stabilizer.activate_by_modifier"
     _FORCE_TAPERING_KEY = "assisted.stabilizer.force_tapering"
 
     _TAPERING_LENGTH = 32.0 
@@ -121,7 +121,7 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
             cls = self.__class__
             cls._average_previous = pref.get(self._AVERAGE_PREF_KEY, True)
             cls._stabilize_range = pref.get(self._STABILIZE_RANGE_KEY, 48)
-            cls._range_switcher = pref.get(self._RANGE_SWITCHER_KEY, True)
+            cls._range_switcher = pref.get(self._ACTIVATE_BY_MOD_KEY, True)
             cls._force_tapering = pref.get(self._FORCE_TAPERING_KEY, False)
 
         # Ignore the additional arg that flip actions feed us
@@ -140,7 +140,6 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
     
     ## Input handlers
     def drag_start_cb(self, tdw, event, pressure):
-        self._tdw = tdw # For timer.
         self._start_time = event.time
         self._last_time = event.time
         self._rx = event.x
@@ -156,9 +155,6 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
                 self._current_range = self._stabilize_range / 2
             else:
                 self._current_range = self._stabilize_range
-
-        if self._range_switcher:
-            self._start_range_timer(self._TIMER_PERIOD)
 
     def drag_update_cb(self, tdw, event, pressure):
         """ motion notify callback for assisted freehand drawing
@@ -197,8 +193,6 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
                 tdw, event, fakepressure)
 
     def drag_stop_cb(self, tdw, event):
-        self._stop_range_timer() # Call this first, before attributes
-                                 # invalidated.
         self._phase = _Phase.INVALID
         x, y = tdw.display_to_model(self._cx, self._cy)
         self.queue_motion(tdw, 
@@ -210,10 +204,6 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
             self._current_range = 0
             self._drag_x = 0
             self._drag_y = 0
-
-        # After stop the timer, invalidate cached tdw.
-        self._tdw = None
-
 
     ## Mode options
 
@@ -312,7 +302,6 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
             self._current_range = 0.0
         else:
             self._current_range = self._stabilize_range
-        self._timer_id = None
 
     def fetch(self, x, y, pressure, time):
         """ Fetch samples(i.e. current stylus input datas) 
@@ -344,86 +333,6 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
             full_rad = half_rad * 2
             tdw.queue_draw_area(self._cx - half_rad, self._cy - half_rad,
                     full_rad, full_rad)
-
-    ## Stabilizer Range switcher related
-    def _switcher_timer_cb(self):
-
-        # In some case, although timer stopped by 
-        # GLib.remove_id(), but handler still invoked.
-        # for such case, reject invalid timer loop at here.
-        if self.last_button is None:
-            return False
-
-        nowtime = time.time()
-        difftime = nowtime - self._start_time
-        if difftime == 0:
-            difftime = 1 # to avoid zero divide
-        speed = self._drag_length / difftime 
-
-        # 'cont_timer' is a flag, used for whether stroke speed is
-        # enough low to switch range_radius.
-        # It will affect range-switcher timer.
-        half_range = self._stabilize_range / 2
-        cont_timer = (speed >= 0.005) 
-
-        # When the drawing speed below the specfic value,
-        # (currently, it is 0.003 --- i.e. 3px per second)
-        # it is recognized as 'Pointer stands still'
-        # then stabilizer range is expanded.
-
-        if cont_timer == False:
-            #  First of all, current timer  
-            #  so current _timer_id should be invalidated.
-            self._timer_id = None
-
-            if self._current_range < half_range:
-                self._phase = _Phase.INIT
-                self._current_range = half_range
-                if self._latest_pressure > 0.95:
-                    # immidiately enter 2nd stage
-                    self._current_range = self._stabilize_range
-                elif self._latest_pressure > 0.9:
-                    self._start_range_timer(self._TIMER_PERIOD * 0.5)
-                else:
-                    self._start_range_timer(self._TIMER_PERIOD)
-            else:
-                self._current_range = self._stabilize_range
-
-            assert self._tdw is not None
-            self.queue_draw_ui(self._tdw)
-        else:
-            # When right after entering 2nd stage
-            # and speed is faster than threshold
-            # (i.e. user drawing fast stroke right now),
-            # reset the timer period to ordinary one,of 1st stage.
-            # With this, we can avoid unintentioal stabilizer range
-            # expansion at 2nd stage.
-            if (self._current_range > 0 and
-                    self._timer_period < self._TIMER_PERIOD):
-                self._start_range_timer(self._TIMER_PERIOD)
-                cont_timer = False
-
-        self._current_range = clamp(self._current_range,
-                0, self._stabilize_range)
-
-        # Update current/previous position in every case.
-        self._drag_length = 0
-        self._start_time = nowtime
-
-        return cont_timer
-
-    def _start_range_timer(self, period):
-        assert self.last_button != None
-        self._stop_range_timer()
-        self._timer_id = GLib.timeout_add(period,
-                self._switcher_timer_cb)
-        self._timer_period = period
-
-    def _stop_range_timer(self):
-        if self._timer_id:
-            GLib.source_remove(self._timer_id)
-            self._timer_id = None
-            self._timer_period = 0
 
     ## Stabilizer configuration related
     @property
@@ -461,7 +370,7 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
     def range_switcher(self, flag):
         cls = self.__class__
         cls._range_switcher = flag
-        self.app.preferences[self._RANGE_SWITCHER_KEY] = flag
+        self.app.preferences[self._ACTIVATE_BY_MOD_KEY] = flag
 
     @property
     def force_tapering(self):
@@ -532,7 +441,7 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
         row += 1
 
         # Checkbox for use 'range switcher' feature.
-        checkbox = Gtk.CheckButton(_("Range switcher"),
+        checkbox = Gtk.CheckButton(_("Activate by modifier"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
         checkbox.set_active(mode.range_switcher) 
         checkbox.connect('toggled', self._range_switcher_toggled_cb)
