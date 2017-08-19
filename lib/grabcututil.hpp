@@ -57,10 +57,7 @@ grabcututil_setup_cvimg(
 
 PyObject*
 grabcututil_finalize_cvmask(
-    PyObject *py_cvmask,
-    PyObject *py_cvimg,
-    double targ_r, double targ_g, double targ_b,
-    int remove_lineart
+    PyObject *py_cvmask
 );
 
 #endif

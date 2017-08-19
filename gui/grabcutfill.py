@@ -62,13 +62,11 @@ class _Prefs:
     REMOVE_LINEART_PREF = 'grabcut_fill.remove_lineart_pixel'
     REMOVE_HINT_PREF = 'grabcut_fill.remove_hint'
     DILATION_SIZE_PREF = 'grabcut_fill.dilate_size'
-    FILL_AREA_PREF = 'grabcut_fill.fill_area'
     THRESHOLD_PREF = 'grabcut_fill.alpha_threshold'
 
     DEFAULT_REMOVE_LINEART = True
     DEFAULT_REMOVE_HINT = True
     DEFAULT_DILATION_SIZE = 0
-    DEFAULT_FILL_AREA = False
     DEFAULT_THRESHOLD = 0.3
 
 ## Function defs
@@ -93,7 +91,6 @@ def grabcutfill(sample_layer, lineart_layer,
                 fg_color, dilation_size,
                 remove_lineart_pixel,
                 alpha_threshold,
-                fill_contour = True,
                 iter_cnt=3):
     """grabcutfill
 
@@ -120,12 +117,6 @@ def grabcutfill(sample_layer, lineart_layer,
                             that pixel is ignored.
                             This parameter should be within the range of 
                             0.0 - 1.0.
-    :param fill_contour: With removing lineart pixels,
-                         it make small holes in grabcut filled area.
-                         If this option is true, to surpass such glitch, 
-                         entire grubcut area would be detected as 'contour' 
-                         by cv2.findContours function 
-                         and filled by cv2.drawContours function.
 
     :return: when failed, None.
              when success for execute, it is a new layer.
@@ -213,7 +204,7 @@ def grabcutfill(sample_layer, lineart_layer,
         margin)
 
     # Create Opencv2 lineart image from the surface of the lineart layer. 
-    src = get_tile_source(lineart_layer)
+    lineart = get_tile_source(lineart_layer)
 
     # Convert alpha threshold to fix15_short_t
     fix15_one = 1 << 15
@@ -226,9 +217,10 @@ def grabcutfill(sample_layer, lineart_layer,
         ty = int(by // N) + sy
         for bx in xrange(0, sw, N):
             tx = int(bx // N) + sx
-            with src.tile_request(tx, ty, readonly=True) as src_tile:
-                # Alpha value in lineart layer
-                # would be converted into pure white.
+            with lineart.tile_request(tx, ty, readonly=True) as src_tile:
+                # Completely transparent alpha value in lineart layer
+                # would be converted into rgb(br,bg,bb) 
+                # i.e. pure white.
                 mypaintlib.grabcututil_convert_tile_to_image(
                     img_art, src_tile,
                     bx, by,
@@ -303,46 +295,26 @@ def grabcutfill(sample_layer, lineart_layer,
     # Finalizing grabcut mask.
     # which is , remove detected lineart contour
     # and convert 'probable foreground' as foreground.
-    mypaintlib.grabcututil_finalize_cvmask(
-        mask, img_art,
-        br, bg, bb,
-        int(remove_lineart_pixel))
+    mypaintlib.grabcututil_finalize_cvmask(mask)
 
-
-    # Dilating the output mask, if needed.
-    if dilation_size > 0:
-        dilation_size = int(dilation_size)
+    # Removing lineart edge by erosion 
+    # and Dilating the output mask, if needed.
+    dilation_size = int(dilation_size)
+    if remove_lineart_pixel or dilation_size > 0:
+        assert dilation_size >= 0
         neiborhood4 = np.array([[0, 1, 0],
                                 [1, 1, 1],
                                 [0, 1, 0]],
                                 np.uint8)
-        mask = cv2.dilate(mask, neiborhood4, iterations=dilation_size)
+        if remove_lineart_pixel:
+            mask = cv2.erode(mask, neiborhood4, iterations=dilation_size+1)
 
-    # Detect 'grubcutted' and removed linearts area, 
-    # and fill entire that area, to eliminate pixel holes.
-    if remove_lineart_pixel and fill_contour:
-        contours, hierarchy = cv2.findContours( 
-                                mask,  
-                                cv2.RETR_EXTERNAL, 
-                                cv2.CHAIN_APPROX_SIMPLE)
-        
-        # We need BGR image to use drawcontour function.
-        new_mask = np.zeros((h, w, 3), dtype = np.uint8)
-        cv2.drawContours(
-            new_mask, 
-            contours, 
-            -1, 
-            (255, 255, 255),
-            -1)
-        mask = new_mask
-        # Utilize new_mask BGR image as 'mask'
-        # so target value would be changed.
-        target_value = 255
-    else:
-        # mask is Binary image, so Target value must be 1.
-        target_value = 1
+        if dilation_size > 0:
+            mask = cv2.dilate(mask, neiborhood4, iterations=dilation_size)
 
     dst = cl._surface
+    lineart_tile = None
+    target_value = 1
     for by in xrange(0, sh, N):
         ty = int(by // N) + sy
         for bx in xrange(0, sw, N):
@@ -355,7 +327,7 @@ def grabcutfill(sample_layer, lineart_layer,
                 # It is binary image(array of 1byte mask, 0 or 1) 
                 # or BGR image(array of 3bytes pixels).
                 if mypaintlib.grabcututil_convert_binary_to_tile(
-                        dst_tile, mask,
+                        dst_tile, mask, 
                         bx, by,
                         targ_r, targ_g, targ_b,
                         target_value,
@@ -505,8 +477,6 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
         remove_hint_layer_flag = prefs.get(_Prefs.REMOVE_LINEART_PREF,
                                            _Prefs.DEFAULT_REMOVE_LINEART)
 
-        fill_contour_flag = prefs.get(_Prefs.FILL_AREA_PREF,
-                                      _Prefs.DEFAULT_FILL_AREA)
 
         alpha_threshold = prefs.get(_Prefs.THRESHOLD_PREF,
                                     _Prefs.DEFAULT_THRESHOLD)
@@ -527,8 +497,7 @@ class GrabcutFillMode (gui.freehand.FreehandMode,
             self._get_fg_color(),
             dilation_size,
             remove_lineart_pixel,
-            alpha_threshold,
-            fill_contour = fill_contour_flag
+            alpha_threshold
         )
 
         if new_layer:
@@ -763,28 +732,16 @@ class GrabFillOptionsWidget (Gtk.Grid):
                     _("About output results"))
 
         # 'Remove layer' related
-        text = _("Remove lineart")
+        text = _("Remove lineart edge")
         checkbut = Gtk.CheckButton.new_with_label(text)
         checkbut.set_tooltip_text(
-            _("Remove lineart opaque area from filled area."))
+            _("Remove lineart edge from filled area."))
         self.attach(checkbut, 1, row, 1, 1)
         active = prefs.get(_Prefs.REMOVE_LINEART_PREF ,
                            _Prefs.DEFAULT_REMOVE_LINEART)
         checkbut.set_active(active)
         checkbut.connect("toggled", self._remove_lineart_pixel_toggled_cb)
         self._remove_lineart_pixel_toggle = checkbut
-
-        row += 1
-        text = _("Fill extracted area")
-        checkbut = Gtk.CheckButton.new_with_label(text)
-        checkbut.set_tooltip_text(
-            _("Fill entire grabcut extracted area."))
-        self.attach(checkbut, 1, row, 1, 1)
-        active = prefs.get(_Prefs.FILL_AREA_PREF,
-                           _Prefs.DEFAULT_FILL_AREA)
-        checkbut.set_active(active)
-        checkbut.connect("toggled", self._fill_grabcut_area_toggled_cb)
-        self._fill_grabcut_area_toggle = checkbut
 
         row += 1
         text = _("Remove hint layer")
@@ -909,9 +866,6 @@ class GrabFillOptionsWidget (Gtk.Grid):
 
     def _remove_hint_toggled_cb(self, btn):
         self.app.preferences[_Prefs.REMOVE_HINT_PREF] = btn.get_active()
-
-    def _fill_grabcut_area_toggled_cb(self, btn):
-        self.app.preferences[_Prefs.FILL_AREA_PREF] = btn.get_active()
 
     def _on_layer_combo_changed(self, cmb):
         if not self._update_ui:

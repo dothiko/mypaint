@@ -259,10 +259,19 @@ grabcututil_convert_tile_to_image(
                 g = *buf_src++;
                 b = *buf_src++;
                 buf_src++; // alpha unused
-
                 *buf_dst++ = (r * 255) / (1<<15);
                 *buf_dst++ = (g * 255) / (1<<15);
                 *buf_dst++ = (b * 255) / (1<<15);
+                /*
+                uint32_t a;
+                buf_src+=3; // pixel unused
+                a = *buf_src++;
+                a = 255 - ((a * 255) / (1<<15));
+
+                *buf_dst++ = (uint8_t)a;
+                *buf_dst++ = (uint8_t)a;
+                *buf_dst++ = (uint8_t)a;
+                */
             }
             else {
                 buf_src+=4; // pixel unused
@@ -289,7 +298,10 @@ grabcututil_convert_tile_to_image(
 *                   (i.e. 8bit 1byte array, value is 0 or 1)
 *                   or BGR numpy array
 *                   (i.e. 8bit 3bytes array)
+* @param fill_r, fill_g, fill_b : rgb value of filling color.
+*                                 each value range is 0.0 to 1.0.
 * @param targ_value: target value of binary array.
+*                    that binary array might be (0,1) or (0, 255)
 * @return: When at least one pixel is written, return PyTrue.
 *          Otherwise, PyFalse.
 * @detail
@@ -320,16 +332,19 @@ grabcututil_convert_binary_to_tile(
     assert(y_src + MYPAINT_TILE_SIZE < bin_h);
 #endif
     const unsigned int xstride_src = PyArray_STRIDE(bin_arr, 1);
-    unsigned int ystride_src = PyArray_STRIDE(bin_arr, 0);
+    // We need modify ystride_src after calculate stating address.
+    // So, cannot use const keyword.
+    unsigned int ystride_src = PyArray_STRIDE(bin_arr, 0);  
     uint8_t *buf_src = (uint8_t*)PyArray_DATA(bin_arr);
     buf_src+=(ystride_src * y_src + xstride_src * x_src);
-
-    const unsigned int xstride_dst = PyArray_STRIDE(tile_arr, 1);
-    unsigned int ystride_dst = PyArray_STRIDE(tile_arr, 0);
-    fix15_short_t *buf_dst = (fix15_short_t*)PyArray_DATA(tile_arr);
-
-    ystride_dst -= xstride_dst * MYPAINT_TILE_SIZE;
     ystride_src -= xstride_src * MYPAINT_TILE_SIZE;
+
+    const unsigned int xstride_dst = PyArray_STRIDE(tile_arr, 1) / 
+                                        sizeof(fix15_short_t);
+    const unsigned int ystride_dst = (PyArray_STRIDE(tile_arr, 0) / 
+                                        sizeof(fix15_short_t)) - 
+                                        (MYPAINT_TILE_SIZE * xstride_dst);
+    fix15_short_t *buf_dst = (fix15_short_t*)PyArray_DATA(tile_arr);
 
     fix15_short_t fr = (fix15_short_clamp)(fill_r * (double)fix15_one);
     fix15_short_t fg = (fix15_short_clamp)(fill_g * (double)fix15_one);
@@ -353,15 +368,11 @@ grabcututil_convert_binary_to_tile(
                 cnt++;
             }
             else {
-                buf_dst+=4;
-            }
-            buf_src+=xstride_src;
-            /*
-            else {
-                buf_dst+=3; // pixel unused
+                buf_dst += 3;
                 *buf_dst++ = 0;
             }
-            */
+            buf_src += xstride_src;
+
         }
         buf_dst += ystride_dst;
         buf_src += ystride_src;
@@ -463,59 +474,26 @@ grabcututil_setup_cvimg(
 * Finalize Opencv mask. 
 *
 * @param py_cvmask: Opencv mask array
-* @param py_cvimg : Opencv image array, this should be lineart.
-* @param targ_r, targ_g, targ_b: the background color(transparent part)
-*                                of py_cvimg.
-* @param remove_lineart: if not 0, remove opaque area of 
-*                        lineart(py_cvimg).
 * @return None
 * @detail
-* Remove lineart contour, which would be recognized
-* as foreground pixels. 
-* If these pixels remained, it would be annoying glitch 
-* pixel around entire lineart.
-* Also, convert mask value 'Probable foreground' to 
+* Convert mask value 'Probable foreground' to 
 * 'surely foreground'.
-* Both lineart and final result must same dimension.
 */
 PyObject*
-grabcututil_finalize_cvmask(
-    PyObject *py_cvmask,
-    PyObject *py_cvimg,
-    double targ_r, double targ_g, double targ_b,
-    int remove_lineart)
+grabcututil_finalize_cvmask(PyObject *py_cvmask)
 {
-    PyArrayObject *img_arr = (PyArrayObject*)py_cvimg;
     PyArrayObject *mask_arr = (PyArrayObject*)py_cvmask;
     int dst_w = PyArray_DIM(mask_arr, 1);
     int dst_h = PyArray_DIM(mask_arr, 0);
 #ifdef HEAVY_DEBUG
-    int img_w = PyArray_DIM(img_arr, 1);
-    int img_h = PyArray_DIM(img_arr, 0);
-    assert(img_w == dst_w);
-    assert(img_h == dst_h);
-    assert(PyArray_ISCARRAY(img_arr));
     assert(PyArray_ISCARRAY(mask_arr));
-    assert(PyArray_TYPE(img_arr) == NPY_UINT8);
     assert(PyArray_TYPE(mask_arr) == NPY_UINT8);
 #endif
-    const unsigned int xstride_src = PyArray_STRIDE(img_arr, 1);
-    unsigned int ystride_src = PyArray_STRIDE(img_arr, 0);
-    uint8_t *buf_src = (uint8_t*)PyArray_DATA(img_arr);
-
     const unsigned int xstride_dst = PyArray_STRIDE(mask_arr, 1);
     unsigned int ystride_dst = PyArray_STRIDE(mask_arr, 0);
     uint8_t *buf_dst = (uint8_t*)PyArray_DATA(mask_arr);
 
-    uint32_t tr = (targ_r * (double)fix15_one);
-    uint32_t tg = (targ_g * (double)fix15_one);
-    uint32_t tb = (targ_b * (double)fix15_one);
-    tr = (tr * 255) / (1<<15);
-    tg = (tg * 255) / (1<<15);
-    tb = (tb * 255) / (1<<15);
-
     ystride_dst -= xstride_dst * dst_w;
-    ystride_src -= xstride_src * dst_w;
 
     for(int y = 0;
             y < dst_h;
@@ -525,31 +503,21 @@ grabcututil_finalize_cvmask(
                 x < dst_w;
                 ++x)
         {
-            if (remove_lineart != 0
-                    && (buf_src[0] != tr
-                        || buf_src[1] != tg
-                        || buf_src[2] != tb)) {
+           switch(*buf_dst) {
+               case 2:
+                // probable background
                 *buf_dst=0;
-            }
-            else {
-               switch(*buf_dst) {
-                   case 2:
-                    // probable background
-                    *buf_dst=0;
-                    break;
-                   case 3:
-                    // probable foreground
-                    *buf_dst=1;
-                    break;
-               }
-            }
+                break;
+               case 3:
+                // probable foreground
+                *buf_dst=1;
+                break;
+           }
             
             ++buf_dst;
-            buf_src+=3;
         }
         buf_dst += ystride_dst;
-        buf_src += ystride_src;
     }
-
     Py_RETURN_NONE;
 }
+

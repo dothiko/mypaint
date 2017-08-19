@@ -321,6 +321,8 @@ tile_convert_rgbu16_to_rgbu8_c(const uint16_t* const src,
       b = *src_p++;
       src_p++; // alpha unused
 #ifdef HEAVY_DEBUG
+      if (r > (1<<15))
+          printf("ERROR: %d\n",r );
       assert(r<=(1<<15));
       assert(g<=(1<<15));
       assert(b<=(1<<15));

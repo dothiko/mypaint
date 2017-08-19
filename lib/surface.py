@@ -171,6 +171,11 @@ class TileRequestWrapper (TileAccessible):
         return getattr(self._obj, attr)
 
     def _request_single_tile(self, tx, ty):
+        """Utility method.
+        To share same codes between `tile_request` 
+        and a method for dilation-fill of 
+        `ensure_surrounding_tiles`.
+        """
         tile = self._cache.get((tx, ty), None)
         if tile is None:
             tile = np.zeros((N, N, 4), 'uint16')
