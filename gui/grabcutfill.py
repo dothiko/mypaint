@@ -312,9 +312,36 @@ def grabcutfill(sample_layer, lineart_layer,
         if dilation_size > 0:
             mask = cv2.dilate(mask, neiborhood4, iterations=dilation_size)
 
+        contours, hierarchy = cv2.findContours( 
+                                mask,  
+                                cv2.RETR_EXTERNAL, 
+                                cv2.CHAIN_APPROX_SIMPLE)
+        
+        # We need BGR image to use drawcontour function.
+        new_mask = np.zeros((h, w, 3), dtype = np.uint8)
+        fill_contours = []
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area > 1024:
+                # less than 1024 pixel area should be rejected.
+                fill_contours.append(c)
+
+        cv2.drawContours(
+            new_mask, 
+            fill_contours, 
+            -1, 
+            (255, 255, 255),
+            -1)
+        mask = new_mask
+        # Utilize new_mask BGR image as 'mask'
+        # so target value would be changed.
+        target_value = 255
+    else:
+        # mask is Binary image, so Target value must be 1.
+        target_value = 1
+
     dst = cl._surface
     lineart_tile = None
-    target_value = 1
     for by in xrange(0, sh, N):
         ty = int(by // N) + sy
         for bx in xrange(0, sw, N):
