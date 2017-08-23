@@ -307,24 +307,34 @@ def grabcutfill(sample_layer, lineart_layer,
                                 [0, 1, 0]],
                                 np.uint8)
         if remove_lineart_pixel:
+            # remove at least 1 pixel from edge, 
+            # even dilation size is zero.
             mask = cv2.erode(mask, neiborhood4, iterations=dilation_size+1)
 
         if dilation_size > 0:
             mask = cv2.dilate(mask, neiborhood4, iterations=dilation_size)
 
+        # erosion/dilation operation would produce some garbage pixels
+        # around thick parts of lineart.
+        # To remove them, use cv2.findContours. Such garbages would be
+        # apperently smaller than the area that we want to fill.
         contours, hierarchy = cv2.findContours( 
                                 mask,  
                                 cv2.RETR_EXTERNAL, 
                                 cv2.CHAIN_APPROX_SIMPLE)
         
-        # We need BGR image to use drawcontour function.
-        new_mask = np.zeros((h, w, 3), dtype = np.uint8)
         fill_contours = []
         for c in contours:
             area = cv2.contourArea(c)
             if area > 1024:
-                # less than 1024 pixel area should be rejected.
+                # XXX Fixed value used - this should become user-configurable...
+                # Anyway, only greater than 1024 pixel area should be filled.
                 fill_contours.append(c)
+
+        # We need BGR image to use cv2.drawContours function.
+        # So `new_mask` should have 3 element for each pixel,
+        # contrary to ordinary mask has 1 element binary image.
+        new_mask = np.zeros((h, w, 3), dtype = np.uint8)
 
         cv2.drawContours(
             new_mask, 
@@ -333,11 +343,13 @@ def grabcutfill(sample_layer, lineart_layer,
             (255, 255, 255),
             -1)
         mask = new_mask
-        # Utilize new_mask BGR image as 'mask'
-        # so target value would be changed.
+
+        # To utilize new_mask BGR image as 'mask' in
+        # grabcututil_convert_binary_to_tile,
+        # we must change `target_value` as 255
         target_value = 255
     else:
-        # mask is Binary image, so Target value must be 1.
+        # mask is Binary image, so `target_value` must be 1.
         target_value = 1
 
     dst = cl._surface
@@ -347,7 +359,7 @@ def grabcutfill(sample_layer, lineart_layer,
         for bx in xrange(0, sw, N):
             tx = int(bx // N) + sx
             with dst.tile_request(tx, ty, readonly=False) as dst_tile:
-                # Currently, complete alpha in lineart layer
+                # Currently, complete transparent pixels in lineart layer
                 # would be converted into pure white.
                 # This function accepts mask image of different 
                 # two pixel formats.
