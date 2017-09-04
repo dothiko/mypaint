@@ -320,6 +320,11 @@ class InteractionMode (object):
 
     def button_press_cb(self, tdw, event):
         """Handler for ``button-press-event``s."""
+        # When realtime update notification disabled (especially PreviewTool)
+        # we need to trigger update notifier for such widgets.
+        if tdw.app is not None:
+            tdw.app.doc.model.start_realtime_event()
+
         assert not hasattr(super(InteractionMode, self), "button_press_cb")
 
     def motion_notify_cb(self, tdw, event):
@@ -336,6 +341,12 @@ class InteractionMode (object):
 
     def button_release_cb(self, tdw, event):
         """Handler for ``button-release-event``s."""
+
+        # When realtime update notification disabled (especially PreviewTool)
+        # we need to trigger update notifier for such widgets.
+        if tdw.app is not None:
+            tdw.app.doc.model.end_realtime_event()
+
         assert not hasattr(super(InteractionMode, self), "button_release_cb")
 
     def scroll_cb(self, tdw, event):

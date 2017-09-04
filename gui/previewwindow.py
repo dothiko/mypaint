@@ -233,6 +233,7 @@ class PreviewTool (SizedVBoxToolWidget):
         self.tdw.set_model(self._model)
         self.tdw.zoom_min = 1/50.0
         self.tdw.set_size_request(64, 64)
+        self.tdw.renderer.suppress_update = True
         self.pack_start(self.tdw, True, True, 0)
         self._cursor = None
 
@@ -563,6 +564,12 @@ class PreviewTool (SizedVBoxToolWidget):
         inside the previously known area.
 
         """
+
+        # When realtime(i.e. during freehand motion_update_cb) 
+        # update is suppressed, nothing done.
+        if self._model.suppress_update:
+            return
+
         outside_existing = False
         if x == 0 and y == 0 and w == 0 and h == 0:
             # This is a redraw-all notification. Don't track the zeros.
@@ -596,6 +603,10 @@ class PreviewTool (SizedVBoxToolWidget):
         :return: True if an update was performed.
 
         """
+
+        # When realtime update is suppressed, nothing done.
+        if self._model.suppress_update:
+            return
 
         # Clear tracking variables, if update forced
         if force:
@@ -659,3 +670,5 @@ class PreviewTool (SizedVBoxToolWidget):
         # Update the overlay, since the transformation has changed
         self._overlay.update_location()
         return True
+
+

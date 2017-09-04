@@ -282,6 +282,10 @@ class Document (object):
         self.stroke = None
         self.command_stack = command.CommandStack()
 
+        # Surpressing realtime update for additional widgets
+        # especially PreviewTool.
+        self._suppress_update = False
+
         # Cache and auto-saving to the cache
         self._painting_only = painting_only
         self._cache_dir = None
@@ -1016,6 +1020,19 @@ class Document (object):
     def invalidate_all(self):
         """Marks everything as invalid"""
         self.canvas_area_modified(0, 0, 0, 0)
+
+    ## Providing facility to suppress realtime(freehand) events refresh
+    #  for some classes such as PreviewTool.
+
+    def start_realtime_event(self):
+        self._suppress_update = True
+
+    def end_realtime_event(self):
+        self._suppress_update = False
+
+    @property
+    def suppress_update(self):
+        return self._suppress_update
 
     ## Undo/redo command stack
 

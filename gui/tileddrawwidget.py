@@ -747,6 +747,8 @@ class CanvasRenderer (Gtk.DrawingArea, DrawCursorMixin):
 
         self.connect("configure-event", self._configure_event_cb)
 
+        self.suppress_update = False
+
     def _init_alpha_checks(self):
         """Initialize the alpha check backgrounds"""
         # Real: checkerboard pattern, rendered via Cairo
@@ -860,6 +862,12 @@ class CanvasRenderer (Gtk.DrawingArea, DrawCursorMixin):
 
         if self._insensitive_state_content:
             return False
+
+        # Suppressing update to fasten mypaint, 
+        # if this canvas instance assigned so.
+        # This facility is mainly for PreviewTool.
+        if self.suppress_update and model.suppress_update:
+            return
 
         if not self.get_window():
             return
