@@ -561,8 +561,6 @@ class LayerBase (TileBlittable, TileCompositable):
         root = self.root
         if root is not None:
             root.layer_content_changed(self, *args)
-        else:
-            print("[INFO] NO ROOT!")
 
     def _properties_changed(self, properties):
         """Notifies the root's layer properties observers
