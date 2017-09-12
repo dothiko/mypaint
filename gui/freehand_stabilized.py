@@ -326,6 +326,11 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
             self._current_range = self._stabilize_range / 2
         self.queue_draw_ui(tdw)
 
+    def expand_range(self):
+        """Expand stabilizer range temporary (from keyboard shortcut)"""
+        self._current_range = self._stabilize_range
+        self.queue_draw_ui(None)
+
     ## Overlay related
 
     def _generate_overlay(self, tdw):

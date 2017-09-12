@@ -2172,6 +2172,13 @@ Vocabulary
           <signal name="activate" handler="mode_flip_action_activated_cb"/>
         </object>
       </child>
+      <child>
+        <object class="GtkAction" id="ExpandStabilizer">
+          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Expand Stabilizer</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Expand Stabilizer range temporary.</property>
+          <signal name="activate" handler="expand_stabilizer_cb"/>
+        </object>
+      </child>
       <!-- }}} -->
       <!-- {{{ Freehand with Parallel ruler radio and flip actions -->
       <child>

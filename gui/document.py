@@ -2450,4 +2450,10 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         else:
             logger.error('menu %s has no valid plugin instance. ' % widget.get_label())
 
+    def expand_stabilizer_cb(self, action):
+        """Callback: expand stabilizer range temporary, in stabilizer mode."""
+        mode=self.modes.top
+        if (mode.ACTION_NAME.startswith('Stabilize')
+                and hasattr(mode, 'expand_range')):
+            mode.expand_range()
 
