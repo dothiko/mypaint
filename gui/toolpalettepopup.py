@@ -35,8 +35,8 @@ TIMEOUT_LEAVE = int(0.7 * 1000) # Auto timeout, when once change size.
 
 class _Zone:
     INVALID = 0
-    CIRCLE = 0
-    BUTTON = 1
+    CIRCLE = 1
+    BUTTON = 2
 
 ## Class definitions
 
@@ -85,7 +85,6 @@ class ToolPalettePopup (windowing.PopupWindow):
 
         self.set_app_paintable(True)
         self.set_decorated(False)
-       #self.resize(320, 240)
         self.bgpix = None
 
         # Initialize buttons
@@ -103,7 +102,8 @@ class ToolPalettePopup (windowing.PopupWindow):
 
             if (action_name is not None
                     and not action_name in registered):
-                action = app.find_action(action_name)
+                # XXX Should we just use unmodified(not `Flip`) action name?
+                action = app.find_action("Flip%s" % action_name)
                 icon_name = action.get_icon_name()
                 if icon_name == None:
                     icon_name = 'mypaint-ok-symbolic'
@@ -162,6 +162,9 @@ class ToolPalettePopup (windowing.PopupWindow):
             self.queue_redraw(self)
 
     def capture_screen(self):
+        """Capture background screen.
+        This method is used when desktop compositor disabled.
+        """
         x, y = self.get_position()
         w, h = self.get_size()
         win = Gdk.get_default_root_window()
@@ -178,12 +181,11 @@ class ToolPalettePopup (windowing.PopupWindow):
 
         window = self.get_window()
         cursor = Gdk.Cursor.new_for_display(
-            window.get_display(), Gdk.CursorType.CROSSHAIR)
+            window.get_display(), Gdk.CursorType.ARROW)
         window.set_cursor(cursor)
         self._leave_cancel = True
 
     def leave(self, reason):
-       #if self._button == None:
         self.hide()
         self._close_timer_id = None
         self._button = None
@@ -195,13 +197,13 @@ class ToolPalettePopup (windowing.PopupWindow):
         if event.button == 1:
 
             if self._zone == _Zone.BUTTON:
-                idx = self._current_button_index
-                assert idx >= 0
-                assert idx < len(self.buttons)
-                junk, cls , action = self.buttons[idx]
-                doc = self.app.doc
-                doc.mode_radioaction_changed_cb(None, action)
-                self.leave("clicked")
+                # Nothing to be done here.
+                # Changing tool should be done
+                # at button_release_cb.
+                # If we change tool here 
+                # we messed up the tool cursor
+                # after leave this popup.
+                pass
             elif self._zone == _Zone.INVALID:
                 self.leave("aborted")
                 
@@ -209,12 +211,22 @@ class ToolPalettePopup (windowing.PopupWindow):
 
     def button_release_cb(self, widget, event):
         if self._button != None:
-            if self._close_timer_id:
-                GLib.source_remove(self._close_timer_id)
-            self._close_timer_id = GLib.timeout_add(
-                    TIMEOUT_LEAVE,
-                    self.leave,
-                    'timer')
+            self.update_zone(event.x, event.y)
+            if self._zone == _Zone.BUTTON:
+                idx = self._current_button_index
+                assert idx >= 0
+                assert idx < len(self.buttons)
+                junk, cls , action = self.buttons[idx]
+                doc = self.app.doc
+                doc.mode_flip_action_activated_cb(action)
+                self.leave("clicked")
+            else:
+                if self._close_timer_id:
+                    GLib.source_remove(self._close_timer_id)
+                self._close_timer_id = GLib.timeout_add(
+                        TIMEOUT_LEAVE,
+                        self.leave,
+                        'timer')
                         
         self._button = None
 

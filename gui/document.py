@@ -2218,7 +2218,6 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             mode.simplify_nodes()
 
     def cull_nodes_cb(self, action):
-        #<<<<<<< HEAD
         """Callback: cull current inktool nodes"""
         mode=self.modes.top
         if getattr(mode, 'cull_nodes', False):
