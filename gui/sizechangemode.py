@@ -31,7 +31,7 @@ import gui.ui_utils
 ## Interaction modes for making lines
 
 class SizechangeMode(gui.mode.ScrollableModeMixin,
-                    gui.mode.BrushworkModeMixin,
+                   #gui.mode.BrushworkModeMixin,
                     gui.mode.OneshotDragMode,
                     gui.mode.OverlayMixin):
     """Oncanvas brush Size change mode"""

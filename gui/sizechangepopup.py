@@ -16,36 +16,23 @@ from lib import helpers
 import windowing
 import drawutils
 import quickchoice
-
+import gui.cursor
 
 """Brush Size change popup."""
 
 
 ## Module constants
-
-MARGIN = 8
-FONT_SIZE = 10
-SIZE_SPACE = 20
-CANVAS_SIZE = 200
-ZOOM_SPACE = 28
-POPUP_HEIGHT = CANVAS_SIZE + MARGIN * 2 + ZOOM_SPACE
-POPUP_WIDTH = CANVAS_SIZE + SIZE_SPACE + (MARGIN * 3)
+FONT_SIZE = 20
+CANVAS_SIZE = 224
+RADIUS = CANVAS_SIZE / 2
+LINE_WIDTH = 32
 TIMEOUT_LEAVE = int(0.7 * 1000) # Auto timeout, when once change size.
-RELATIVE_THRESHOLD = 10
-MAX_RANGE_MIN = 80
-
-INDICATOR_HEIGHT = 22
-INDICATOR_WIDTH = CANVAS_SIZE - INDICATOR_HEIGHT 
-
-PRESETS = (1.0, 3.0, 6.0, 10.0, 32.0, 50.0)
-
-class _Zone:
-    INVALID = -1
-    CANVAS = 0
-    PRESET = 1
-    INDICATOR = 2
+MARGIN = LINE_WIDTH / 4
 
 ## Class definitions
+class _Zone:
+    INVALID = 0
+    CIRCLE = 1
 
 class SizePopup (windowing.PopupWindow):
     """Brush Size change popup
@@ -55,6 +42,10 @@ class SizePopup (windowing.PopupWindow):
     """
 
     outside_popup_timeout = 0
+
+    _mask = None
+    _active_cursor = None
+    _normal_cursor = None
 
     def __init__(self, app, prefs_id=quickchoice._DEFAULT_PREFS_ID):
         super(SizePopup, self).__init__(app)
@@ -76,60 +67,54 @@ class SizePopup (windowing.PopupWindow):
 
         self.connect("draw", self.draw_cb)
 
-        self.set_size_request(POPUP_WIDTH, POPUP_HEIGHT)
+        self.set_size_request(CANVAS_SIZE, CANVAS_SIZE)
 
-        self._brush_size = None
+        self._brush_normal = None
         self._button = None
         self._close_timer_id = None
-        self._doubleclicked = False
         self._zone = _Zone.INVALID
-        self._original_size = None
-        
+        self._current_cursor = None
+
     @property
-    def canvas_center(self):
-        return MARGIN + (CANVAS_SIZE / 2)
-        
+    def active_cursor(self):
+        cls = self.__class__
+        if cls._active_cursor is None:
+            cursors = self.app.cursors
+            cursor = cursors._get_overlay_cursor(
+                        None, 
+                        gui.cursor.Name.CROSSHAIR_OPEN) 
+            cls._active_cursor = cursor
+        return cls._active_cursor
+
     @property
-    def max_range(self):
-        return self._max_range
-        
-    @max_range.setter
-    def max_range(self, value):
-        self._max_range = min(max(MAX_RANGE_MIN, value), self.max_radius)
-        self._canvas_ratio = CANVAS_SIZE / float(self._max_range)
-        
+    def normal_cursor(self):
+        cls = self.__class__
+        if cls._normal_cursor is None:
+            cursors = self.app.cursors
+            cursor = cursors._get_overlay_cursor(
+                        None, 
+                        gui.cursor.Name.ARROW
+                    ) 
+            cls._normal_cursor = cursor
+        return cls._normal_cursor
+
     @property
-    def max_range_level(self):
-        return (self._max_range - MAX_RANGE_MIN) / (self.max_radius - MAX_RANGE_MIN)
-        
-    @property
-    def max_radius(self):
-        return math.exp(self._adj.get_upper())
+    def current_cursor(self):
+        return self._current_cursor
+
+    @current_cursor.setter
+    def current_cursor(self, cursor):
+       #if self._current_cursor != cursor:
+        window = self.get_window()
+        window.set_cursor(cursor)
+        self._current_cursor = cursor
+
+    def display_to_local(self, dx, dy):
+        return (dx - RADIUS, dy - RADIUS)
 
     def get_normalized_brush_size(self, pixel_size):
         brush_range = self._adj.get_upper() - self._adj.get_lower()
         return (math.log(pixel_size) - self._adj.get_lower()) / brush_range
-            
-    def get_zone(self, x, y):
-        """ Get zone information, to know where user clicked.
-        """
-        canvas_bottom = MARGIN + CANVAS_SIZE
-        
-        if (MARGIN < x < MARGIN + CANVAS_SIZE and
-                MARGIN < y < canvas_bottom):
-            return _Zone.CANVAS
-        
-        left = MARGIN * 2 + CANVAS_SIZE
-        if (left <= x <= left + SIZE_SPACE and
-                MARGIN < y < MARGIN + CANVAS_SIZE):
-            return _Zone.PRESET
-            
-        canvas_bottom += MARGIN    
-        if (MARGIN < x < MARGIN + INDICATOR_WIDTH and
-                canvas_bottom < y < canvas_bottom + INDICATOR_HEIGHT):
-            return _Zone.INDICATOR            
-            
-        return _Zone.INVALID
         
     def popup(self):
         self.enter()
@@ -140,84 +125,46 @@ class SizePopup (windowing.PopupWindow):
         self.move(x, y)
         self.show_all()
 
-        window = self.get_window()
-        cursor = Gdk.Cursor.new_for_display(
-            window.get_display(), Gdk.CursorType.CROSSHAIR)
-        window.set_cursor(cursor)
-
         adj = self.app.brush_adjustment['radius_logarithmic']
         self._adj = adj
-        self._brush_size = math.exp(adj.get_value()) 
-        self._initial_size = self._brush_size
-        self.max_range = MAX_RANGE_MIN
         self._leave_cancel = True
 
+        self._brush_normal = self.get_brushsize_normaled_from_adj()
+
     def leave(self, reason):
-        if self._button == None:
-            if self._brush_size:
-                self._adj.set_value(math.log(self._brush_size))
-            self._brush_size = None
-            self._close_timer_id = None
-            self._button = None
-            self.hide()
+        if self._brush_normal is not None:
+            # Restore `normalized` brush size into logarithmic.
+             self.set_brushsize_normaled_to_adj(self._brush_normal)
+        self._brush_normal = None
+        self._close_timer_id = None
+        self._button = None
+        self.hide()
 
     def button_press_cb(self, widget, event):
+        self.update_zone(event.x, event.y)
         self._button = event.button
         if event.button == 1:
 
             if self._close_timer_id:
                 GLib.source_remove(self._close_timer_id)
-                
-            x, y = event.x, event.y
-            self._zone = self.get_zone(x, y)
-            
-            if self._zone == _Zone.CANVAS:                                    
-                if event.type == Gdk.EventType.BUTTON_PRESS:
-                    self.base_x = x
-                    self.base_y = y   
-                    # Save pre-click brush size,
-                    # for double click relative mode  
-                    self._prev_size = self._original_size           
-                    self._original_size = self._brush_size
-                                   
-                    self._direct_set_radius(x, y)
 
-            elif self._zone == _Zone.PRESET:
-                segment = float(CANVAS_SIZE) / len(PRESETS)
-                idx = int(math.floor((y - MARGIN) / segment))
-                # NOTE: Preset is DIAMETER, not radius.
-                self.brush_size = PRESETS[idx] / 2.0
-            elif self._zone == _Zone.INDICATOR:
-                pass
-            else:
-                self._button = None
-                
-            if event.type == Gdk.EventType._2BUTTON_PRESS:
-                self._doubleclicked = True
-                # Reset brush size as efore doubleclick relative mode
-                assert self._prev_size != None
-                self._brush_size = self._prev_size
+            if self._zone == _Zone.CIRCLE:
+                self._brush_normal = self.get_brushsize_normaled(
+                                        event.x, event.y)
+            elif self._zone == _Zone.INVALID:
+                self._brush_normal = None
+                self.leave("aborted")
                     
         self.queue_redraw(widget)
 
     def button_release_cb(self, widget, event):
         if self._button != None:
-            if self._zone == _Zone.CANVAS:
-
-                if self._close_timer_id:
-                    GLib.source_remove(self._close_timer_id)
-                self._close_timer_id = GLib.timeout_add(
-                        TIMEOUT_LEAVE,
-                        self.leave,
-                        'timer')
-                        
-                if self._doubleclicked:
-                    if ( event.x < 0 or event.y < 0 or
-                        event.x >= POPUP_WIDTH or event.y >= POPUP_HEIGHT):
-                        self._leave_cancel = True
-                    self._doubleclicked = False
-                    self.queue_redraw(widget)
-                    self._original_size = None
+            if self._close_timer_id:
+                GLib.source_remove(self._close_timer_id)
+            self._close_timer_id = GLib.timeout_add(
+                    TIMEOUT_LEAVE,
+                    self.leave,
+                    'timer')
 
         self._button = None
 
@@ -230,23 +177,29 @@ class SizePopup (windowing.PopupWindow):
             self.leave('outside')
 
     def motion_cb(self, widget, event):
+        self.update_zone(event.x, event.y)
         if self._button == 1:
-            if self._zone == _Zone.CANVAS:
-                if self._doubleclicked:
-                    self._relative_set_radius(event.x - self.base_x, 
-                        event.y - self.base_y)
-                else:
-                    self._direct_set_radius(event.x, event.y)
-
-                self.queue_redraw(widget)
-                self.base_x = event.x
-                self.base_y = event.y
-            elif self._zone == _Zone.INDICATOR:
-                pos = (event.x - MARGIN) / float(INDICATOR_WIDTH)
-                max_indicator = self.max_radius - MAX_RANGE_MIN
-                self.max_range = MAX_RANGE_MIN + (pos * max_indicator)
+            if self._zone == _Zone.CIRCLE:
+                self._brush_normal = self.get_brushsize_normaled(
+                                        event.x, event.y)
                 self.queue_redraw(widget)
 
+    def update_zone(self, x, y):
+        x, y = self.display_to_local(x, y)
+        zone = _Zone.INVALID
+        cursor = self.normal_cursor
+        r = RADIUS
+        sub_r = r - LINE_WIDTH
+        inner_r = (sub_r - LINE_WIDTH / 2) - MARGIN
+        outer_r = (sub_r + LINE_WIDTH / 2) + MARGIN
+
+        dist = math.hypot(x , y)
+        if dist >= inner_r and dist <= outer_r:
+            zone = _Zone.CIRCLE
+            cursor = self.active_cursor
+
+        self.current_cursor = cursor
+        self._zone = zone
 
     def queue_redraw(self, widget):
         a = widget.get_allocation()
@@ -254,136 +207,73 @@ class SizePopup (windowing.PopupWindow):
         
     @property
     def brush_size(self):
-        return self._brush_size
+        """Get brush size in pixels"""
+        adj = self._adj
+        min_s = adj.get_lower()
+        max_s = adj.get_upper()
+        val = self._brush_normal * (max_s - min_s) + min_s
+        return math.exp(val)
         
-    @brush_size.setter
-    def brush_size(self, new_size):
-        new_size = max (math.exp(self._adj.get_lower()), new_size)
-        new_size = min (math.exp(self._adj.get_upper()), new_size)
-        self._brush_size = new_size
+    def get_brushsize_normaled_from_adj(self):
+        """ Get normalized brush size from brush_adjustment"""
+        adj = self._adj
+        min_s = adj.get_lower()
+        max_s = adj.get_upper()
+        cur = adj.get_value() 
+        return (cur - min_s) / (max_s - min_s)
 
-    def _relative_set_radius(self, x, y):
-        """ Set brush radius relatively.
-        if pointer is off from size circle,this callback
-        returns False.
-        Otherwise this updates internal size value and returns True.
+    def set_brushsize_normaled_to_adj(self, value):
+        """ Set normalized brush size to brush_adjustment"""
+        adj = self._adj
+        min_s = adj.get_lower()
+        max_s = adj.get_upper()
+        adj.set_value((max_s - min_s) * value + min_s)
 
-        :param x: the raw x difference of pointer, in pixel.
-        :param y: the raw y difference of pointer, in pixel.
-        """ 
-        half_canvas = CANVAS_SIZE / 2
-        self.brush_size = self.brush_size + \
-            x * 0.1 * math.exp(self._brush_size / 100.0)      
-
-                
-    def _direct_set_radius(self, x, y):
-        """ Set brush radius relatively.
-        if pointer is off from size circle,this callback
-        returns False.
-        Otherwise this updates internal size value and returns True.
-
-        :param x: the raw x coordinate of pointer, in pixel.
-        :param y: the raw y coordinate of pointer, in pixel.
-        """ 
-        center = MARGIN + (CANVAS_SIZE / 2)
-        x -= center
-        y -= center
-        
-        length = math.hypot(x, y)
-        self.brush_size = length / self._canvas_ratio
+    def get_brushsize_normaled(self, x, y):
+        """Get normalized brush size from local coordinate.
+        i.e. get clockwise angle of pressed point.
+        :param x: window event.x
+        :param y: window event.y
+        """
+        x, y = self.display_to_local(x, y)
+        r = RADIUS
+        a = math.acos(-y / math.hypot(x,y))
+        rad = math.pi * 2
+        if x < 0:
+            a = rad - a
+        return a / rad
 
     def draw_cb(self, widget, cr):
-        cr.set_source_rgb(0.9, 0.9, 0.9)
+        cr.set_source_rgba(0.9, 0.9, 0.9, 1.0)
         cr.paint()
         cr.set_font_size(12)
 
         # Drawing background of presets
         cr.save()
-        rad = min(4, MARGIN / 2)
-        drawutils.create_rounded_rectangle_path(cr, 
-                MARGIN * 2 + CANVAS_SIZE - rad, MARGIN - rad,
-                SIZE_SPACE + rad*2, CANVAS_SIZE + rad*2, 
-                rad)
-        cr.set_source_rgb(0.4, 0.4, 0.4)
-        cr.fill()
-        cr.restore()
-        
-        cr.save()
-        # Draw zoom indicator
-        cr.set_source_rgb(1.0, 1.0, 1.0)
-        cr.translate(MARGIN, 
-            CANVAS_SIZE + (ZOOM_SPACE - INDICATOR_HEIGHT / 2))
-            
-        drawutils.create_rounded_rectangle_path(cr, 
-                0, 0, INDICATOR_WIDTH, INDICATOR_HEIGHT,
-                rad) 
-        cr.clip_preserve()
-        cr.fill()
-        
-        cr.set_source_rgb(1.0, 0.5, 0.0)
-        cr.rectangle(0, 0,
-            self.max_range_level * INDICATOR_WIDTH, INDICATOR_HEIGHT)
-        cr.fill()
-        
-        cr.set_source_rgb(0.0, 0.0, 0.0)
-        cr.move_to(MARGIN, 
-            (INDICATOR_HEIGHT / 2) + (FONT_SIZE / 2))
-        cr.show_text("%.2f / max %.2f" % 
-            (self._brush_size * 2.0, # Shows diameter.
-             self._max_range))
-        cr.restore()
+        r = (CANVAS_SIZE / 2)
+        sub_r = r - LINE_WIDTH
+        angle_offset = -(math.pi / 2)
+        brush_angle = self._brush_normal * math.pi * 2
 
-        # Draw base canvas circle
-        cr.save()
-        cr.translate(MARGIN + CANVAS_SIZE / 2, MARGIN + CANVAS_SIZE / 2)
-        cr.set_source_rgb(1.0, 1.0, 1.0)
-        cr.arc(0, 0, CANVAS_SIZE / 2, 0, math.pi * 2)
+        cr.translate(r, r)
+        cr.set_line_width(LINE_WIDTH)
+        cr.set_source_rgba(0.0, 0.0, 0.0, 1.0)
+        cr.arc(0, 0, sub_r, angle_offset, math.pi*2 +angle_offset)
+        cr.stroke()
         
-        cr.clip_preserve() # Important: clip following draw calls.
-        cr.fill()
-
-        assert self._brush_size != None
-        # Drawing current brush size
-        if self._doubleclicked:
-            cr.set_source_rgb(1.0, 0, 0)
-        else:
-            cr.set_source_rgb(0, 0, 0)
-        cr.arc(0, 0, self._brush_size * self._canvas_ratio,
-            0, math.pi * 2)
-        cr.fill()
-
-        # Drawing initial brush size
-        cr.set_source_rgb(0, 0.3, 0.7)
-        cr.arc(0, 0, self._initial_size * self._canvas_ratio,
-            0, math.pi * 2)
+        cr.set_source_rgba(1.0, 0.5, 0.0, 1.0)
+        cr.arc(0, 0, sub_r, angle_offset, brush_angle+angle_offset)
         cr.stroke()
 
-        # Drawing gauge
-        cr.set_source_rgb(0.6, 0.6, 0.6)
-        cr.set_line_width(1)
-        for i in (1, 10, 100, 250):
-            rad = i * self._canvas_ratio
-            cr.arc(0, 0, rad * 0.5, 0, math.pi * 2)
-            cr.stroke()
-        cr.restore()
+        cr.set_source_rgba(0.0, 0.0, 0.0, 1.0)
+        cr.set_font_size(FONT_SIZE)
+        txt = "%.3f" % self.brush_size
+        x_bearing, y_bearing, width, height, x_advance, y_advance = cr.text_extents(txt)
+        cr.move_to(-width / 2, height / 2)
+        cr.show_text(txt)
 
-        # Draw presets
-        cr.save()
-        cr.set_source_rgb(1.0, 1.0, 1.0)
-        center = CANVAS_SIZE + (MARGIN * 2) + (SIZE_SPACE / 2)
-        cnt = float(len(PRESETS))
-        segment_size = CANVAS_SIZE / cnt
-        max_radius = min(SIZE_SPACE, segment_size)
-        cr.set_source_rgb(1.0, 1.0, 1.0)
-        cr.set_line_width(1.0)
-        cr.translate(CANVAS_SIZE + (MARGIN * 2), MARGIN)
-        for i, size in enumerate(PRESETS):
-            cr.move_to(0, (segment_size / 2) + (FONT_SIZE / 2))
-            cr.show_text("%d" % size)
-            cr.move_to(0, segment_size - 1)
-            cr.line_to(0 + SIZE_SPACE, segment_size - 1)
-            cr.translate(0, segment_size)
         cr.restore()
+        
 
         return True
 

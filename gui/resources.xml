@@ -295,7 +295,7 @@ Vocabulary
       <child>
         <object class="GtkAction" id="SizeChangePopup">
           <property name="label" translatable="yes" context="Menu→Color (labels), Accel Editor (labels)">BrushSize Change Popup</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Change the working brush size</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Make change the working brush size</property>
           <signal name="activate" handler="quick_chooser_popup_cb"/>
         </object>
         <accelerator key="x"/>
@@ -2237,6 +2237,15 @@ Vocabulary
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">fill an area with user-assigned color samples of current layer.</property>
           <property name="icon-name">mypaint-fill-symbolic</property>
           <signal name="activate" handler="mode_flip_action_activated_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
+      <!-- {{{ Tool palette popup -->
+      <child>
+        <object class="GtkAction" id="ToolPalettePopup">
+          <property name="label" translatable="yes" context="Menu→Color (labels), Accel Editor (labels)">Tool Palette Popup</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Popup tool palette to select it quickly on canvas.</property>
+          <signal name="activate" handler="quick_chooser_popup_cb"/>
         </object>
       </child>
       <!-- }}} -->

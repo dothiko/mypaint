@@ -48,6 +48,7 @@ import gui.picker
 import gui.footer
 import brushselectionwindow
 import sizechangepopup
+import toolpalettepopup
 
 import xml.etree.ElementTree as ET
 
@@ -124,6 +125,9 @@ class DrawWindow (Gtk.Window):
         ),
         "SizeChangePopup": (
             sizechangepopup.SizePopup, [],
+        ),
+        "ToolPalettePopup": (
+            toolpalettepopup.ToolPalettePopup, [],
         ),
     }
 
