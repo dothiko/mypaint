@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2016 by dothiko <dothiko@gmail.com>
+# Copyright (C) 2017 by dothiko <dothiko@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -26,11 +26,8 @@ import gui.mode
 ICON_SIZE = 32
 ICON_RADIUS = ICON_SIZE / 2
 LABEL_SPACE = 10
-CANVAS_SIZE = 256
 LABEL_HEIGHT = 30
 FONT_SIZE = 16
-POPUP_HEIGHT = CANVAS_SIZE + LABEL_HEIGHT + LABEL_SPACE * 2
-POPUP_WIDTH = CANVAS_SIZE  
 TIMEOUT_LEAVE = int(0.7 * 1000) # Auto timeout, when once change size.
 
 class _Zone:
@@ -48,6 +45,8 @@ class ToolPalettePopup (windowing.PopupWindow):
     """
 
     outside_popup_timeout = 0
+    _canvas_size = None
+    buttons = None
 
     def __init__(self, app, prefs_id=quickchoice._DEFAULT_PREFS_ID):
         super(ToolPalettePopup, self).__init__(app)
@@ -69,7 +68,6 @@ class ToolPalettePopup (windowing.PopupWindow):
 
         self.connect("draw", self.draw_cb)
 
-        self.set_size_request(POPUP_WIDTH, POPUP_HEIGHT)
 
         self._button = None
         self._close_timer_id = None
@@ -88,53 +86,67 @@ class ToolPalettePopup (windowing.PopupWindow):
         self.bgpix = None
 
         # Initialize buttons
-        buttons = []
-        registered = []
-        for cs in gui.mode.ModeRegistry.mode_classes:
-            action_name = None
-            if (issubclass(cs, gui.mode.BrushworkModeMixin)
-                    or issubclass(cs, gui.mode.SingleClickMode)):
-                # The class which has cs.ACTION_NAME is
-                # not baseclass/mixin, so append to list.
-                action_name = cs.ACTION_NAME
-            else:
-                continue
+        cls = self.__class__
+        if cls.buttons == None:
+            buttons = []
+            registered = []
+            for cs in gui.mode.ModeRegistry.mode_classes:
+                action_name = None
+                if (issubclass(cs, gui.mode.BrushworkModeMixin)
+                        or issubclass(cs, gui.mode.SingleClickMode)):
+                    # The class which has cs.ACTION_NAME is
+                    # not baseclass/mixin, so validate it.
+                    action_name = cs.ACTION_NAME
+                else:
+                    continue
 
-            if (action_name is not None
-                    and not action_name in registered):
-                # XXX Should we just use unmodified(not `Flip`) action name?
-                action = app.find_action("Flip%s" % action_name)
-                icon_name = action.get_icon_name()
-                if icon_name == None:
-                    icon_name = 'mypaint-ok-symbolic'
-                pixbuf = gui.drawutils.load_symbolic_icon(
-                    icon_name=icon_name,
-                    size=gui.style.FLOATING_BUTTON_ICON_SIZE,
-                    fg=(0, 0, 0, 1),
-                )
-                buttons.append((pixbuf, cs, action))
-                registered.append(action_name)
+                # I don't know exactly what is happening,
+                # but some `valid` action might be enumrated multiple times.
+                # To reject them, use `registered` list.
+                if (action_name is not None
+                        and not action_name in registered):
+                    # XXX Should we just use unmodified(not `Flip`) action name?
+                    action = app.find_action("Flip%s" % action_name)
+                    icon_name = action.get_icon_name()
+                    if icon_name == None:
+                        icon_name = 'mypaint-ok-symbolic'
+                    pixbuf = gui.drawutils.load_symbolic_icon(
+                        icon_name=icon_name,
+                        size=gui.style.FLOATING_BUTTON_ICON_SIZE,
+                        fg=(0, 0, 0, 1),
+                    )
+                    buttons.append((pixbuf, cs, action))
+                    registered.append(action_name)
 
-        # Sort buttons to make it unique order.
-        # Without this, button order might be changed everytime.
-        def _sort_buttons(a, b):
-            aname = a[1].ACTION_NAME
-            bname = b[1].ACTION_NAME
-            if aname < bname:
-                return -1
-            elif aname == bname:
-                return 0
-            else:
-                return 1
+            # Sort buttons, to make it unique order.
+            # Without this, button order might be changed everytime
+            # we start mypaint.
+            def _sort_buttons(a, b):
+                aname = a[1].ACTION_NAME
+                bname = b[1].ACTION_NAME
+                if aname < bname:
+                    return -1
+                elif aname == bname:
+                    return 0
+                else:
+                    return 1
 
-        self.buttons = sorted(buttons, _sort_buttons)
+            cls.buttons = sorted(buttons, _sort_buttons)
+
+        # Button setup completed. now we can get self.canvas_size
+        # and set size_request.
+        
+        canvas_size = self.canvas_size
+        width = canvas_size
+        height = canvas_size + LABEL_HEIGHT + LABEL_SPACE * 2
+        self.set_size_request(width, height)
 
     def update_zone(self, x, y):
         """ Get zone information, to know where user clicked.
         """
-        w, h = self.get_canvas_size()
+        w = self.canvas_size
         x -= w/2
-        y -= h/2
+        y -= w/2
         dist = math.hypot(x, y)
         sub_r = self.sub_radius
         r = self.radius
@@ -198,9 +210,9 @@ class ToolPalettePopup (windowing.PopupWindow):
 
             if self._zone == _Zone.BUTTON:
                 # Nothing to be done here.
-                # Changing tool should be done
-                # at button_release_cb.
-                # If we change tool here 
+                # `Changing tool` should be done
+                # at button_release_cb, not here.
+                # If we change tool here,
                 # we messed up the tool cursor
                 # after leave this popup.
                 pass
@@ -264,19 +276,20 @@ class ToolPalettePopup (windowing.PopupWindow):
         if idx == -1:
             return
         junk, cs, act = self.buttons[idx]
+        canvsize = self.canvas_size
         # We can draw much better text with pango
         # such as
         # gui.overlay.ScaleOverlay.paint_frame()
         cr.save()
         cr.set_source_rgba(0.0, 0.0, 0.0, 0.6)
         cr.translate(
-            CANVAS_SIZE / 2, 
-            CANVAS_SIZE + LABEL_SPACE + LABEL_HEIGHT / 2
+            canvsize / 2, 
+            canvsize + LABEL_SPACE + LABEL_HEIGHT / 2
         )
         gui.overlays.rounded_box(
             cr,
-            -CANVAS_SIZE/2, -LABEL_HEIGHT / 2,
-            CANVAS_SIZE,
+            -canvsize/2, -LABEL_HEIGHT / 2,
+            canvsize,
             LABEL_HEIGHT,
             6
         )
@@ -305,11 +318,11 @@ class ToolPalettePopup (windowing.PopupWindow):
             Gdk.cairo_set_source_pixbuf(cr, self.bgpix, 0, 0)
             cr.paint()
 
-        w, h = self.get_canvas_size()
+        w = self.canvas_size
         r = self.radius
         sub_r = self.sub_radius
 
-        cr.translate(w/2, h/2)
+        cr.translate(w/2, w/2)
 
         # Drawing background of presets
         cr.save()
@@ -325,7 +338,7 @@ class ToolPalettePopup (windowing.PopupWindow):
         cr.restore() # Restoring from transparent state
 
         cr.save()
-        cr.translate(w/2, h/2)
+        cr.translate(w/2, w/2)
         btncnt = len(self.buttons)
         for i, cbtn in enumerate(self.buttons):
             dx, dy = self._get_button_pos(i)
@@ -350,8 +363,7 @@ class ToolPalettePopup (windowing.PopupWindow):
 
     @property
     def radius(self):
-        w, h = self.get_size()
-        return min(w/2, h/2)
+        return self.canvas_size / 2
 
     @property
     def sub_radius(self):
@@ -381,6 +393,14 @@ class ToolPalettePopup (windowing.PopupWindow):
                 return i
         return -1
 
-    def get_canvas_size(self):
-        return (CANVAS_SIZE, CANVAS_SIZE)
+    @property
+    def canvas_size(self):
+        """CAUTION: Use this after buttons setup!!
+        """
+        cls = self.__class__
+        if cls._canvas_size == None:
+            # We can get suitable canvas size from circumference.
+            canvas_size = ((len(self.buttons) * (ICON_SIZE * 1.1)) / math.pi) * 2
+            cls._canvas_size = canvas_size
+        return self._canvas_size
 
