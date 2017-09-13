@@ -131,7 +131,7 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
 
     @classmethod
     def get_name(cls):
-        return _(u"Freehand Drawing with Stabilizer")
+        return _(u"Freehand Stabilizer")
 
     def get_usage(self):
         return _(u"Paint free-form brush strokes with stabilizer")

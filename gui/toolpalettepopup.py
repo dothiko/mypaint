@@ -28,7 +28,7 @@ ICON_RADIUS = ICON_SIZE / 2
 LABEL_SPACE = 10
 CANVAS_SIZE = 256
 LABEL_HEIGHT = 30
-FONT_SIZE = 18
+FONT_SIZE = 16
 POPUP_HEIGHT = CANVAS_SIZE + LABEL_HEIGHT + LABEL_SPACE * 2
 POPUP_WIDTH = CANVAS_SIZE  
 TIMEOUT_LEAVE = int(0.7 * 1000) # Auto timeout, when once change size.
@@ -258,12 +258,12 @@ class ToolPalettePopup (windowing.PopupWindow):
         cr.save()
         cr.set_source_rgba(0.0, 0.0, 0.0, 0.6)
         cr.translate(
-            0, 
+            CANVAS_SIZE / 2, 
             CANVAS_SIZE + LABEL_SPACE + LABEL_HEIGHT / 2
         )
         gui.overlays.rounded_box(
             cr,
-            0, -LABEL_HEIGHT / 2,
+            -CANVAS_SIZE/2, -LABEL_HEIGHT / 2,
             CANVAS_SIZE,
             LABEL_HEIGHT,
             6
@@ -271,9 +271,11 @@ class ToolPalettePopup (windowing.PopupWindow):
         cr.fill()
 
         cr.set_source_rgba(1, 1, 1, 1)
-        cr.move_to(0, FONT_SIZE / 2);
         cr.set_font_size(FONT_SIZE)
-        cr.show_text(cs.get_name())
+        txt = cs.get_name()
+        x_bear, y_bear, width, height, x_adv, y_adv = cr.text_extents(txt)
+        cr.move_to(-width/2, height/2)
+        cr.show_text(txt)
         cr.restore()
 
     def draw_cb(self, widget, cr):

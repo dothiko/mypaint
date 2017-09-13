@@ -268,7 +268,7 @@ class SizePopup (windowing.PopupWindow):
         cr.set_source_rgba(0.0, 0.0, 0.0, 1.0)
         cr.set_font_size(FONT_SIZE)
         txt = "%.3f" % self.brush_size
-        x_bearing, y_bearing, width, height, x_advance, y_advance = cr.text_extents(txt)
+        x_bear, y_bear, width, height, x_adv, y_adv = cr.text_extents(txt)
         cr.move_to(-width / 2, height / 2)
         cr.show_text(txt)
 

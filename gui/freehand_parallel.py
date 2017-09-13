@@ -80,7 +80,7 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
 
     @classmethod
     def get_name(cls):
-        return _(u"Freehand Drawing with Parallel ruler")
+        return _(u"Freehand Parallel")
 
     def get_usage(self):
         return _(u"Paint free-form brush strokes with parallel ruler")
