@@ -135,6 +135,15 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
     def drag_start_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
         self._queue_draw_brush()
+        # Storing original cursor position(in screen coodinate)
+        # and some needed objects.
+        dev = event.get_device()
+        self._dev = dev
+        pos = dev.get_position()
+        self._scr = event.get_screen()
+        self._ox = pos.x
+        self._oy = pos.y
+
         super(SizechangeMode, self).drag_start_cb(tdw, event)
 
     def drag_update_cb(self, tdw, event, dx, dy):
@@ -154,7 +163,12 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
          
         self.base_x = None
         self.base_y = None
+
+        # Reset cursor positon at start position of dragging.
+        Gdk.Device.warp(self._dev, self._scr, self._ox, self._oy)
+
         super(SizechangeMode, self).drag_stop_cb(tdw)
+
         
 
     ## Overlays
