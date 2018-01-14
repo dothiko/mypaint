@@ -206,6 +206,8 @@ class AssistedFreehandMode (freehand.FreehandMode,
         pressure = event.get_axis(Gdk.AxisUse.PRESSURE)
         xtilt = event.get_axis(Gdk.AxisUse.XTILT)
         ytilt = event.get_axis(Gdk.AxisUse.YTILT)
+        viewzoom = tdw.scale
+        viewrotation = tdw.rotation
         state = event.state
 
         # Workaround for buggy evdev behaviour.
@@ -328,7 +330,12 @@ class AssistedFreehandMode (freehand.FreehandMode,
             self.fetch(x, y, pressure, time)
             for x, y, p in self.enum_samples():
                 x, y = tdw.display_to_model(x, y)
-                event_data = (time, x, y, p, xtilt, ytilt)
+                event_data = (
+                    time, 
+                    x, y, p, 
+                    xtilt, ytilt, 
+                    viewzoom, viewrotation
+                )
                 drawstate.queue_motion(event_data)
 
             # New positioned assistant overlay should be drawn here.
@@ -339,7 +346,12 @@ class AssistedFreehandMode (freehand.FreehandMode,
 
             # Queue this event
             x, y = tdw.display_to_model(x, y)
-            event_data = (time, x, y, pressure, xtilt, ytilt)
+            event_data = (
+                time, 
+                x, y, pressure, 
+                xtilt, ytilt, 
+                viewzoom, viewrotation
+            )
             drawstate.queue_motion(event_data)
 
         # Start the motion event processor, if it isn't already running
@@ -438,7 +450,14 @@ class AssistedFreehandMode (freehand.FreehandMode,
         :param x,y: stroke position, in MODEL coodinate.
         """
         drawstate = self._get_drawing_state(tdw)
-        event_data = (time, x, y, pressure, xtilt, ytilt)
+        event_data = (
+            time, 
+            x, y, 
+            pressure, 
+            xtilt, ytilt,
+            tdw.scale, # viewzoom
+            tdw.rotation # viewrotation
+        )
         drawstate.queue_motion(event_data)
 
         if not drawstate.motion_processing_cbid:
