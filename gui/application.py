@@ -101,12 +101,12 @@ import stampeditor
 import exinktool
 import projectmanager
 from lib.observable import event
-import grabcutfill
 import freehand_stabilized
 import freehand_parallel
 import freehand_center
 import lib.tiledsurface
 import oncanvas
+import closefill
 
 ## Utility methods
 

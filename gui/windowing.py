@@ -21,6 +21,7 @@ import gi
 from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GLib
+import cairo
 
 from lib.helpers import clamp
 
@@ -628,3 +629,49 @@ class ChooserPopup (Gtk.Window):
             elif hasattr(self, 'advance'):
                 self.advance()
            
+class TransparentMixin:
+    """A Mixin for popup window which has transparent background
+    """
+
+    def setup_background(self):
+        """Setup screen background.
+        If there is no composition mode in current window manager, 
+        create its own capture buffer.
+        """
+        # Transparent window supports
+        screen = self.get_screen()
+        visual = screen.get_rgba_visual()
+        if visual != None and screen.is_composited():
+            self.set_visual(visual)
+
+        self.set_app_paintable(True)
+        self.set_decorated(False)
+        self.bgpix = None
+
+    def capture_screen(self):
+        """Capture background screen.
+        This method is used when desktop compositor disabled.
+        """
+        x, y = self.get_position()
+        w, h = self.get_size()
+        win = Gdk.get_default_root_window()
+        self.bgpix = Gdk.pixbuf_get_from_window(win, x, y, w, h)
+
+    def draw_background(self, cr):
+        """Draw background.  call this from draw_cb.
+        You should use this method between cr.save() - cr.restore(),
+        For example,
+
+        cr.save()
+        self.draw_background(cr)
+        draw_something_in_cairo_with_alpha_transparency
+        cr.restore() # Exit from transparent state
+        """
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        # Drawing background for transparent.
+        if self.bgpix is None:
+            cr.set_source_rgba(1.0, 1.0, 1.0, 0.0)
+            cr.paint()
+        else:
+            Gdk.cairo_set_source_pixbuf(cr, self.bgpix, 0, 0)
+            cr.paint()

@@ -26,6 +26,7 @@ import weakref
 from gettext import gettext as _
 from logging import getLogger
 logger = getLogger(__name__)
+import operator 
 
 
 ## Command stack and action interface
@@ -659,7 +660,7 @@ class FloodFill (Command):
 
     def __init__(self, doc, x, y, color, bbox, tolerance,
                  sample_merged, make_new_layer, 
-                 dilation_size, **kwds):
+                 **kwds):
         super(FloodFill, self).__init__(doc, **kwds)
         self.x = x
         self.y = y
@@ -671,7 +672,11 @@ class FloodFill (Command):
         self.new_layer = None
         self.new_layer_path = None
         self.snapshot = None
-        self.dilation_size = dilation_size
+        # Only erase_pixel is extracted from kwds.
+        # We need this for checking coexistable option.
+        self.erase_pixel = kwds.get('erase_pixel', False)
+
+        self.kwds = kwds
 
     def redo(self):
         # Pick a source
@@ -698,10 +703,18 @@ class FloodFill (Command):
             assert self.snapshot is None
             self.snapshot = layers.current.save_snapshot()
             dst_layer = layers.current
+
+
+        # erase_pixel cannot coexist with make_new_layer
+        # It means `generate empty layer`
+        if self.make_new_layer and self.erase_pixel:
+            return
+
         # Fill connected areas of the source into the destination
         src_layer.flood_fill(self.x, self.y, self.color, self.bbox,
                              self.tolerance, dst_layer=dst_layer,
-                             dilation_size=self.dilation_size)
+                             # kwargs arguments
+                             **self.kwds)
 
     def undo(self):
         layers = self.doc.layer_stack
@@ -2216,54 +2229,396 @@ class MergeLayerDownOpaque(MergeLayerDown):
         super(MergeLayerDownOpaque, self).__init__(doc, **kwds)
         self._only_opaque = True
 
-class GrabcutAddLayer(Command):
-    """Inserts a new grabcut-generated (multiple) layers 
-    into the layer stack.
-    That layers generated at another python file.
-    
-    For some reasons, this class named as Grabcut`AddLayer`, but
-    show its name as `Grabcut fill` in Mypaint GUI.
+
+class ClosedAreaFill (FloodFill):
+    """Closed area fill on the current layer
+    This class inherit from FloodFill and
+    use its `undo` method.
     """
 
-    def __init__(self, doc, result, insert_path, removed_hint_layer, **kwds): 
-        super(GrabcutAddLayer, self).__init__(doc, **kwds)
-        self._insert_path = insert_path
-        self._prev_currentlayer_path = None
-        self._result_layer = result
-        self._removed_hint_layer = removed_hint_layer
+    display_name = _("Closed area Fill")
 
-    @property
-    def display_name(self):
-        # This class used as grabcut fill. but actually does not
-        # any filling operation, just add layers into rootlayerStack.
-        return _("Grabcut fill")
+    def __init__(self, doc, 
+                 nodes, color, tolerance, 
+                 sample_merged, make_new_layer, 
+                 dilation_size,
+                 **kwds):
+        """Params of constructor are same as LassoFill.
+        Dedicated parameters are set as keyword parameter.
+        """
+        super(ClosedAreaFill, self).__init__(
+            doc,
+            -1, -1, # No target position
+            color,
+            None,   # No bbox
+            tolerance,
+            sample_merged,
+            make_new_layer,
+            **kwds
+        )
+        # self.erase_pixel would be set at superclass constructor. 
+        assert(len(nodes) > 2)
+        self.nodes = nodes
+        self.dilation_size = int(dilation_size)
+        
+        self.targ_color_pos = kwds.get('targ_color_pos', None)
+        self.progress_level = int(kwds.get('progress_level', 3))
+        assert self.progress_level >= 0
+        assert self.progress_level <= 6
+        self.reject_perimeter = int(kwds.get('reject_perimeter', 
+                (1 << self.progress_level) * 4 * 2))
+        self.alpha_threshold = float(kwds.get('alpha_threshold', 0.2))
+        self.fill_all_holes = bool(kwds.get('fill_all_holes', False))
+                
+        self._restore_bg = False
+
+        # XXX DEBUG options
+        self.tile_output = kwds.get('tile_output', False)
+        self.show_flag = kwds.get('show_flag', False)
+        print("rejecting perimeter %d" %  self.reject_perimeter)
+
+    def _dbg_show_flag(self, ft):
+        # XXX debug method
+        
+        # From lib/progfilldefine.h
+        PIXEL_FILLED = 0x05
+        PIXEL_CONTOUR = 0x06
+        PIXEL_AREA = 0x02
+        npbuf = None
+        npbuf = ft.render_to_numpy(npbuf, PIXEL_FILLED, 0, 255, 255) 
+        npbuf = ft.render_to_numpy(npbuf, PIXEL_CONTOUR, 255, 0, 0) 
+        npbuf = ft.render_to_numpy(npbuf, PIXEL_AREA, 255, 255, 0) 
+        
+        print('---- rendering tiles completed')
+        from PIL import Image
+        newimg = Image.fromarray(npbuf)
+        newimg.save('/tmp/closefill_check.jpg')
+        newimg.show()
+
+    def _dbg_tile_output(self, ox, oy, tw, th, src, dir_suffix):
+        # XXX debug method
+
+        print("# tile writing enabled")
+        import os
+        import numpy as np
+        import json
+        outputdir = '/tmp/%s' % dir_suffix
+        if os.path.exists(outputdir):
+            import shutil
+            shutil.rmtree(outputdir)
+        if not os.path.exists(outputdir):
+            os.mkdir(outputdir)
+        info = {}
+        if hasattr(self, 'bbox'):
+            info['bbox'] = self.bbox
+        if hasattr(self, 'nodes'):
+            info['nodes'] = self.nodes
+        info['tolerance'] = self.tolerance
+        info['level'] = self.progress_level
+        info['erase_pixel'] = self.erase_pixel
+        info['reject_perimeter'] = self.reject_perimeter
+        info['tilesurf_dimension'] = (ox, oy, tw, th)
+        info['fill_all_holes'] = self.fill_all_holes
+
+        tcpos = self.targ_color_pos
+        if tcpos is not None:
+            info['targ_color_pos'] = self.targ_color_pos
+
+        for ty in range(oy, th+oy):
+            for tx in range(ox, tw+ox):
+                with src.tile_request(tx, ty, readonly=True) as src_tile:
+                    if self.tile_output:
+                        np.save('%s/tile_%d_%d.npy' % (outputdir, tx, ty), src_tile)
+
+        with open("%s/info" % outputdir, 'w') as ofp:
+            json.dump(info, ofp)
+
+    def _draw_result(self, layers, ft):
+        """Draw filled result into the layer.
+        """
+
+        # Create new layer (if needed)
+        if self.make_new_layer:
+            nl = lib.layer.PaintingLayer()
+            path = layers.get_current_path()
+            path = layers.path_above(path, insert=1)
+            layers.deepinsert(path, nl)
+            path = layers.deepindex(nl)
+            layers.set_current_path(path)
+            self.new_layer = nl
+            self.new_layer_path = path
+        else:
+            # Overwrite current, but snapshot 1st
+            assert self.snapshot is None
+            self.snapshot = layers.current.save_snapshot()
+            nl = layers.current
+
+        nl.autosave_dirty = True
+
+        ox = ft.get_origin_x()
+        oy = ft.get_origin_y()
+        tw = ft.get_width()
+        th = ft.get_height()
+        r, g, b = self.color
+        dstsurf = nl._surface
+        filled = {}
+        for fty in range(th):
+            for ftx in range(tw):
+                ct = ft.get_tile(ftx, fty, False)
+                if ct is not None:
+                    tx = ftx + ox
+                    ty = fty + oy
+                    with dstsurf.tile_request(tx, ty, readonly=False) \
+                            as dst_tile:
+                        if self.erase_pixel:
+                            ct.convert_to_transparent(dst_tile)
+                        else:
+                            ct.convert_to_color(
+                                dst_tile,
+                                r, g, b
+                            )
+                        filled[(tx, ty)] = dst_tile
+
+        # Actual color-tile bbox might be different from FlagtileSurface
+        # Because FlagtileSurface has some reserved empty tiles for dilation.
+        # So we should use `filled` dictionary.
+        tile_bbox = lib.surface.get_tiles_bbox(filled)
+        dstsurf.notify_observers(*tile_bbox)
+    
+    def _get_source_surface(self, cl):
+        """Get source surface from layer object.
+        If the layer is layergroup, use TileRequestWrapper.
+        But, temporally hide background to get transparent pixels.
+        """
+        if hasattr(cl, "_surface"):
+            return cl._surface
+        else:
+            assert hasattr(cl, "background_visible")
+            self._restore_bg = cl.background_visible
+            cl.background_visible = False
+            return lib.surface.TileRequestWrapper(cl)
+        
+    def redo(self):
+        # TODO Implement 'fill once' option.
+
+        _TILE_SIZE = lib.mypaintlib.TILE_SIZE
+        layers = self.doc.layer_stack
+        saved_bg_state = False
+        if self.sample_merged:
+            cl = layers
+        else:
+            cl = layers.current
+        tcpos = self.targ_color_pos
+        level = self.progress_level
+
+        # XXX Debug/profiling code
+        import time
+        ctm = time.time()
+        # XXX Debug code end
+
+        # Create flagtilesurface object
+        ft = lib.mypaintlib.ClosefillSurface(
+                level,
+                self.nodes
+        )
+
+        ox = ft.get_origin_x()
+        oy = ft.get_origin_y()
+        tw = ft.get_width()
+        th = ft.get_height()
+        
+        src = self._get_source_surface(cl)
+        
+        # XXX Debug code
+        show_flag = self.show_flag
+        if self.tile_output:
+            self._dbg_tile_output(ox, oy, tw, th, src, 'tiles')
+        # XXX Debug code End
+        
+        # Get target color if needed
+        targ_a = 0 # Important, use this as initialize flag later.
+        if tcpos is not None:
+            px, py = tcpos
+            tx = px // _TILE_SIZE 
+            ty = py // _TILE_SIZE 
+            px = px % _TILE_SIZE
+            py = py % _TILE_SIZE
+            with src.tile_request(tx, ty, readonly=True) as sample:
+                targ_r, targ_g, targ_b, targ_a = [int(c) for c in sample[py][px]]
+        if targ_a == 0:
+            targ_r = 0
+            targ_g = 0
+            targ_b = 0
+            targ_a = 0
+
+        for fty in range(0, th):
+            for ftx in range(0, tw):
+                with src.tile_request(ftx+ox, fty+oy, readonly=True) as src_tile:
+                    ct = ft.get_tile(ftx, fty, False)
+                    if ct is not None:
+                        ct.convert_from_color(
+                            src_tile,
+                            targ_r, targ_g, targ_b, targ_a,
+                            self.tolerance,
+                            self.alpha_threshold,
+                            False
+                        )
+
+        # XXX Debug/profiling code
+        if show_flag:
+            self._dbg_show_flag(ft)
+        #XXX debug code end
+
+        # Mipmap build
+        ft.build_progress_seed()
+
+        # Deciding filling area
+        ft.decide_area()
+            
+        # Then, start progressing tiles.
+        ft.progress_tiles(
+            level-1, 
+            int((1<<(level-1)) * 4 * 2)
+        )
+
+        # Finalize progressive fill.
+        ft.finalize(
+            self.reject_perimeter,
+            self.dilation_size, 
+            True,
+            self.fill_all_holes
+        )
+
+        # Convert flagtiles into that new layer.
+        self._draw_result(layers, ft)
+        
+        # Restore background visible state if needed.
+        if self._restore_bg:
+            cl.background_visible = True
+
+        # XXX Debug/profiling code
+        print("processing time %s" % str(time.time()-ctm))
+        if show_flag:
+            self._dbg_show_flag(ft)
+        #XXX debug code end
+
+class LassoFill(ClosedAreaFill):
+    """Doing Lasso fill on the current layer"""
+
+    display_name = _("Lasso Fill")
+
+    def __init__(self, doc, 
+                 nodes, color, tolerance, 
+                 sample_merged, make_new_layer, 
+                 dilation_size,
+                 **kwds):
+        super(LassoFill, self).__init__(
+            doc, 
+            nodes, color, tolerance, 
+            sample_merged, make_new_layer, 
+            dilation_size,
+            **kwds
+        )
 
     def redo(self):
+        # TODO Implement 'fill once' option.
+
+        _TILE_SIZE = lib.mypaintlib.TILE_SIZE
         layers = self.doc.layer_stack
-        assert len(layers) > 0
-        self._prev_currentlayer_path = layers.get_current_path()
+        saved_bg_state = False
+        if self.sample_merged:
+            cl = layers
+        else:
+            cl = layers.current
 
-        layers.deepinsert(self._insert_path, self._result_layer)
+        # XXX Debug/profiling code
+        import time
+        ctm = time.time()
+        # XXX Debug code end
 
-        if self._removed_hint_layer is not None:
-            layers.deepremove(self._removed_hint_layer)
+        # Create flagtilesurface object
+        lt = lib.mypaintlib.LassofillSurface(self.nodes)
 
-    def undo(self):
-        layers = self.doc.layer_stack
-        assert len(layers) > 0
+        ox = lt.get_origin_x()
+        oy = lt.get_origin_y()
+        tw = lt.get_width()
+        th = lt.get_height()
+        
+        # Convert color-pixel tiles into flag tiles.
+        src = self._get_source_surface(cl)
 
-        # First of all, insert removed hint layer
-        # into the position of grabcut filled layer.
-        if self._removed_hint_layer is not None:
-            result_path = layers.deepindex(self._result_layer)
-            layers.deepinsert(result_path, self._removed_hint_layer)
+        # XXX Debug code
+        show_flag = self.show_flag
+        if self.tile_output:
+            self._dbg_tile_output(ox, oy, tw, th, src, 'lasso_tiles')
+        # XXX Debug code End
 
-        # After that, remove grabcut filled layers directly. 
-        layers.deepremove(self._result_layer)
+        # Sampling colors from src color tiles around nodes.
+        node_colors = {}
+        # previous node position, in integer precision.
+        px = None
+        py = None
 
-        # Thus, removed_hiht_layer placed its original path.
+        for cn in self.nodes:
+            cx = int(cn.x) 
+            cy = int(cn.y)
+            tx = cx // _TILE_SIZE
+            ty = cy // _TILE_SIZE
+            if cx != px or cy != py:
+                px = cx
+                py = cy
+                if lt.tile_exists(tx-ox, ty-oy):
+                    with src.tile_request(tx, ty, readonly=True) as src_tile:
+                        cx %= _TILE_SIZE
+                        cy %= _TILE_SIZE
+                        key = tuple([int(c) for c in src_tile[cy][cx]])
+                        # Only opaque color should be count.
+                        if key[3] != 0:
+                            cnt = node_colors.get(key, 0)
+                            node_colors[key] = cnt + 1
+                    
 
-        layers.set_current_path(self._prev_currentlayer_path)
-        self._prev_currentlayer_path = None
+        # get most frequent color
+        targ_item = sorted(
+            node_colors.items(), 
+            key=operator.itemgetter(1)
+        )[-1]      
+        # We sort the dict by value,
+        # but need key(tuple of pixel color), not value(color count). 
+        targ_r, targ_g, targ_b, targ_a = targ_item[0] 
+        
+        # Convert colortiles into flagtiles
+        for fty in range(th):
+            for ftx in range(tw):
+                ct = lt.get_tile(ftx, fty, False)
+                if ct is not None:
+                    with src.tile_request(ftx+ox, fty+oy, readonly=True) as src_tile:
+                        # That tile has vaild polygon area already.
+                        # If not, tile
+                        ct.convert_from_color(
+                            src_tile,
+                            targ_r, targ_g, targ_b, targ_a,
+                            self.tolerance,
+                            self.alpha_threshold,
+                            True
+                        )
+        
+        # Finalize lasso fill
+        lt.finalize(
+            self.dilation_size, 
+            True,
+            self.fill_all_holes
+        )
 
+        # Convert flagtiles into that new layer.
+        self._draw_result(layers, lt)
 
+        # Restore background visible state if needed.
+        if self._restore_bg:
+            cl.background_visible = True
+            
+        # XXX Debug/profiling code
+        print("processing time %s" % str(time.time()-ctm))
+        if show_flag:
+            self._dbg_show_flag(lt)
+        #XXX debug code end

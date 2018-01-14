@@ -37,7 +37,7 @@ import lib.modes
 
 TILE_SIZE = N = mypaintlib.TILE_SIZE
 MAX_MIPMAP_LEVEL = mypaintlib.MAX_MIPMAP_LEVEL
-
+PROGRESSIVE_PIXEL_AREA = 0x02 # Important: From lib/progfilldefine.hpp
 
 ## Tile class and marker tile constants
 
@@ -350,6 +350,7 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
                     if dst_has_alpha:
                         mypaintlib.tile_convert_rgba16_to_rgba8(src, dst)
                     else:
+                        print('here')
                         mypaintlib.tile_convert_rgbu16_to_rgbu8(src, dst)
 
     def composite_tile(self, dst, dst_has_alpha, tx, ty, mipmap_level=0,
@@ -600,8 +601,7 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         """
         return _TiledSurfaceMove(self, x, y, sort=sort)
 
-    def flood_fill(self, x, y, color, bbox, tolerance, dst_surface,
-                    dilation_size=0):
+    def flood_fill(self, x, y, color, bbox, tolerance, dst_surface, **kwargs):
         """Fills connected areas of this surface into another
 
         :param x: Starting point X coordinate
@@ -614,13 +614,10 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         :type tolerance: float [0.0, 1.0]
         :param dst: Target surface
         :type dst: lib.tiledsurface.MyPaintSurface
-        :param dilation_size: Filled area dilation size
-        :type dilation_size: int [0 , MYPAINT_TILE_SIZE/2-1]
 
         See also `lib.layer.Layer.flood_fill()` and `fill.flood_fill()`.
         """
-        flood_fill(self, x, y, color, bbox, tolerance, dst_surface,
-                dilation_size)
+        flood_fill(self, x, y, color, bbox, tolerance, dst_surface, **kwargs)
 
 
 class _TiledSurfaceMove (object):
@@ -998,7 +995,7 @@ class Background (Surface):
             return super(Background, self).load_from_numpy(arr, x, y)
 
 
-def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size=0):
+def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     """Fills connected areas of one surface into another
 
     :param src: Source surface-like object
@@ -1013,8 +1010,14 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size=0):
     :type tolerance: float [0.0, 1.0]
     :param dst: Target surface
     :type dst: lib.tiledsurface.MyPaintSurface
+
+    Keyword args:
     :param dilate_size: dilation size
     :type dilate_size: int, maximum MYPAINT_TILE_SIZE/2
+    :param progress_level: progress-pixel-level. a.k.a gap closing level. 
+    :type gap_level: int [0, 6]
+    :param do_antialias: Draw psuedo anti-aliasing pixels around filled area.
+    :type do_antialias: boolean
 
     See also `lib.layer.Layer.flood_fill()`.
     """
@@ -1052,13 +1055,58 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size=0):
         targ_b = 0
         targ_a = 0
 
+    # Setting keyword options here.
+    dilation_size = kwargs.get('dilation_size', 0) 
+    progress_level = kwargs.get('progress_level', 0)
+    erase_pixel = kwargs.get('erase_pixel', False)
+    anti_alias = kwargs.get('anti_alias', True)
+    alpha_threshold = kwargs.get('alpha_threshold', 0.2)
+    fill_all_holes = kwargs.get('fill_all_holes', False)
+
+    # All values setup end. 
+    # Adjust pixel coordinate into progress-coordinate.
+    print("original px/py %s" % str((min_px, min_py, max_px, max_py, px, py)))
+    if (progress_level > 0):
+        min_px >>= progress_level
+        min_py >>= progress_level
+        max_px >>= progress_level
+        max_py >>= progress_level
+        px >>= progress_level
+        py >>= progress_level
+        MAX_PROGRESS_LEVEL = 6
+        MN = 1 << (MAX_PROGRESS_LEVEL - progress_level) # Mipmap tile-size
+    else:
+        MN = TILE_SIZE
+
     # Flood-fill loop
     filled = {}
-    dilated = {}
     tileq = [
         ((tx, ty),
          [(px, py)])
     ]
+    # XXX DEBUG START
+    print("tolerance %.6f" % tolerance)
+    print("progress_level %s" % str(progress_level))
+    print("dilation %s" % str(dilation_size))
+    print("px/py %s" % str((min_px, min_py, max_px, max_py, px, py)))
+    print("tx/ty limits %s" % str((min_tx, min_ty, max_tx, max_ty)))
+    print("targ color : %s" % str((targ_r, targ_g, targ_b, targ_a)))
+    print("fill_all_holes : %s" % str(fill_all_holes))
+
+    tile_output = kwargs.get('tile_output', False)
+    if tile_output:
+        print("*** TILE OUTPUT ENABLED ***")
+        srcdict = {}  
+        # To avoid inner loop error (such error cannot output
+        # all tiles test case needed), We fetch all the tile
+        # of bbox prior to real case.
+        for ty in range(min_ty, max_ty+1):
+            for tx in range(min_tx, max_tx+1):
+                with src.tile_request(tx, ty, readonly=True) as src_tile:
+                    if tile_output:
+                        srcdict[(tx, ty)] = src_tile 
+    # XXX DEBUG END
+    
     while len(tileq) > 0:
         (tx, ty), seeds = tileq.pop(0)
         # Bbox-derived limits
@@ -1069,8 +1117,8 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size=0):
         # Pixel limits within this tile...
         min_x = 0
         min_y = 0
-        max_x = N-1
-        max_y = N-1
+        max_x = MN-1
+        max_y = MN-1
         # ... vary at the edges
         if tx == min_tx:
             min_x = min_px
@@ -1081,60 +1129,166 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, dilation_size=0):
         if ty == max_ty:
             max_y = max_py
         # Flood-fill one tile
-        with src.tile_request(tx, ty, readonly=True) as src_tile:
-            dst_tile = filled.get((tx, ty), None)
-            if dst_tile is None:
-                dst_tile = np.zeros((N, N, 4), 'uint16')
-                filled[(tx, ty)] = dst_tile
-            overflows = mypaintlib.tile_flood_fill(
-                src_tile, dst_tile, seeds,
-                targ_r, targ_g, targ_b, targ_a,
-                fill_r, fill_g, fill_b,
+        flag_tile = filled.get((tx, ty), None)
+        if flag_tile is None:
+            with src.tile_request(tx, ty, readonly=True) as src_tile:
+                flag_tile = mypaintlib.Flagtile(PROGRESSIVE_PIXEL_AREA)
+                flag_tile.convert_from_color(
+                    src_tile,
+                    targ_r, targ_g, targ_b, targ_a,
+                    tolerance,
+                    alpha_threshold,
+                    False
+                )
+                if progress_level > 0:
+                    flag_tile.build_progress_seed(progress_level)
+                filled[(tx, ty)] = flag_tile
+                #print('flagtile %d,%d generated' % (tx, ty))
+        if flag_tile is not None:
+            overflows = mypaintlib.progfill_flood_fill(
+                flag_tile, seeds,
                 min_x, min_y, max_x, max_y,
-                tolerance
+                progress_level
             )
-            seeds_n, seeds_e, seeds_s, seeds_w = overflows
-        # Enqueue overflows in each cardinal direction
-        if seeds_n and ty > min_ty:
-            tpos = (tx, ty-1)
-            tileq.append((tpos, seeds_n))
-        if seeds_w and tx > min_tx:
-            tpos = (tx-1, ty)
-            tileq.append((tpos, seeds_w))
-        if seeds_s and ty < max_ty:
-            tpos = (tx, ty+1)
-            tileq.append((tpos, seeds_s))
-        if seeds_e and tx < max_tx:
-            tpos = (tx+1, ty)
-            tileq.append((tpos, seeds_e))
+            if overflows is not None:
+                seeds_n, seeds_e, seeds_s, seeds_w = overflows
 
-    if dilation_size > 0:
-        ctx = mypaintlib.dilation_init(
-            fill_r, fill_g, fill_b,
-            int(dilation_size)
+                # Enqueue overflows in each cardinal direction
+                if seeds_n and ty > min_ty:
+                    tpos = (tx, ty-1)
+                    tileq.append((tpos, seeds_n))
+                if seeds_w and tx > min_tx:
+                    tpos = (tx-1, ty)
+                    tileq.append((tpos, seeds_w))
+                if seeds_s and ty < max_ty:
+                    tpos = (tx, ty+1)
+                    tileq.append((tpos, seeds_s))
+                if seeds_e and tx < max_tx:
+                    tpos = (tx+1, ty)
+                    tileq.append((tpos, seeds_e))
+
+    # FloodfillSurface increace reference counter of `filled` dictionary.
+    # `filled` dictionary used to just calculate bbox of surface in 
+    # constructor.
+    ft = mypaintlib.FloodfillSurface(filled, progress_level)
+    ox = ft.get_origin_x()
+    oy = ft.get_origin_y()
+    for tx, ty in filled:
+        ftx = tx - ox 
+        fty = ty - oy 
+        ft.borrow_tile(ftx, fty, filled[(tx, ty)])
+
+    # XXX DEBUG START
+    if tile_output:
+        _dbg_tile_output(
+            ft, 
+            color,
+            tolerance, 
+            dilation_size,
+            progress_level, 
+            x, y,
+            srcdict,
+            bbox,
+            erase_pixel
         )
-        
-        for (tx, ty), src_tile in filled.iteritems():
-            mypaintlib.dilation_process_tile(
-                ctx,
-                dilated,
-                src_tile,
-                tx, ty
-            )
+    # XXX DEBUG END
+    ft.progress_tiles(-1, 0) # Flood-fill does not need `early area rejection`
+    ft.finalize(
+        MN * 4 * 2,
+        dilation_size,
+        anti_alias,
+        fill_all_holes
+    )
+    print("end tile")
+    # XXX DEBUG START
+    if kwargs.get('show_flag', False):
+        _dbg_show_flag(ft)
+    print("--- finalize end ---")
+    # XXX DEBUG END
 
-        mypaintlib.dilation_finalize(ctx)
+    # Directly write pixels into color-tiles.
+    # But, some new flagtile might generated with dilation.
+    # Such tiles are not in `filled` dictonary.
+    # So enumerate FlagtileSurface, not that dict.
+    for fty in range(ft.get_height()): 
+        for ftx in range(ft.get_width()): 
+            flag_tile = ft.get_tile(ftx, fty, False)
+            if flag_tile is not None:
+                # convert to surface tile coodinate
+                tx = ftx + ox
+                ty = fty + oy
+                with dst.tile_request(tx, ty, readonly=False) as dst_tile:
+                    if erase_pixel:
+                        flag_tile.convert_to_transparent(dst_tile)
+                    else:
+                        flag_tile.convert_to_color(
+                            dst_tile,
+                            fill_r, fill_g, fill_b
+                        )
+            #else:# XXX DEBUG
+                #print("flagtile %d, %d is empty" % (ftx, fty))
 
-    # Composite filled tiles into the destination surface
-    mode = mypaintlib.CombineNormal
-    if len(dilated) > 0:
-        filled = dilated
-    for (tx, ty), src_tile in filled.iteritems():
-        with dst.tile_request(tx, ty, readonly=False) as dst_tile:
-            mypaintlib.tile_combine(mode, src_tile, dst_tile, True, 1.0)
-        dst._mark_mipmap_dirty(tx, ty)
     bbox = lib.surface.get_tiles_bbox(filled)
     dst.notify_observers(*bbox)
 
+# XXX DEBUG FUNC
+def _dbg_tile_output(ft, color, tolerance, dilation_size, gap_close_level, x, y, src_dict, bbox, erase_pixel):
+    assert(tolerance >= 0.0)
+    assert(tolerance <= 1.0)
+    assert(gap_close_level >= 0)
+    assert(gap_close_level <= 6)
+    assert(dilation_size >= 0)
+    assert(dilation_size < TILE_SIZE)
+    print("# tile writing enabled")
+    import os
+    import numpy as np
+    import json
+    outputdir = '/tmp/flood_tiles'
+    if os.path.exists(outputdir):
+        import shutil
+        shutil.rmtree(outputdir)
+    if not os.path.exists(outputdir):
+        os.mkdir(outputdir)
+    info = {}
+    ox = ft.get_origin_x()
+    oy = ft.get_origin_y()
+    tw = ft.get_width()
+    th = ft.get_height()
+
+    # Convert bbox(Rect object) into tuple.
+    bbx, bby, bbw, bbh = bbox
+    bbox = (bbx, bby, bbw, bbh)
+
+    info['color'] = color
+    info['bbox'] = bbox
+    info['tolerance'] = tolerance
+    info['level'] = gap_close_level
+    info['targ_color_pos'] = [x, y]
+    info['erase_pixel'] = erase_pixel
+    info['dilation_size'] = dilation_size
+
+    for (tx, ty), src_tile in src_dict.iteritems():
+        np.save('%s/tile_%d_%d.npy' % (outputdir, tx, ty), src_tile)
+
+    with open("%s/info" % outputdir, 'w') as ofp:
+        json.dump(info, ofp)
+
+# XXX DEBUG FUNC
+def _dbg_show_flag(ft):
+    # From lib/progfilldefine.h
+    PIXEL_FILLED = 0x04
+    PIXEL_CONTOUR = 0x05
+    PIXEL_AREA = 0x01
+    npbuf = None
+    npbuf = ft.render_to_numpy(npbuf, PIXEL_FILLED, 0, 255, 255) 
+    npbuf = ft.render_to_numpy(npbuf, PIXEL_CONTOUR, 255, 0, 0) 
+    npbuf = ft.render_to_numpy(npbuf, PIXEL_FILLED | FLAG_CONTOUR, 255, 0, 0) 
+    
+    print('---- rendering tiles completed')
+    from PIL import Image
+    newimg = Image.fromarray(npbuf)
+    newimg.save('/tmp/closefill_check.jpg')
+    newimg.show()
 
 class PNGFileUpdateTask (object):
     """Piecemeal callable: writes to or replaces a PNG file

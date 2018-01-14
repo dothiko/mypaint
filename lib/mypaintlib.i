@@ -33,8 +33,7 @@ typedef struct { int x, y, w, h; } Rect;
 %include "brushsettings.hpp"
 %include "gdkpixbuf2numpy.hpp"
 
-%include "dilation.hpp"
-%include "grabcututil.hpp"
+%include "progfill.hpp"
 
 %init %{
 import_array();

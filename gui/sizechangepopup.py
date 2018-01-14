@@ -17,6 +17,8 @@ import windowing
 import drawutils
 import quickchoice
 import gui.cursor
+import gui.style
+from lib.color import HCYColor, RGBColor
 
 """Brush Size change popup."""
 
@@ -34,7 +36,8 @@ class _Zone:
     INVALID = 0
     CIRCLE = 1
 
-class SizePopup (windowing.PopupWindow):
+class SizePopup (windowing.PopupWindow, 
+                 windowing.TransparentMixin):
     """Brush Size change popup
 
     This window is normally popup when hover the cursor
@@ -46,6 +49,9 @@ class SizePopup (windowing.PopupWindow):
     _mask = None
     _active_cursor = None
     _normal_cursor = None
+
+    _bar_color = None
+    _base_color = None
 
     def __init__(self, app, prefs_id=quickchoice._DEFAULT_PREFS_ID):
         super(SizePopup, self).__init__(app)
@@ -74,6 +80,8 @@ class SizePopup (windowing.PopupWindow):
         self._close_timer_id = None
         self._zone = _Zone.INVALID
         self._current_cursor = None
+
+        self.setup_background()
 
     @property
     def active_cursor(self):
@@ -104,18 +112,29 @@ class SizePopup (windowing.PopupWindow):
 
     @current_cursor.setter
     def current_cursor(self, cursor):
-       #if self._current_cursor != cursor:
         window = self.get_window()
         window.set_cursor(cursor)
         self._current_cursor = cursor
 
+    @property
+    def base_color(self):
+        cls = self.__class__
+        if cls._base_color is None:
+            rgbc = RGBColor(color=gui.style.EDITABLE_ITEM_COLOR)
+            cls._base_color = rgbc.get_rgb()
+        return cls._base_color
+
+    @property
+    def bar_color(self):
+        cls = self.__class__
+        if cls._bar_color is None:
+            rgbc = RGBColor(color=gui.style.ACTIVE_ITEM_COLOR)
+            cls._bar_color = rgbc.get_rgb()
+        return cls._bar_color
+
     def display_to_local(self, dx, dy):
         return (dx - RADIUS, dy - RADIUS)
 
-    def get_normalized_brush_size(self, pixel_size):
-        brush_range = self._adj.get_upper() - self._adj.get_lower()
-        return (math.log(pixel_size) - self._adj.get_lower()) / brush_range
-        
     def popup(self):
         self.enter()
 
@@ -129,12 +148,12 @@ class SizePopup (windowing.PopupWindow):
         self._adj = adj
         self._leave_cancel = True
 
-        self._brush_normal = self.get_brushsize_normaled_from_adj()
+        self._brush_normal = self.get_brushsize_normalized_from_adj()
 
     def leave(self, reason):
         if self._brush_normal is not None:
             # Restore `normalized` brush size into logarithmic.
-             self.set_brushsize_normaled_to_adj(self._brush_normal)
+             self.set_brushsize_normalized_to_adj(self._brush_normal)
         self._brush_normal = None
         self._close_timer_id = None
         self._button = None
@@ -149,7 +168,7 @@ class SizePopup (windowing.PopupWindow):
                 GLib.source_remove(self._close_timer_id)
 
             if self._zone == _Zone.CIRCLE:
-                self._brush_normal = self.get_brushsize_normaled(
+                self._brush_normal = self.get_brushsize_normalized(
                                         event.x, event.y)
             elif self._zone == _Zone.INVALID:
                 self._brush_normal = None
@@ -180,7 +199,7 @@ class SizePopup (windowing.PopupWindow):
         self.update_zone(event.x, event.y)
         if self._button == 1:
             if self._zone == _Zone.CIRCLE:
-                self._brush_normal = self.get_brushsize_normaled(
+                self._brush_normal = self.get_brushsize_normalized(
                                         event.x, event.y)
                 self.queue_redraw(widget)
 
@@ -214,7 +233,7 @@ class SizePopup (windowing.PopupWindow):
         val = self._brush_normal * (max_s - min_s) + min_s
         return math.exp(val)
         
-    def get_brushsize_normaled_from_adj(self):
+    def get_brushsize_normalized_from_adj(self):
         """ Get normalized brush size from brush_adjustment"""
         adj = self._adj
         min_s = adj.get_lower()
@@ -222,14 +241,14 @@ class SizePopup (windowing.PopupWindow):
         cur = adj.get_value() 
         return (cur - min_s) / (max_s - min_s)
 
-    def set_brushsize_normaled_to_adj(self, value):
+    def set_brushsize_normalized_to_adj(self, value):
         """ Set normalized brush size to brush_adjustment"""
         adj = self._adj
         min_s = adj.get_lower()
         max_s = adj.get_upper()
         adj.set_value((max_s - min_s) * value + min_s)
 
-    def get_brushsize_normaled(self, x, y):
+    def get_brushsize_normalized(self, x, y):
         """Get normalized brush size from local coordinate.
         i.e. get clockwise angle of pressed point.
         :param x: window event.x
@@ -241,30 +260,50 @@ class SizePopup (windowing.PopupWindow):
         rad = math.pi * 2
         if x < 0:
             a = rad - a
-        return a / rad
+        return 1.0 - (a / rad) # Reverse, to increase right direction.
 
     def draw_cb(self, widget, cr):
-        cr.set_source_rgba(0.9, 0.9, 0.9, 1.0)
-        cr.paint()
-        cr.set_font_size(12)
-
-        # Drawing background of presets
+       #cr.set_source_rgba(0.9, 0.9, 0.9, 1.0)
+       #cr.paint()
         cr.save()
+
+        self.draw_background(cr)
+
         r = (CANVAS_SIZE / 2)
         sub_r = r - LINE_WIDTH
         angle_offset = -(math.pi / 2)
-        brush_angle = self._brush_normal * math.pi * 2
+        brush_angle = (1.0 - self._brush_normal) * math.pi * 2
 
         cr.translate(r, r)
+
+        # As first, draw label background.
+        cr.set_line_width(1)
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.6)
+        w = sub_r
+        h = FONT_SIZE * 0.7
+        cr.rectangle(-w, -h, w*2, h*2) 
+        cr.fill()
+
+        # Draw base circle.
         cr.set_line_width(LINE_WIDTH)
-        cr.set_source_rgba(0.0, 0.0, 0.0, 1.0)
+        cr.set_source_rgba(*self.base_color)
         cr.arc(0, 0, sub_r, angle_offset, math.pi*2 +angle_offset)
-        cr.stroke()
-        
-        cr.set_source_rgba(1.0, 0.5, 0.0, 1.0)
-        cr.arc(0, 0, sub_r, angle_offset, brush_angle+angle_offset)
+        drawutils.render_drop_shadow(cr)
         cr.stroke()
 
+        # Draw base `empty` circle, with a bit narrower line.
+        cr.set_line_width(LINE_WIDTH * 0.5)
+        cr.set_source_rgba(0.0, 0.0, 0.0, 0.5)
+        cr.arc(0, 0, sub_r, angle_offset, math.pi*2 +angle_offset)
+        cr.stroke()
+
+        # Draw colored circle, this shows the size setting.
+        cr.set_line_width(LINE_WIDTH * 0.6)
+        cr.set_source_rgba(*self.bar_color)
+        cr.arc_negative(0, 0, sub_r, angle_offset, brush_angle+angle_offset)
+        cr.stroke()
+
+        # Draw current brush size label.
         cr.set_source_rgba(0.0, 0.0, 0.0, 1.0)
         cr.set_font_size(FONT_SIZE)
         txt = "%.3f" % self.brush_size
@@ -273,8 +312,6 @@ class SizePopup (windowing.PopupWindow):
         cr.show_text(txt)
 
         cr.restore()
-        
-
         return True
 
     def advance(self):
