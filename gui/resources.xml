@@ -697,20 +697,6 @@ Vocabulary
         </object>
       </child>
       <child>
-        <object class="GtkAction" id="ImportLayerFromFileAbove">
-          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Import Layer From File Above</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Import a new layer above from a file.</property>
-          <signal name="activate" handler="new_layer_cb"/>
-        </object>
-      </child>
-      <child>
-        <object class="GtkAction" id="ImportLayerFromFileBelow">
-          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Import Layer From File Below</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Import a new layer below from a file.</property>
-          <signal name="activate" handler="new_layer_cb"/>
-        </object>
-      </child>
-      <child>
         <object class="GtkAction" id="CutLayerWithSelectedOpaque">
           <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Cut Layer with Selected Opaque</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Cut current layer with opaque area of selected layer(s)</property>
@@ -722,13 +708,6 @@ Vocabulary
           <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Cut Layer with Selected Transparent</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Cut current layer with transparent area of selected layer(s)</property>
           <signal name="activate" handler="cut_layer_with_selected_cb"/>
-        </object>
-      </child>
-      <child>
-        <object class="GtkAction" id="ClearLayerSelection">
-          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Clear Layers Selection States.</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Clear multiple layers selection states</property>
-          <signal name="activate" handler="clear_layer_selection_cb"/>
         </object>
       </child>
       <!-- }}} -->

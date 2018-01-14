@@ -247,12 +247,10 @@
       <menuitem action='NewPaintingLayerAbove'/>
       <menuitem action='NewLayerGroupAbove'/>
       <menuitem action='NewVectorLayerAbove'/>
-      <menuitem action='ImportLayerFromFileAbove'/>
       <menu action="LayerNewBelowMenu">
         <menuitem action='NewPaintingLayerBelow'/>
         <menuitem action='NewLayerGroupBelow'/>
         <menuitem action='NewVectorLayerBelow'/>
-        <menuitem action='ImportLayerFromFileBelow'/>
       </menu>
       <!-- Current layer: editing: Clipboard -->
       <separator/>

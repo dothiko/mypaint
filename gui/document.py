@@ -440,12 +440,6 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             self._update_external_layer_edit_actions: [
                 layerstack.current_path_updated,
             ],
-            # XXX Multiple layer selection
-            self._update_muliple_layer_select_actions: [
-                layerstack.multiple_layers_selection_updated,
-                layerstack.layer_deleted,
-            ],
-            # XXX Multiple layer selection end.
             self._update_layer_visible_toggle_from_current_view: [
                 self.model.layer_view_manager.current_view_changed,
             ],
@@ -1181,17 +1175,6 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         app.find_action("SelectLayerAbove").set_sensitive(has_predecessor)
         app.find_action("SelectLayerBelow").set_sensitive(has_successor)
 
-    def _update_muliple_layer_select_actions(self, *_ignored):
-        """Updates the multiple layer selected actions"""
-        app = self.app
-        root = self.model.layer_stack
-        layers = root.get_selected_layers()
-        flag = False
-        if layers is not None and len(layers) >= 2:
-            flag = True
-        self.app.find_action("ClearLayerSelection").set_sensitive(flag)
-        self.app.find_action("MergeSelectedLayers").set_sensitive(flag)
-
     ## Current layer's opacity
 
     def layer_increase_opacity(self, action):
@@ -1481,7 +1464,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             if bool(action.get_active()) != bool(model_state):
                 action.set_active(model_state)
 
-    ## Multiple selected layers action
+    # XXX Multiple selected layers action
 
     def merge_selected_layers_cb(self, action):
         if self.model.merge_selected_layers():
@@ -1503,11 +1486,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             raise NotImplementedError("Unknown action %r" % action_name)
         self.layerblink_state.activate(action)
 
-    def clear_layer_selection_cb(self, action):
-        rootstack = self.model.layer_stack
-        selected_layers = rootstack.get_selected_layers()
-        if len(selected_layers) > 1:
-            self.model.clear_layer_selection(selected_layers)
+    # XXX Multiple selected layers action end
 
     ## Brush settings callbacks
 
