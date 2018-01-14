@@ -28,7 +28,6 @@ import widgets
 from widgets import inline_toolbar
 from workspace import SizedVBoxToolWidget
 import layers
-import layerpreviewpopup # XXX For experimental layerpreview popup.
 from lib.modes import STACK_MODES
 from lib.modes import STANDARD_MODES
 from lib.modes import MODE_STRINGS
@@ -114,12 +113,6 @@ class LayersTool (SizedVBoxToolWidget):
         view = layers.RootStackTreeView(docmodel)
         self._treemodel = view.get_model()
         self._treeview = view
-        # XXX For Layer-alphalock feature: (deprecated)
-        # In application class, there is no obvious codes
-        # to build LayersTool instance,
-        # so I placed this line here.
-        view.current_layer_alpha_lock_changed += app.current_layer_alphalock_changed_cb
-        # XXX For Layer-alphalock
         # RootStackTreeView events
         view.current_layer_rename_requested += self._layer_properties_cb
         view.current_layer_changed += self._blink_current_layer_cb
@@ -150,10 +143,6 @@ class LayersTool (SizedVBoxToolWidget):
         self._menu = menu
         self._layer_specific_ui_mergeids = []
         self._layer_specific_ui_class = None
-        # Hover preview
-        view.hover_over_layer += self._hover_over_layer_cb
-        view.hover_leave += self._hover_leave_cb
-        self._hover_popup = None
 
         # Main layout grid
         grid = Gtk.Grid()
@@ -423,12 +412,7 @@ class LayersTool (SizedVBoxToolWidget):
         label, desc = MODE_STRINGS.get(mode)
         docmodel.set_current_layer_mode(mode)
 
-    ## Popup Menu callbacks
-
-    def _popup_menu_cb(self, widget, event=None):
-        """Handler for "popup-menu" GtkEvents, and the view's @event"""
-        self._popup_context_menu(event=event)
-        return True
+    ## Utility methods
 
     def _popup_context_menu(self, event=None):
         """Display the popup context menu"""
@@ -438,17 +422,9 @@ class LayersTool (SizedVBoxToolWidget):
         else:
             time = event.time
             button = event.button
+        self._menu.popup(None, None, None, None, button, time)
 
-        self._menu.popup(None,None, None, None, button, time)
-
-    ## Hover-preview callbacks
-    def _hover_over_layer_cb(self, widget, layer):
-        if self._hover_popup == None:
-            self._hover_popup = layerpreviewpopup.PreviewPopup(self.app)
-        self._hover_popup.enter(layer)
-
-    def _hover_leave_cb(self, widget):
-        if self._hover_popup and self._hover_popup.active:
-           #self._hover_popup.leave('leave_tree')
-            pass
-
+    def _popup_menu_cb(self, widget, event=None):
+        """Handler for "popup-menu" GtkEvents, and the view's @event"""
+        self._popup_context_menu(event=event)
+        return True

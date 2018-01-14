@@ -96,7 +96,6 @@ class LayerBase (TileBlittable, TileCompositable):
         self._name = name
         self._visible = True
         self._locked = False
-        self._alpha_locked = False
         self._mode = self.INITIAL_MODE
         self._group_ref = None
         self._root_ref = None
@@ -422,26 +421,6 @@ class LayerBase (TileBlittable, TileCompositable):
         if locked != self._locked:
             self._locked = locked
             self._properties_changed(["locked"])
-
-    @property
-    def alpha_locked(self):
-        """Whether the layer alpha-pixel is locked (immutable).
-        This locking 'alpha' means alpha value of each pixel,
-        not the global alpha value of layer.
-
-        Values must permit conversion to a `bool`.
-        Changing this property issues `layer_properties_changed` via the
-        root layer stack if the layer is within a tree structure.
-
-        """
-        return self._alpha_locked
-
-    @alpha_locked.setter
-    def alpha_locked(self, alpha_locked):
-        alpha_locked = bool(alpha_locked)
-        if alpha_locked != self._alpha_locked:
-            self._alpha_locked = alpha_locked
-            self._properties_changed(["alpha_locked"])
 
     @property
     def branch_locked(self):

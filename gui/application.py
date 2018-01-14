@@ -330,9 +330,6 @@ class Application (object):
 
         # Working document: model and controller
         model = lib.document.Document(self.brush)
-        # For Layer alphalock feature:
-        self._alphalock_forced = False
-        model.layer_stack.current_path_updated += self._current_path_track_alphalock_cb 
 
         self.doc = document.Document(self, app_canvas, model)
         app_canvas.set_model(model)
@@ -904,42 +901,7 @@ class Application (object):
         print('---- dirty state end ----\n')
 
     #--------------------------------------------------
-    ### My addtion
-
-    ## Layer Alpha-lock feature
-    def _current_path_track_alphalock_cb(self, root, path):
-        # proxy callback, redirect to other callback.
-        target = root.current
-        if isinstance(target, lib.layer.PaintingLayer):
-            self.current_layer_alphalock_changed_cb(None, target, target.alpha_locked)
-
-    def current_layer_alphalock_changed_cb(self, view, layer, locked):
-        """ The callback for tracking current layer's alpha_locked flag.
-
-        CAUTION: when this callback called, the alpha_locked flag of
-        layer might not be changed yet.
-        so use 'locked' parameter, DO NOT LOOK layer.alpha_locked flag.
-
-        :param view: the RootStackTreeView widget, this might be None.
-        :param layer: the layer alpha-locked flag to be changed.
-        :param locked: the new state of alpha-locked flag.
-        """
-        brush = self.doc.model.brush
-       #print("layer : %s coming - as %s (current status is %s)" % (layer.name, str(locked),str(layer.alpha_locked)))
-        if locked:
-            self._alphalock_forced = True
-            if not brush.brushinfo.is_alpha_locked():
-                self.brushmodifier.set_override_setting("lock_alpha", True)
-            else:
-                # brush is already in alpha locked. so it is not forced.
-                self._alphalock_forced = False
-
-        else:
-            if self._alphalock_forced:
-                if brush.brushinfo.is_alpha_locked():
-                    self.brushmodifier.set_override_setting("lock_alpha", False)
-
-            self._alphalock_forced = False
+    #XXX My added codes
 
     @event
     def before_exit(self):
@@ -950,7 +912,7 @@ class Application (object):
 
         Actually, called from gui.drawutils.quit_cb()
         """
-
+    #XXX My added codes end
 
 
 class PixbufDirectory (object):

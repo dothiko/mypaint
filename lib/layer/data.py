@@ -1589,9 +1589,6 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
 
     _ORA_STROKEMAP_ATTR = "{%s}strokemap" % (lib.xml.OPENRASTER_MYPAINT_NS,)
     _ORA_STROKEMAP_LEGACY_ATTR = "mypaint_strokemap_v2"
-    # XXX Alphalock feature(deprecated)
-    _ORA_ALPHALOCK_ATTR= "{%s}alphalock" % (lib.xml.OPENRASTER_MYPAINT_NS,)
-    # XXX Alphalock feature end
 
     ## Initializing & resetting
 
@@ -1625,7 +1622,6 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
             **kwargs
         )
         self._load_strokemap_from_ora(elem, x, y, orazip=orazip)
-        self._load_expanded_attrs_from_ora(elem)
 
     def load_from_openraster_dir(self, oradir, elem, cache_dir, progress,
                                  x=0, y=0, **kwargs):
@@ -1640,8 +1636,6 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
             **kwargs
         )
         self._load_strokemap_from_ora(elem, x, y, oradir=oradir)
-        self._load_expanded_attrs_from_ora(elem)
-
 
     def _load_strokemap_from_ora(self, elem, x, y, orazip=None, oradir=None):
         """Load the strokemap from a layer elem & an ora{zip|dir}."""
@@ -1674,15 +1668,6 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
                 self._load_strokemap_from_file(sfp, x, y)
         else:
             raise ValueError("either orazip or oradir must be specified")
-
-    def _load_expanded_attrs_from_ora(self, elem):
-        """ Load expanded(extra) attributes from orafile element.
-        """ 
-        attrs = elem.attrib
-
-        # Layer alphalock:
-        alpha_locked = attrs.get(self._ORA_ALPHALOCK_ATTR, 'false').lower()
-        self.alpha_locked = (alpha_locked == 'true')
 
     def get_paintable(self):
         """True if this layer currently accepts painting brushstrokes"""
@@ -1729,38 +1714,6 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         self._surface.flood_fill(x, y, color, bbox, tolerance,
                                  dst_surface=dst_layer._surface,
                                  dilation_size=dilation_size)
-
-    ## Painting
-
-   #def stroke_to(self, brush, x, y, pressure, xtilt, ytilt, dtime):
-   #    """Render a part of a stroke to the canvas surface
-   #
-   #    :param brush: The brush to use for rendering dabs
-   #    :type brush: lib.brush.Brush
-   #    :param x: Input event's X coord, translated to document coords
-   #    :param y: Input event's Y coord, translated to document coords
-   #    :param pressure: Input event's pressure
-   #    :param xtilt: Input event's tilt component in the document X direction
-   #    :param ytilt: Input event's tilt component in the document Y direction
-   #    :param dtime: Time delta, in seconds
-   #    :returns: whether the stroke should now be split
-   #    :rtype: bool
-   #
-   #    This method renders zero or more dabs to the surface of this layer,
-   #    but does not affect the strokemap. Use this for the incremental
-   #    painting of segments of a stroke sorresponding to single input events.
-   #    The return value decides whether to finalize the lib.stroke.Stroke
-   #    which is currently recording the user's input, and begin recording a
-   #    new one.
-   #    """
-   #    self._surface.begin_atomic()
-   #    split = brush.stroke_to(
-   #        self._surface.backend, x, y,
-   #        pressure, xtilt, ytilt, dtime
-   #    )
-   #    self._surface.end_atomic()
-   #    self.autosave_dirty = True
-   #    return split
 
     ## Stroke recording and rendering
 
@@ -1893,8 +1846,6 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         # See comment above for compatibility strategy.
         elem.attrib[self._ORA_STROKEMAP_ATTR] = storepath
         elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = storepath
-        # Add expanded attributes
-        self._save_expanded_attrs_to_ora(elem)
         return elem
 
     def save_to_project(self, projdir, path,
@@ -1933,10 +1884,6 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         elem.attrib[self._ORA_STROKEMAP_ATTR] = dat_relpath
         elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = dat_relpath
         elem.attrib[self.ORA_LAYERID_ATTR] = self.unique_id
-        # XXX For alphalock feature(deprecated)
-        # Add expanded attributes
-        self._save_expanded_attrs_to_ora(elem)
-        # XXX alphalock end
         return elem
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
@@ -1963,20 +1910,8 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         # See comment above for compatibility strategy.
         elem.attrib[self._ORA_STROKEMAP_ATTR] = dat_relpath
         elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = dat_relpath
-        # XXX For alphalock feature(deprecated)
-        # Add expanded attributes
-        self._save_expanded_attrs_to_ora(elem)
-        # XXX For alphalock end
         manifest.add(dat_relpath)
         return elem
-
-    # XXX For alphalock feature(deprecated)
-    def _save_expanded_attrs_to_ora(self, elem):
-        """ save(write/set) expanded attributes into elem object. 
-        """
-        elem.attrib[self._ORA_ALPHALOCK_ATTR] = str(self.alpha_locked)
-        return elem
-    # XXX For alphalock end
 
     ## Type-specific stuff
     def enum_filenames(self):

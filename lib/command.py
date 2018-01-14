@@ -1579,41 +1579,6 @@ class SetLayerLocked (Command):
         else:
             return _("Unlock Layer")
 
-class SetLayerAlphaLocked (SetLayerLocked):
-    """Sets the alpha locking status of a layer"""
-
-    def __init__(self, doc, locked, layer=None, path=None, index=None,
-                 **kwds):
-        super(SetLayerAlphaLocked, self).__init__(doc, 
-                locked, layer, path, index,
-                **kwds)
-
-
-    def redo(self):
-        self.old_locked = self.layer.alpha_locked
-        self.layer.alpha_locked = self.new_locked
-        redraw_bboxes = [self.layer.get_full_redraw_bbox()]
-        self._notify_canvas_observers(redraw_bboxes)
-
-    def undo(self):
-        self.layer.alpha_locked = self.old_locked
-        redraw_bboxes = [self.layer.get_full_redraw_bbox()]
-        self._notify_canvas_observers(redraw_bboxes)
-
-    def update(self, locked):
-        self.layer.alpha_locked = locked
-        self.new_locked = locked
-        redraw_bboxes = [self.layer.get_full_redraw_bbox()]
-        self._notify_canvas_observers(redraw_bboxes)
-
-    @property
-    def display_name(self):
-        if self.new_locked:
-            return _("Lock alpha pixels of Layer")
-        else:
-            return _("Unlock alpha pixels of Layer")
-
-
 class SetLayerOpacity (Command):
     """Sets the opacity of a layer"""
 
