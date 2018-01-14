@@ -37,7 +37,8 @@ class _Zone:
 
 ## Class definitions
 
-class ToolPalettePopup (windowing.PopupWindow):
+class ToolPalettePopup (windowing.PopupWindow, 
+                        windowing.TransparentMixin):
     """ToolPalette Popup
 
     This window is normally popup when hover the cursor
@@ -76,47 +77,49 @@ class ToolPalettePopup (windowing.PopupWindow):
         self._current_button_index = -1
 
         # Transparent window supports
-        screen = self.get_screen()
-        visual = screen.get_rgba_visual()
-        if visual != None and screen.is_composited():
-            self.set_visual(visual)
-
-        self.set_app_paintable(True)
-        self.set_decorated(False)
-        self.bgpix = None
+        self.setup_background()
 
         # Initialize buttons
         cls = self.__class__
         if cls.buttons == None:
             buttons = []
             registered = []
+            # Enumulate mode metaclasses, to make palette buttons.
             for cs in gui.mode.ModeRegistry.mode_classes:
-                action_name = None
-                if (issubclass(cs, gui.mode.BrushworkModeMixin)
-                        or issubclass(cs, gui.mode.SingleClickMode)):
+                if (hasattr(cs, "ACTION_NAME") 
+                        and (issubclass(cs, gui.mode.BrushworkModeMixin)
+                             or issubclass(cs, gui.mode.SingleClickMode))):
                     # The class which has cs.ACTION_NAME is
-                    # not baseclass/mixin, so validate it.
-                    action_name = cs.ACTION_NAME
+                    # not baseclass or mixin interface.
+                    if cs.ACTION_NAME is not None:
+                        action_name = cs.ACTION_NAME
+                    else:
+                        continue
+
+                    # Some `valid` action might be enumrated multiple times.
+                    # I don't know exactly what is happening...
+                    # To reject them, use `registered` list.
+                    if (action_name in registered):
+                        continue
                 else:
                     continue
 
-                # I don't know exactly what is happening,
-                # but some `valid` action might be enumrated multiple times.
-                # To reject them, use `registered` list.
-                if (action_name is not None
-                        and not action_name in registered):
-                    # XXX Should we just use unmodified(not `Flip`) action name?
-                    action = app.find_action("Flip%s" % action_name)
-                    icon_name = action.get_icon_name()
-                    if icon_name == None:
-                        icon_name = 'mypaint-ok-symbolic'
-                    pixbuf = gui.drawutils.load_symbolic_icon(
-                        icon_name=icon_name,
-                        size=gui.style.FLOATING_BUTTON_ICON_SIZE,
-                        fg=(0, 0, 0, 1),
-                    )
-                    buttons.append((pixbuf, cs, action))
-                    registered.append(action_name)
+                # Get Gtk.Action from action_name
+                # and get its icon pixbuf.
+                #
+                # XXX Should we just use unmodified(not `Flip`) action name?
+                action = app.find_action("Flip%s" % action_name)
+                assert action is not None
+                icon_name = action.get_icon_name()
+                if icon_name == None:
+                    icon_name = 'mypaint-ok-symbolic'
+                pixbuf = gui.drawutils.load_symbolic_icon(
+                    icon_name=icon_name,
+                    size=gui.style.FLOATING_BUTTON_ICON_SIZE,
+                    fg=(0, 0, 0, 1),
+                )
+                buttons.append((pixbuf, cs, action))
+                registered.append(action_name)
 
             # Sort buttons, to make it unique order.
             # Without this, button order might be changed everytime
@@ -172,15 +175,6 @@ class ToolPalettePopup (windowing.PopupWindow):
         if (self._zone != old_zone or
                 old_btn_idx != self._current_button_index):
             self.queue_redraw(self)
-
-    def capture_screen(self):
-        """Capture background screen.
-        This method is used when desktop compositor disabled.
-        """
-        x, y = self.get_position()
-        w, h = self.get_size()
-        win = Gdk.get_default_root_window()
-        self.bgpix = Gdk.pixbuf_get_from_window(win, x, y, w, h)
 
     def popup(self):
         self.enter()
@@ -309,14 +303,7 @@ class ToolPalettePopup (windowing.PopupWindow):
             assert(self.bgpix is not None)
 
         cr.save() # Saving before transparent state
-        cr.set_operator(cairo.OPERATOR_SOURCE)
-        # Drawing background for transparent.
-        if self.bgpix is None:
-            cr.set_source_rgba(1.0, 1.0, 1.0, 0.0)
-            cr.paint()
-        else:
-            Gdk.cairo_set_source_pixbuf(cr, self.bgpix, 0, 0)
-            cr.paint()
+        self.draw_background(cr)
 
         w = self.canvas_size
         r = self.radius
@@ -374,7 +361,7 @@ class ToolPalettePopup (windowing.PopupWindow):
 
 
     def _get_button_pos(self, i):
-        """Get button position, from origin (i.e. from x,y = 0,0).
+        """Get button position, from origin (i.e. from center of the window)
         """
         btn_rad = (math.pi / len(self.buttons)) * 2.0 * i
         sub_r = self.sub_radius # Center radius of buttons.
