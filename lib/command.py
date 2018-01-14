@@ -254,10 +254,10 @@ class Command (object):
 
 
 class Brushwork (Command):
-    """Some seconds of painting on the current layer"""
+    """Some seconds of painting on a layer in a document."""
 
-    def __init__(self, doc, layer_path, description=None, abrupt_start=False,
-                 **kwds):
+    def __init__(self, doc, layer_path=None, description=None,
+                 abrupt_start=False, layer=None, **kwds):
         """Initializes as an active brushwork command
 
         :param doc: document being updated
@@ -265,13 +265,27 @@ class Brushwork (Command):
         :param tuple layer_path: path of the layer to affect within doc
         :param unicode description: Descriptive name for this brushwork
         :param bool abrupt_start: Reset brush & dwell before starting
+        :param gui.layer.data.SimplePaintingLayer layer: explicit target layer
 
         The Brushwork command is created as an active command which can
         be used for capturing brushstrokes. Recording must be stopped
         before the command is added to the CommandStack.
 
+        If an explicit target layer is used, it must be one that's
+        guaranteed to persist for the lifetime of the current document
+        model to prevent leaks.
+
+        If one is not used, the layer path must always refer to the same
+        layer while the command is used for recording the stroke, and at
+        the points in time where redo() or undo() might be called on it.
+
         """
         super(Brushwork, self).__init__(doc, **kwds)
+        if not (layer_path or layer):
+            raise ValueError("Either layer_path or layer must be set")
+        elif (layer_path and layer):
+            raise ValueError("Cannot set both layer_path and layer")
+        self._layer = layer
         self._layer_path = layer_path
         self._abrupt_start = abrupt_start
         # Recording phase
@@ -325,10 +339,23 @@ class Brushwork (Command):
             brush_name=brush_name,
         )
 
+    @property
+    def _target_layer(self):
+        """The command's target layer.
+
+        This is either the explicit target layer from the constructor,
+        or the layer accessed via its path.
+
+        The _stroke_target_layer cache property is used during painting.
+
+        """
+        model = self.doc
+        return self._layer or model.layer_stack.deepget(self._layer_path)
+
     def redo(self):
         """Performs, or re-performs after undo"""
         model = self.doc
-        layer = model.layer_stack.deepget(self._layer_path)
+        layer = self._target_layer
         assert self._recording_finished, "Call stop_recording() first"
         assert self._sshot_before is not None
         assert self._sshot_after is not None
@@ -343,7 +370,7 @@ class Brushwork (Command):
     def undo(self):
         """Undoes the effects of redo()"""
         model = self.doc
-        layer = model.layer_stack.deepget(self._layer_path)
+        layer = self._target_layer
         assert self._recording_finished, "Call stop_recording() first"
         layer.load_snapshot(self._sshot_before)
         model.unsaved_painting_time = self._time_before
@@ -351,8 +378,7 @@ class Brushwork (Command):
 
     def update(self, brushinfo):
         """Retrace the last stroke with a new brush"""
-        model = self.doc
-        layer = model.layer_stack.deepget(self._layer_path)
+        layer = self._target_layer
         assert self._recording_finished, "Call stop_recording() first"
         assert self._sshot_after_applied, \
             "command.Brushwork must be applied before being updated"
@@ -371,7 +397,7 @@ class Brushwork (Command):
         # Cache the layer being painted to. This is accessed frequently
         # during the painting phase.
         model = self.doc
-        layer = model.layer_stack.deepget(self._layer_path)
+        layer = self._target_layer
         assert layer is not None, \
             "Layer with path %r not available" % (self._layer_path,)
         if not layer.get_paintable():
@@ -392,7 +418,8 @@ class Brushwork (Command):
         assert self._sshot_after is None
         self._recording_started = True
 
-    def stroke_to(self, dtime, x, y, pressure, xtilt, ytilt):
+    def stroke_to(self, dtime, x, y, pressure, xtilt, ytilt,
+                  viewzoom, viewrotation):
         """Painting: forward a stroke position update to the model
 
         :param float dtime: Seconds since the last call to this method
@@ -401,6 +428,8 @@ class Brushwork (Command):
         :param float pressure: Pressure, ranging from 0.0 to 1.0
         :param float xtilt: X-axis tilt, ranging from -1.0 to 1.0
         :param float ytilt: Y-axis tilt, ranging from -1.0 to 1.0
+        :param float viewzoom: current view zoom level from 0 to 64
+        :param float viewrotation; current view rotation from -180.0 to 180.0
 
         Stroke data is recorded at this level, but strokes are not
         autosplit here because that would involve the creation of a new
@@ -419,18 +448,24 @@ class Brushwork (Command):
         brush = model.brush
         if self._abrupt_start and not self._abrupt_start_done:
             brush.reset()
-            layer.stroke_to(brush, x, y, 0.0, xtilt, ytilt, 10.0)
+            layer.stroke_to(
+                brush, x, y,
+                0.0,
+                xtilt, ytilt,
+                10.0,
+                viewzoom, viewrotation,
+            )
             self._abrupt_start_done = True
         # Record and paint this position
         self._stroke_seq.record_event(
             dtime,
             x, y, pressure,
-            xtilt, ytilt,
+            xtilt, ytilt, viewzoom, viewrotation,
         )
         self.split_due = layer.stroke_to(
             brush,
             x, y, pressure,
-            xtilt, ytilt, dtime,
+            xtilt, ytilt, dtime, viewzoom, viewrotation,
         )
 
     def stop_recording(self, revert=False):
@@ -1002,29 +1037,33 @@ class NormalizeLayerMode (Command):
 
 
 class AddLayer (Command):
-    """Creates and inserts a new painting layer into the layer stack"""
+    """Inserts a layer into the layer stack.
+
+    The layer can be supplied at construction time. Alternatively a
+    constructor function or class can be passed in, along with a name
+    and any other **kwds you need. The default class if neither is
+    specified is the normal painting layer type.
+
+    In both cases, the command object takes ownership of the layer.
+
+    """
 
     def __init__(self, doc, insert_path, name=None,
-                 layer_class=lib.layer.PaintingLayer, **kwds):
+                 layer_class=lib.layer.PaintingLayer,
+                 layer=None, is_import=False, **kwds):
         super(AddLayer, self).__init__(doc, **kwds)
         self._insert_path = insert_path
         self._prev_currentlayer_path = None
-        self._layer_class = layer_class
-        self._layer_kwds = kwds
-        self._layer = layer_class(name=name, **kwds)
-        if 'import-filename' in kwds:
-            assert isinstance(self._layer, lib.layer.PaintingLayer)
-            self.import_filename= kwds['import-filename']
-            filename = kwds['import-filename']
-            pixbuf = lib.pixbuf.load_from_file(filename)
-            arr = helpers.gdkpixbuf2numpy(pixbuf)
-            s = lib.tiledsurface.Surface()
-            bbox = s.load_from_numpy(arr, 0, 0)
-            self._layer.load_from_surface(s)
+        self._layer = layer or layer_class(name=name, **kwds)
+        self._is_import = bool(is_import)
 
     @property
     def display_name(self):
-        return _("Add {layer_default_name}").format(
+        if self._is_import:
+            tmpl = _("Import Layers")
+        else:
+            tmpl = _("Add {layer_default_name}")
+        return tmpl.format(
             layer_default_name=self._layer.DEFAULT_NAME,
         )
 
@@ -1436,27 +1475,34 @@ class RestackLayer (Command):
 
 
 class RenameLayer (Command):
-    """Renames the current layer"""
+    """Renames a layer."""
 
     display_name = _("Rename Layer")
 
-    def __init__(self, doc, name, **kwds):
+    def __init__(self, doc, name, layer=None, path=None, index=None,
+                 **kwds):
         super(RenameLayer, self).__init__(doc, **kwds)
-        self.new_name = name
         layers = self.doc.layer_stack
         assert layers.current_path
-        self._path = layers.current_path
+        self._path = layers.canonpath(layer=layer, path=path, index=index,
+                                      usecurrent=True)
+        self._new_name = name
+        self._old_name = None
 
     @property
     def layer(self):
         return self.doc.layer_stack.deepget(self._path)
 
     def redo(self):
-        self.old_name = self.layer.name
-        self.layer.name = self.new_name
+        self._old_name = self.layer.name
+        self.layer.name = self._new_name
 
     def undo(self):
-        self.layer.name = self.old_name
+        self.layer.name = self._old_name
+
+    def update(self, name):
+        self.layer.name = name
+        self._new_name = name
 
 
 class SetLayerVisibility (Command):
@@ -1621,7 +1667,7 @@ class SetLayerMode (Command):
 
     @property
     def display_name(self):
-        info = lib.layer.MODE_STRINGS.get(self._new_mode)
+        info = lib.modes.MODE_STRINGS.get(self._new_mode)
         name = info and info[0] or _(u"Unknown Mode")
         return _(u"Set Layer Mode: %s") % (name,)
 

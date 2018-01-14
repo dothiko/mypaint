@@ -16,20 +16,17 @@ import sys
 import zipfile
 import tempfile
 import time
-import traceback
 from os.path import join
-from cStringIO import StringIO
 import xml.etree.ElementTree as ET
 from warnings import warn
-from copy import deepcopy
 import shutil
 from datetime import datetime
 from collections import namedtuple
+import json
 import logging
-logger = logging.getLogger(__name__)
-import uuid
+from lib.fileutils import safename
+from lib.naming import make_unique_name
 
-from gi.repository import GdkPixbuf
 from gi.repository import GObject
 from gi.repository import GLib
 
@@ -38,13 +35,11 @@ import numpy as np
 import lib.helpers as helpers
 import lib.fileutils as fileutils
 import lib.tiledsurface as tiledsurface
-import lib.pixbufsurface as pixbufsurface
-import lib.mypaintlib as mypaintlib
 import lib.command as command
-import lib.stroke as stroke
 import lib.layer as layer
 import lib.brush as brush
 from lib.observable import event
+from lib.observable import ObservableDict
 import lib.pixbuf
 from lib.errors import FileHandlingError
 from lib.errors import AllocationError
@@ -52,9 +47,13 @@ import lib.idletask
 from lib.gettext import C_
 import lib.xml
 import lib.glib
+import lib.feedback
+import lib.layervis
 import lib.autosave
 import lib.projectsave
 import lib.surface
+
+logger = logging.getLogger(__name__)
 
 
 ## Module constants
@@ -88,8 +87,15 @@ _ORA_FRAME_ACTIVE_ATTR \
 _ORA_UNSAVED_PAINTING_TIME_ATTR \
     = "{%s}unsaved-painting-time" % (lib.xml.OPENRASTER_MYPAINT_NS,)
 
+_ORA_JSON_SETTINGS_ATTR \
+    = "{%s}json-settings" % (lib.xml.OPENRASTER_MYPAINT_NS,)
+
+_ORA_JSON_SETTINGS_ZIP_PATH = "data/mypaint-settings.json"
+
+# XXX: For project-save 
 _ORA_FRAME_BBOX_ATTR \
     = "{%s}frame-bbox" % (lib.xml.OPENRASTER_MYPAINT_NS,)
+# XXX: For project-save end
 
 ## Class defs
 
@@ -132,11 +138,10 @@ class AutosaveInfo (namedtuple("AutosaveInfo", _AUTOSAVE_INFO_FIELDS)):
         stackxml_path = os.path.join(path, "stack.xml")
         thumbnail_path = os.path.join(path, "Thumbnails", "thumbnail.png")
         has_stackxml = os.path.isfile(stackxml_path)
-        _mtime = lambda x: datetime.fromtimestamp(os.stat(x).st_mtime)
         if has_stackxml:
-            last_modified = _mtime(stackxml_path)
+            last_modified = _get_path_mtime(stackxml_path)
         else:
-            last_modified = _mtime(path)
+            last_modified = _get_path_mtime(path)
             valid = False
         unsaved_painting_time = 0
         num_layers = 0
@@ -165,7 +170,7 @@ class AutosaveInfo (namedtuple("AutosaveInfo", _AUTOSAVE_INFO_FIELDS)):
         cache_dir_path = os.path.dirname(path)
         activity_file_path = os.path.join(cache_dir_path, CACHE_ACTIVITY_FILE)
         if os.path.exists(activity_file_path):
-            cache_activity_time = _mtime(activity_file_path)
+            cache_activity_time = _get_path_mtime(activity_file_path)
             cache_activity_dt = (datetime.now() - cache_activity_time).seconds
             if cache_activity_dt <= CACHE_UPDATE_INTERVAL + 3:
                 cache_in_use = True
@@ -262,14 +267,21 @@ class Document (object):
 
     ## Initialization and cleanup
 
-    def __init__(self, brushinfo=None, painting_only=False):
+    def __init__(self, brushinfo=None, painting_only=False, cache_dir=None):
         """Initialize
 
         :param brushinfo: the lib.brush.BrushInfo instance to use
         :param painting_only: only use painting layers
+        :param cache_dir: use an existing cache dir
 
         If painting_only is true, then no tempdir will be created by the
         document when it is initialized or cleared.
+
+        If an existing cache dir is requested, it will not be created, and
+        it won't be managed. Autosave and cleanup will be turned off if
+        this is set; it's assumed that you're importing into a parent
+        document.
+
         """
         object.__init__(self)
         if not brushinfo:
@@ -288,7 +300,21 @@ class Document (object):
 
         # Cache and auto-saving to the cache
         self._painting_only = painting_only
-        self._cache_dir = None
+        self._cache_dir = cache_dir
+        if cache_dir is not None:
+            if painting_only:
+                raise ValueError(
+                    "painting_only and cache_dir arguments "
+                    "are mutually exclusive",
+                )
+            if not os.path.isdir(cache_dir):
+                raise ValueError(
+                    "cache_dir argument must be the path "
+                    "to an existing directory",
+                )
+            self._owns_cache_dir = False
+        else:
+            self._owns_cache_dir = True
         self._cache_updater_id = None
         self._autosave_backups = False
         self.autosave_interval = 10
@@ -300,7 +326,7 @@ class Document (object):
         # from _command_stack_updated_cb
         self._is_project = False
 
-        if not painting_only:
+        if (not painting_only) and self._owns_cache_dir:
             self._autosave_processor = lib.idletask.Processor()
             self.command_stack.stack_updated += self._command_stack_updated_cb
             self.effective_bbox_changed += self._effective_bbox_changed_cb
@@ -316,12 +342,18 @@ class Document (object):
         blank_arr = np.zeros((N, N, 4), dtype='uint16')
         self._blank_bg_surface = tiledsurface.Background(blank_arr)
 
+        #: Document-specific settings, serialized as JSON when saving ORA.
+        self._settings = ObservableDict()
+
+        #: Sets of layer-views, identified by name.
+        self._layer_view_manager = lib.layervis.LayerViewManager(self)
+
         # And begin in a known state
         self.clear()
 
     def __repr__(self):
         bbox = self.get_bbox()
-        nlayers = len(list(self.layer_stack.deepenumerate()))
+        nlayers = len(list(self.layer_stack.walk()))
         return ("<Document nlayers=%d bbox=%r paintonly=%r>" %
                 (nlayers, bbox, self._painting_only))
 
@@ -350,8 +382,8 @@ class Document (object):
         return self._cache_dir
 
     def _create_cache_dir(self):
-        """Internal: creates the working-document cache dir"""
-        if self._painting_only:
+        """Internal: creates the working-document cache dir if needed."""
+        if self._painting_only or not self._owns_cache_dir:
             return
         assert self._cache_dir is None
         app_cache_root = get_app_cache_root()
@@ -376,12 +408,12 @@ class Document (object):
         self._start_cache_updater()
 
     def _cleanup_cache_dir(self):
-        """Internal: recursively delete the working-document cache_dir
+        """Internal: recursively delete the working-document cache_dir if OK.
 
         Also stops any background tasks which update it.
 
         """
-        if self._painting_only:
+        if self._painting_only or not self._owns_cache_dir:
             return
         if self._cache_dir is None:
             return
@@ -408,12 +440,52 @@ class Document (object):
         """
         self._cleanup_cache_dir()
 
+    ## Document-specific settings dict.
+
+    @property
+    def settings(self):
+        """The document-specific settings dict.
+
+        :returns: dict-like object that can be monitored for simple changes.
+        :rtype: lib.observable.ObservableDict
+
+        The settings dict is conserved when saving and loading
+        OpenRaster files. Note however that a round-trip converts
+        strings and dict keys to unicode objects.
+
+        >>> import tempfile, shutil, os.path
+        >>> tmpdir = tempfile.mkdtemp()
+        >>> doc1 = Document(painting_only=True)
+        >>> doc1.settings[u"T.1"] = [1, 2]
+        >>> doc1.settings[u"T.2"] = u"simple"
+        >>> doc1.settings[u"T.3"] = {u"4": 5}
+        >>> sorted([i for i in doc1.settings.items() if i[0].startswith("T.")])
+        [(u'T.1', [1, 2]), (u'T.2', u'simple'), (u'T.3', {u'4': 5})]
+        >>> file1 = os.path.join(tmpdir, "file1.ora")
+        >>> thumb1 = doc1.save(file1)
+        >>> doc1.cleanup()
+        >>> doc2 = Document(painting_only=True)
+        >>> doc2.load(file1)
+        >>> sorted([i for i in doc1.settings.items() if i[0].startswith("T.")])
+        [(u'T.1', [1, 2]), (u'T.2', u'simple'), (u'T.3', {u'4': 5})]
+        >>> doc2.settings == doc1.settings
+        True
+        >>> doc2.cleanup()
+        >>> shutil.rmtree(tmpdir)
+
+        See also: ``json``.
+
+        """
+        return self._settings
+
     ## Periodic cache updater
 
     def _start_cache_updater(self):
         """Start the cache updater if it isn't running."""
         assert not self._painting_only
-        if self._cache_updater_id: return
+        assert self._owns_cache_dir
+        if self._cache_updater_id:
+            return
         logger.debug("cache_updater started")
         self._cache_updater_id = GLib.timeout_add_seconds(
             interval = CACHE_UPDATE_INTERVAL,
@@ -423,7 +495,9 @@ class Document (object):
     def _stop_cache_updater(self):
         """Stop the cache updater."""
         assert not self._painting_only
-        if not self._cache_updater_id: return
+        assert self._owns_cache_dir
+        if not self._cache_updater_id:
+            return
         logger.debug("cache_updater: stopped")
         GLib.source_remove(self._cache_updater_id)
         self._cache_updater_id = None
@@ -431,6 +505,7 @@ class Document (object):
     def _cache_updater_cb(self):
         """Payload: update canary file, start autosave countdown if dirty"""
         assert not self._painting_only
+        assert self._owns_cache_dir
         activity_file_path = os.path.join(self.cache_dir, CACHE_ACTIVITY_FILE)
         os.utime(activity_file_path, None)
         if self._autosave_dirty:
@@ -448,7 +523,7 @@ class Document (object):
         newval = bool(newval)
         oldval = bool(self._autosave_backups)
         self._autosave_backups = newval
-        if self._painting_only:
+        if self._painting_only or not self._owns_cache_dir:
             return
         if oldval and not newval:
             self._stop_autosave_writes()
@@ -475,10 +550,14 @@ class Document (object):
 
         """
         assert not self._painting_only
-        if not self._autosave_dirty: return
-        if self._autosave_processor.has_work(): return
-        if self._autosave_countdown_id: return
-        if not self._autosave_backups: return
+        if not self._autosave_dirty:
+            return
+        if self._autosave_processor.has_work():
+            return
+        if self._autosave_countdown_id:
+            return
+        if not self._autosave_backups:
+            return
         interval = lib.helpers.clamp(self.autosave_interval, 5, 300)
         self._autosave_countdown_id = GLib.timeout_add_seconds(
             interval = interval,
@@ -500,6 +579,7 @@ class Document (object):
     def _autosave_countdown_cb(self):
         """Payload: start autosave writes and terminate"""
         assert not self._painting_only
+        self.sync_pending_changes(flush=True)
         self._queue_autosave_writes()
         self._autosave_countdown_id = None
         return False
@@ -556,6 +636,16 @@ class Document (object):
         # This is a (very) local extension to the format.
         t_str = "{:3f}".format(self.unsaved_painting_time)
         image_elem.attrib[_ORA_UNSAVED_PAINTING_TIME_ATTR] = t_str
+        # Doc-specific settings
+        settings_file_rel = _ORA_JSON_SETTINGS_ZIP_PATH
+        if self._settings is not None:
+            taskproc.add_work(
+                self._autosave_settings_cb,
+                dict(self._settings),
+                os.path.join(oradir, settings_file_rel),
+            )
+            image_elem.attrib[_ORA_JSON_SETTINGS_ATTR] = settings_file_rel
+            manifest.add(settings_file_rel)
         # Thumbnail generation.
         rootstack_sshot = self.layer_stack.save_snapshot()
         rootstack_clone = layer.RootLayerStack(doc=None)
@@ -574,7 +664,7 @@ class Document (object):
         )
         manifest.add(thumbfile_rel)
         # Final write
-        stackfile_rel = "stack.xml";
+        stackfile_rel = "stack.xml"
         taskproc.add_work(
             self._autosave_stackxml_cb,
             image_elem,
@@ -643,6 +733,14 @@ class Document (object):
         lib.fileutils.replace(tmpname, filename)
         return False
 
+    def _autosave_settings_cb(self, settings, filename):
+        """Autosaved backup task: save the doc-specific settings dict"""
+        assert not self._painting_only
+        json_data = json.dumps(settings, indent=2)
+        tmpname = filename + u".TMP"
+        with open(tmpname, 'wb') as fp:
+            print(json_data, file=fp)
+        lib.fileutils.replace(tmpname, filename)
 
     def _autosave_cleanup_cb(self, oradir, manifest):
         """Autosaved backup task: final cleanup task"""
@@ -683,7 +781,8 @@ class Document (object):
 
     def _command_stack_updated_cb(self, cmdstack):
         assert not self._painting_only
-        if not self.autosave_backups: return
+        if not self.autosave_backups:
+            return
         self._autosave_dirty = True
         self._restart_autosave_countdown()
         logger.debug("autosave: updates detected, doc marked autosave-dirty")
@@ -722,9 +821,6 @@ class Document (object):
         if res is not None:
             res = int(res)
             res = max(1, res)
-        # Maybe. Using 72 as a fake null would be pretty weird.
-        #if res == DEFAULT_RESOLUTION:
-        #    res = None
         self._xres = res
         self._yres = res
 
@@ -827,15 +923,21 @@ class Document (object):
         an empty undo history, and unless `new_cache` is False,
         a new empty working-document temp directory.
         Clearing the document also generates a full redraw,
-        and resets the frame and the stored resolution.
+        and resets the frame, the stored resolution,
+        and the document-specific settings.
         """
         self.sync_pending_changes()
-        self._layers.set_symmetry_state(False, None)
+        self.layer_view_manager.clear()
+        self._layers.set_symmetry_state(
+            False, None, None,
+            lib.mypaintlib.SymmetryVertical, 2,
+        )
         prev_area = self.get_full_redraw_bbox()
-        if self._cache_dir is not None:
-            self._cleanup_cache_dir()
-        if new_cache:
-            self._create_cache_dir()
+        if self._owns_cache_dir:
+            if self._cache_dir is not None:
+                self._cleanup_cache_dir()
+            if new_cache:
+                self._create_cache_dir()
         self.command_stack.clear()
         self._layers.clear()
         if self.CREATE_PAINTING_LAYER_IF_EMPTY:
@@ -849,6 +951,7 @@ class Document (object):
         self.set_frame_enabled(False)
         self._xres = None
         self._yres = None
+        self._settings.clear()
         self.canvas_area_modified(*prev_area)
 
     def brushsettings_changed_cb(self, settings):
@@ -1100,9 +1203,9 @@ class Document (object):
 
         """
         res = helpers.Rect()
-        for layer in self.layer_stack.deepiter():
+        for l in self.layer_stack.deepiter():
             # OPTIMIZE: only visible layers?
-            bbox = layer.get_bbox()
+            bbox = l.get_bbox()
             res.expandToIncludeRect(bbox)
         return res
 
@@ -1113,8 +1216,8 @@ class Document (object):
         and is built up from the full-redraw bounding boxes of all layers.
         """
         res = helpers.Rect()
-        for layer in self.layer_stack.deepiter():
-            bbox = layer.get_full_redraw_bbox()
+        for l in self.layer_stack.deepiter():
+            bbox = l.get_full_redraw_bbox()
             if bbox.w == 0 and bbox.h == 0:  # infinite
                 res = bbox
             else:
@@ -1207,12 +1310,13 @@ class Document (object):
 
         See: `lib.command.AddLayer`
         """
-        self.do(command.AddLayer(
+        cmd = command.AddLayer(
             self, path,
             name=None,
             layer_class=layer_class,
             **kwds
-            ))
+        )
+        self.do(cmd)
 
     def remove_current_layer(self):
         """Delete the current layer"""
@@ -1224,7 +1328,15 @@ class Document (object):
         """Rename the current layer"""
         if not self.layer_stack.current_path:
             return
-        self.do(command.RenameLayer(self, name))
+        cmd_class = command.RenameLayer
+        cmd = self.get_last_command()
+        layer = self.layer_stack.current
+        if isinstance(cmd, cmd_class) and cmd.layer is layer:
+            logger.info("Updating the last layer rename: %r", name)
+            self.update_last_command(name=name)
+        else:
+            cmd = cmd_class(self, name, layer=layer)
+            self.do(cmd)
 
     def normalize_layer_mode(self):
         """Normalize current layer's mode and opacity"""
@@ -1317,9 +1429,10 @@ class Document (object):
         self.do(command.LoadLayer(self, s))
         return bbox
 
-    def load_layer_from_png(self, filename, x, y, feedback_cb=None, **kwargs):
+    def load_layer_from_png(self, filename, x, y, progress=None,
+                            **kwargs):
         s = tiledsurface.Surface()
-        bbox = s.load_from_png(filename, x, y, feedback_cb, **kwargs)
+        bbox = s.load_from_png(filename, x, y, progress, **kwargs)
         self.do(command.LoadLayer(self, s))
         return bbox
 
@@ -1433,7 +1546,7 @@ class Document (object):
         The filename's extension is used to determine the save format, and a
         ``save_*()`` method is chosen to perform the save.
         """
-        self.sync_pending_changes()
+        self.sync_pending_changes(flush=True)
 
         if 'project' in kwargs and kwargs['project']:
             # Project-save should have 'project' kwarg.
@@ -1451,8 +1564,8 @@ class Document (object):
         except GObject.GError as e:
             logger.exception("GError when writing %r: %s", filename, e)
             if e.code == 5:
-                #add a hint due to a very consfusing error message when
-                #there is no space left on device
+                # add a hint due to a very consfusing error message when
+                # there is no space left on device
                 hint_tmpl = C_(
                     "Document IO: hint templates for user-facing exceptions",
                     u'Unable to write “{filename}”: {err}\n'
@@ -1489,6 +1602,10 @@ class Document (object):
         :param dict kwargs:
             Passed on to the chosen loader method.
         :raise FileHandlingError: with a suitable string
+
+        >>> doc = Document()
+        >>> doc.load("tests/smallimage.ora")
+        >>> doc.cleanup()
 
         """
         error_kwargs = {
@@ -1546,7 +1663,7 @@ class Document (object):
 
         load_method_name = 'load_' + ext
         load_method = getattr(self, load_method_name, self._unsupported)
-        logger.info(
+        logger.debug(
             "Using %r to load %r (kwargs=%r)",
             load_method_name,
             filename,
@@ -1591,6 +1708,73 @@ class Document (object):
         )
         raise FileHandlingError(tmpl.format(**error_kwargs))
 
+    def import_layers(self, filenames, progress=None, **kwargs):
+        """Imports layers at the current position from files.
+
+        >>> doc = Document()
+        >>> len(doc.layer_stack)
+        1
+        >>> doc.import_layers([
+        ...    "tests/smallimage.ora",
+        ...    "tests/bigimage.ora",
+        ... ])
+        >>> len(doc.layer_stack)
+        2
+        >>> doc.cleanup()
+
+        """
+        if progress is None:
+            progress = lib.feedback.Progress()
+        progress.items = len(filenames)
+
+        logger.info(
+            "Importing layers from %d file(s) via a temporary document",
+            len(filenames),
+        )
+        import_group = layer.LayerStack()
+        import_group.name = C_(
+            "Document IO: group name for Import Layers",
+            u"Imported layers",
+        )
+        try:
+            tmp_doc = Document(cache_dir=self._cache_dir)
+            for filename in filenames:
+                tmp_doc.load(
+                    filename,
+                    progress=progress.open(),
+                    **kwargs
+                )
+                tmp_root = tmp_doc.layer_stack
+
+                layers = list(tmp_root)
+                if len(layers) == 0:
+                    return
+                elif len(layers) == 1:
+                    # Single-layer .ora and .png go directly into
+                    # the import group.
+                    targ_group = import_group
+                    if not layers[0].has_interesting_name():
+                        layers[0].name = os.path.basename(filename)
+                else:
+                    # A multi-layer .ora files gets a subgroup of its own,
+                    # named after the imported file.
+                    targ_group = layer.LayerStack()
+                    targ_group.name = os.path.basename(filename)
+                    import_group.append(targ_group)
+
+                for child_layer in layers:
+                    tmp_root.remove(child_layer)
+                    targ_group.append(child_layer)
+
+                tmp_doc.clear()
+        finally:
+            tmp_doc.cleanup()
+
+        path = self.layer_stack.current_path
+        cmd = command.AddLayer(self, path, layer=import_group, is_import=True)
+        self.do(cmd)
+        progress.close()
+
     def render_thumbnail(self, **kwargs):
         """Renders a thumbnail for the user bbox"""
         t0 = time.time()
@@ -1602,46 +1786,109 @@ class Document (object):
                     time.time() - t0)
         return pixbuf
 
-    def save_png(self, filename, alpha=None, multifile=False, **kwargs):
+    def save_png(self, filename, alpha=None, multifile=None, progress=None,
+                 **kwargs):
         """Save to one or more PNG files"""
-        if multifile:
-            self._save_multi_file_png(filename, **kwargs)
-        else:
-            self._save_single_file_png(filename, alpha, **kwargs)
+        if progress is None:
+            progress = lib.feedback.Progress()
 
-    def _save_single_file_png(self, filename, alpha, **kwargs):
-        if alpha is None:
-            alpha = not self.layer_stack.background_visible
-        doc_bbox = self.get_user_bbox()
+        if multifile == "layers":
+            if alpha is None:
+                alpha = True
+            self._save_layers_to_numbered_pngs(filename, alpha, progress,
+                                               **kwargs)
+        elif multifile == "views":
+            if alpha is None:
+                alpha = not self.layer_stack.background_visible
+            self._save_layer_views_to_named_pngs(filename, alpha, progress,
+                                                 **kwargs)
+        elif multifile is not None:
+            raise ValueError("only valid multifile values: 'layers', 'views'")
+        else:
+            if alpha is None:
+                alpha = not self.layer_stack.background_visible
+            self._save_single_file_png(filename, alpha, progress, **kwargs)
+
+    def _save_single_file_png(self, filename, alpha, progress, **kwargs):
+        """Save to a single PNG, with optional alpha."""
+        x, y, w, h = self.get_user_bbox()
+
         self.layer_stack.save_as_png(
             filename,
-            *doc_bbox,
+            x, y, w, h,
             alpha=alpha,
             render_background=not alpha,
+            progress=progress,
             **kwargs
         )
 
-    def _save_multi_file_png(self, filename, alpha=False, **kwargs):
-        """Save to multiple suffixed PNG files"""
+    def _save_layers_to_numbered_pngs(self, filename, alpha, progress,
+                                      **kwargs):
+        """Save layers to multiple number-suffixed PNG files."""
         prefix, ext = os.path.splitext(filename)
-        # if we have a number already, strip it
-        l = prefix.rsplit('.', 1)
-        if l[-1].isdigit():
-            prefix = l[0]
-        doc_bbox = self.get_user_bbox()
-        for i, l in enumerate(self.layer_stack.deepiter()):
-            filename = '%s.%03d%s' % (prefix, i+1, ext)
-            l.save_as_png(filename, *doc_bbox, **kwargs)
 
-    def load_png(self, filename, feedback_cb=None, **kwargs):
+        # if we have a number already, strip it
+        s = prefix.rsplit('.', 1)
+        if s[-1].isdigit():
+            prefix = s[0]
+
+        x, y, w, h = self.get_user_bbox()
+
+        layers = [lr for path, lr in self.layer_stack.walk()]
+        progress.items = len(layers)
+        for i, lr in enumerate(layers):
+            filename = '%s.%03d%s' % (prefix, i+1, ext)
+            lr.save_as_png(
+                filename,
+                x, y, w, h,
+                alpha=alpha,
+                progress=progress.open(),
+                **kwargs
+            )
+
+    def _save_layer_views_to_named_pngs(self, filename, alpha, progress,
+                                        **kwargs):
+        """Save the layer-views to multiple name-suffixed PNG files."""
+        prefix, ext = os.path.splitext(filename)
+
+        lvm = self.layer_view_manager
+        old_active_view = lvm.current_view_name
+        all_views = sorted(lvm.view_names)
+        view_was_changed = False
+
+        try:
+            progress.items = len(all_views)
+            used_namefrags = set()
+            for view_name in all_views:
+                frag = safename(view_name, fragment=True)
+                frag = make_unique_name(frag, used_namefrags)
+                used_namefrags.add(frag)
+                filename = "{prefix}.{view_name}{ext}".format(
+                    prefix=prefix,
+                    view_name=frag,
+                    ext=ext,
+                )
+                lvm.activate_view_by_name(view_name)
+                view_was_changed = True
+                self._save_single_file_png(
+                    filename, alpha,
+                    progress=progress.open(),
+                    **kwargs
+                )
+
+        finally:
+            if view_was_changed:
+                lvm.activate_view_by_name(old_active_view)
+
+    def load_png(self, filename, progress=None, **kwargs):
         """Load (speedily) from a PNG file"""
         self.clear()
-        bbox = self.load_layer_from_png(filename, 0, 0, feedback_cb, **kwargs)
+        bbox = self.load_layer_from_png(filename, 0, 0, progress, **kwargs)
         self.set_frame(bbox, user_initiated=False)
 
-    def load_from_pixbuf_file(self, filename, feedback_cb=None, **kwargs):
+    def load_from_pixbuf_file(self, filename, progress=None, **kwargs):
         """Load from a file which GdkPixbuf can open"""
-        pixbuf = lib.pixbuf.load_from_file(filename, feedback_cb)
+        pixbuf = lib.pixbuf.load_from_file(filename, progress)
         self.load_from_pixbuf(pixbuf)
 
     load_jpg = load_from_pixbuf_file
@@ -1674,6 +1921,7 @@ class Document (object):
         """Saves OpenRaster data to a file"""
         logger.info('save_ora: %r (%r, %r)', filename, options, kwargs)
         t0 = time.time()
+        self.sync_pending_changes(flush=True)
         thumbnail = _save_layers_to_new_orazip(
             self.layer_stack,
             filename,
@@ -1681,15 +1929,17 @@ class Document (object):
             xres=self._xres if self._xres else None,
             yres=self._yres if self._yres else None,
             frame_active = self.frame_enabled,
+            settings=dict(self._settings),
             **kwargs
         )
         logger.info('%.3fs save_ora total', time.time() - t0)
         return thumbnail
 
-    def load_ora(self, filename, feedback_cb=None, **kwargs):
+    def load_ora(self, filename, progress=None, **kwargs):
         """Loads from an OpenRaster file"""
         logger.info('load_ora: %r', filename)
         t0 = time.time()
+        self.clear()
         cache_dir = self._cache_dir
         orazip = zipfile.ZipFile(filename)
         logger.debug('mimetype: %r', orazip.read('mimetype').strip())
@@ -1703,12 +1953,11 @@ class Document (object):
         image_yres = max(0, int(image_elem.attrib.get('yres', 0)))
 
         # Delegate loading of image data to the layers tree itself
-        self.layer_stack.clear()
         self.layer_stack.load_from_openraster(
             orazip,
             root_stack_elem,
             cache_dir,
-            feedback_cb,
+            progress,
             x=0, y=0,
             **kwargs
         )
@@ -1733,13 +1982,26 @@ class Document (object):
         )
         self.set_frame_enabled(frame_enab, user_initiated=False)
 
+        # Document-specific settings dict.
+        self._settings.clear()
+        json_entry = image_elem.attrib.get(_ORA_JSON_SETTINGS_ATTR, None)
+        if json_entry is not None:
+            new_settings = {}
+            try:
+                json_data = orazip.read(json_entry)
+                new_settings = json.loads(json_data)
+            except Exception:
+                logger.exception(
+                    "Failed to load JSON settings from zipfile's %r entry",
+                    json_entry,
+                )
+            self._settings.update(new_settings)
+
         orazip.close()
 
         logger.info('%.3fs load_ora total', time.time() - t0)
 
-                    
-                    
-    def resume_from_autosave(self, autosave_dir, feedback_cb=None):
+    def resume_from_autosave(self, autosave_dir, progress=None):
         """Resume using an autosave dir (and its parent cache dir)"""
         assert os.path.isdir(autosave_dir)
         assert os.path.basename(autosave_dir) == CACHE_DOC_AUTOSAVE_SUBDIR
@@ -1754,7 +2016,7 @@ class Document (object):
             self._load_from_openraster_dir(
                 autosave_dir,
                 doc_cache_dir,
-                feedback_cb=feedback_cb,
+                progress=progress,
                 retain_autosave_info=True,
             )
         except Exception as e:
@@ -1780,19 +2042,24 @@ class Document (object):
         else:
             self._cache_dir = doc_cache_dir
 
-    def _load_from_openraster_dir(self, oradir, cache_dir, feedback_cb=None,
-                                  retain_autosave_info=False, **kwargs):
+    def _load_from_openraster_dir(self, oradir, cache_dir,
+                                  progress=None,
+                                  retain_autosave_info=False,
+                                  **kwargs):
         """Load from an OpenRaster-style folder.
 
         :param unicode oradir: Directory with a .ORA-like structure
         :param unicode cache_dir: Doc cache for storing layer revs etc.
-        :param callable feedback_cb: Called every so often for feedback
+        :param progress: Unsized progress object: updates UI.
+        :type progress: lib.feedback.Progress or None
         :param bool retain_autosave_info: Restore unsaved time etc.
         :param \*\*kwargs: Passed through to layer loader methods.
 
         The oradir folder is treated as read-only during this operation.
 
         """
+        self.clear()
+        # XXX For project-save code
         doc = None
         if 'project' in kwargs:
             if 'target_version' in kwargs:
@@ -1809,6 +2076,13 @@ class Document (object):
         if doc == None:
             doc = ET.parse(os.path.join(oradir, "stack.xml"))
 
+        # Original upstream/master codes are below.
+       #with open(os.path.join(oradir, "mimetype"), "r") as fp:
+       #    logger.debug('mimetype: %r', fp.read().strip())
+       #doc = ET.parse(os.path.join(oradir, "stack.xml"))
+        
+        # XXX For project-save code end.
+
         image_elem = doc.getroot()
         width = max(0, int(image_elem.attrib.get('w', 0)))
         height = max(0, int(image_elem.attrib.get('h', 0)))
@@ -1816,12 +2090,11 @@ class Document (object):
         yres = max(0, int(image_elem.attrib.get('yres', 0)))
         # Delegate layer loading to the layers tree.
         root_stack_elem = image_elem.find("stack")
-        self.layer_stack.clear()
         self.layer_stack.load_from_openraster_dir(
             oradir,
             root_stack_elem,
             cache_dir,
-            feedback_cb,
+            progress,
             x=0, y=0,
             **kwargs
         )
@@ -1847,15 +2120,40 @@ class Document (object):
         )
         self.set_frame_enabled(frame_enab, user_initiated=False)
 
-        # (For project-load)
+        # XXX For project-load
         # Get frame bbox from xml custom attribute.
         frame_bbox_src = image_elem.attrib.get(_ORA_FRAME_BBOX_ATTR, None)
         if frame_bbox_src is not None:
             frame_bbox_src = [int(x) for x in frame_bbox_src.split(",")]
             assert len(frame_bbox_src) == 4
             self.set_frame(frame_bbox_src)
+        # XXX For project-load end
 
-    ## Project Related
+        # Document-specific settings dict.
+        self._settings.clear()
+        json_rel = image_elem.attrib.get(_ORA_JSON_SETTINGS_ATTR, None)
+        if json_rel is not None:
+            json_path = os.path.join(oradir, json_rel)
+            new_settings = {}
+            try:
+                with open(json_path, 'rb') as fp:
+                    json_data = fp.read()
+                    new_settings = json.loads(json_data)
+            except Exception:
+                logger.exception(
+                    "Failed to load JSON settings from %r",
+                    json_path,
+                )
+            self._settings.update(new_settings)
+
+    ## Layer visibility sets
+
+    @property
+    def layer_view_manager(self):
+        """RO property: the layer visibility set manager for this doc."""
+        return self._layer_view_manager
+
+    ## XXX Project Related
     @property
     def is_project(self):
         return self._is_project
@@ -2176,9 +2474,15 @@ class Document (object):
             fp.write(xml)
 
         return thumbnail
+    # XXX Project related end.
 
 
-def _save_layers_to_new_orazip(root_stack, filename, bbox=None, xres=None, yres=None, frame_active=False, **kwargs):
+def _save_layers_to_new_orazip(root_stack, filename, bbox=None,
+                               xres=None, yres=None,
+                               frame_active=False,
+                               progress=None,
+                               settings=None,
+                               **kwargs):
     """Save a root layer stack to a new OpenRaster zipfile
 
     :param lib.layer.RootLayerStack root_stack: what to save
@@ -2187,16 +2491,22 @@ def _save_layers_to_new_orazip(root_stack, filename, bbox=None, xres=None, yres=
     :param int xres: nominal X resolution for the doc
     :param int yres: nominal Y resolution for the doc
     :param frame_active: True if the frame is enabled
+    :param progress: Unsized UI feedback object
+    :type progress: lib.feedback.Progress or None
     :param \*\*kwargs: Passed through to root_stack.save_to_openraster()
     :rtype: GdkPixbuf
     :returns: Thumbnail preview image (256x256 max) of what was saved
 
+    >>> from gi.repository import GdkPixbuf
     >>> from lib.layer.test import make_test_stack
     >>> root, leaves = make_test_stack()
     >>> import tempfile
     >>> tmpdir = tempfile.mkdtemp()
     >>> orafile = os.path.join(tmpdir, "test.ora")
-    >>> thumb = _save_layers_to_new_orazip(root, orafile)
+    >>> thumb = _save_layers_to_new_orazip(root, orafile, settings={
+    ...     "thing.one": 42,
+    ...     "thing.two": [101, 99],
+    ... })
     >>> isinstance(thumb, GdkPixbuf.Pixbuf)
     True
     >>> assert os.path.isfile(orafile)
@@ -2204,6 +2514,11 @@ def _save_layers_to_new_orazip(root_stack, filename, bbox=None, xres=None, yres=
     >>> assert not os.path.exists(tmpdir)
 
     """
+
+    if not progress:
+        progress = lib.feedback.Progress()
+    progress.items = 100
+
     tempdir = tempfile.mkdtemp(suffix='mypaint', prefix='save')
     if not isinstance(tempdir, unicode):
         tempdir = tempdir.decode(sys.getfilesystemencoding())
@@ -2225,7 +2540,7 @@ def _save_layers_to_new_orazip(root_stack, filename, bbox=None, xres=None, yres=
         data_bbox.expandToIncludeRect(s_layer.get_bbox())
     data_bbox = tuple(data_bbox)
 
-    # Save the layer stack
+    # First 90%: save the layer stack
     image = ET.Element('image')
     if bbox is None:
         bbox = data_bbox
@@ -2235,13 +2550,22 @@ def _save_layers_to_new_orazip(root_stack, filename, bbox=None, xres=None, yres=
     root_stack_path = ()
     root_stack_elem = root_stack.save_to_openraster(
         orazip, tempdir, root_stack_path,
-        data_bbox, bbox, **kwargs
+        data_bbox, bbox,
+        progress=progress.open(90),
+        **kwargs
     )
     image.append(root_stack_elem)
 
     # Frame-enabled state
     frame_active_value = ("true" if frame_active else "false")
     image.attrib[_ORA_FRAME_ACTIVE_ATTR] = frame_active_value
+
+    # Document-specific settings dict.
+    if settings is not None:
+        json_data = json.dumps(dict(settings), indent=2)
+        zip_path = _ORA_JSON_SETTINGS_ZIP_PATH
+        helpers.zipfile_writestr(orazip, zip_path, json_data)
+        image.attrib[_ORA_JSON_SETTINGS_ATTR] = zip_path
 
     # Resolution info
     if xres and yres:
@@ -2251,8 +2575,12 @@ def _save_layers_to_new_orazip(root_stack, filename, bbox=None, xres=None, yres=
     # OpenRaster version declaration
     image.attrib["version"] = lib.xml.OPENRASTER_VERSION
 
+    # Last 10%: previews.
     # Thumbnail preview (256x256)
-    thumbnail = root_stack.render_thumbnail(bbox)
+    thumbnail = root_stack.render_thumbnail(
+        bbox,
+        progress=progress.open(1),
+    )
     tmpfile = join(tempdir, 'tmp.png')
     lib.pixbuf.save(thumbnail, tmpfile, 'png')
     orazip.write(tmpfile, 'Thumbnails/thumbnail.png')
@@ -2263,6 +2591,7 @@ def _save_layers_to_new_orazip(root_stack, filename, bbox=None, xres=None, yres=
     root_stack.save_as_png(
         tmpfile, *bbox,
         alpha=False, background=True,
+        progress=progress.open(9),
         **kwargs
     )
     orazip.write(tmpfile, 'mergedimage.png')
@@ -2277,6 +2606,7 @@ def _save_layers_to_new_orazip(root_stack, filename, bbox=None, xres=None, yres=
     orazip.close()
     os.rmdir(tempdir)
 
+    progress.close()
     return thumbnail
 
 
@@ -2321,3 +2651,7 @@ def get_available_autosaves():
         if not os.path.isdir(autosave_path):
             continue
         yield AutosaveInfo.new_for_path(autosave_path)
+
+
+def _get_path_mtime(path):
+    return datetime.fromtimestamp(os.stat(path).st_mtime)

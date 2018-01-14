@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2011-2015 by Andrew Chadwick <a.t.chadwick@gmail.com>
+# Copyright (C) 2011-2017 by Andrew Chadwick <a.t.chadwick@gmail.com>
 # Copyright (C) 2007-2012 by Martin Renold <martinxyz@gmx.ch>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -18,27 +18,32 @@ import logging
 import os
 from cStringIO import StringIO
 import time
-import zipfile
-logger = logging.getLogger(__name__)
 import tempfile
 import shutil
 from copy import deepcopy
 from random import randint
 import uuid
 import struct
+import contextlib
 
 from lib.gettext import C_
+from lib.tiledsurface import N
 import lib.tiledsurface as tiledsurface
 import lib.strokemap
 import lib.helpers as helpers
 import lib.fileutils
 import lib.pixbuf
-from lib.modes import *
+import lib.modes
 import core
 import lib.layer.error
 import lib.autosave
 import lib.projectsave
 import lib.xml
+import lib.feedback
+
+import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 ## Base classes
@@ -119,7 +124,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
 
     ## Loading
 
-    def load_from_openraster(self, orazip, elem, cache_dir, feedback_cb,
+    def load_from_openraster(self, orazip, elem, cache_dir, progress,
                              x=0, y=0, **kwargs):
         """Loads layer flags and bitmap/surface data from a .ora zipfile
 
@@ -136,7 +141,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             orazip,
             elem,
             cache_dir,
-            feedback_cb,
+            progress,
             x=x, y=y,
             **kwargs
         )
@@ -153,7 +158,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             src,
             x, y,
             self.__class__.__name__,
-            )
+        )
         suffixes = self.ALLOWED_SUFFIXES
         if ("" not in suffixes) and (src_ext not in suffixes):
             logger.debug(
@@ -171,12 +176,12 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             orazip,
             cache_dir,
             src,
-            feedback_cb,
+            progress,
             x, y,
         )
 
     def _load_surface_from_orazip_member(self, orazip, cache_dir,
-                                         src, feedback_cb, x, y):
+                                         src, progress, x, y):
         """Loads the surface from a member of an OpenRaster zipfile
 
         Intended strictly for override by subclasses which need to first
@@ -186,11 +191,11 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         pixbuf = lib.pixbuf.load_from_zipfile(
             datazip=orazip,
             filename=src,
-            feedback_cb=feedback_cb,
+            progress=progress,
         )
         self.load_surface_from_pixbuf(pixbuf, x=x, y=y)
 
-    def load_from_openraster_dir(self, oradir, elem, cache_dir, feedback_cb,
+    def load_from_openraster_dir(self, oradir, elem, cache_dir, progress,
                                  x=0, y=0, **kwargs):
         """Loads layer flags and data from an OpenRaster-style dir"""
         # Load layer flags
@@ -198,7 +203,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             oradir,
             elem,
             cache_dir,
-            feedback_cb,
+            progress,
             x=x, y=y,
             **kwargs
         )
@@ -216,7 +221,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             src,
             x, y,
             self.__class__.__name__,
-            )
+        )
         suffixes = self.ALLOWED_SUFFIXES
         if ("" not in suffixes) and (src_ext not in suffixes):
             logger.debug(
@@ -234,7 +239,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             oradir,
             cache_dir,
             src,
-            feedback_cb,
+            progress,
             x, y,
         )
 
@@ -248,7 +253,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             self._filename = src
 
     def _load_surface_from_oradir_member(self, oradir, cache_dir,
-                                         src, feedback_cb, x, y):
+                                         src, progress, x, y):
         """Loads the surface from a file in an OpenRaster-like folder
 
         Intended strictly for override by subclasses which need to
@@ -258,15 +263,23 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         self.load_surface_from_pixbuf_file(
             os.path.join(oradir, src),
             x, y,
-            feedback_cb,
+            progress,
         )
 
     def load_surface_from_pixbuf_file(self, filename, x=0, y=0,
-                                      feedback_cb=None):
+                                      progress=None):
         """Loads the layer's surface from any file which GdkPixbuf can open"""
+        if progress:
+            if progress.items is not None:
+                raise ValueError(
+                    "load_surface_from_pixbuf_file() expects "
+                    "unsized progress objects"
+                )
+            s = os.stat(filename)
+            progress.items = int(s.st_size)
         try:
             with open(filename, 'rb') as fp:
-                pixbuf = lib.pixbuf.load_from_stream(fp, feedback_cb)
+                pixbuf = lib.pixbuf.load_from_stream(fp, progress)
         except Exception as err:
             if self.FALLBACK_CONTENT is None:
                 raise lib.layer.error.LoadingFailed(
@@ -338,23 +351,31 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
 
     def blit_tile_into(self, dst, dst_has_alpha, tx, ty, mipmap_level=0,
                        **kwargs):
-        """Unconditionally copy one tile's data into an array without options
+        """Unconditionally copy one tile's data into an array.
 
-        The minimal surface-based implementation composites one tile of the
+        The minimal surface-based implementation copies one tile of the
         backing surface over the array dst, modifying only dst.
+
         """
-        self._surface.composite_tile(
-            dst, dst_has_alpha, tx, ty,
+        self._surface.blit_tile_into(
+            dst, dst_has_alpha,
+            tx, ty,
             mipmap_level=mipmap_level,
-            opacity=1, mode=DEFAULT_MODE
         )
 
     def composite_tile(self, dst, dst_has_alpha, tx, ty, mipmap_level=0,
-                       layers=None, previewing=None, solo=None, **kwargs):
-        """Composite a tile's data into an array, respecting flags/layers list
+                       layers=None, previewing=None, solo=None,
+                       current_layer=None, current_layer_overlay=None,
+                       **kwargs):
+        """Composite a tile's data into an array, with options.
 
         The minimal surface-based implementation composites one tile of the
         backing surface over the array dst, modifying only dst.
+
+        The overlay for the current_layer is intended as a generic place
+        to hang special effects and previews of work being captured. It
+        is only used during rendering for the screen.
+
         """
         mode = self.mode
         opacity = self.opacity
@@ -364,13 +385,34 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         elif not self.visible:
             return
         if self is previewing:  # not solo though - we show the effect of that
-            mode = DEFAULT_MODE
+            mode = lib.modes.DEFAULT_MODE
             opacity = 1.0
-        self._surface.composite_tile(
-            dst, dst_has_alpha, tx, ty,
+
+        # Most of the time, surface-backed layers render directly onto
+        # the backdrop.
+
+        if (self is not current_layer) or (current_layer_overlay is None):
+            self._surface.composite_tile(
+                dst, dst_has_alpha, tx, ty,
+                mipmap_level=mipmap_level,
+                opacity=opacity,
+                mode=mode,
+            )
+            return
+
+        # This is the current layer and it has an overlay.
+        # Render them like an isolated group.
+
+        tiledims = (tiledsurface.N, tiledsurface.N, 4)
+        tmp = np.zeros(tiledims, dtype='uint16')
+
+        self.blit_tile_into(tmp, True, tx, ty, mipmap_level=mipmap_level)
+        current_layer_overlay.composite_tile(
+            tmp, True, tx, ty,
             mipmap_level=mipmap_level,
-            opacity=opacity, mode=mode
         )
+
+        lib.mypaintlib.tile_combine(mode, tmp, dst, dst_has_alpha, opacity)
 
     def render_as_pixbuf(self, *rect, **kwargs):
         """Renders this layer as a pixbuf"""
@@ -471,15 +513,15 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         return "".join([prefix, sep, path_ref, suffix])
 
     def _save_rect_to_ora(self, orazip, tmpdir, prefix, path,
-                          frame_bbox, rect, **kwargs):
+                          frame_bbox, rect, progress=None, **kwargs):
         """Internal: saves a rectangle of the surface to an ORA zip"""
         # Write PNG data via a tempfile
         pngname = self._make_refname(prefix, path, ".png")
         pngpath = os.path.join(tmpdir, pngname)
         t0 = time.time()
-        self._surface.save_as_png(pngpath, *rect, **kwargs)
+        self._surface.save_as_png(pngpath, *rect, progress=progress, **kwargs)
         t1 = time.time()
-        logger.debug('%.3fs surface saving %r', t1-t0, pngname)
+        logger.debug('%.3fs surface saving %r', t1 - t0, pngname)
         # Archive and remove
         storepath = "data/%s" % (pngname,)
         orazip.write(pngpath, storepath)
@@ -545,12 +587,17 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
 
     ## Painting symmetry axis
 
-    def set_symmetry_state(self, active, center_x):
+    def set_symmetry_state(self, active, center_x, center_y,
+                           symmetry_type, rot_symmetry_lines):
         """Set the surface's painting symmetry axis and active flag.
 
         See `LayerBase.set_symmetry_state` for the params.
         """
-        self._surface.set_symmetry_state(bool(active), float(center_x))
+        self._surface.set_symmetry_state(
+            bool(active),
+            float(center_x), float(center_y),
+            int(symmetry_type), int(rot_symmetry_lines),
+        )
 
     ## Snapshots
 
@@ -576,6 +623,18 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         """
         self.autosave_dirty = True
         self._surface.trim(rect)
+
+    ## Cleanup
+
+    def remove_empty_tiles(self):
+        """Removes empty tiles.
+
+        :returns: Stats about the removal: (nremoved, ntotal)
+        :rtype: tuple
+
+        """
+        removed, total = self._surface.remove_empty_tiles()
+        return (removed, total)
 
 
 class SurfaceBackedLayerMove (object):
@@ -696,7 +755,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         raise NotImplementedError
 
     def _load_surface_from_orazip_member(self, orazip, cache_dir,
-                                         src, feedback_cb, x, y):
+                                         src, progress, x, y):
         """Loads the surface from a member of an OpenRaster zipfile
 
         This override retains a managed copy of the extracted file in
@@ -712,7 +771,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         self.load_surface_from_pixbuf_file(
             tmp_filename,
             x, y,
-            feedback_cb,
+            progress,
         )
         # Move it to the revisions subdir, and manage it there.
         revisions_dir = os.path.join(cache_dir, self.REVISIONS_SUBDIR)
@@ -728,7 +787,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         self._y = y
 
     def _load_surface_from_oradir_member(self, oradir, cache_dir,
-                                         src, feedback_cb, x, y):
+                                         src, progress, x, y):
         """Loads the surface from a file in an OpenRaster-like folder
 
         This override makes a managed copy of the original file in the
@@ -738,7 +797,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         # Load the displayed surface tiles
         super(FileBackedLayer, self)._load_surface_from_oradir_member(
             oradir, cache_dir,
-            src, feedback_cb,
+            src, progress,
             x, y,
         )
         # Copy it to the revisions subdir, and manage it there.
@@ -1109,23 +1168,38 @@ class BackgroundLayer (SurfaceBackedLayer):
         self._surface = surface
 
     def save_to_openraster(self, orazip, tmpdir, path,
-                           canvas_bbox, frame_bbox, **kwargs):
-        # Save as a regular layer for other apps.
+                           canvas_bbox, frame_bbox,
+                           progress=None, **kwargs):
+
+        if not progress:
+            progress = lib.feedback.Progress()
+        progress.items = 2
+
+        # Item 1: save as a regular layer for other apps.
         # Background surfaces repeat, so just the bit filling the frame.
         elem = self._save_rect_to_ora(
             orazip, tmpdir, "background", path,
-            frame_bbox, frame_bbox, **kwargs
+            frame_bbox, frame_bbox,
+            progress=progress.open(),
+            **kwargs
         )
 
-        # Also save as single pattern (with corrected origin)
+        # Item 2: also save as single pattern (with corrected origin)
         x0, y0 = frame_bbox[0:2]
         x, y, w, h = self.get_bbox()
-        rect = (x+x0, y+y0, w, h)
 
         pngname = self._make_refname("background", path, "tile.png")
         tmppath = os.path.join(tmpdir, pngname)
         t0 = time.time()
-        self._surface.save_as_png(tmppath, *rect, **kwargs)
+        self._surface.save_as_png(
+            tmppath,
+            x=x + x0,
+            y=y + y0,
+            w=w,
+            h=h,
+            progress=progress.open(),
+            **kwargs
+        )
         t1 = time.time()
         storename = 'data/%s' % (pngname,)
         logger.debug('%.3fs surface saving %s', t1 - t0, storename)
@@ -1133,6 +1207,8 @@ class BackgroundLayer (SurfaceBackedLayer):
         os.remove(tmppath)
         elem.attrib[self.ORA_BGTILE_LEGACY_ATTR] = storename
         elem.attrib[self.ORA_BGTILE_ATTR] = storename
+
+        progress.close()
         return elem
 
     def save_to_project(self, projdir, path,
@@ -1183,7 +1259,7 @@ class BackgroundLayer (SurfaceBackedLayer):
         manifest.add(tilepng_relpath)
         x0, y0 = bbox[0:2]
         x, y, w, h = self.get_bbox()
-        tilepng_bbox = (x+x0, y+y0, w, h)
+        tilepng_bbox = (x + x0, y + y0, w, h)
         tilepng_path = os.path.join(oradir, tilepng_relpath)
         if self.autosave_dirty or not os.path.exists(tilepng_path):
             task = tiledsurface.PNGFileUpdateTask(
@@ -1251,9 +1327,14 @@ class VectorLayer (FileBackedLayer):
 
     """
 
-    #TRANSLATORS: Short default name for vector (SVG/Inkscape) layers
+    # TRANSLATORS: Short default name for vector (SVG/Inkscape) layers
     DEFAULT_NAME = C_(
         "layer default names",
+        u"Vectors",
+    )
+
+    TYPE_DESCRIPTION = C_(
+        "layer type descriptions",
         u"Vector Layer",
     )
 
@@ -1263,12 +1344,11 @@ class VectorLayer (FileBackedLayer):
         return "mypaint-layer-vector-symbolic"
 
     def write_blank_backing_file(self, file, **kwargs):
-        N = tiledsurface.N
         x = kwargs.get("x", 0)
         y = kwargs.get("y", 0)
         outline = kwargs.get("outline")
         if outline:
-            outline = [(px-x, py-y) for (px, py) in outline]
+            outline = [(px - x, py - y) for (px, py) in outline]
         else:
             outline = [(0, 0), (0, N), (N, N), (N, 0)]
         svg = (
@@ -1276,7 +1356,7 @@ class VectorLayer (FileBackedLayer):
             '<!-- Created by MyPaint (http://mypaint.org/) -->'
             '<svg version="1.1" width="{w}" height="{h}">'
             '<path d="M '
-            ).format(**kwargs)
+        ).format(**kwargs)
         for px, py in outline:
             svg += "{x},{y} ".format(x=px, y=py)
         rgb = tuple([randint(0x33, 0x99) for i in range(3)])
@@ -1287,7 +1367,7 @@ class VectorLayer (FileBackedLayer):
             'stroke-linecap:round;stroke-linejoin:round;'
             'stroke-dasharray:9, 9;stroke-dashoffset:0" />'
             '</svg>'
-            ).format(col=col)
+        ).format(col=col)
         file.write(svg)
 
 
@@ -1297,10 +1377,15 @@ class FallbackBitmapLayer (FileBackedLayer):
     def get_icon_name(self):
         return "mypaint-layer-fallback-symbolic"
 
-    #TRANSLATORS: Short default name for renderable fallback layers
+    # TRANSLATORS: Short default name for renderable fallback layers
     DEFAULT_NAME = C_(
         "layer default names",
-        u"Unknown Bitmap Layer",
+        "Bitmap",
+    )
+
+    TYPE_DESCRIPTION = C_(
+        "layer type descriptions",
+        u"Bitmap Data",
     )
 
     #: Any suffix is allowed, no preference for defaults
@@ -1313,10 +1398,15 @@ class FallbackDataLayer (FileBackedLayer):
     def get_icon_name(self):
         return "mypaint-layer-fallback-symbolic"
 
-    #TRANSLATORS: Short default name for non-renderable fallback layers
+    # TRANSLATORS: Short default name for non-renderable fallback layers
     DEFAULT_NAME = C_(
         "layer default names",
-        u"Unknown Data Layer",
+        u"Data",
+    )
+
+    TYPE_DESCRIPTION = C_(
+        "layer type descriptions",
+        u"Unknown Data",
     )
 
     #: Any suffix is allowed, favour ".dat".
@@ -1347,27 +1437,148 @@ class FallbackDataLayer (FileBackedLayer):
         text="#9c0",
         textshadow="#360",
         textstroke="#ad1",
-        )
+    )
 
 
-class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
-    """A paintable, bitmap layer
+## User-paintable layer classes
 
-    Painting layers add a strokemap to the base implementation. The
-    stroke map is a stack of `strokemap.StrokeShape` objects in painting
-    order, allowing strokes and their associated brush and color
-    information to be picked from the canvas.
-    """
+class SimplePaintingLayer (SurfaceBackedLayer):
+    """A layer you can paint on, but not much else."""
 
     ## Class constants
 
     ALLOWED_SUFFIXES = [".png"]
 
-    #TRANSLATORS: Default name for new normal, paintable layers
+    # TRANSLATORS: Default name for new normal, paintable layers
     DEFAULT_NAME = C_(
         "layer default names",
         u"Layer",
     )
+
+    TYPE_DESCRIPTION = C_(
+        "layer type descriptions",
+        u"Painting Layer",
+    )
+
+    ## Flood fill
+
+    def get_fillable(self):
+        """True if this layer currently accepts flood fill"""
+        return not self.locked
+
+    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None):
+        """Fills a point on the surface with a color
+
+        :param x: Starting point X coordinate
+        :param y: Starting point Y coordinate
+        :param color: an RGB color
+        :type color: tuple
+        :param bbox: Bounding box: limits the fill
+        :type bbox: lib.helpers.Rect or equivalent 4-tuple
+        :param tolerance: how much filled pixels are permitted to vary
+        :type tolerance: float [0.0, 1.0]
+        :param dst_layer: Optional target layer (default is self!)
+        :type dst_layer: StrokemappedPaintingLayer
+
+        The `tolerance` parameter controls how much pixels are permitted to
+        vary from the starting color.  We use the 4D Euclidean distance from
+        the starting point to each pixel under consideration as a metric,
+        scaled so that its range lies between 0.0 and 1.0.
+
+        The default target layer is `self`. This method invalidates the filled
+        area of the target layer's surface, queueing a redraw if it is part of
+        a visible document.
+        """
+        if dst_layer is None:
+            dst_layer = self
+        dst_layer.autosave_dirty = True   # XXX hmm, not working?
+        self._surface.flood_fill(x, y, color, bbox, tolerance,
+                                 dst_surface=dst_layer._surface)
+
+    ## Simple painting
+
+    def get_paintable(self):
+        """True if this layer currently accepts painting brushstrokes"""
+        return (
+            self.visible
+            and not self.locked
+            and self.branch_visible
+            and not self.branch_locked
+        )
+
+    def stroke_to(self, brush, x, y, pressure, xtilt, ytilt, dtime,
+                  viewzoom, viewrotation):
+        """Render a part of a stroke to the canvas surface
+
+        :param brush: The brush to use for rendering dabs
+        :type brush: lib.brush.Brush
+        :param x: Input event's X coord, translated to document coords
+        :param y: Input event's Y coord, translated to document coords
+        :param pressure: Input event's pressure
+        :param xtilt: Input event's tilt component in the document X direction
+        :param ytilt: Input event's tilt component in the document Y direction
+        :param dtime: Time delta, in seconds
+        :returns: whether the stroke should now be split
+        :rtype: bool
+
+        This method renders zero or more dabs to the surface of this
+        layer, but it won't affect any strokemap maintained by this
+        object (even if subclasses add one). That's because this method
+        is for tiny increments, not big brushstrokes.
+
+        Use this for the incremental painting of segments of a stroke
+        corresponding to single input events.  The return value tells
+        the caller whether to finalize the lib.stroke.Stroke which is
+        currently recording the user's input, and begin recording a new
+        one. You can choose to ignore it if you're just using a
+        SimplePaintingLayer and not recording strokes.
+
+        """
+        self._surface.begin_atomic()
+        split = brush.stroke_to(
+            self._surface.backend, x, y,
+            pressure, xtilt, ytilt, dtime, viewzoom, viewrotation
+        )
+        self._surface.end_atomic()
+        self.autosave_dirty = True
+        return split
+
+    @contextlib.contextmanager
+    def cairo_request(self, x, y, w, h, mode=lib.modes.DEFAULT_MODE):
+        """Get a Cairo context for a given area, then put back changes.
+
+        See lib.tiledsurface.MyPaintSurface.cairo_request() for details.
+        This is just a wrapper.
+
+        """
+        with self._surface.cairo_request(x, y, w, h, mode) as cr:
+            yield cr
+        self.autosave_dirty = True
+
+    ## Type-specific stuff
+
+    def get_icon_name(self):
+        return "mypaint-layer-painting-symbolic"
+
+
+class StrokemappedPaintingLayer (SimplePaintingLayer):
+    """Painting layer with a record of user brushstrokes.
+
+    This class definition adds a strokemap to the simple implementation.
+    The stroke map is a stack of `strokemap.StrokeShape` objects in
+    painting order, allowing strokes and their associated brush and
+    color information to be picked from the canvas.
+
+    The caller of stroke_to() is expected to also maintain a current
+    lib.stroke.Stroke object which records user input for the current
+    stroke, but no shape info. When stroke_to() says to break the
+    stroke, or when the caller wishes to break a stroke, feed these
+    details back to the layer via add_stroke_shape() to update the
+    strokemap.
+
+    """
+
+    ## Class constants
 
     # The un-namespaced legacy attribute name is deprecated since
     # MyPaint v1.2.0, and painting layers in OpenRaster files will not
@@ -1378,14 +1589,14 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
     _ORA_STROKEMAP_ATTR = "{%s}strokemap" % (lib.xml.OPENRASTER_MYPAINT_NS,)
     _ORA_STROKEMAP_LEGACY_ATTR = "mypaint_strokemap_v2"
+    # XXX Alphalock feature(deprecated)
     _ORA_ALPHALOCK_ATTR= "{%s}alphalock" % (lib.xml.OPENRASTER_MYPAINT_NS,)
-
+    # XXX Alphalock feature end
 
     ## Initializing & resetting
 
     def __init__(self, **kwargs):
-        super(PaintingLayer, self).__init__(**kwargs)
-        self._external_edit = None
+        super(StrokemappedPaintingLayer, self).__init__(**kwargs)
         #: Stroke map.
         #: List of strokemap.StrokeShape instances (not stroke.Stroke),
         #: ordered by depth.
@@ -1393,38 +1604,38 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
     def clear(self):
         """Clear both the surface and the strokemap"""
-        super(PaintingLayer, self).clear()
+        super(StrokemappedPaintingLayer, self).clear()
         self.strokes = []
 
     def load_from_surface(self, surface):
         """Load the surface image's tiles from another surface"""
-        super(PaintingLayer, self).load_from_surface(surface)
+        super(StrokemappedPaintingLayer, self).load_from_surface(surface)
         self.strokes = []
 
-    def load_from_openraster(self, orazip, elem, cache_dir, feedback_cb,
+    def load_from_openraster(self, orazip, elem, cache_dir, progress,
                              x=0, y=0, **kwargs):
         """Loads layer flags, PNG data, and strokemap from a .ora zipfile"""
         # Load layer tile data and flags
-        super(PaintingLayer, self).load_from_openraster(
+        super(StrokemappedPaintingLayer, self).load_from_openraster(
             orazip,
             elem,
             cache_dir,
-            feedback_cb,
+            progress,
             x=x, y=y,
             **kwargs
         )
         self._load_strokemap_from_ora(elem, x, y, orazip=orazip)
         self._load_expanded_attrs_from_ora(elem)
 
-    def load_from_openraster_dir(self, oradir, elem, cache_dir, feedback_cb,
+    def load_from_openraster_dir(self, oradir, elem, cache_dir, progress,
                                  x=0, y=0, **kwargs):
         """Loads layer flags and data from an OpenRaster-style dir"""
         # Load layer tile data and flags
-        super(PaintingLayer, self).load_from_openraster_dir(
+        super(StrokemappedPaintingLayer, self).load_from_openraster_dir(
             oradir,
             elem,
             cache_dir,
-            feedback_cb,
+            progress,
             x=x, y=y,
             **kwargs
         )
@@ -1456,11 +1667,11 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
             return
         if orazip:
             sio = StringIO(orazip.read(strokemap_name))
-            self.load_strokemap_from_file(sio, x, y)
+            self._load_strokemap_from_file(sio, x, y)
             sio.close()
         elif oradir:
             with open(os.path.join(oradir, strokemap_name), "rb") as sfp:
-                self.load_strokemap_from_file(sfp, x, y)
+                self._load_strokemap_from_file(sfp, x, y)
         else:
             raise ValueError("either orazip or oradir must be specified")
 
@@ -1521,35 +1732,37 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
     ## Painting
 
-    def stroke_to(self, brush, x, y, pressure, xtilt, ytilt, dtime):
-        """Render a part of a stroke to the canvas surface
+   #def stroke_to(self, brush, x, y, pressure, xtilt, ytilt, dtime):
+   #    """Render a part of a stroke to the canvas surface
+   #
+   #    :param brush: The brush to use for rendering dabs
+   #    :type brush: lib.brush.Brush
+   #    :param x: Input event's X coord, translated to document coords
+   #    :param y: Input event's Y coord, translated to document coords
+   #    :param pressure: Input event's pressure
+   #    :param xtilt: Input event's tilt component in the document X direction
+   #    :param ytilt: Input event's tilt component in the document Y direction
+   #    :param dtime: Time delta, in seconds
+   #    :returns: whether the stroke should now be split
+   #    :rtype: bool
+   #
+   #    This method renders zero or more dabs to the surface of this layer,
+   #    but does not affect the strokemap. Use this for the incremental
+   #    painting of segments of a stroke sorresponding to single input events.
+   #    The return value decides whether to finalize the lib.stroke.Stroke
+   #    which is currently recording the user's input, and begin recording a
+   #    new one.
+   #    """
+   #    self._surface.begin_atomic()
+   #    split = brush.stroke_to(
+   #        self._surface.backend, x, y,
+   #        pressure, xtilt, ytilt, dtime
+   #    )
+   #    self._surface.end_atomic()
+   #    self.autosave_dirty = True
+   #    return split
 
-        :param brush: The brush to use for rendering dabs
-        :type brush: lib.brush.Brush
-        :param x: Input event's X coord, translated to document coords
-        :param y: Input event's Y coord, translated to document coords
-        :param pressure: Input event's pressure
-        :param xtilt: Input event's tilt component in the document X direction
-        :param ytilt: Input event's tilt component in the document Y direction
-        :param dtime: Time delta, in seconds
-        :returns: whether the stroke should now be split
-        :rtype: bool
-
-        This method renders zero or more dabs to the surface of this layer,
-        but does not affect the strokemap. Use this for the incremental
-        painting of segments of a stroke sorresponding to single input events.
-        The return value decides whether to finalize the lib.stroke.Stroke
-        which is currently recording the user's input, and begin recording a
-        new one.
-        """
-        self._surface.begin_atomic()
-        split = brush.stroke_to(
-            self._surface.backend, x, y,
-            pressure, xtilt, ytilt, dtime
-        )
-        self._surface.end_atomic()
-        self.autosave_dirty = True
-        return split
+    ## Stroke recording and rendering
 
     def render_stroke(self, stroke):
         """Render a whole captured stroke to the canvas
@@ -1566,7 +1779,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         :param stroke: the stroke sequence which has been rendered
         :type stroke: lib.stroke.Stroke
         :param before: layer snapshot taken before the stroke started
-        :type before: lib.layer.PaintingLayerSnapshot
+        :type before: lib.layer.StrokemappedPaintingLayerSnapshot
 
         The StrokeMap is a stack of lib.strokemap.StrokeShape objects which
         encapsulate the shape of a rendered stroke, and the brush settings
@@ -1588,19 +1801,19 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
     def save_snapshot(self):
         """Snapshots the state of the layer and its strokemap for undo"""
-        return PaintingLayerSnapshot(self)
+        return StrokemappedPaintingLayerSnapshot(self)
 
     ## Translating
 
     def get_move(self, x, y):
         """Get an interactive move object for the surface and its strokemap"""
-        return PaintingLayerMove(self, x, y)
+        return StrokemappedPaintingLayerMove(self, x, y)
 
     ## Trimming
 
     def trim(self, rect):
         """Trim the layer and its strokemap"""
-        super(PaintingLayer, self).trim(rect)
+        super(StrokemappedPaintingLayer, self).trim(rect)
         empty_strokes = []
         for stroke in self.strokes:
             if not stroke.trim(rect):
@@ -1609,14 +1822,13 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
             logger.debug("Removing emptied stroke %r", stroke)
             self.strokes.remove(stroke)
 
-    ## Strokemap
+    ## Strokemap load and save
 
-    def load_strokemap_from_file(self, f, translate_x, translate_y):
+    def _load_strokemap_from_file(self, f, translate_x, translate_y):
         assert not self.strokes
         brushes = []
-        N = tiledsurface.N
-        x = int(translate_x//N) * N
-        y = int(translate_y//N) * N
+        x = int(translate_x // N) * N
+        y = int(translate_y // N) * N
         dx = translate_x % N
         dy = translate_y % N
         while True:
@@ -1626,7 +1838,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
                 tmp = f.read(length)
                 brushes.append(zlib.decompress(tmp))
             elif t == 's':
-                brush_id, length = struct.unpack('>II', f.read(2*4))
+                brush_id, length = struct.unpack('>II', f.read(2 * 4))
                 stroke = lib.strokemap.StrokeShape()
                 tmp = f.read(length)
                 stroke.init_from_string(tmp, x, y)
@@ -1639,6 +1851,8 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
                 break
             else:
                 assert False, 'invalid strokemap'
+
+    ## Strokemap querying
 
     def get_stroke_info_at(self, x, y):
         """Get the stroke at the given point"""
@@ -1659,7 +1873,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         """Save the strokemap too, in addition to the base implementation"""
         # Save the layer normally
 
-        elem = super(PaintingLayer, self).save_to_openraster(
+        elem = super(StrokemappedPaintingLayer, self).save_to_openraster(
             orazip, tmpdir, path,
             canvas_bbox, frame_bbox, **kwargs
         )
@@ -1672,7 +1886,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         data = sio.getvalue()
         sio.close()
         datname = self._make_refname("layer", path, "strokemap.dat")
-        logger.debug("%.3fs strokemap saving %r", t1-t0, datname)
+        logger.debug("%.3fs strokemap saving %r", t1 - t0, datname)
         storepath = "data/%s" % (datname,)
         helpers.zipfile_writestr(orazip, storepath, data)
         # Add strokemap XML attrs and return.
@@ -1719,8 +1933,10 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         elem.attrib[self._ORA_STROKEMAP_ATTR] = dat_relpath
         elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = dat_relpath
         elem.attrib[self.ORA_LAYERID_ATTR] = self.unique_id
+        # XXX For alphalock feature(deprecated)
         # Add expanded attributes
         self._save_expanded_attrs_to_ora(elem)
+        # XXX alphalock end
         return elem
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
@@ -1739,7 +1955,7 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
             )
             taskproc.add_work(task)
         # Supercall to queue saving PNG and obtain basic XML
-        elem = super(PaintingLayer, self).queue_autosave(
+        elem = super(StrokemappedPaintingLayer, self).queue_autosave(
             oradir, taskproc, manifest, bbox,
             **kwargs
         )
@@ -1747,22 +1963,22 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         # See comment above for compatibility strategy.
         elem.attrib[self._ORA_STROKEMAP_ATTR] = dat_relpath
         elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = dat_relpath
+        # XXX For alphalock feature(deprecated)
         # Add expanded attributes
         self._save_expanded_attrs_to_ora(elem)
+        # XXX For alphalock end
         manifest.add(dat_relpath)
         return elem
 
+    # XXX For alphalock feature(deprecated)
     def _save_expanded_attrs_to_ora(self, elem):
         """ save(write/set) expanded attributes into elem object. 
         """
         elem.attrib[self._ORA_ALPHALOCK_ATTR] = str(self.alpha_locked)
         return elem
+    # XXX For alphalock end
 
     ## Type-specific stuff
-
-    def get_icon_name(self):
-        return "mypaint-layer-painting-symbolic"
-
     def enum_filenames(self):
         """Enum filenames which consists this layer.
         This method used for project-save.
@@ -1779,6 +1995,13 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
     ## Editing via external apps
 
+class PaintingLayer (StrokemappedPaintingLayer, core.ExternallyEditable):
+    """The normal paintable bitmap layer that the user sees."""
+
+    def __init__(self, **kwargs):
+        super(PaintingLayer, self).__init__(**kwargs)
+        self._external_edit = None
+
     def new_external_edit_tempfile(self):
         """Get a tempfile for editing in an external app"""
         # Uniquely named tempfile. Will be overwritten.
@@ -1792,9 +2015,9 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         # Record the data area for later.
         rect = self.get_bbox()
         if rect.w <= 0:
-            rect.w = tiledsurface.N
+            rect.w = N
         if rect.h <= 0:
-            rect.h = tiledsurface.N
+            rect.h = N
         self._surface.save_as_png(tmp_filename, *rect, alpha=True)
         edit_info = (tmp_filename, _ManagedFile(tmp_filename), rect)
         self._external_edit = edit_info
@@ -1818,6 +2041,8 @@ class PaintingLayer (SurfaceBackedLayer, core.ExternallyEditable):
         self._content_changed(*tuple(core.combine_redraws(redraw_bboxes)))
         self.autosave_dirty = True
 
+
+## Stroke-mapped layer implementation details and helpers
 
 def _write_strokemap(f, strokes, dx, dy):
     brush2id = {}
@@ -1883,35 +2108,35 @@ class _StrokemapFileUpdateTask (object):
             return False
 
 
-class PaintingLayerSnapshot (SurfaceBackedLayerSnapshot):
-    """Snapshot subclass for painting layers"""
+class StrokemappedPaintingLayerSnapshot (SurfaceBackedLayerSnapshot):
+    """Snapshot subclass for painting layers with strokemaps"""
 
     def __init__(self, layer):
-        super(PaintingLayerSnapshot, self).__init__(layer)
+        super(StrokemappedPaintingLayerSnapshot, self).__init__(layer)
         self.strokes = layer.strokes[:]
 
     def restore_to_layer(self, layer):
-        super(PaintingLayerSnapshot, self).restore_to_layer(layer)
+        super(StrokemappedPaintingLayerSnapshot, self).restore_to_layer(layer)
         layer.strokes = self.strokes[:]
         layer.autosave_dirty = True
 
 
-class PaintingLayerMove (SurfaceBackedLayerMove):
-    """Move object wrapper for painting layers"""
+class StrokemappedPaintingLayerMove (SurfaceBackedLayerMove):
+    """Move object wrapper for painting layers with strokemaps"""
 
     def __init__(self, layer, x, y):
-        super(PaintingLayerMove, self).__init__(layer, x, y)
+        super(StrokemappedPaintingLayerMove, self).__init__(layer, x, y)
         self._layer = layer
         self._final_dx = 0
         self._final_dy = 0
 
     def update(self, dx, dy):
-        super(PaintingLayerMove, self).update(dx, dy)
+        super(StrokemappedPaintingLayerMove, self).update(dx, dy)
         self._final_dx = dx
         self._final_dy = dy
 
     def cleanup(self):
-        super(PaintingLayerMove, self).cleanup()
+        super(StrokemappedPaintingLayerMove, self).cleanup()
         dx = self._final_dx
         dy = self._final_dy
         # Arrange for the strokemap to be moved too;

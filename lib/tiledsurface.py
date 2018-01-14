@@ -1,6 +1,6 @@
 # This file is part of MyPaint.
-# Copyright (C) 2007-2008 by Martin Renold <martinxyz@gmx.ch>
-# Copyright (C) 2017 by dothiko <dothiko@gmail.com>
+# Copyright (C) 2009-2017 by the MyPaint Development Team.
+# Copyright (C) 2007-2012 by Martin Renold <martinxyz@gmx.ch>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,27 +17,40 @@ import sys
 import os
 import contextlib
 import logging
-logger = logging.getLogger(__name__)
 
 from gettext import gettext as _
 import numpy as np
 
 import mypaintlib
+import lib.mypaintlib
 import helpers
-import math
 import pixbufsurface
 import lib.surface
 from lib.surface import TileAccessible, TileBlittable, TileCompositable
 from errors import FileHandlingError
 import lib.fileutils
 import lib.modes
+import lib.feedback
 
+logger = logging.getLogger(__name__)
 
 ## Constants
 
 TILE_SIZE = N = mypaintlib.TILE_SIZE
 MAX_MIPMAP_LEVEL = mypaintlib.MAX_MIPMAP_LEVEL
 PROGRESSIVE_PIXEL_AREA = 0x02 # Important: From lib/progfilldefine.hpp
+
+SYMMETRY_TYPES = tuple(range(lib.mypaintlib.NumSymmetryTypes))
+SYMMETRY_STRINGS = {
+    lib.mypaintlib.SymmetryVertical: _("Vertical"),
+    lib.mypaintlib.SymmetryHorizontal: _("Horizontal"),
+    lib.mypaintlib.SymmetryVertHorz: _("Vertical and horizontal"),
+    lib.mypaintlib.SymmetryRotational: _("Rotational"),
+    lib.mypaintlib.SymmetrySnowflake: _("Snowflake"),
+}
+for sym_type in SYMMETRY_TYPES:
+    assert sym_type in SYMMETRY_STRINGS
+
 
 ## Tile class and marker tile constants
 
@@ -255,9 +268,13 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
 
         for x in xrange(2):
             for y in xrange(2):
-                src = self.parent.tiledict.get((tx*2 + x, ty*2 + y), transparent_tile)
+                src = self.parent.tiledict.get((tx*2 + x, ty*2 + y),
+                                               transparent_tile)
                 if src is mipmap_dirty_tile:
-                    src = self.parent._regenerate_mipmap(src, tx*2 + x, ty*2 + y)
+                    src = self.parent._regenerate_mipmap(
+                        src,
+                        tx*2 + x, ty*2 + y,
+                    )
                 mypaintlib.tile_downscale_rgba16(src.rgba, t.rgba,
                                                  x * N // 2,
                                                  y * N // 2)
@@ -301,7 +318,7 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         pass  # Data can be modified directly, no action needed
 
     def _mark_mipmap_dirty(self, tx, ty):
-        #assert self.mipmap_level == 0
+        # assert self.mipmap_level == 0
         if not self._mipmaps:
             return
         for level, mipmap in enumerate(self._mipmaps):
@@ -322,29 +339,33 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
 
         :param int mipmap_level: layer mipmap level to use
 
-        """
-        # used mainly for saving (transparent PNG)
+        Used mainly for saving (transparent PNG).
 
-        #assert dst_has_alpha is True
+        """
+
+        # assert dst_has_alpha is True
 
         if self.mipmap_level < mipmap_level:
-            return self.mipmap.blit_tile_into(dst, dst_has_alpha, tx, ty, mipmap_level)
+            return self.mipmap.blit_tile_into(dst, dst_has_alpha, tx, ty,
+                                              mipmap_level)
 
         assert dst.shape[2] == 4
         if dst.dtype not in ('uint16', 'uint8'):
-            raise ValueError('Unsupported destination buffer type %r', dst.dtype)
+            raise ValueError('Unsupported destination buffer type %r',
+                             dst.dtype)
         dst_is_uint16 = (dst.dtype == 'uint16')
 
         with self.tile_request(tx, ty, readonly=True) as src:
             if src is transparent_tile.rgba:
-                #dst[:] = 0 # <-- notably slower than memset()
+                # dst[:] = 0  # <-- notably slower than memset()
                 if dst_is_uint16:
                     mypaintlib.tile_clear_rgba16(dst)
                 else:
                     mypaintlib.tile_clear_rgba8(dst)
             else:
                 if dst_is_uint16:
-                    # this will do memcpy, not worth to bother skipping the u channel
+                    # this will do memcpy, not worth to bother skipping
+                    # the u channel
                     mypaintlib.tile_copy_rgba16_into_rgba16(src, dst)
                 else:
                     if dst_has_alpha:
@@ -419,7 +440,8 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         """Efficiently loads a tiledict, and notifies the observers"""
         if d == self.tiledict:
             # common case optimization, called via stroke.redo()
-            # testcase: comparison above (if equal) takes 0.6ms, code below 30ms
+            # testcase: comparison above (if equal) takes 0.6ms,
+            # code below 30ms
             return
         old = set(self.tiledict.iteritems())
         self.tiledict = d.copy()
@@ -471,7 +493,7 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
 
         return (x, y, w, h)
 
-    def load_from_png(self, filename, x, y, feedback_cb=None,
+    def load_from_png(self, filename, x, y, progress=None,
                       convert_to_srgb=True,
                       **kwargs):
         """Load from a PNG, one tilerow at a time, discarding empty tiles.
@@ -480,25 +502,43 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         :param int x: X-coordinate at which to load the replacement data
         :param int y: Y-coordinate at which to load the replacement data
         :param bool convert_to_srgb: If True, convert to sRGB
-        :param callable feedback_cb: Called every few tile rows
+        :param progress: Unsized UI feedback obj.
+        :type progress: lib.feedback.Progress or None
         :param dict \*\*kwargs: Ignored
 
         Raises a `lib.errors.FileHandlingError` with a descriptive
         string when conversion or PNG reading fails.
 
         """
+        if not progress:
+            progress = lib.feedback.Progress()
+
+        # Catch this error up front, since the code below hides it.
+        if progress.items is not None:
+            raise ValueError("progress arg must be unsized")
+
         dirty_tiles = set(self.tiledict.keys())
         self.tiledict = {}
 
+        ty0 = int(y // N)
         state = {}
         state['buf'] = None   # array of height N, width depends on image
-        state['ty'] = y // N  # current tile row being filled into buf
+        state['ty'] = ty0  # current tile row being filled into buf
         state['frame_size'] = None
+        state['progress'] = progress
 
         def get_buffer(png_w, png_h):
-            state['frame_size'] = x, y, png_w, png_h
-            if feedback_cb:
-                feedback_cb()
+            if state["frame_size"] is None:
+                if state['progress']:
+                    ty_final = int((y + png_h) // N)
+                    # We have to handle feedback exceptions ourself
+                    try:
+                        state["progress"].items = ty_final - ty0
+                    except:
+                        logger.exception("setting progress.items failed")
+                        state["progress"] = None
+                state['frame_size'] = (x, y, png_w, png_h)
+
             buf_x0 = x // N * N
             buf_x1 = ((x + png_w - 1) // N + 1) * N
             buf_y0 = state['ty']*N
@@ -533,11 +573,19 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
                 if src[:, :, 3].any():
                     with self.tile_request(tx, ty, readonly=False) as dst:
                         mypaintlib.tile_convert_rgba8_to_rgba16(src, dst)
+            if state["progress"]:
+                try:
+                    state["progress"].completed(ty - ty0)
+                except:
+                    logger.exception("Progress.completed() failed")
+                    state["progress"] = None
 
         if sys.platform == 'win32':
             filename_sys = filename.encode("utf-8")
         else:
-            filename_sys = filename.encode(sys.getfilesystemencoding())  # FIXME: should not do that, should use open(unicode_object)
+            filename_sys = filename.encode(sys.getfilesystemencoding())
+            # FIXME: should not do that, should use open(unicode_object)
+
         try:
             flags = mypaintlib.load_png_fast_progressive(
                 filename_sys,
@@ -547,6 +595,7 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         except (IOError, OSError, RuntimeError) as ex:
             raise FileHandlingError(_("PNG reader failed: %s") % str(ex))
         consume_buf()  # also process the final chunk of data
+        progress.close()
         logger.debug("PNG loader flags: %r", flags)
 
         dirty_tiles.update(self.tiledict.keys())
@@ -584,9 +633,23 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
 
     def remove_empty_tiles(self):
         """Removes tiles from the tiledict which contain no data"""
-        for pos, data in self.tiledict.items():
-            if not data.rgba.any():
-                self.tiledict.pop(pos)
+        if self.mipmap_level != 0:
+            raise ValueError("Only call this on the top-level surface.")
+        assert self is self._mipmaps[0]
+        total = 0
+        removed = 0
+        for surf in self._mipmaps:
+            for pos, data in surf.tiledict.items():
+                total += 1
+                try:
+                    rgba = data.rgba
+                except AttributeError:
+                    continue
+                if rgba.any():
+                    continue
+                surf.tiledict.pop(pos)
+                removed += 1
+        return removed, total
 
     def get_move(self, x, y, sort=True):
         """Returns a move object for this surface
@@ -618,6 +681,113 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         See also `lib.layer.Layer.flood_fill()` and `fill.flood_fill()`.
         """
         flood_fill(self, x, y, color, bbox, tolerance, dst_surface, **kwargs)
+
+    @contextlib.contextmanager
+    def cairo_request(self, x, y, w, h, mode=lib.modes.DEFAULT_MODE):
+        """Get a Cairo context for a given area, then put back changes.
+
+        :param int x: Request area's X coordinate.
+        :param int y: Request area's Y coordinate.
+        :param int w: Request area's width.
+        :param int h: Request area's height.
+        :param mode: Combine mode for the put-back.
+        :rtype: contextlib.GeneratorContextManager
+        :returns: cairo.Context (via with-statement)
+
+        This context manager works by constructing and managing a
+        temporary 8bpp Cairo imagesurface and yielding up a Cairo
+        context that points at it. Call the method as part of a
+        with-statement:
+
+        >>> s = MyPaintSurface()
+        >>> n = TILE_SIZE
+        >>> assert n > 10
+        >>> with s.cairo_request(10, 10, n, n) as cr:
+        ...     cr.set_source_rgb(1, 0, 0)
+        ...     cr.rectangle(1, 1, n-2, n-2)
+        ...     cr.fill()
+        >>> list(sorted(s.tiledict.keys()))
+        [(0, 0), (0, 1), (1, 0), (1, 1)]
+
+        If the mode is specified, it must be a layer/surface combine
+        mode listed in `lib.modes.STACK_MODES`. In this case, The
+        temporary cairo ImageSurface object is initially completely
+        transparent, and anything you draw to it is composited back over
+        the surface using the mode you requested.
+
+        If you pass mode=None (or mode=lib.modes.PASS_THROUGH_MODE),
+        Cairo operates directly on the surface. This means that you can
+        use Cairo operators and primitives which erase tile data.
+
+        >>> import cairo
+        >>> with s.cairo_request(0, 0, n, n, mode=None) as cr:
+        ...     cr.set_operator(cairo.OPERATOR_CLEAR)
+        ...     cr.set_source_rgb(1, 1, 1)
+        ...     cr.paint()
+        >>> _ignored = s.remove_empty_tiles()
+        >>> list(sorted(s.tiledict.keys()))
+        [(0, 1), (1, 0), (1, 1)]
+        >>> with s.cairo_request(n-10, n-10, n+10, n+10, mode=None) as cr:
+        ...     cr.set_operator(cairo.OPERATOR_SOURCE)
+        ...     cr.set_source_rgba(0, 1, 0, 0)
+        ...     cr.paint()
+        >>> _ignored = s.remove_empty_tiles()
+        >>> list(sorted(s.tiledict.keys()))
+        [(0, 1), (1, 0)]
+
+        See also:
+
+        * lib.pixbufsurface.Surface.cairo_request()
+        * lib.layer.data.SimplePaintingMode.cairo_request()
+
+        """
+
+        # Normalize and validate args
+        if mode is not None:
+            if mode == lib.modes.PASS_THROUGH_MODE:
+                mode = None
+            elif mode not in lib.modes.STANDARD_MODES:
+                raise ValueError(
+                    "The 'mode' argument must be one of STANDARD_MODES, "
+                    "or it must be either PASS_THROUGH_MODE or None."
+                )
+        x = int(x)
+        y = int(y)
+        w = int(w)
+        h = int(h)
+        if w <= 0 or h <= 0:
+            return   # nothing to do
+
+        # Working pixbuf-surface
+        s = lib.pixbufsurface.Surface(x, y, w, h)
+        dirty_tiles = list(s.get_tiles())
+
+        # Populate it with an 8-bit downsampling of this surface's data
+        # if we're going to be "working directly"
+        if mode is None:
+            for tx, ty in dirty_tiles:
+                with s.tile_request(tx, ty, readonly=False) as dst:
+                    self.blit_tile_into(dst, True, tx, ty)
+
+        # Collect changes from the invoker...
+        with s.cairo_request() as cr:
+            yield cr
+
+        # Blit or composite back the changed pixbuf
+        if mode is None:
+            for tx, ty in dirty_tiles:
+                with self.tile_request(tx, ty, readonly=False) as dst:
+                    s.blit_tile_into(dst, True, tx, ty)
+        else:
+            tmp = np.zeros((N, N, 4), 'uint16')
+            for tx, ty in dirty_tiles:
+                s.blit_tile_into(tmp, True, tx, ty)
+                with self.tile_request(tx, ty, readonly=False) as dst:
+                    mypaintlib.tile_combine(mode, tmp, dst, True, 1.0)
+
+        # Tell everyone about the changes
+        bbox = lib.surface.get_tiles_bbox(dirty_tiles)
+        self.notify_observers(*bbox)
 
 
 class _TiledSurfaceMove (object):
@@ -710,8 +880,9 @@ class _TiledSurfaceMove (object):
         ty = y // N
         self.start_pos = (x, y)
         if self.sort:
-            manhattan_dist = lambda p: abs(tx - p[0]) + abs(ty - p[1])
-            self.chunks.sort(key=manhattan_dist)
+            self.chunks.sort(
+                key=lambda p: abs(tx - p[0]) + abs(ty - p[1]),
+            )
         # High water mark of chunks processed so far.
         # This is reset on every call to update().
         self.chunks_i = 0
@@ -740,8 +911,9 @@ class _TiledSurfaceMove (object):
             x, y = self.start_pos
             tx = (x + dx) // N
             ty = (y + dy) // N
-            manhattan_dist = lambda p: abs(tx - p[0]) + abs(ty - p[1])
-            self.blank_queue.sort(key=manhattan_dist)
+            self.blank_queue.sort(
+                key=lambda p: abs(tx - p[0]) + abs(ty - p[1]),
+            )
         # Calculate offsets
         self.slices_x = calc_translation_slices(int(dx))
         self.slices_y = calc_translation_slices(int(dy))
@@ -767,7 +939,11 @@ class _TiledSurfaceMove (object):
         assert self.chunks_i >= len(self.chunks)
         assert len(self.blank_queue) == 0
         # Remove empty tiles created by Layer Move
-        self.surface.remove_empty_tiles()
+        removed, total = self.surface.remove_empty_tiles()
+        logger.debug(
+            "_TiledSurfaceMove.cleanup: removed %d empty tiles of %d",
+            removed, total,
+        )
 
     def process(self, n=200):
         """Process a number of pending tile moves
@@ -949,7 +1125,10 @@ class Background (Surface):
 
         height, width = obj.shape[0:2]
         if height % N or width % N:
-            raise BackgroundError('unsupported background tile size: %dx%d' % (width, height))
+            raise BackgroundError(
+                "unsupported background tile size: %dx%d"
+                % (width, height),
+            )
 
         super(Background, self).__init__(mipmap_level=0, looped=True,
                                          looped_size=(width, height))
@@ -1362,6 +1541,7 @@ class PNGFileUpdateTask (object):
             if os.path.exists(self._tmp_filename):
                 os.unlink(self._tmp_filename)
             raise
+
 
 if __name__ == '__main__':
     import doctest

@@ -14,10 +14,8 @@ from __future__ import division, print_function
 
 import abc
 import contextlib
-import sys
 import os
 import logging
-logger = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -25,11 +23,14 @@ import mypaintlib
 import lib.helpers
 from lib.errors import FileHandlingError
 from lib.gettext import C_
+import lib.feedback
 
+
+logger = logging.getLogger(__name__)
 
 N = mypaintlib.TILE_SIZE
 
-# throttle excesssive calls to the save/render feedback_cb
+# throttle excesssive calls to the save/render progress monitor objects
 TILES_PER_CALLBACK = 256
 
 
@@ -46,6 +47,7 @@ class Bounded (object):
         :rtype: lib.helpers.Rect
 
         """
+
 
 class TileAccessible (Bounded):
     """Interface for objects whose memory is accessible by tile"""
@@ -70,6 +72,7 @@ class TileAccessible (Bounded):
         explanation of this interface and its expectations.
 
         """
+
 
 class TileBlittable (Bounded):
     """Interface for unconditional copying by tile"""
@@ -102,6 +105,7 @@ class TileBlittable (Bounded):
 
         """
 
+
 class TileCompositable (Bounded):
     """Interface for compositing by tile, with modes/opacities/flags"""
 
@@ -125,6 +129,7 @@ class TileCompositable (Bounded):
         any special rendering settings on the object itself.
 
         """
+
 
 class TileRequestWrapper (TileAccessible):
     """Adapts a compositable object into one supporting tile_request()
@@ -281,7 +286,8 @@ def save_as_png(surface, filename, *rect, **kwargs):
     :param unicode filename: The file to write
     :param tuple \*rect: Rectangle (x, y, w, h) to save
     :param bool alpha: If true, write a PNG with alpha
-    :param callable feedback_cb: Called every TILES_PER_CALLBACK tiles.
+    :param progress: Updates a UI every scanline strip.
+    :type progress: lib.feedback.Progress or None
     :param bool single_tile_pattern: True if surface is a one tile only.
     :param bool save_srgb_chunks: Set to False to not save sRGB flags.
     :param tuple \*\*kwargs: Passed to blit_tile_into (minus the above)
@@ -301,7 +307,7 @@ def save_as_png(surface, filename, *rect, **kwargs):
     """
     # Horrible, dirty argument handling
     alpha = kwargs.pop('alpha', False)
-    feedback_cb = kwargs.pop('feedback_cb', None)
+    progress = kwargs.pop('progress', None)
     single_tile_pattern = kwargs.pop("single_tile_pattern", False)
     save_srgb_chunks = kwargs.pop("save_srgb_chunks", True)
 
@@ -312,6 +318,11 @@ def save_as_png(surface, filename, *rect, **kwargs):
     if w == 0 or h == 0:
         x, y, w, h = (0, 0, 1, 1)
         rect = (x, y, w, h)
+
+    if not progress:
+        progress = lib.feedback.Progress()
+    num_strips = int((1 + ((y + h) // N)) - (y // N))
+    progress.items = num_strips
 
     try:
         logger.debug(
@@ -328,7 +339,6 @@ def save_as_png(surface, filename, *rect, **kwargs):
                 alpha,
                 save_srgb_chunks,
             )
-            feedback_counter = 0
             scanline_strips = scanline_strips_iter(
                 surface, rect,
                 alpha=alpha,
@@ -337,11 +347,20 @@ def save_as_png(surface, filename, *rect, **kwargs):
             )
             for scanline_strip in scanline_strips:
                 pngsave.write(scanline_strip)
-                if feedback_cb and feedback_counter % TILES_PER_CALLBACK == 0:
-                    feedback_cb()
-                feedback_counter += 1
+                if not progress:
+                    continue
+                try:
+                    progress += 1
+                except:
+                    logger.exception(
+                        "Failed to update lib.feedback.Progress: "
+                        "dropping it"
+                    )
+                    progress = None
             pngsave.close()
         logger.debug("Finished writing %r", filename)
+        if progress:
+            progress.close()
     except (IOError, OSError, RuntimeError) as err:
         logger.exception(
             "Caught %r from C++ png-writer code, re-raising as a "

@@ -7,6 +7,7 @@
 ########################################################################
 
 export ARCH=$(arch)
+eval `python2 lib/meta.py`
 
 APP=MyPaint
 LOWERAPP=${APP,,}
@@ -59,9 +60,6 @@ cp /usr/lib/x86_64-linux-gnu/libg*k-3.so.0 usr/lib/x86_64-linux-gnu/
 # Compile Glib schemas
 ( mkdir -p usr/share/glib-2.0/schemas/ ; cd usr/share/glib-2.0/schemas/ ; glib-compile-schemas . )
 
-GLIBC_NEEDED=$(glibc_needed)
-VERSION=$(eval `python2 lib/meta.py`).glibc$GLIBC_NEEDED
-
 ########################################################################
 # Copy in the dependencies that cannot be assumed to be available
 # on all target systems
@@ -76,6 +74,7 @@ copy_deps
 # Delete dangerous libraries; see
 # https://github.com/probonopd/AppImages/blob/master/excludelist
 delete_blacklisted
+find . -name *harfbuzz* -delete
 
 ########################################################################
 # desktopintegration asks the user on first run to install a menu item
@@ -87,8 +86,7 @@ get_desktopintegration $LOWERAPP
 # Determine the version of the app; also include needed glibc version
 ########################################################################
 
-GLIBC_NEEDED=$(glibc_needed)
-VERSION=${RELEASE_VERSION}-glibc$GLIBC_NEEDED
+VERSION=$(echo "$MYPAINT_VERSION_CEREMONIAL" | sed -e 's/alpha+gitexport/git/')
 
 ########################################################################
 # Patch away absolute paths; it would be nice if they were relative

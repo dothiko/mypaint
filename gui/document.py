@@ -38,12 +38,12 @@ import lib.helpers
 from lib.helpers import clamp
 import lib.observable
 import stategroup
-import dialogs
 import gui.mode
 import gui.colorpicker   # purely for registration
 import gui.symmetry   # registration only
 import gui.freehand
 import gui.inktool   # registration only
+import gui.layerprops
 import gui.buttonmap
 import gui.externalapp
 import gui.device
@@ -317,11 +317,11 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         GLib.idle_add(self.init_scroll_events)
 
         self.zoomlevel_values = [
-            # micro:
+            # micro
             1.0 / 16, 1.0 / 8, 2.0 / 11, 0.25, 1.0 / 3, 0.50, 2.0 / 3,
-            # normal:
+            # normal
             1.0, 1.5, 2.0, 3.0, 4.0, 5.5, 8.0,
-            # macro:
+            # macro
             11.0, 16.0, 23.0, 32.0, 45.0, 64.0,
         ]
 
@@ -440,9 +440,14 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             self._update_external_layer_edit_actions: [
                 layerstack.current_path_updated,
             ],
+            # XXX Multiple layer selection
             self._update_muliple_layer_select_actions: [
                 layerstack.multiple_layers_selection_updated,
                 layerstack.layer_deleted,
+            ],
+            # XXX Multiple layer selection end.
+            self._update_layer_visible_toggle_from_current_view: [
+                self.model.layer_view_manager.current_view_changed,
             ],
         }
         for observer_method, events in observed_events.items():
@@ -500,9 +505,9 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
 
         k('BackSpace', 'ClearLayer')
 
-        k('<control>z', 'Undo')
+        k('z', 'Undo')  # Old-style MyPaint Shortcut
         k('<control>y', 'Redo')
-        k('<control><shift>z', 'Redo')
+        k('y', 'Redo')  # Old-style MyPaint Shortcut
         k('<control>w', lambda action: self.app.drawWindow.quit_cb())
         k('KP_Add', 'ZoomIn')
         k('KP_Subtract', 'ZoomOut')
@@ -945,7 +950,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         x, y, w, h = self.model.get_bbox()
         try:
             self.model.load_layer_from_pixbuf(pixbuf, x, y)
-        except:
+        except Exception:
             logger.exception("Paste failed")
             self.app.show_transient_message(C_(
                 "Statusbar message: paste result",
@@ -1081,9 +1086,8 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
     def _layer_picking_iter(self):
         """Enumerates leaf layers in picking order, with paths"""
         layer_stack = self.model.layer_stack
-        layers_enum = layer_stack.deepenumerate()
         parents = set()
-        for path, layer in layers_enum:
+        for path, layer in layer_stack.walk():
             if path in parents:
                 continue
             parent_path = path[:-1]
@@ -1111,7 +1115,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             "DuplicateLayer",
             "NewPaintingLayerAbove",  # but not below so the button still works
             "LayerMode",  # the modes submenu
-            "RenameLayer",
+            "LayerProperties",
             "LayerVisibleToggle",
             "LayerLockedToggle",
             "LayerOpacityMenu",
@@ -1428,18 +1432,17 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         """``DuplicateLayer`` GtkAction callback: clone the current layer"""
         self.model.duplicate_current_layer()
 
-    def rename_layer_cb(self, action):
-        """``RenameLayer`` GtkAction callback: layer rename dialog"""
+    def layer_properties_cb(self, action):
+        """LayerProperties GtkAction callback: layer properties dialog"""
         layer = self.model.layer_stack.get_current()
         if layer is self.model.layer_stack:
             return
-        old_name = layer.name
-        if old_name is None:
-            old_name = layer.DEFAULT_NAME
-        win = self.app.drawWindow
-        new_name = dialogs.ask_for_name(win, _("Layer Name"), old_name)
-        if new_name:
-            self.model.rename_current_layer(new_name)
+        dialog = gui.layerprops.LayerPropertiesDialog(
+            self.app.drawWindow,
+            self.model,
+        )
+        dialog.run()
+        dialog.destroy()
 
 
     ## Per-layer flag toggles
@@ -1549,7 +1552,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         self.app.brush.set_color_hsv((h, s, v))
 
     def increase_hue_cb(self, action):
-        """``IncreaseHue`` GtkAction callback: anticlockwise hue rotation"""
+        """Clockwise hue rotation ("IncreaseHue" action)."""
         # TODO: use HCY?
         h, s, v = self.app.brush.get_color_hsv()
         e = 0.015
@@ -1557,7 +1560,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         self.app.brush.set_color_hsv((h, s, v))
 
     def decrease_hue_cb(self, action):
-        """``DecreaseHue`` GtkAction callback: clockwise hue rotation"""
+        """Anticlockwise hue rotation ("DecreaseHue" action)."""
         # TODO: use HCY?
         h, s, v = self.app.brush.get_color_hsv()
         e = 0.015
@@ -1820,16 +1823,20 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         want_active = bool(action.get_active())
         if want_active and not already_active:
             alloc = self.tdw.get_allocation()
-            axis_pos = self.model.layer_stack.symmetry_axis
-            if axis_pos is None:
+            axis_x_pos = self.model.layer_stack.symmetry_x
+            axis_y_pos = self.model.layer_stack.symmetry_y
+            if axis_x_pos is None or axis_y_pos is None:
                 center_disp = alloc.width / 2.0, alloc.height / 2.0
                 center_model = self.tdw.display_to_model(*center_disp)
-                axis_pos = center_model[0]
-                self.model.layer_stack.symmetry_axis = axis_pos
+                axis_x_pos = center_model[0]
+                axis_y_pos = center_model[1]
+                self.model.layer_stack.symmetry_x = axis_x_pos
+                self.model.layer_stack.symmetry_y = axis_y_pos
         if want_active != already_active:
             self.model.layer_stack.symmetry_active = want_active
 
-    def _symmetry_state_changed_cb(self, layerstack, active, x):
+    def _symmetry_state_changed_cb(self, layerstack, active, x, y,
+                                   sym_type, rot_sym_lines):
         """Update the SymmetryActive toggle on model state changes"""
         symm_toggle = self.action_group.get_action("SymmetryActive")
         symm_toggle_active = bool(symm_toggle.get_active())
@@ -2014,6 +2021,17 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         """Toggles double buffering"""
         self.tdw.renderer.set_double_buffered(not action.get_active())
 
+    def vacuum_document_cb(self, action):
+        """Discards empty (all-zeros) tiles."""
+        r, t = self.model.layer_stack.remove_empty_tiles()
+        self.app.show_transient_message(C_(
+            "Statusbar message: vacuum document",
+            u"Vacuum: discarded {removed} of {total} tiles.",
+        ).format(
+            removed=r,
+            total=t,
+        ))
+
     ## Model state reflection
 
     def _input_stroke_ended_cb(self, self_again, event):
@@ -2196,6 +2214,14 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         can_commit = hasattr(current, "load_from_external_edit_tempfile")
         app.find_action("BeginExternalLayerEdit").set_sensitive(can_commit)
         app.find_action("CommitExternalLayerEdit").set_sensitive(can_commit)
+
+    ## Layer views, and their locked flag
+
+    def _update_layer_visible_toggle_from_current_view(self, *_ignored):
+        app = self.app
+        lvm = self.model.layer_view_manager
+        view_locked = lvm.current_view_locked
+        app.find_action("LayerVisibleToggle").set_sensitive(not view_locked)
 
     ## Inking tool node manipulation
     def insert_current_node_cb(self, action):

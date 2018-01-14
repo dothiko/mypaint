@@ -9,37 +9,36 @@
 
 """Core layer classes etc."""
 
+
 ## Imports
+
 from __future__ import division, print_function
 
-import re
-import zlib
 import logging
 import os
-from cStringIO import StringIO
-import time
-import zipfile
-logger = logging.getLogger(__name__)
-import tempfile
-import shutil
 import xml.etree.ElementTree as ET
 import weakref
 from warnings import warn
-from copy import deepcopy
-from random import randint
 import abc
-import uuid
 
 from lib.gettext import C_
 import lib.mypaintlib
-import lib.tiledsurface as tiledsurface
 import lib.strokemap
 import lib.helpers as helpers
 import lib.fileutils
 import lib.pixbuf
-from lib.surface import TileBlittable, TileCompositable
-from lib.modes import *
+from lib.surface import TileBlittable
+from lib.surface import TileCompositable
+from lib.modes import PASS_THROUGH_MODE
+from lib.modes import STANDARD_MODES
+from lib.modes import DEFAULT_MODE
+from lib.modes import ORA_MODES_BY_OPNAME
+from lib.modes import MODES_EFFECTIVE_AT_ZERO_ALPHA
+from lib.modes import MODES_DECREASING_BACKDROP_ALPHA
 import lib.xml
+import lib.tiledsurface
+
+logger = logging.getLogger(__name__)
 
 
 ## Base class defs
@@ -68,34 +67,14 @@ class LayerBase (TileBlittable, TileCompositable):
 
     ## Class constants
 
-    #TRANSLATORS: Default name for new (base class) layers
+    #: Forms the default name, may be suffixed per lib.naming consts.
     DEFAULT_NAME = C_(
         "layer default names",
         u"Layer",
     )
 
-    #TRANSLATORS: The template for creating unique names, and the
-    #TRANSLATORS: regular expression for parsing it MUST be kept in
-    #TRANSLATORS: sync. If they are not in sync, MyPaint will not run.
-    #TRANSLATORS: If you're unsure or cannot test, leave the unique name
-    #TRANSLATORS: stuff untranslated. This is only for if you *need* a
-    #TRANSLATORS: specific number-sign or word/numeral order for your
-    #TRANSLATORS: language.
-    UNIQUE_NAME_TEMPLATE = C_(
-        "layer unique names: template (leave untranslated if unsure)",
-        u'%(name)s %(number)d',
-    )
-    UNIQUE_NAME_REGEX = re.compile(C_(
-        "layer unique names: match regex (leave untranslated if unsure)",
-        '^(.*?)\\s*(\\d+)$',
-    ))
-
-    assert UNIQUE_NAME_REGEX.match(
-        UNIQUE_NAME_TEMPLATE % {
-            "name": DEFAULT_NAME,
-            "number": 42,
-        }
-    )
+    #: A string for the layer type.
+    TYPE_DESCRIPTION = None
 
     PERMITTED_MODES = set(STANDARD_MODES)
     INITIAL_MODE = DEFAULT_MODE
@@ -121,11 +100,12 @@ class LayerBase (TileBlittable, TileCompositable):
         self._mode = self.INITIAL_MODE
         self._group_ref = None
         self._root_ref = None
+        self._thumbnail = None
         #: True if the layer was marked as selected when loaded.
         self.initially_selected = False
 
     @classmethod
-    def new_from_openraster(cls, orazip, elem, cache_dir, feedback_cb,
+    def new_from_openraster(cls, orazip, elem, cache_dir, progress,
                             root, x=0, y=0, **kwargs):
         """Reads and returns a layer from an OpenRaster zipfile
 
@@ -139,14 +119,14 @@ class LayerBase (TileBlittable, TileCompositable):
             orazip,
             elem,
             cache_dir,
-            feedback_cb,
+            progress,
             x=x, y=y,
             **kwargs
         )
         return layer
 
     @classmethod
-    def new_from_openraster_dir(cls, oradir, elem, cache_dir, feedback_cb,
+    def new_from_openraster_dir(cls, oradir, elem, cache_dir, progress,
                                 root, x=0, y=0, **kwargs):
         """Reads and returns a layer from an OpenRaster-like folder
 
@@ -160,13 +140,13 @@ class LayerBase (TileBlittable, TileCompositable):
             oradir,
             elem,
             cache_dir,
-            feedback_cb,
+            progress,
             x=x, y=y,
             **kwargs
         )
         return layer
 
-    def load_from_openraster(self, orazip, elem, cache_dir, feedback_cb,
+    def load_from_openraster(self, orazip, elem, cache_dir, progress,
                              x=0, y=0, **kwargs):
         """Loads layer data from an open OpenRaster zipfile
 
@@ -175,7 +155,8 @@ class LayerBase (TileBlittable, TileCompositable):
         :param elem: <layer/> or <stack/> element to load (stack.xml)
         :type elem: xml.etree.ElementTree.Element
         :param cache_dir: Cache root dir for this document
-        :param feedback_cb: Callback invoked to provide feedback to the user
+        :param progress: Provides feedback to the user.
+        :type progress: lib.feedback.Progress or None
         :param x: X offset of the top-left point for image data
         :param y: Y offset of the top-left point for image data
         :param **kwargs: Extensibility
@@ -187,7 +168,7 @@ class LayerBase (TileBlittable, TileCompositable):
         """
         self._load_common_flags_from_ora_elem(elem)
 
-    def load_from_openraster_dir(self, oradir, elem, cache_dir, feedback_cb,
+    def load_from_openraster_dir(self, oradir, elem, cache_dir, progress,
                                  x=0, y=0, **kwargs):
         """Loads layer data from an OpenRaster-style folder.
 
@@ -509,7 +490,7 @@ class LayerBase (TileBlittable, TileCompositable):
         layer stack if the layer is within a tree structure.
 
         In addition to the modes supported by the base implementation,
-        layer groups permit `lib.layer.PASS_THROUGH_MODE`, an
+        layer groups permit `lib.modes.PASS_THROUGH_MODE`, an
         additional mode where group contents are rendered as if their
         group were not present. Setting the mode to this value also
         sets the opacity to 100%.
@@ -719,9 +700,9 @@ class LayerBase (TileBlittable, TileCompositable):
             return False
         if name == self.DEFAULT_NAME:
             return False
-        match = self.UNIQUE_NAME_REGEX.match(name)
+        match = lib.naming.UNIQUE_NAME_REGEX.match(name)
         if match is not None:
-            base = unicode(match.group(1))
+            base = unicode(match.group("name"))
             if base == self.DEFAULT_NAME:
                 return False
         return True
@@ -968,11 +949,16 @@ class LayerBase (TileBlittable, TileCompositable):
 
     ## Painting symmetry axis
 
-    def set_symmetry_state(self, active, center_x):
+    def set_symmetry_state(self, active, center_x, center_y,
+                           symmetry_type, rot_symmetry_lines):
         """Set the surface's painting symmetry axis and active flag.
 
         :param bool active: Whether painting should be symmetrical.
         :param int center_x: X coord of the axis of symmetry.
+        :param int center_y: Y coord of the axis of symmetry.
+        :param int symmetry_type: symmetry type that will be applied if active
+        :param int rot_symmetry_lines: number of rotational
+            symmetry lines for angle dependent symmetry modes.
 
         The symmetry axis is only meaningful to paintable layers.
         Received strokes are reflected along the line ``x=center_x``
@@ -999,6 +985,74 @@ class LayerBase (TileBlittable, TileCompositable):
         """Restores the layer from snapshot data"""
         sshot.restore_to_layer(self)
 
+    ## Thumbnails
+
+    @property
+    def thumbnail(self):
+        """The layer's cached preview thumbnail.
+
+        :rtype: GdkPixbuf.Pixbuf or None
+
+        Thumbnail pixbufs are always 256x256 pixels, and correspond to
+        the data bounding box of the layer only.
+
+        See also: render_as_pixbuf(), render_thumbnail().
+
+        """
+        return self._thumbnail
+
+    def update_thumbnail(self):
+        """Safely updates the cached preview thumbnail.
+
+        This method updates self.thumbnail using render_thumbnail() and
+        the data bounding box, and eats any NotImplementedErrors.
+
+        This is used by the layer stack to keep the preview thumbnail up
+        to date. It is called automatically after layer data is changed
+        and stable for a bit, so there is normally no need to call it in
+        client code.
+
+        """
+        try:
+            self._thumbnail = self.render_thumbnail(
+                self.get_bbox(),
+                alpha=True,
+            )
+        except NotImplementedError:
+            self._thumbnail = None
+
+    def render_thumbnail(self, bbox, **options):
+        """Renders a 256x256 thumb of the layer in an arbitrary bbox.
+
+        :param bbox: Bounding box to make a thumbnail of
+        :type bbox: tuple
+        :param **options: Passed to `render_as_pixbuf()`.
+        :rtype: GtkPixbuf or None
+
+        This implementation requires a working render_as_pixbuf().  Use
+        the thumbnail property if you just want a reasonably up-to-date
+        preview thumbnail for a single layer.
+
+        """
+        x, y, w, h = bbox
+        if w == 0 or h == 0:
+            # workaround to save empty documents
+            x, y, w, h = 0, 0, lib.tiledsurface.N, lib.tiledsurface.N
+        mipmap_level = 0
+        while (mipmap_level < lib.tiledsurface.MAX_MIPMAP_LEVEL and
+               max(w, h) >= 512):
+            mipmap_level += 1
+            x, y, w, h = x // 2, y // 2, w // 2, h // 2
+        w = max(1, w)
+        h = max(1, h)
+        pixbuf = self.render_as_pixbuf(
+            x, y, w, h,
+            mipmap_level=mipmap_level,
+            **options
+        )
+        assert pixbuf.get_width() == w and pixbuf.get_height() == h
+        return helpers.scale_proportionally(pixbuf, 256, 256)
+
     ## Trimming
 
     def trim(self, rect):
@@ -1023,7 +1077,6 @@ class LayerBaseSnapshot (object):
 
     def __init__(self, layer):
         super(LayerBaseSnapshot, self).__init__()
-        self.opacity = layer.opacity
         self.name = layer.name
         self.mode = layer.mode
         self.opacity = layer.opacity
@@ -1031,7 +1084,6 @@ class LayerBaseSnapshot (object):
         self.locked = layer.locked
 
     def restore_to_layer(self, layer):
-        layer.opacity = self.opacity
         layer.name = self.name
         layer.mode = self.mode
         layer.opacity = self.opacity

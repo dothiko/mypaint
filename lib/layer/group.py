@@ -11,10 +11,10 @@
 
 
 ## Imports
+
 from __future__ import division, print_function
 
 import logging
-logger = logging.getLogger(__name__)
 
 import numpy as np
 
@@ -24,13 +24,19 @@ import lib.tiledsurface as tiledsurface
 import lib.pixbufsurface
 import lib.helpers as helpers
 import lib.fileutils
-from lib.modes import *
+from lib.modes import DEFAULT_MODE
+from lib.modes import STANDARD_MODES
+from lib.modes import STACK_MODES
+from lib.modes import PASS_THROUGH_MODE
 import core
 import data
 import lib.layer.error
 import lib.surface
 import lib.autosave
 import lib.projectsave
+import lib.feedback
+
+logger = logging.getLogger(__name__)
 
 
 ## Class defs
@@ -56,10 +62,15 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
 
     ## Class constants
 
-    #TRANSLATORS: Short default name for layer groups.
+    # TRANSLATORS: Short default name for layer groups.
     DEFAULT_NAME = C_(
         "layer default names",
         "Group",
+    )
+
+    TYPE_DESCRIPTION = C_(
+        "layer type descriptions",
+        u"Layer Group",
     )
 
     PERMITTED_MODES = set(STANDARD_MODES + STACK_MODES)
@@ -72,20 +83,26 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
         self._layers = []  # must be done before supercall
         super(LayerStack, self).__init__(**kwargs)
         # Blank background, for use in rendering
-        N = tiledsurface.N
-        blank_arr = np.zeros((N, N, 4), dtype='uint16')
+        tile_dims = (tiledsurface.N, tiledsurface.N, 4)
+        blank_arr = np.zeros(tile_dims, dtype='uint16')
         self._blank_bg_surface = tiledsurface.Background(blank_arr)
 
-    def load_from_openraster(self, orazip, elem, cache_dir, feedback_cb,
+    def load_from_openraster(self, orazip, elem, cache_dir, progress,
                              x=0, y=0, **kwargs):
         """Load this layer from an open .ora file"""
         if elem.tag != "stack":
             raise lib.layer.error.LoadingFailed("<stack/> expected")
+
+        if not progress:
+            progress = lib.feedback.Progress()
+        progress.items = 1 + len(list(elem.findall("./*")))
+
+        # Item 1: supercall
         super(LayerStack, self).load_from_openraster(
             orazip,
             elem,
             cache_dir,
-            feedback_cb,
+            progress.open(),
             x=x, y=y,
             **kwargs
         )
@@ -103,6 +120,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
         if is_pass_through:
             self.mode = PASS_THROUGH_MODE
 
+        # Items 2..n: child elements.
         # Document order is the same as _layers, bottom layer to top.
         for child_elem in elem.findall("./*"):
             assert child_elem is not elem
@@ -110,20 +128,21 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
                 orazip,
                 child_elem,
                 cache_dir,
-                feedback_cb,
+                progress.open(),
                 x=x, y=y,
                 **kwargs
             )
+        progress.close()
 
     def _load_child_layer_from_orazip(self, orazip, elem, cache_dir,
-                                      feedback_cb, x=0, y=0, **kwargs):
+                                      progress, x=0, y=0, **kwargs):
         """Loads a single child layer element from an open .ora file"""
         try:
             child = _layer_new_from_orazip(
                 orazip,
                 elem,
                 cache_dir,
-                feedback_cb,
+                progress,
                 self.root,
                 x=x, y=y,
                 **kwargs
@@ -133,7 +152,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
         else:
             self.append(child)
 
-    def load_from_openraster_dir(self, oradir, elem, cache_dir, feedback_cb,
+    def load_from_openraster_dir(self, oradir, elem, cache_dir, progress,
                                  x=0, y=0, **kwargs):
         """Loads layer flags and data from an OpenRaster-style dir"""
         if elem.tag != "stack":
@@ -142,7 +161,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
             oradir,
             elem,
             cache_dir,
-            feedback_cb,
+            progress,
             x=x, y=y,
             **kwargs
         )
@@ -164,14 +183,14 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
                 oradir,
                 child_elem,
                 cache_dir,
-                feedback_cb,
+                progress,
                 x=x, y=y,
                 **kwargs
             )
 
 
     def _load_child_layer_from_oradir(self, oradir, elem, cache_dir,
-                                      feedback_cb, x=0, y=0, **kwargs):
+                                      progress, x=0, y=0, **kwargs):
         """Loads a single child layer element from an open .ora file
 
         Child classes can override this, but otherwise it's an internal
@@ -183,7 +202,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
                 oradir,
                 elem,
                 cache_dir,
-                feedback_cb,
+                progress,
                 self.root,
                 x=x, y=y,
                 **kwargs
@@ -375,8 +394,8 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
     def blit_tile_into(self, dst, dst_has_alpha, tx, ty, mipmap_level=0,
                        **kwargs):
         """Unconditionally copy one tile's data into an array"""
-        N = tiledsurface.N
-        tmp = np.zeros((N, N, 4), dtype='uint16')
+        tile_dims = (tiledsurface.N, tiledsurface.N, 4)
+        tmp = np.zeros(tile_dims, dtype='uint16')
         for layer in reversed(self._layers):
             layer.composite_tile(tmp, True, tx, ty, mipmap_level,
                                  layers=None, **kwargs)
@@ -393,7 +412,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
 
     def composite_tile(self, dst, dst_has_alpha, tx, ty, mipmap_level=0,
                        layers=None, previewing=None, solo=None, **kwargs):
-        """Composite a tile's data into an array, respecting flags/layers list"""
+        """Composite a tile's data, respecting flags/layers list"""
 
         mode = self.mode
         opacity = self.opacity
@@ -414,8 +433,8 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
         if isolate and solo and self is not solo:
             isolate = False
         if isolate:
-            N = tiledsurface.N
-            tmp = np.zeros((N, N, 4), dtype='uint16')
+            tile_dims = (tiledsurface.N, tiledsurface.N, 4)
+            tmp = np.zeros(tile_dims, dtype='uint16')
             for layer in reversed(self._layers):
                 p = (self is previewing) and layer or previewing
                 s = (self is solo) and layer or solo
@@ -478,8 +497,13 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
         lib.surface.save_as_png(self, filename, *rect, **kwargs)
 
     def save_to_openraster(self, orazip, tmpdir, path,
-                           canvas_bbox, frame_bbox, **kwargs):
+                           canvas_bbox, frame_bbox, progress=None,
+                           **kwargs):
         """Saves the stack's data into an open OpenRaster ZipFile"""
+
+        if not progress:
+            progress = lib.feedback.Progress()
+        progress.items = 1 + len(self)
 
         # MyPaint uses the same origin internally for all data layers,
         # meaning the internal stack objects don't impose any offsets on
@@ -492,6 +516,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
             layer_path = tuple(list(path) + [layer_idx])
             layer_elem = layer.save_to_openraster(orazip, tmpdir, layer_path,
                                                   canvas_bbox, frame_bbox,
+                                                  progress=progress.open(),
                                                   **kwargs)
             stack_elem.append(layer_elem)
 
@@ -504,6 +529,10 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
             stack_elem.attrib.pop("composite-op", None)  # => svg:src-over
             isolation = "auto"
         stack_elem.attrib["isolation"] = isolation
+
+        progress += 1
+
+        progress.close()
 
         return stack_elem
 
@@ -650,7 +679,7 @@ _LAYER_LOADER_CLASS_ORDER = [
 ]
 
 
-def _layer_new_from_orazip(orazip, elem, cache_dir, feedback_cb,
+def _layer_new_from_orazip(orazip, elem, cache_dir, progress,
                            root, x=0, y=0, **kwargs):
     """New layer from an OpenRaster zipfile (factory)"""
     for layer_class in _LAYER_LOADER_CLASS_ORDER:
@@ -659,7 +688,7 @@ def _layer_new_from_orazip(orazip, elem, cache_dir, feedback_cb,
                 orazip,
                 elem,
                 cache_dir,
-                feedback_cb,
+                progress,
                 root,
                 x=x, y=y,
                 **kwargs
@@ -671,7 +700,7 @@ def _layer_new_from_orazip(orazip, elem, cache_dir, feedback_cb,
     )
 
 
-def _layer_new_from_oradir(oradir, elem, cache_dir, feedback_cb,
+def _layer_new_from_oradir(oradir, elem, cache_dir, progress,
                            root, x=0, y=0, **kwargs):
     """New layer from a dir with an OpenRaster-like layout (factory)"""
     for layer_class in _LAYER_LOADER_CLASS_ORDER:
@@ -680,7 +709,7 @@ def _layer_new_from_oradir(oradir, elem, cache_dir, feedback_cb,
                 oradir,
                 elem,
                 cache_dir,
-                feedback_cb,
+                progress,
                 root,
                 x=x, y=y,
                 **kwargs

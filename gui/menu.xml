@@ -56,11 +56,10 @@
       <menuitem action='FlipEllipseMode'/>
       <menuitem action='FlipSymmetryEditMode'/>
       <menuitem action='FlipStampMode'/>
-      <menuitem action='FlipGrabcutFillMode'/>
       <!-- All radio modes, in case somebody wants to bind those -->
       <separator/>
-      <menuitem action='RevealModeOptionsTool'/>
-      <menuitem action='RevealHistoryPanel'/>
+      <menuitem action='ToggleModeOptionsTool'/>
+      <menuitem action='ToggleHistoryPanel'/>
       <separator/>
       <menuitem action='PreferencesWindow'/>
     </menu>
@@ -76,7 +75,7 @@
       -->
       <menuitem action='FullscreenAutohide'/>
       <menuitem action='ShowPopupMenu'/>
-      <menuitem action='RevealPreviewTool'/>
+      <menuitem action='TogglePreviewTool'/>
       <separator/>
       <!-- ResetView is on its own because it also recentres the canvas, -->
       <menuitem action='ResetView'/>
@@ -193,10 +192,14 @@
       <menuitem action='ColorHistoryPopup'/>
       <separator/>
       <menu action="ColorAdjustmentsMenu">
-        <!-- These are only here to be bound to some keypress -->
+        <!--
+          These are only here to show of the keybinding, really.
+          Using them from a menu is hard/pointless. They're for keys
+          and things like ring buttons.
+        -->
         <menuitem action='Brighter'/>
         <menuitem action='Darker'/>
-        <menuitem action='IncreaseHue'/>
+        <menuitem action='IncreaseHue'/><!-- "increase" = Clockwise -->
         <menuitem action='DecreaseHue'/>
         <menuitem action='Purer'/>
         <menuitem action='Grayer'/>
@@ -210,8 +213,10 @@
     <menu action='LayerMenu'>
       <!-- All layers: general -->
       <separator/>
-      <menuitem action='RevealLayersTool'/>
+      <menuitem action='ToggleLayersTool'/>
       <menuitem action='BackgroundWindow'/>
+      <separator/>
+      <menuitem action='ImportLayers'/>
       <!-- Switching layers -->
       <separator/>
       <menu action="LayerGoMenu">
@@ -222,7 +227,7 @@
       <!-- Current layer properties -->
       <separator/>
       <menu action="LayerPropertiesMenu">
-        <menuitem action='RenameLayer'/>
+        <menuitem action='LayerProperties'/>
         <menuitem action="LayerVisibleToggle"/>
         <menuitem action="LayerLockedToggle"/>
         <menuitem action='LayerMode'/>
@@ -277,7 +282,7 @@
       <menuitem action='CommitExternalLayerEdit'/>
     </menu>
     <menu action="ScratchMenu">
-      <menuitem action='RevealScratchpadTool'/>
+      <menuitem action='ToggleScratchpadTool'/>
       <separator/>
       <menuitem action='ScratchNew'/>
       <menuitem action='ScratchLoad'/>
@@ -325,6 +330,7 @@
         <menuitem action='NoDoubleBuffereing'/>
         <separator/>
         <menuitem action='PrintMemoryLeak'/>
+        <menuitem action='VacuumDocument'/>
         <menuitem action='RunGarbageCollector'/>
         <menuitem action='StartProfiling'/>
       </menu>

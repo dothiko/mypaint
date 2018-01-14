@@ -8,19 +8,16 @@
 
 
 ## Imports
+
 from __future__ import division, print_function
 
 import math
 from numpy import isfinite
 import collections
 import weakref
-import os.path
 from logging import getLogger
-logger = getLogger(__name__)
 
 from gettext import gettext as _
-import gi
-from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GLib
 
@@ -31,6 +28,12 @@ import gui.drawutils
 import lib.helpers
 import gui.cursor
 import lib.observable
+import gui.mvp
+
+
+## Module constants
+
+logger = getLogger(__name__)
 
 
 ## Class defs
@@ -42,7 +45,13 @@ class _Phase:
     ADJUST = 1
 
 
-_NODE_FIELDS = ("x", "y", "pressure", "xtilt", "ytilt", "time")
+_NODE_FIELDS = (
+    "x", "y",
+    "pressure",
+    "xtilt", "ytilt",
+    "time",
+    "viewzoom", "viewrotation",
+)
 
 
 class _Node (collections.namedtuple("_Node", _NODE_FIELDS)):
@@ -54,6 +63,8 @@ class _Node (collections.namedtuple("_Node", _NODE_FIELDS)):
     * pressure: float in [0.0, 1.0]
     * xtilt, ytilt: float in [-1.0, 1.0]
     * time: absolute seconds, float
+    * viewzoom: current zoom level [0.0, 64]
+    * viewrotation: current view rotation [-180.0, 180.0]
     """
 
 
@@ -100,7 +111,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         if self.phase == _Phase.ADJUST:
             if self.zone == _EditZone.CONTROL_NODE:
                 return self._crosshair_cursor
-            elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
+            elif self.zone != _EditZone.EMPTY_CANVAS:  # assume button
                 return self._arrow_cursor
         return None
 
@@ -109,19 +120,19 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     # Input node capture settings:
     MAX_INTERNODE_DISTANCE_MIDDLE = 30   # display pixels
     MAX_INTERNODE_DISTANCE_ENDS = 10   # display pixels
-    MAX_INTERNODE_TIME = 1/100.0   # seconds
+    MAX_INTERNODE_TIME = 1 / 100.0   # seconds
 
     # Captured input nodes are then interpolated with a spline.
     # The code tries to make nice smooth input for the brush engine,
     # but avoids generating too much work.
-    INTERPOLATION_MAX_SLICE_TIME = 1/200.0   # seconds
+    INTERPOLATION_MAX_SLICE_TIME = 1 / 200.0   # seconds
     INTERPOLATION_MAX_SLICE_DISTANCE = 20   # model pixels
     INTERPOLATION_MAX_SLICES = MAX_INTERNODE_DISTANCE_MIDDLE * 5
-        # In other words, limit to a set number of interpolation slices
-        # per display pixel at the time of stroke capture.
+    # In other words, limit to a set number of interpolation slices
+    # per display pixel at the time of stroke capture.
 
     # Node value adjustment settings
-    MIN_INTERNODE_TIME = 1/200.0   # seconds (used to manage adjusting)
+    MIN_INTERNODE_TIME = 1 / 200.0   # seconds (used to manage adjusting)
 
     ## Other class vars
 
@@ -151,6 +162,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_pressure = 0.0
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
+        self._last_good_raw_viewzoom = 0.0
+        self._last_good_raw_viewrotation = 0.0
 
     def _reset_nodes(self):
         self.nodes = []  # nodes that met the distance+time criteria
@@ -282,6 +295,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_pressure = 0.0
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
+        self._last_good_raw_viewzoom = 0.0
+        self._last_good_raw_viewrotation = 0.0
         # Supercall: start drags etc
         return super(InkingMode, self).button_press_cb(tdw, event)
 
@@ -317,6 +332,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self._last_good_raw_pressure = 0.0
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
+        self._last_good_raw_viewzoom = 0.0
+        self._last_good_raw_viewrotation = 0.0
         # Supercall: stop current drag
         return super(InkingMode, self).button_release_cb(tdw, event)
 
@@ -398,7 +415,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             if self.phase == _Phase.ADJUST:
                 if self.zone == _EditZone.CONTROL_NODE:
                     cursor = self._crosshair_cursor
-                elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
+                elif self.zone != _EditZone.EMPTY_CANVAS:  # assume button
                     cursor = self._arrow_cursor
             if cursor is not self._current_override_cursor:
                 tdw.set_override_cursor(cursor)
@@ -424,7 +441,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 )
                 r += gui.style.DROP_SHADOW_BLUR
                 x, y = pos
-                tdw.queue_draw_area(x-r, y-r, 2*r+1, 2*r+1)
+                tdw.queue_draw_area(x - r, y - r, (2 * r) + 1, (2 * r) + 1)
 
     def _queue_draw_node(self, i):
         """Redraws a specific control node on all known view TDWs"""
@@ -434,7 +451,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             x = math.floor(x)
             y = math.floor(y)
             size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
-            tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
+            tdw.queue_draw_area(
+                x - size, y - size,
+                (size * 2) + 1, (size * 2) + 1,
+            )
 
     def _queue_redraw_all_nodes(self):
         """Redraws all nodes on all known view TDWs"""
@@ -469,21 +489,27 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         last_t_abs = state["t_abs"]
         dtime_p0_p1_real = p1[-1] - p0[-1]
         steps_t = dtime_p0_p1_real / self.INTERPOLATION_MAX_SLICE_TIME
-        dist_p1_p2 = math.hypot(p1[0]-p2[0], p1[1]-p2[1])
+        dist_p1_p2 = math.hypot(p1[0] - p2[0], p1[1] - p2[1])
         steps_d = dist_p1_p2 / self.INTERPOLATION_MAX_SLICE_DISTANCE
         steps = math.ceil(min(self.INTERPOLATION_MAX_SLICES,
                               max(2, steps_t, steps_d)))
         for i in xrange(int(steps) + 1):
             t = i / steps
             point = gui.drawutils.spline_4p(t, p_1, p0, p1, p2)
-            x, y, pressure, xtilt, ytilt, t_abs = point
+            x, y, pressure, xtilt, ytilt, t_abs, viewzoom, viewrotation = point
             pressure = lib.helpers.clamp(pressure, 0.0, 1.0)
             xtilt = lib.helpers.clamp(xtilt, -1.0, 1.0)
             ytilt = lib.helpers.clamp(ytilt, -1.0, 1.0)
             t_abs = max(last_t_abs, t_abs)
             dtime = t_abs - last_t_abs
+            viewzoom = self.doc.tdw.scale
+            viewrotation = self.doc.tdw.rotation
             self.stroke_to(
-                model, dtime, x, y, pressure, xtilt, ytilt,
+                model, dtime,
+                x, y,
+                pressure,
+                xtilt, ytilt,
+                viewzoom, viewrotation,
                 auto_split=False,
             )
             last_t_abs = t_abs
@@ -547,7 +573,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         if self.phase == _Phase.CAPTURE:
             node = self._get_event_data(tdw, event)
             evdata = (event.x, event.y, event.time)
-            if not self._last_node_evdata: # e.g. after an undo while dragging
+            if not self._last_node_evdata:  # e.g. after an undo while dragging
                 append_node = True
             elif evdata == self._last_node_evdata:
                 logger.debug(
@@ -570,7 +596,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 )
             if append_node:
                 self.nodes.append(node)
-                self._queue_draw_node(len(self.nodes)-1)
+                self._queue_draw_node(len(self.nodes) - 1)
                 self._queue_redraw_curve()
                 self._last_node_evdata = evdata
             self._last_event_node = node
@@ -622,6 +648,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             pressure=self._get_event_pressure(event),
             xtilt=xtilt, ytilt=ytilt,
             time=(event.time / 1000.0),
+            viewzoom = self.doc.tdw.scale,
+            viewrotation = self.doc.tdw.rotation,
         )
 
     def _get_event_pressure(self, event):
@@ -696,7 +724,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         """MVP presenter object for the node editor panel"""
         cls = self.__class__
         if cls._OPTIONS_PRESENTER is None:
-            cls._OPTIONS_PRESENTER = OptionsPresenter()
+            cls._OPTIONS_PRESENTER = OptionsUI()
         return cls._OPTIONS_PRESENTER
 
     def get_options_widget(self):
@@ -721,7 +749,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def get_node_dtime(self, i):
         if not (0 < i < len(self.nodes)):
             return 0.0
-        n0 = self.nodes[i-1]
+        n0 = self.nodes[i - 1]
         n1 = self.nodes[i]
         dtime = n1.time - n0.time
         dtime = max(dtime, self.MIN_INTERNODE_TIME)
@@ -732,14 +760,14 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         nodes = self.nodes
         if not (0 < i < len(nodes)):
             return
-        old_dtime = nodes[i].time - nodes[i-1].time
+        old_dtime = nodes[i].time - nodes[i - 1].time
         for j in range(i, len(nodes)):
             n = nodes[j]
             new_time = n.time + dtime - old_dtime
             self.update_node(j, time=new_time)
 
     def can_delete_node(self, i):
-        return 0 < i < len(self.nodes)-1
+        return 0 < i < len(self.nodes) - 1
 
     def delete_node(self, i):
         """Delete a node, and issue redraws & updates"""
@@ -767,10 +795,10 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self.delete_node(self.current_node_index)
 
             # FIXME: Quick hack,to avoid indexerror(very rare case)
-            self.target_node_index=None
+            self.target_node_index = None
 
     def can_insert_node(self, i):
-        return 0 <= i < len(self.nodes)-1
+        return 0 <= i < (len(self.nodes) - 1)
 
     def insert_node(self, i):
         """Insert a node, and issue redraws & updates"""
@@ -778,18 +806,20 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         # Redraw old locations of things while the node still exists
         self._queue_draw_buttons()
         self._queue_draw_node(i)
-        # Create the new node
+        # Create the new e
         cn = self.nodes[i]
-        nn = self.nodes[i+1]
+        nn = self.nodes[i + 1]
 
         newnode = _Node(
-            x=(cn.x + nn.x)/2.0, y=(cn.y + nn.y) / 2.0,
+            x=(cn.x + nn.x) / 2.0, y=(cn.y + nn.y) / 2.0,
             pressure=(cn.pressure + nn.pressure) / 2.0,
-            xtilt=(cn.xtilt + nn.xtilt) / 2.0, 
+            xtilt=(cn.xtilt + nn.xtilt) / 2.0,
             ytilt=(cn.ytilt + nn.ytilt) / 2.0,
-            time=(cn.time + nn.time) / 2.0
+            time=(cn.time + nn.time) / 2.0,
+            viewzoom=(cn.viewzoom + nn.viewzoom) / 2.0,
+            viewrotation=(cn.viewrotation + nn.viewrotation) / 2.0,
         )
-        self.nodes.insert(i+1,newnode)
+        self.nodes.insert(i + 1, newnode)
 
         # Issue redraws for the changed on-canvas elements
         self._queue_redraw_curve()
@@ -803,29 +833,30 @@ class InkingMode (gui.mode.ScrollableModeMixin,
     def _simplify_nodes(self, tolerance):
         """Internal method of simplify nodes.
 
-        """
-        # Algorithm: Reumann-Witkam.
-        i=0
-        oldcnt=len(self.nodes)
-        while i<len(self.nodes)-2:
-            try:
-                vsx=self.nodes[i+1].x-self.nodes[i].x
-                vsy=self.nodes[i+1].y-self.nodes[i].y
-                ss=math.sqrt(vsx*vsx + vsy*vsy)
-                nsx=vsx/ss
-                nsy=vsy/ss
-                while i+2<len(self.nodes):
-                    vex=self.nodes[i+2].x-self.nodes[i].x
-                    vey=self.nodes[i+2].y-self.nodes[i].y
-                    es=math.sqrt(vex*vex + vey*vey)
-                    px=nsx*es
-                    py=nsy*es
-                    dp=(px*(vex/es)+py*(vey/es)) / es
-                    hx=(vex*dp)-px
-                    hy=(vey*dp)-py
+        Algorithm: Reumann-Witkam.
 
-                    if math.sqrt(hx*hx + hy*hy) < tolerance:
-                        self.nodes.pop(i+1)
+        """
+        i = 0
+        oldcnt = len(self.nodes)
+        while i < len(self.nodes) - 2:
+            try:
+                vsx = self.nodes[i + 1].x - self.nodes[i].x
+                vsy = self.nodes[i + 1].y - self.nodes[i].y
+                ss = math.sqrt((vsx * vsx) + (vsy * vsy))
+                nsx = vsx / ss
+                nsy = vsy / ss
+                while (i + 2) < len(self.nodes):
+                    vex = self.nodes[i + 2].x - self.nodes[i].x
+                    vey = self.nodes[i + 2].y - self.nodes[i].y
+                    es = math.sqrt((vex * vex) + (vey * vey))
+                    px = nsx * es
+                    py = nsy * es
+                    dp = (px * (vex / es) + py * (vey / es)) / es
+                    hx = (vex * dp) - px
+                    hy = (vey * dp) - py
+
+                    if math.sqrt((hx * hx) + (hy * hy)) < tolerance:
+                        self.nodes.pop(i + 1)
                     else:
                         break
 
@@ -834,17 +865,17 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             except ZeroDivisionError:
                 pass
             finally:
-                i+=1
+                i += 1
 
-        return oldcnt-len(self.nodes)
+        return oldcnt - len(self.nodes)
 
     def _cull_nodes(self):
         """Internal method of cull nodes."""
-        curcnt=len(self.nodes)
-        lastnode=self.nodes[-1]
-        self.nodes=self.nodes[:-1:2]
+        curcnt = len(self.nodes)
+        lastnode = self.nodes[-1]
+        self.nodes = self.nodes[:-1:2]
         self.nodes.append(lastnode)
-        return curcnt-len(self.nodes)
+        return curcnt - len(self.nodes)
 
     def _nodes_deletion_operation(self, callable, args):
         """Internal method for delete-related operation of multiple nodes."""
@@ -863,7 +894,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
                 self.options_presenter.target = (self, new_cn)
 
             # FIXME: Quick hack,to avoid indexerror
-            self.target_node_index=None
+            self.target_node_index = None
 
             # Issue redraws for the changed on-canvas elements
             self._queue_redraw_curve()
@@ -905,7 +936,7 @@ class Overlay (gui.overlays.Overlay):
         margin = 1.5 * button_radius
         alloc = self._tdw.get_allocation()
         view_x0, view_y0 = alloc.x, alloc.y
-        view_x1, view_y1 = view_x0+alloc.width, view_y0+alloc.height
+        view_x1, view_y1 = (view_x0 + alloc.width), (view_y0 + alloc.height)
 
         # Force-directed layout: "wandering nodes" for the buttons'
         # eventual positions, moving around a constellation of "fixed"
@@ -918,7 +949,7 @@ class Overlay (gui.overlays.Overlay):
 
         # The reject and accept buttons are connected to different nodes
         # in the stroke by virtual springs.
-        stroke_end_i = len(fixed)-1
+        stroke_end_i = len(fixed) - 1
         stroke_start_i = 0
         stroke_last_quarter_i = int(stroke_end_i * 3.0 // 4.0)
         assert stroke_last_quarter_i < stroke_end_i
@@ -934,28 +965,28 @@ class Overlay (gui.overlays.Overlay):
         if stroke_tail_len <= 0:
             stroke_tail = (0., 1.)
         else:
-            stroke_tail = tuple(c/stroke_tail_len for c in stroke_tail)
+            stroke_tail = tuple(c / stroke_tail_len for c in stroke_tail)
 
         # Initial positions.
         accept_button = _LayoutNode(
-            fixed[accept_anchor_i].x + stroke_tail[0]*margin,
-            fixed[accept_anchor_i].y + stroke_tail[1]*margin,
+            fixed[accept_anchor_i].x + stroke_tail[0] * margin,
+            fixed[accept_anchor_i].y + stroke_tail[1] * margin,
         )
         reject_button = _LayoutNode(
-            fixed[reject_anchor_i].x - stroke_tail[0]*margin,
-            fixed[reject_anchor_i].y - stroke_tail[1]*margin,
+            fixed[reject_anchor_i].x - stroke_tail[0] * margin,
+            fixed[reject_anchor_i].y - stroke_tail[1] * margin,
         )
 
         # Constraint boxes. They mustn't share corners.
         # Natural hand strokes are often downwards,
         # so let the reject button to go above the accept button.
         reject_button_bbox = (
-            view_x0+margin, view_x1-margin,
-            view_y0+margin, view_y1-2.666*margin,
+            view_x0 + margin, view_x1 - margin,
+            view_y0 + margin, view_y1 - (2.666 * margin),
         )
         accept_button_bbox = (
-            view_x0+margin, view_x1-margin,
-            view_y0+2.666*margin, view_y1-margin,
+            view_x0 + margin, view_x1 - margin,
+            view_y0 + (2.666 * margin), view_y1 - margin,
         )
 
         # Force-update constants
@@ -978,7 +1009,7 @@ class Overlay (gui.overlays.Overlay):
             accept_button \
                 .update_position() \
                 .constrain_position(*accept_button_bbox)
-            settled = [(p.speed<0.5) for p in [accept_button, reject_button]]
+            settled = [(p.speed < 0.5) for p in [accept_button, reject_button]]
             if all(settled):
                 break
         self.accept_button_pos = accept_button.x, accept_button.y
@@ -1005,10 +1036,10 @@ class Overlay (gui.overlays.Overlay):
         for i, node in enumerate(mode.nodes):
             x, y = self._tdw.model_to_display(node.x, node.y)
             node_on_screen = (
-                x > alloc.x - radius*2 and
-                y > alloc.y - radius*2 and
-                x < alloc.x + alloc.width + radius*2 and
-                y < alloc.y + alloc.height + radius*2
+                x > alloc.x - (radius * 2) and
+                y > alloc.y - (radius * 2) and
+                x < alloc.x + alloc.width + (radius * 2) and
+                y < alloc.y + alloc.height + (radius * 2)
             )
             if node_on_screen:
                 yield (i, node, x, y)
@@ -1018,7 +1049,6 @@ class Overlay (gui.overlays.Overlay):
         # Control nodes
         mode = self._inkmode
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
-        alloc = self._tdw.get_allocation()
         for i, node, x, y in self._get_onscreen_nodes():
             color = gui.style.EDITABLE_ITEM_COLOR
             if mode.phase == _Phase.ADJUST:
@@ -1063,10 +1093,11 @@ class Overlay (gui.overlays.Overlay):
                     radius=radius,
                 )
 
+
 class _LayoutNode (object):
     """Vertex/point for the button layout algorithm."""
 
-    def __init__(self, x, y, force=(0.,0.), velocity=(0.,0.)):
+    def __init__(self, x, y, force=(0., 0.), velocity=(0., 0.)):
         self.x = float(x)
         self.y = float(y)
         self.force = tuple(float(c) for c in force[:2])
@@ -1104,7 +1135,7 @@ class _LayoutNode (object):
         for other in others:
             if other is self:
                 continue
-            rsquared = (self.x-other.x)**2 + (self.y-other.y)**2
+            rsquared = (self.x - other.x) ** 2 + (self.y - other.y) ** 2
             if rsquared == 0:
                 continue
             else:
@@ -1175,58 +1206,23 @@ class _LayoutNode (object):
         return self
 
 
-class OptionsPresenter (object):
+class OptionsUI (gui.mvp.BuiltUIPresenter, object):
     """Presents UI for directly editing point values etc."""
 
     def __init__(self):
-        super(OptionsPresenter, self).__init__()
-        from application import get_app
-        self._app = get_app()
-        self._options_grid = None
-        self._point_values_grid = None
-        self._pressure_adj = None
-        self._xtilt_adj = None
-        self._ytilt_adj = None
-        self._dtime_adj = None
-        self._dtime_label = None
-        self._dtime_scale = None
-        self._insert_button = None
-        self._delete_button = None
-        self._optimize_button = None
-        self._cull_button = None
-        self._updating_ui = False
+        super(OptionsUI, self).__init__()
         self._target = (None, None)
 
-    def _ensure_ui_populated(self):
-        if self._options_grid is not None:
-            return
-        builder_xml = os.path.splitext(__file__)[0] + ".glade"
-        builder = Gtk.Builder()
-        builder.set_translation_domain("mypaint")
-        builder.add_from_file(builder_xml)
-        builder.connect_signals(self)
-        self._options_grid = builder.get_object("options_grid")
-        self._point_values_grid = builder.get_object("point_values_grid")
-        self._point_values_grid.set_sensitive(False)
-        self._pressure_adj = builder.get_object("pressure_adj")
-        self._xtilt_adj = builder.get_object("xtilt_adj")
-        self._ytilt_adj = builder.get_object("ytilt_adj")
-        self._dtime_adj = builder.get_object("dtime_adj")
-        self._dtime_label = builder.get_object("dtime_label")
-        self._dtime_scale = builder.get_object("dtime_scale")
-        self._insert_button = builder.get_object("insert_point_button")
-        self._insert_button.set_sensitive(False)
-        self._delete_button = builder.get_object("delete_point_button")
-        self._delete_button.set_sensitive(False)
-        self._optimize_button = builder.get_object("simplify_points_button")
-        self._optimize_button.set_sensitive(False)
-        self._cull_button = builder.get_object("cull_points_button")
-        self._cull_button.set_sensitive(False)
+    def init_view(self):
+        self.view.point_values_grid.set_sensitive(False)
+        self.view.insert_point_button.set_sensitive(False)
+        self.view.delete_point_button.set_sensitive(False)
+        self.view.simplify_points_button.set_sensitive(False)
+        self.view.cull_points_button.set_sensitive(False)
 
     @property
     def widget(self):
-        self._ensure_ui_populated()
-        return self._options_grid
+        return self.view.options_grid
 
     @property
     def target(self):
@@ -1235,8 +1231,9 @@ class OptionsPresenter (object):
         :returns: a pair of the form (inkmode, node_idx)
         :rtype: tuple
 
-        Updating this pair via the property also updates the UI.
-        The target mode most be an InkingTool instance.
+        Updating this pair via the property also updates the options UI
+        view, shortly afterwards. The target mode must be an InkingTool
+        instance.
 
         """
         mode_ref, node_idx = self._target
@@ -1252,77 +1249,80 @@ class OptionsPresenter (object):
         if inkmode:
             inkmode_ref = weakref.ref(inkmode)
         self._target = (inkmode_ref, cn_idx)
-        # Update the UI
-        if self._updating_ui:
-            return
-        self._updating_ui = True
-        try:
-            self._ensure_ui_populated()
-            if 0 <= cn_idx < len(inkmode.nodes):
-                cn = inkmode.nodes[cn_idx]
-                self._pressure_adj.set_value(cn.pressure)
-                self._xtilt_adj.set_value(cn.xtilt)
-                self._ytilt_adj.set_value(cn.ytilt)
-                if cn_idx > 0:
-                    sensitive = True
-                    dtime = inkmode.get_node_dtime(cn_idx)
-                else:
-                    sensitive = False
-                    dtime = 0.0
-                for w in (self._dtime_scale, self._dtime_label):
-                    w.set_sensitive(sensitive)
-                self._dtime_adj.set_value(dtime)
-                self._point_values_grid.set_sensitive(True)
-            else:
-                self._point_values_grid.set_sensitive(False)
-            self._insert_button.set_sensitive(inkmode.can_insert_node(cn_idx))
-            self._delete_button.set_sensitive(inkmode.can_delete_node(cn_idx))
-            self._optimize_button.set_sensitive(len(inkmode.nodes)>3)
-            self._cull_button.set_sensitive(len(inkmode.nodes)>2)
-        finally:
-            self._updating_ui = False
 
+        GLib.idle_add(self._update_ui_for_current_target)
+
+    @gui.mvp.view_updater(default=False)
+    def _update_ui_for_current_target(self):
+        (inkmode, cn_idx) = self.target
+        if 0 <= cn_idx < len(inkmode.nodes):
+            cn = inkmode.nodes[cn_idx]
+            self.view.pressure_adj.set_value(cn.pressure)
+            self.view.xtilt_adj.set_value(cn.xtilt)
+            self.view.ytilt_adj.set_value(cn.ytilt)
+            if cn_idx > 0:
+                sensitive = True
+                dtime = inkmode.get_node_dtime(cn_idx)
+            else:
+                sensitive = False
+                dtime = 0.0
+            for w in (self.view.dtime_scale, self.view.dtime_label):
+                w.set_sensitive(sensitive)
+            self.view.dtime_adj.set_value(dtime)
+            self.view.point_values_grid.set_sensitive(True)
+        else:
+            self.view.point_values_grid.set_sensitive(False)
+        button_sensitivities = [
+            (self.view.insert_point_button, inkmode.can_insert_node(cn_idx)),
+            (self.view.delete_point_button, inkmode.can_delete_node(cn_idx)),
+            (self.view.simplify_points_button, (len(inkmode.nodes) > 3)),
+            (self.view.cull_points_button, (len(inkmode.nodes) > 2)),
+        ]
+        for button, sens in button_sensitivities:
+            button.set_sensitive(sens)
+        return False
+
+    @gui.mvp.model_updater
     def _pressure_adj_value_changed_cb(self, adj):
-        if self._updating_ui:
-            return
         inkmode, node_idx = self.target
         inkmode.update_node(node_idx, pressure=float(adj.get_value()))
 
+    @gui.mvp.model_updater
     def _dtime_adj_value_changed_cb(self, adj):
-        if self._updating_ui:
-            return
         inkmode, node_idx = self.target
         inkmode.set_node_dtime(node_idx, adj.get_value())
 
+    @gui.mvp.model_updater
     def _xtilt_adj_value_changed_cb(self, adj):
-        if self._updating_ui:
-            return
-        value = adj.get_value()
+        value = float(adj.get_value())
         inkmode, node_idx = self.target
-        inkmode.update_node(node_idx, xtilt=float(adj.get_value()))
+        inkmode.update_node(node_idx, xtilt=value)
 
+    @gui.mvp.model_updater
     def _ytilt_adj_value_changed_cb(self, adj):
-        if self._updating_ui:
-            return
-        value = adj.get_value()
+        value = float(adj.get_value())
         inkmode, node_idx = self.target
-        inkmode.update_node(node_idx, ytilt=float(adj.get_value()))
+        inkmode.update_node(node_idx, ytilt=value)
 
+    @gui.mvp.model_updater
     def _insert_point_button_clicked_cb(self, button):
         inkmode, node_idx = self.target
         if inkmode.can_insert_node(node_idx):
             inkmode.insert_node(node_idx)
 
+    @gui.mvp.model_updater
     def _delete_point_button_clicked_cb(self, button):
         inkmode, node_idx = self.target
         if inkmode.can_delete_node(node_idx):
             inkmode.delete_node(node_idx)
 
+    @gui.mvp.model_updater
     def _simplify_points_button_clicked_cb(self, button):
         inkmode, node_idx = self.target
         if len(inkmode.nodes) > 3:
             inkmode.simplify_nodes()
 
+    @gui.mvp.model_updater
     def _cull_points_button_clicked_cb(self, button):
         inkmode, node_idx = self.target
         if len(inkmode.nodes) > 2:

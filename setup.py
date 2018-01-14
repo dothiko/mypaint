@@ -9,6 +9,8 @@ import os
 import os.path
 import sys
 import textwrap
+import tempfile
+import shutil
 
 from distutils.command.build import build
 from distutils.command.clean import clean
@@ -136,41 +138,71 @@ class Clean (clean):
 
 
 class Demo (Command):
-    """Builds, and then does a MyPaint test run from the build."""
+    """Builds, then do a test run from a temporary install tree"""
 
-    description = "Rebuild, and then run inside the build tree."
-    user_options = []
+    description = "[MyPaint] build, install, and run in a throwaway folder"
+    user_options = [
+        ("temp-root=", None,
+         "parent dir (retained) for the demo install (deleted)"),
+    ]
 
     def initialize_options(self):
-        pass
+        self.temp_root = None
 
     def finalize_options(self):
         pass
 
     def run(self):
+        if self.dry_run:
+            self.announce(
+                "The demo command can't do anything in dry-run mode",
+                level=2,
+            )
+            return
+
         build = self.get_finalized_command("build")
         build.run()
 
         build_scripts = self.get_finalized_command("build_scripts")
-        cmd = [
-            build_scripts.executable,
-            os.path.join(build.build_scripts, "mypaint.py"),
-        ]
+        demo_cmd = [build_scripts.executable]
 
-        self.announce("Running %r..." % (" ".join(cmd),), level=2)
-        if self.dry_run:
-            return
-
-        env = os.environ.copy()
-        env["PYTHONPATH"] = os.path.pathsep.join([
-            os.path.abspath(build.build_lib),
-            os.path.abspath(build.build_purelib),
-            os.path.abspath(build.build_platlib),
-        ])
-        subprocess.check_call(
-            cmd,
-            env=env,
+        temp_dir = tempfile.mkdtemp(
+            prefix="demo-",
+            suffix="",
+            dir=self.temp_root,
         )
+        try:
+            inst = self.distribution.get_command_obj("install", 1)
+            inst.root = temp_dir
+            inst.prefix = ""
+            inst.ensure_finalized()
+            inst.run()
+
+            script_path = None
+            potential_script_names = ["mypaint.py", "mypaint"]
+            for s in potential_script_names:
+                p = os.path.join(inst.install_scripts, s)
+                if os.path.exists(p):
+                    script_path = p
+                    break
+            if not script_path:
+                raise RuntimeError(
+                    "Cannot locate installed script. "
+                    "Tried all of %r in %r."
+                    % (potential_script_names, inst.install_scripts)
+                )
+
+            config_dir = os.path.join(temp_dir, "_config")
+
+            demo_cmd.extend([script_path, "-c", config_dir])
+
+            self.announce("Demo: running %r..." % (demo_cmd,), level=2)
+            subprocess.check_call(demo_cmd)
+        except:
+            raise
+        finally:
+            self.announce("Demo: cleaning up %r..." % (temp_dir,), level=2)
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 class InstallScripts (install_scripts):
@@ -240,6 +272,148 @@ class InstallScripts (install_scripts):
             self.announce("changing mode of %s to %o" % (targ, mode), level=2)
             os.chmod(targ, mode)
         return [targ]
+
+
+class _ManagedInstBase (Command):
+    """Base for commands that work on managed installs."""
+
+    MANAGED_FILES_LIST = "managed_files.txt"
+
+    # Common options:
+
+    user_options = [
+        ("prefix=", None, "POSIX-style install prefix, e.g. /usr"),
+    ]
+
+    def initialize_options(self):
+        self.prefix = "/usr/local"
+
+    def finalize_options(self):
+        self.prefix = os.path.abspath(self.prefix)
+
+    # Utility methods for subclasses:
+
+    def is_installed(self):
+        """True if an installation is present at the prefix."""
+        inst = self.distribution.get_command_obj("install", 1)
+        inst.root = "/"
+        inst.prefix = self.prefix
+        inst.ensure_finalized()
+        inst.record = os.path.join(inst.install_lib, self.MANAGED_FILES_LIST)
+        return os.path.isfile(inst.record)
+
+    def uninstall(self):
+        """Uninstalls an existing install."""
+        self.announce(
+            "Uninstalling from %r..." % (self.prefix,),
+            level=2,
+        )
+
+        inst = self.distribution.get_command_obj("install", 1)
+        inst.root = "/"
+        inst.prefix = self.prefix
+        inst.ensure_finalized()
+        inst.record = os.path.join(inst.install_lib, self.MANAGED_FILES_LIST)
+
+        self.announce(
+            "Using the installation record in %r" % (inst.record,),
+            level=2,
+        )
+        with open(inst.record, "r") as fp:
+            for path_rel in fp:
+                path_rel = path_rel.rstrip("\r\n")
+                path = os.path.join("/", path_rel)
+                self.rm(path)
+        self.rm(inst.record)
+
+        # Remove the trees that are entirely MyPaint's too
+        # See setup.cfg's [install] and get_data_files()
+        mypaint_data_trees = [
+            inst.install_lib,
+            os.path.join(inst.install_data, "mypaint"),
+        ]
+        for path in mypaint_data_trees:
+            path = os.path.normpath(path)
+            assert os.path.basename(path) == "mypaint", \
+                "path %r does not end in mypaint" % (path,)
+            self.rmtree(path)
+
+    def rmtree(self, path):
+        """Remove a tree recursively."""
+        self.announce("recursively removing %r" % (path,), level=2)
+        if not self.dry_run:
+            shutil.rmtree(path, ignore_errors=True)
+
+    def rm(self, path):
+        """Remove a single file."""
+        self.announce("removing %r" % (path,), level=2)
+        if not self.dry_run:
+            if os.path.isfile(path):
+                os.unlink(path)
+            elif os.path.exists(path):
+                raise RuntimeError(
+                    "ERROR: %r exists, but it is no longer a file"
+                    % (path,)
+                )
+            else:
+                self.announce("remove: %r is already gone" % (path,), level=1)
+
+
+class ManagedInstall (_ManagedInstBase):
+    """Simplified "install" with a list of installed files.
+
+    This command and ManagedUninstall are temporary hacks which we have
+    to use because `pip {install,uninstall}` doen't work yet. Once we
+    have proper namespacing (prefixed `mypaint.{lib,gui}` modules), we
+    may be able to drop these commands and use standard ones.
+
+    """
+
+    description = "[MyPaint] like install, but allow managed_uninstall"
+
+    def run(self):
+
+        if self.is_installed():
+            self.announce("Already installed, uninstalling first...", level=2)
+            self.uninstall()
+
+        self.announce(
+            "Installing (manageably) to %r" % (self.prefix,),
+            level=2,
+        )
+
+        inst = self.distribution.get_command_obj("install", 1)
+        inst.root = "/"
+        inst.prefix = self.prefix
+        inst.ensure_finalized()
+        inst.record = os.path.join(inst.install_lib, self.MANAGED_FILES_LIST)
+        self.announce(
+            "Record will be saved to %r" % (inst.record,),
+            level=2,
+        )
+
+        if not self.dry_run:
+            inst.run()
+            assert os.path.isfile(inst.record)
+
+
+class ManagedUninstall (_ManagedInstBase):
+    """Removes the files created by ManagedInstall."""
+
+    description = "[MyPaint] remove files that managed_install wrote"
+
+    user_options = [
+        ("prefix=", None, "same as used in your earlier managed_install"),
+    ]
+
+    def initialize_options(self):
+        self.prefix = "/usr/local"
+
+    def finalize_options(self):
+        self.prefix = os.path.abspath(self.prefix)
+
+    def run(self):
+        self.uninstall()
 
 
 def uniq(items):
@@ -325,7 +499,7 @@ def get_ext_modules():
             "libpng",
             "lcms2",
             "gtk+-3.0",
-            "libmypaint",
+            "libmypaint-2.0",
         ],
         include_dirs=[
             numpy.get_include(),
@@ -343,7 +517,7 @@ def get_ext_modules():
     mypaintlib_swig_opts.extend(['-DNO_TESTS'])
 
     mypaintlib = Extension(
-        '_mypaintlib',
+        'lib._mypaintlib',
         [
             'lib/mypaintlib.i',
             'lib/fill.cpp',
@@ -412,6 +586,8 @@ setup(
         "build_ext": BuildExt,
         "build_translations": BuildTranslations,
         "demo": Demo,
+        "managed_install": ManagedInstall,
+        "managed_uninstall": ManagedUninstall,
         "install_scripts": InstallScripts,
         "clean": Clean,
     },
@@ -419,5 +595,6 @@ setup(
         "mypaint.py",
         "desktop/mypaint-ora-thumbnailer.py",
     ],
+    test_suite='tests',
     ext_modules=get_ext_modules(),
 )

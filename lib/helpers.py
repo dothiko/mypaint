@@ -9,6 +9,7 @@
 
 from __future__ import division, print_function
 
+from itertools import izip_longest
 from math import floor, isnan
 import os
 import hashlib
@@ -359,7 +360,7 @@ def get_pixbuf(filename):
         try:
             with zipfile.ZipFile(filename) as orazip:
                 pixbuf = lib.pixbuf.load_from_zipfile(orazip, thumb_entry)
-        except:
+        except Exception:
             logger.exception(
                 "Failed to read %r entry of %r",
                 thumb_entry,
@@ -382,7 +383,7 @@ def get_pixbuf(filename):
     else:
         try:
             return lib.pixbuf.load_from_file(filename)
-        except:
+        except Exception:
             logger.exception(
                 "Failed to load thumbnail pixbuf from %r",
                 filename,
@@ -466,6 +467,7 @@ def run_garbage_collector():
     logger.info('MEM: gc.garbage contains %d items of uncollectible garbage',
                 len(gc.garbage))
 
+
 old_stats = []
 
 
@@ -528,6 +530,45 @@ def fmt_time_period_abbr(t):
         minutes = minutes,
         seconds = seconds,
     )
+
+
+def grouper(iterable, n, fillvalue=None):
+    """Collect data into fixed-length chunks or blocks
+
+    :param iterable: An iterable
+    :param int n: How many items to chunk the iterator by
+    :param fillvalue: Filler value when iterable length isn't a multiple of n
+    :returns: An iterable with tuples n items from the source iterable
+    :rtype: iterable
+
+    >>> actual = grouper('ABCDEFG', 3, fillvalue='x')
+    >>> expected = [('A', 'B', 'C'), ('D', 'E', 'F'), ('G', 'x', 'x')]
+    >>> [a_val == e_val for a_val, e_val in zip(actual, expected)]
+    [True, True, True]
+    """
+    args = [iter(iterable)] * n
+    return izip_longest(*args, fillvalue=fillvalue)
+
+
+def casefold(s):
+    """Converts a unicode string into a case-insensitively comparable form.
+
+    Forward-compat marker for things that should be .casefold() in
+    Python 3, but which need to be .lower() in Python2.
+
+    :param unicode s: The string to convert.
+    :rtype: unicode
+    :returns: The converted string.
+
+    >>> casefold("Xyz")
+    u'xyz'
+
+    """
+    s = unicode(s)
+    if hasattr(s, "casefold"):
+        return s.casefold()
+    else:
+        return s.lower()
 
 
 def _test():

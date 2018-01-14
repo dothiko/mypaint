@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2012 by Andrew Chadwick <a.t.chadwick@gmail.com>
+# Copyright (C) 2012-2017 by Andrew Chadwick <a.t.chadwick@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -12,6 +12,7 @@
 from __future__ import division, print_function
 
 from gettext import gettext as _
+import logging
 
 from gi.repository import Gtk
 from gi.repository import Gdk
@@ -20,6 +21,8 @@ from gi.repository import Pango
 
 import lib.xml
 import widgets
+
+logger = logging.getLogger(__name__)
 
 
 def button_press_name(button, mods):
@@ -55,7 +58,7 @@ def button_press_displayname(button, mods, shorten = False):
         separator = u"+"
     mouse_button_label = _("Button")
     if shorten:
-        #TRANSLATORS: abbreviated "Button <number>" for forms like "Alt+Btn1"
+        # TRANSLATORS: abbreviated "Button <number>" for forms like "Alt+Btn1"
         mouse_button_label = _("Btn")
     return "{modifiers}{plus}{btn}{button_number}".format(
         modifiers=modif_label,
@@ -485,20 +488,20 @@ class ButtonMappingEditor (Gtk.EventBox):
         label = Gtk.Label()
         label.set_alignment(0, 0.5)
         label.set_text(_("Action:"))
-        table.attach(label, 0, 1, row, row+1, Gtk.AttachOptions.FILL)
+        table.attach(label, 0, 1, row, row + 1, Gtk.AttachOptions.FILL)
 
         label = Gtk.Label()
         label.set_alignment(0, 0.5)
         label.set_text(str(action_name))
         table.attach(
-            label, 1, 2, row, row+1,
+            label, 1, 2, row, row + 1,
             Gtk.AttachOptions.FILL | Gtk.AttachOptions.EXPAND)
 
         row += 1
         label = Gtk.Label()
         label.set_alignment(0, 0.5)
         label.set_text(_("Button press:"))
-        table.attach(label, 0, 1, row, row+1, Gtk.AttachOptions.FILL)
+        table.attach(label, 0, 1, row, row + 1, Gtk.AttachOptions.FILL)
 
         label = Gtk.Label()
         label.set_alignment(0, 0.5)
@@ -507,7 +510,7 @@ class ButtonMappingEditor (Gtk.EventBox):
         dialog.bp_name_orig = bp_name
         dialog.bp_label = label
         table.attach(
-            label, 1, 2, row, row+1,
+            label, 1, 2, row, row + 1,
             Gtk.AttachOptions.FILL | Gtk.AttachOptions.EXPAND)
 
         row += 1
@@ -518,7 +521,7 @@ class ButtonMappingEditor (Gtk.EventBox):
         dialog.hint_label = label
         self._bp_edit_dialog_set_standard_hint(dialog)
         table.attach(
-            label, 0, 2, row, row+1,
+            label, 0, 2, row, row + 1,
             Gtk.AttachOptions.FILL | Gtk.AttachOptions.EXPAND,
             Gtk.AttachOptions.FILL | Gtk.AttachOptions.EXPAND,
             0, 12)
@@ -540,9 +543,12 @@ class ButtonMappingEditor (Gtk.EventBox):
 
     def _bp_edit_box_enter_cb(self, evbox, event):
         window = evbox.get_window()
-        cursor = Gdk.Cursor.new_for_display(
-            window.get_display(), Gdk.CursorType.MOUSE)
-        window.set_cursor(cursor)
+        disp = window.get_display()
+        try:  # Wayland themes are a bit incomplete
+            cursor = Gdk.Cursor.new_for_display(disp, Gdk.CursorType.CROSSHAIR)
+            window.set_cursor(cursor)
+        except:
+            logger.exception("Cursor setting failed")  # and otherwise ignore
 
     def _bp_edit_dialog_response_cb(self, dialog, response_id, editable):
         if response_id == Gtk.ResponseType.OK:

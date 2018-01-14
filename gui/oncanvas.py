@@ -1434,7 +1434,8 @@ class PressureEditableMixin(OncanvasEditMixin,
     
         """
         # Commit any previous work for this model
-        cmd = self._active_brushwork.get(model)
+        brushwork = self.active_brushwork
+        cmd = brushwork.get(model)
         if cmd is not None:
             self.brushwork_commit(model, abrupt=abrupt)
     
@@ -1451,7 +1452,7 @@ class PressureEditableMixin(OncanvasEditMixin,
         self._sshot_before = None
         self.__first_begin = False
         cmd.__last_pos = None
-        self._active_brushwork[model] = cmd
+        brushwork[model] = cmd
 
     def brushwork_commit(self, model, abrupt=False):
         """Commits any active brushwork for a model to the command stack
@@ -1465,7 +1466,8 @@ class PressureEditableMixin(OncanvasEditMixin,
 
         See also `brushwork_rollback()`.
         """
-        cmd = self._active_brushwork.pop(model, None)
+        brushwork = self.active_brushwork
+        cmd = brushwork.pop(model, None)
         if cmd is None:
             return
         if abrupt and cmd.__last_pos is not None:

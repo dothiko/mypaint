@@ -12,8 +12,6 @@
 from __future__ import division, print_function
 
 import logging
-logger = logging.getLogger(__name__)
-
 import math
 from gettext import gettext as _
 
@@ -21,10 +19,10 @@ from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GLib
 
-import buttonmap
 import lib.command
 from lib.observable import event
 
+logger = logging.getLogger(__name__)
 
 ## Module constants
 
@@ -64,10 +62,13 @@ class Behavior:
     """
     NONE = 0x00  #: the mode does not perform any action
     PAINT_FREEHAND = 0x01  #: paint freehand brushstrokes
-    PAINT_CONSTRAINED = 0x02  #: non-freehand painting: lines, or filling
+    PAINT_LINE = 0x02  #: non-freehand brushstrokes: lines, perspective
     EDIT_OBJECTS = 0x04  #: move and adjust objects on screen
     CHANGE_VIEW = 0x08  #: move the viewport around
+    PAINT_NOBRUSH = 0x10   #: painting independent of brush (eg. fill)
     # Useful masks
+    PAINT_BRUSH = PAINT_FREEHAND | PAINT_LINE #: painting dependent of brush
+    PAINT_CONSTRAINED = PAINT_LINE | PAINT_NOBRUSH #: non-freehand painting
     NON_PAINTING = EDIT_OBJECTS | CHANGE_VIEW
     ALL_PAINTING = PAINT_FREEHAND | PAINT_CONSTRAINED
     ALL = NON_PAINTING | ALL_PAINTING
@@ -272,7 +273,15 @@ class InteractionMode (object):
         onto another mode when switching via toolbars buttons or other actions.
 
         """
-        return False
+        # By default, anything can be stacked on brush tools, except for brush
+        # tools.
+        # Why? So whenever the user picks a brush (from a shortcut or
+        # whatever), the active tool becomes the last used brush-sensitive
+        # tool.
+        # See issue #530.
+        if self.pointer_behavior & Behavior.PAINT_BRUSH:
+            return False
+        return mode.pointer_behavior & Behavior.PAINT_BRUSH
 
     def enter(self, doc, **kwds):
         """Enters the mode: called by `ModeStack.push()` etc.
@@ -402,18 +411,20 @@ class InteractionMode (object):
 
         """
         doc = self.doc
-        if self.doc is None:
+        if doc is None:
             modifiers = Gdk.ModifierType(0)
         else:
-            modifiers = self.doc.get_current_modifiers()
+            modifiers = doc.get_current_modifiers()
         return modifiers
 
     def current_position(self):
-        """Returns the current client pointer position on the main TDW
+        """Returns the current client pointer position on the main TDW.
 
-        For use in enter() methods: since the mode may be being entered by the
-        user pressing a key, no position is available at this point. Normal
-        event handlers should use their argument GdkEvents to determing position.
+        For use in enter() methods: since the mode may be being entered
+        by the user pressing a key, no position is available at this
+        point. Normal event handlers should use their argument GdkEvents
+        to determine position.
+
         """
         disp = self.doc.tdw.get_display()
         mgr = disp.get_device_manager()
@@ -514,7 +525,7 @@ class ScrollableModeMixin (InteractionMode):
                     # tdw.scroll(-dx, 0)  # not for now
                     dy *= -1
                     tdw.zoom(
-                        math.exp(dy/100.0),
+                        math.exp(dy / 100.0),
                         center = (event.x, event.y),
                         ongoing = True,
                     )
@@ -583,13 +594,13 @@ class PaintingModeOptionsWidgetBase (Gtk.Grid):
     """Base class for the options widget of a generic painting mode"""
 
     _COMMON_SETTINGS = [
-        #TRANSLATORS: "Brush radius" for the options panel. Short.
+        # TRANSLATORS:"Brush radius" for the options panel. Short.
         ('radius_logarithmic', _("Size:")),
-        #TRANSLATORS: "Brush opacity" for the options panel. Short.
+        # TRANSLATORS:"Brush opacity" for the options panel. Short.
         ('opaque', _("Opaque:")),
-        #TRANSLATORS: "Brush hardness/sharpness" for the options panel. Short.
+        # TRANSLATORS:"Brush hardness/sharpness" for the options panel. Short.
         ('hardness', _("Sharp:")),
-        #TRANSLATORS: "Additional pressure gain" for the options panel. Short.
+        # TRANSLATORS:"Additional pressure gain" for the options panel. Short.
         ('pressure_gain_log', _("Gain:")),
     ]
 
@@ -671,16 +682,22 @@ class BrushworkModeMixin (InteractionMode):
         """
         super(BrushworkModeMixin, self).__init__(**kwds)
         self.__first_begin = True
-        self._active_brushwork = {}  # {model: Brushwork}
-        # Renamed __active_brushwork to _active_brushwork,
-        # to ease accessing from subclasses.
+        self.__active_brushwork = {}  # {model: Brushwork}
 
-    def brushwork_begin(self, model, description=None, abrupt=False):
+    # XXX Added for OnCanvas mixin
+    @property
+    def active_brushwork(self):
+        return self.__active_brushwork
+    # XXX Added for OnCanvas mixin end
+
+    def brushwork_begin(self, model, description=None, abrupt=False,
+                        layer=None):
         """Begins a new segment of active brushwork for a model
 
         :param lib.document.Document model: The model to begin work on
         :param unicode description: Optional description of the work
         :param bool abrupt: Tail out/in abruptly with faked zero pressure.
+        :param gui.layer.data.SimplePaintingLayer layer: explicit target layer.
 
         Any current segment of brushwork is committed, and a new segment
         is begun.
@@ -688,29 +705,38 @@ class BrushworkModeMixin (InteractionMode):
         Passing ``None`` for the description is suitable for freehand
         drawing modes.  This method will be called automatically with
         the default options by `stroke_to()` if needed, so not all
-        subclasses need to use it.
+        mode classes will need to use it.
 
-        The first segment of brushwork begin by a newly created
-        BrushworkMode objects always starts abruptly.
+        The first segment of brushwork begun by a newly created
+        BrushworkMode object always starts abruptly.
         The second and subsequent segments are assumed to be
         continuations by default. Set abrupt=True to break off any
         existing segment cleanly, and start the new segment cleanly.
 
+        If an explicit target layer is used, it must be one that's
+        guaranteed to persist for the lifetime of the current document
+        model to prevent leaks.
+
         """
         # Commit any previous work for this model
-        cmd = self._active_brushwork.get(model)
+        cmd = self.__active_brushwork.get(model)
         if cmd is not None:
             self.brushwork_commit(model, abrupt=abrupt)
         # New segment of brushwork
-        layer_path = model.layer_stack.current_path
+        if layer is None:
+            layer_path = model.layer_stack.current_path
+        else:
+            layer_path = None
         cmd = lib.command.Brushwork(
-            model, layer_path,
+            model,
+            layer_path=layer_path,
             description=description,
             abrupt_start=(abrupt or self.__first_begin),
+            layer=layer,
         )
         self.__first_begin = False
         cmd.__last_pos = None
-        self._active_brushwork[model] = cmd
+        self.__active_brushwork[model] = cmd
 
     def brushwork_commit(self, model, abrupt=False):
         """Commits any active brushwork for a model to the command stack
@@ -724,14 +750,16 @@ class BrushworkModeMixin (InteractionMode):
 
         See also `brushwork_rollback()`.
         """
-        cmd = self._active_brushwork.pop(model, None)
+        cmd = self.__active_brushwork.pop(model, None)
         if cmd is None:
             return
         if abrupt and cmd.__last_pos is not None:
-            x, y, xtilt, ytilt = cmd.__last_pos
+            x, y, xtilt, ytilt, viewzoom, viewrotation = cmd.__last_pos
             pressure = 0.0
             dtime = 0.0
-            cmd.stroke_to(dtime, x, y, pressure, xtilt, ytilt)
+            viewzoom = self.doc.tdw.scale
+            viewrotation = self.doc.tdw.rotation
+            cmd.stroke_to(dtime, x, y, pressure, xtilt, ytilt, viewzoom, viewrotation)
         changed = cmd.stop_recording(revert=False)
         if changed:
             model.do(cmd)
@@ -748,23 +776,23 @@ class BrushworkModeMixin (InteractionMode):
 
         See also `brushwork_commit()`.
         """
-        cmd = self._active_brushwork.pop(model, None)
+        cmd = self.__active_brushwork.pop(model, None)
         if cmd is None:
             return
         cmd.stop_recording(revert=True)
 
     def brushwork_commit_all(self, abrupt=False):
         """Commits all active brushwork"""
-        for model in list(self._active_brushwork.keys()):
+        for model in list(self.__active_brushwork.keys()):
             self.brushwork_commit(model, abrupt=abrupt)
 
     def brushwork_rollback_all(self):
         """Rolls back all active brushwork"""
-        for model in list(self._active_brushwork.keys()):
+        for model in list(self.__active_brushwork.keys()):
             self.brushwork_rollback(model)
 
-    def stroke_to(self, model, dtime, x, y, pressure, xtilt, ytilt,
-                  auto_split=True):
+    def stroke_to(self, model, dtime, x, y, pressure, xtilt, ytilt, viewzoom, viewrotation,
+                  auto_split=True, layer=None):
         """Feeds an updated stroke position to the brush engine
 
         :param lib.document.Document model: model on which to paint
@@ -775,24 +803,37 @@ class BrushworkModeMixin (InteractionMode):
         :param float xtilt: X-axis tilt, ranging from -1.0 to 1.0
         :param float ytilt: Y-axis tilt, ranging from -1.0 to 1.0
         :param bool auto_split: Split ongoing brushwork if due
+        :param gui.layer.data.SimplePaintingLayer layer: explicit target layer
 
         During normal operation, succesive calls to `stroke_to()` record
         an ongoing sequence of `lib.command.Brushwork` commands on the
         undo stack, stopping and committing the currently recording
         command when it becomes due.
+
+        The explicit target layer is intended for simple painting modes
+        operating on out-of-tree layers which rely on stroke_to()
+        automatically calling brushwork_begin(). Normally the currently
+        selected layer is used as the target layer for each new segment
+        of brushwork.
+
         """
-        cmd = self._active_brushwork.get(model, None)
+        cmd = self.__active_brushwork.get(model, None)
         desc0 = None
         if auto_split and cmd and cmd.split_due:
             desc0 = cmd.description  # retain for the next cmd
             self.brushwork_commit(model, abrupt=False)
-            assert model not in self._active_brushwork
+            assert model not in self.__active_brushwork
             cmd = None
         if not cmd:
-            self.brushwork_begin(model, description=desc0, abrupt=False)
-            cmd = self._active_brushwork[model]
-        cmd.stroke_to(dtime, x, y, pressure, xtilt, ytilt)
-        cmd.__last_pos = (x, y, xtilt, ytilt)
+            self.brushwork_begin(
+                model,
+                description=desc0,
+                abrupt=False,
+                layer=layer,
+            )
+            cmd = self.__active_brushwork[model]
+        cmd.stroke_to(dtime, x, y, pressure, xtilt, ytilt, viewzoom, viewrotation)
+        cmd.__last_pos = (x, y, xtilt, ytilt, viewzoom, viewrotation)
 
     def leave(self, **kwds):
         """Leave mode, committing outstanding brushwork as necessary
@@ -1190,7 +1231,8 @@ class OneshotDragMode (DragMode):
     These are utility modes which allow the user to do quick, simple
     tasks with the canvas like pick a color from it or pan the view.
     """
-    def __init__(self, unmodified_persist=True, temporary_activation=True, **kwargs):
+    def __init__(self, unmodified_persist=True, temporary_activation=True,
+                 **kwargs):
         """
         :param bool unmodified_persist: Stay active if entered without modkeys
         :param bool \*\*kwargs: Passed through to other __init__s.
@@ -1287,7 +1329,7 @@ class ModeStack (object):
         if hasattr(doc, "model"):
             doc.model.sync_pending_changes += self._sync_pending_changes_cb
         #: Class to instantiate if stack is empty: callable with 0 args.
-        default_mode_class = _NullMode
+        self.default_mode_class = _NullMode
 
     def _sync_pending_changes_cb(self, model, **kwargs):
         """Syncs pending changes with the model
@@ -1406,6 +1448,23 @@ class ModeStack (object):
         top_mode = self._check(replacement)
         assert top_mode is not None
         self.changed(old=old_top_mode, new=top_mode)
+
+    def pop_to_behaviour(self, flags):
+        """Keeps popping the stack until a node that matches the flags is found.
+        If the stack does not contain such a node, you will simply end up with
+        an empty ModeStack.
+
+        :param flags: Descriptors of the node you want.
+        :type flags: `Behavior`.
+
+        By "empty ModeStack" I mean a ModeStack with a single
+        ``default_mode_class`` instance, as usual.
+        """
+        while self.top.pointer_behavior & flags == 0:
+            if len(self._stack) == 1:
+                self.pop()
+                return
+            self.pop()
 
     def _check(self, replacement=None):
         """Ensures that the stack is non-empty

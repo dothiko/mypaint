@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2011-2015 by Andrew Chadwick <a.t.chadwick@gmail.com>
+# Copyright (C) 2011-2017 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -11,17 +11,16 @@
 
 
 ## Imports
-from __future__ import division, print_function
 
-from gi.repository import GdkPixbuf
+from __future__ import division, print_function
 
 import re
 import logging
-logger = logging.getLogger(__name__)
-from warnings import warn
 from copy import deepcopy
 import os.path
 
+from gi.repository import GdkPixbuf
+from gi.repository import GLib
 import numpy as np
 
 from lib.gettext import C_
@@ -31,10 +30,17 @@ import lib.helpers as helpers
 from lib.observable import event
 import lib.pixbuf
 import lib.cache
-from lib.modes import *
-import data
-import group
+from lib.modes import DEFAULT_MODE
+from lib.modes import PASS_THROUGH_MODE
+from lib.modes import MODES_DECREASING_BACKDROP_ALPHA
+from . import data
+from . import group
+from . import core
+import lib.feedback
+import lib.naming
 from lib.projectsave import Projectsaveable
+
+logger = logging.getLogger(__name__)
 
 
 ## Class defs
@@ -49,8 +55,8 @@ class PlaceholderLayer (group.LayerStack):
     swapping nodes in the tree or handling drags.
     """
 
-    #TRANSLATORS: Short default name for temporary placeholder layers.
-    #TRANSLATORS: (The user should never see this except in error cases)
+    # TRANSLATORS: Short default name for temporary placeholder layers.
+    # TRANSLATORS: (The user should never see this except in error cases)
     DEFAULT_NAME = C_(
         "layer default names",
         u"Placeholder",
@@ -97,7 +103,6 @@ class RootLayerStack (group.LayerStack):
     INITIAL_MODE = lib.mypaintlib.CombineNormal
     PERMITTED_MODES = {INITIAL_MODE}
 
-
     ## Initialization
 
     def __init__(self, doc=None, **kwargs):
@@ -115,7 +120,10 @@ class RootLayerStack (group.LayerStack):
         self._background_layer = data.BackgroundLayer(default_bg)
         self._background_visible = True
         # Symmetry
-        self._symmetry_axis = None
+        self._symmetry_x = None
+        self._symmetry_y = None
+        self._symmetry_type = None
+        self._rot_symmetry_lines = 2
         self._symmetry_active = False
         # Special rendering state
         self._current_layer_solo = False
@@ -123,11 +131,17 @@ class RootLayerStack (group.LayerStack):
         # Current layer
         self._current_path = ()
         self._current_path_str = ''
+        # Temporary overlay for the current layer
+        self._current_layer_overlay = None
         # Self-observation
         self.layer_content_changed += self._clear_render_cache
         self.layer_properties_changed += self._clear_render_cache
         self.layer_deleted += self._clear_render_cache
         self.layer_inserted += self._clear_render_cache
+        # Layer thumbnail updates
+        self.layer_content_changed += self._mark_layer_for_rethumb
+        self._rethumb_layers = []
+        self._rethumb_layers_timer_id = None
 
     def _clear_render_cache(self, *_ignored):
         self._render_cache.clear()
@@ -170,6 +184,28 @@ class RootLayerStack (group.LayerStack):
             self._current_path = (0,)
             self._current_path_str = '0'
         return layer
+
+    def remove_empty_tiles(self):
+        """Removes empty tiles in all layers backed by a tiled surface.
+
+        :returns: Stats about the removal: (nremoved, ntotal)
+        :rtype: tuple
+
+        """
+        removed, total = (0, 0)
+        for path, layer in self.walk():
+            try:
+                remove_method = layer.remove_empty_tiles
+            except AttributeError:
+                continue
+            r, t = remove_method()
+            removed += r
+            total += t
+        logger.debug(
+            "remove_empty_tiles: removed %d of %d tiles",
+            removed, total,
+        )
+        return (removed, total)
 
     ## Terminal root access
 
@@ -287,10 +323,12 @@ class RootLayerStack (group.LayerStack):
             layers = set(self.layers_along_path(path))
         previewing = None
         solo = None
+        current_layer = self.current
         if self._current_layer_previewing:
-            previewing = self.current
+            previewing = current_layer
         if self._current_layer_solo:
-            solo = self.current
+            solo = current_layer
+
         # Blit loop. Could this be done in C++?
         for tx, ty in tiles:
             with surface.tile_request(tx, ty, readonly=False) as dst:
@@ -303,34 +341,11 @@ class RootLayerStack (group.LayerStack):
                     previewing=previewing,
                     solo=solo,
                     opaque_base_tile=opaque_base_tile,
+                    current_layer=current_layer,
+                    current_layer_overlay=self._current_layer_overlay,
                 )
                 if filter:
                     filter(dst)
-
-    def render_thumbnail(self, bbox, **options):
-        """Renders a 256x256 thumbnail of the stack
-
-        :param bbox: Bounding box to make a thumbnail of
-        :type bbox: tuple
-        :param **options: Passed to `render_as_pixbuf()`.
-        :rtype: GtkPixbuf
-        """
-        x, y, w, h = bbox
-        if w == 0 or h == 0:
-            # workaround to save empty documents
-            x, y, w, h = 0, 0, tiledsurface.N, tiledsurface.N
-        mipmap_level = 0
-        while (mipmap_level < tiledsurface.MAX_MIPMAP_LEVEL and
-               max(w, h) >= 512):
-            mipmap_level += 1
-            x, y, w, h = x // 2, y // 2, w // 2, h // 2
-        w = max(1, w)
-        h = max(1, h)
-        pixbuf = self.render_as_pixbuf(x, y, w, h,
-                                       mipmap_level=mipmap_level,
-                                       **options)
-        assert pixbuf.get_width() == w and pixbuf.get_height() == h
-        return helpers.scale_proportionally(pixbuf, 256, 256)
 
     ## Rendering: common layer API
 
@@ -354,7 +369,7 @@ class RootLayerStack (group.LayerStack):
         documented in `BaseLayer.composite_tile()`, and also consumes:
 
         :param bool render_background: Render the internal bg layer
-        :param BaseLayer overlay: Overlay layer
+        :param BaseLayer overlay: Global overlay layer
         :param array opaque_base_tile: Fallback base tile
 
         The root layer has flags which ensure it is always visible, so the
@@ -362,8 +377,9 @@ class RootLayerStack (group.LayerStack):
         However the rendering loop, `render_into()`, calls this method
         an as
 
-        The overlay layer is optional. If present, it is drawn on top.
-        Overlay layers must support 15-bit scaled-int tile compositing.
+        The global overlay layer is optional. If present, it is drawn on
+        top. Global overlay layers must support 15-bit scaled-int tile
+        compositing.
 
         The base tile is used under the results of rendering, with the
         results drawn over it with simple alpha compositing.
@@ -380,7 +396,7 @@ class RootLayerStack (group.LayerStack):
             background_surface = self._blank_bg_surface
         assert dst.shape[-1] == 4
 
-        N = tiledsurface.N
+        tiledims = (tiledsurface.N, tiledsurface.N, 4)
 
         cache_key = None
         cache_hit = False
@@ -397,7 +413,7 @@ class RootLayerStack (group.LayerStack):
                              render_background, id(opaque_base_tile))
                 dst = self._render_cache.get(cache_key)
             if dst is None:
-                dst = np.empty((N, N, 4), dtype='uint16')
+                dst = np.empty(tiledims, dtype='uint16')
             else:
                 cache_hit = True
         else:
@@ -411,13 +427,17 @@ class RootLayerStack (group.LayerStack):
                     opaque_base_tile,
                     dst_over_opaque_base,
                 )
-                dst = np.empty((N, N, 4), dtype='uint16')
+                dst = np.empty(tiledims, dtype='uint16')
 
             background_surface.blit_tile_into(dst, dst_has_alpha, tx, ty,
                                               mipmap_level)
+
+            # Recursively composite the user-accessible layers
             for layer in reversed(self):
                 layer.composite_tile(dst, dst_has_alpha, tx, ty,
                                      mipmap_level, layers=layers, **kwargs)
+
+            # Apply the global render overlay
             if overlay:
                 overlay.composite_tile(dst, dst_has_alpha, tx, ty,
                                        mipmap_level, layers=set([overlay]),
@@ -454,18 +474,33 @@ class RootLayerStack (group.LayerStack):
 
     @symmetry_active.setter
     def symmetry_active(self, active):
-        if self._symmetry_axis is None:
+        if self._symmetry_x is None:
             raise ValueError(
-                "UI code must set a non-Null symmetry_axis "
+                "UI code must set a non-Null symmetry_x "
                 "before activating symmetrical painting."
             )
-        self.set_symmetry_state(active, self._symmetry_axis)
+        if self._symmetry_y is None:
+            raise ValueError(
+                "UI code must set a non-Null symmetry_y "
+                "before activating symmetrical painting."
+            )
+        if self._symmetry_type is None:
+            raise ValueError(
+                "UI code must set a non-Null symmetry_type "
+                "before activating symmetrical painting."
+            )
+        self.set_symmetry_state(
+            active,
+            self._symmetry_x, self._symmetry_y,
+            self._symmetry_type, self.rot_symmetry_lines,
+        )
 
+    # should be combined into one prop for less event firing
     @property
-    def symmetry_axis(self):
-        """The active painting symmetry X axis value
+    def symmetry_y(self):
+        """The active painting symmetry Y axis value
 
-        The `symmetry_axis` property may be set to None.
+        The `symmetry_y` property may be set to None.
         This indicates the initial state of a document when
         it has been newly created, or newly opened from a file.
 
@@ -476,16 +511,87 @@ class RootLayerStack (group.LayerStack):
         This is a convenience property for part of
         the state managed by `set_symmetry_state()`.
         """
-        return self._symmetry_axis
+        return self._symmetry_y
 
-    @symmetry_axis.setter
-    def symmetry_axis(self, x):
+    @property
+    def symmetry_x(self):
+        """The active painting symmetry X axis value
+
+        The `symmetry_x` property may be set to None.
+        This indicates the initial state of a document when
+        it has been newly created, or newly opened from a file.
+
+        Setting the property to a value forces `symmetry_active` on,
+        and setting it to ``None`` forces `symmetry_active` off.
+        In both bases, only one `symmetry_state_changed` gets emitted.
+
+        This is a convenience property for part of
+        the state managed by `set_symmetry_state()`.
+        """
+        return self._symmetry_x
+
+    @symmetry_x.setter
+    def symmetry_x(self, x):
         if x is None:
-            self.set_symmetry_state(False, None)
+            self.set_symmetry_state(False, None, None, None, None)
         else:
-            self.set_symmetry_state(True, x)
+            self.set_symmetry_state(
+                True,
+                x,
+                self._symmetry_y,
+                self._symmetry_type,
+                self._rot_symmetry_lines
+            )
 
-    def set_symmetry_state(self, active, center_x):
+    @symmetry_y.setter
+    def symmetry_y(self, y):
+        if y is None:
+            self.set_symmetry_state(False, None, None, None, None)
+        else:
+            self.set_symmetry_state(
+                True,
+                self._symmetry_x,
+                y,
+                self._symmetry_type,
+                self._rot_symmetry_lines
+            )
+
+    @property
+    def symmetry_type(self):
+        return self._symmetry_type
+
+    @symmetry_type.setter
+    def symmetry_type(self, symmetry_type):
+        if symmetry_type is None:
+            self.set_symmetry_state(False, None, None, None, None)
+        else:
+            self.set_symmetry_state(
+                True,
+                self._symmetry_x,
+                self._symmetry_y,
+                symmetry_type,
+                self._rot_symmetry_lines
+            )
+
+    @property
+    def rot_symmetry_lines(self):
+        return self._symmetry_type
+
+    @rot_symmetry_lines.setter
+    def rot_symmetry_lines(self, rot_symmetry_lines):
+        if rot_symmetry_lines is None:
+            self.set_symmetry_state(False, None, None, None, None)
+        else:
+            self.set_symmetry_state(
+                True,
+                self._symmetry_x,
+                self._symmetry_y,
+                self._symmetry_type,
+                rot_symmetry_lines
+            )
+
+    def set_symmetry_state(self, active, center_x, center_y,
+                           symmetry_type, rot_symmetry_lines):
         """Set the central, propagated, symmetry axis and active flag.
 
         The root layer stack specialization manages a central state,
@@ -493,39 +599,74 @@ class RootLayerStack (group.LayerStack):
 
         See `LayerBase.set_symmetry_state` for the params.
         This override allows the shared `center_x` to be ``None``:
-        see `symmetry_axis` for what that means.
+        see `symmetry_x` for what that means.
 
         """
         active = bool(active)
         if center_x is not None:
             center_x = round(float(center_x))
-        oldstate = (self._symmetry_active, self._symmetry_axis)
-        newstate = (active, center_x)
+        if center_y is not None:
+            center_y = round(float(center_y))
+        if symmetry_type is not None:
+            symmetry_type = int(symmetry_type)
+        if rot_symmetry_lines is not None:
+            rot_symmetry_lines = int(rot_symmetry_lines)
+
+        oldstate = (
+            self._symmetry_active,
+            self._symmetry_x,
+            self._symmetry_y,
+            self._symmetry_type,
+            self._rot_symmetry_lines,
+        )
+        newstate = (
+            active,
+            center_x,
+            center_y,
+            symmetry_type,
+            rot_symmetry_lines,
+        )
         if oldstate == newstate:
             return
         self._symmetry_active = active
-        self._symmetry_axis = center_x
+        self._symmetry_x = center_x
+        self._symmetry_y = center_y
+        self._symmetry_type = symmetry_type
+        self._rot_symmetry_lines = rot_symmetry_lines
         current = self.get_current()
         if current is not self:
             self._propagate_symmetry_state(current)
-        self.symmetry_state_changed(active, center_x)
+        self.symmetry_state_changed(
+            active,
+            center_x,
+            center_y,
+            symmetry_type,
+            rot_symmetry_lines
+        )
 
     def _propagate_symmetry_state(self, layer):
         """Copy the symmetry state to the a descendant layer"""
         assert layer is not self
-        if self._symmetry_axis is None:
+        if None in {self._symmetry_x, self._symmetry_y, self._symmetry_type}:
             return
         layer.set_symmetry_state(
             self._symmetry_active,
-            self._symmetry_axis,
+            self._symmetry_x,
+            self._symmetry_y,
+            self._symmetry_type,
+            self._rot_symmetry_lines
         )
 
     @event
-    def symmetry_state_changed(self, active, x):
+    def symmetry_state_changed(self, active, x, y,
+                               symmetry_type, rot_symmetry_lines):
         """Event: symmetry axis was changed, or was toggled
 
         :param bool active: updated `symmetry_active` value
-        :param int x: updated `symmetry_active` flag
+        :param int x: new symmetry reference point X
+        :param int y: new symmetry reference point Y
+        :param int symmetry_type: symmetry type
+        :param int rot_symmetry_lines: new number of lines
         """
 
     ## Current layer
@@ -656,6 +797,82 @@ class RootLayerStack (group.LayerStack):
     def background_visible_changed(self):
         """Event: the background visibility flag has changed"""
 
+    ## Temporary overlays for the current layer (not saved)
+
+    @property
+    def current_layer_overlay(self):
+        """A temporary overlay layer for the current layer.
+
+        This isn't saved as part of the document, and strictly speaking
+        it exists outside the doument tree. If it is present, then
+        during rendering it is composited onto the current painting
+        layer in isolation. The effect is as if the overlay were part of
+        the current painting layer.
+
+        The intent of this layer type is to collect together and preview
+        sets of updates to the current layer in response to user input.
+        The updates can then be applied all together by an action.
+        Another possibility might be for brush preview special effects.
+
+        The current layer overlay can be a group, which allows capture
+        of masked drawing. If you want updates to propagate back to the
+        root, the group needs to be set as the ``current_layer_overlay``
+        first. Otherwise, ``root``s won't be hooked up and managed in
+        the right order.
+
+        >>> root = RootLayerStack()
+        >>> root.append(data.SimplePaintingLayer())
+        >>> root.append(data.SimplePaintingLayer())
+        >>> root.set_current_path([1])
+        >>> ovgroup = group.LayerStack()
+        >>> root.current_layer_overlay = ovgroup
+        >>> ovdata1 = data.SimplePaintingLayer()
+        >>> ovdata2 = data.SimplePaintingLayer()
+        >>> ovgroup.append(ovdata1)
+        >>> ovgroup.append(ovdata2)
+        >>> change_count = 0
+        >>> def changed(*a):
+        ...     global change_count
+        ...     change_count += 1
+        >>> root.layer_content_changed += changed
+        >>> ovdata1.clear()
+        >>> ovdata2.clear()
+        >>> change_count
+        2
+
+        Setting the overlay or setting it to None generates content
+        change notifications too.
+
+        >>> root.current_layer_overlay = None
+        >>> root.current_layer_overlay = data.SimplePaintingLayer()
+        >>> change_count
+        4
+
+        """
+        return self._current_layer_overlay
+
+    @current_layer_overlay.setter
+    def current_layer_overlay(self, overlay):
+        old_overlay = self._current_layer_overlay
+        self._current_layer_overlay = overlay
+        self.current_layer_overlay_changed(old_overlay)
+
+        updates = []
+        if old_overlay is not None:
+            old_overlay.root = None
+            updates.append(old_overlay.get_full_redraw_bbox())
+        if overlay is not None:
+            overlay.root = self  # for redraw announcements
+            updates.append(overlay.get_full_redraw_bbox())
+
+        if updates:
+            update_bbox = tuple(core.combine_redraws(updates))
+            self.layer_content_changed(self, *update_bbox)
+
+    @event
+    def current_layer_overlay_changed(self, old):
+        """Event: current_layer_overlay was altered"""
+
     ## Layer Solo toggle (not saved)
 
     @property
@@ -721,41 +938,14 @@ class RootLayerStack (group.LayerStack):
         method can be used before or after the layer is inserted into
         the stack.
         """
-        # If it has a nonblank name that's unique, that's fine
-        existing = {d.name for d in self.deepiter()
-                    if d is not layer and d.name is not None}
+        existing = {l.name for path, l in self.walk()
+                    if l is not layer
+                    and l.name is not None}
         blank = re.compile(r'^\s*$')
         newname = layer._name
         if newname is None or blank.match(newname):
             newname = layer.DEFAULT_NAME
-        if newname not in existing:
-            return newname
-        # Map name prefixes to the max of their numeric suffixes
-        existing_base2num = {}
-        for existing_name in existing:
-            match = layer.UNIQUE_NAME_REGEX.match(existing_name)
-            if match is not None:
-                base = unicode(match.group(1))
-                num = int(match.group(2))
-            else:
-                base = unicode(existing_name)
-                num = 0
-            num = max(num, existing_base2num.get(base, 0))
-            existing_base2num[base] = num
-        # Construct a new unique name that fits the prefix/suffix req.
-        match = layer.UNIQUE_NAME_REGEX.match(newname)
-        if match is not None:
-            base = unicode(match.group(1))
-        else:
-            base = unicode(newname)
-        num = existing_base2num.get(base, 0) + 1
-        newname = layer.UNIQUE_NAME_TEMPLATE % {
-            "name": base,
-            "number": num,
-        }
-        assert layer.UNIQUE_NAME_REGEX.match(newname)
-        assert newname not in existing
-        return newname
+        return lib.naming.make_unique_name(newname, existing)
 
     ## Layer path manipulation
 
@@ -826,7 +1016,7 @@ class RootLayerStack (group.LayerStack):
                 index = max(0, index)
                 return tuple(list(parent_path) + [index])
         p_prev = None
-        for p, l in self.deepenumerate():
+        for p, l in self.walk():
             p = tuple(p)
             if path == p:
                 return p_prev
@@ -908,10 +1098,10 @@ class RootLayerStack (group.LayerStack):
             elif isinstance(self.deepget(path, None), group.LayerStack):
                 return path + (0,)
             else:
-                index = min(len(parent), index+1)
+                index = min(len(parent), index + 1)
                 return parent_path + (index,)
         p_prev = None
-        for p, l in self.deepenumerate():
+        for p, l in self.walk():
             p = tuple(p)
             if path == p_prev:
                 return p
@@ -1140,28 +1330,6 @@ class RootLayerStack (group.LayerStack):
         """
         return (t[1] for t in self.walk())
 
-    def deepenumerate(self):
-        """Enumerates the structure of a stack, from top to bottom
-
-        >>> import test
-        >>> stack, leaves = test.make_test_stack()
-        >>> [a[0] for a in stack.deepenumerate()]
-        [(0,), (0, 0), (0, 1), (0, 2), (1,), (1, 0), (1, 1), (1, 2)]
-        >>> set(leaves) - set([a[1] for a in stack.deepenumerate()])
-        set([])
-
-        This method is pending deprecation: it is the same as `walk()`
-        with its default arguments::
-
-        >>> list(stack.walk()) == list(stack.deepenumerate())
-        True
-
-        But `walk()` is more versatile and shorter to type out.
-        """
-        warn("walk() is more versatile, please use that instead",
-             PendingDeprecationWarning, stacklevel=2)
-        return self.walk()
-
     def deepget(self, path, default=None):
         """Gets a layer based on its path
 
@@ -1190,7 +1358,7 @@ class RootLayerStack (group.LayerStack):
         layer = self
         while len(unused_path) > 0:
             idx = unused_path.pop(0)
-            if abs(idx) > len(layer)-1:
+            if abs(idx) > (len(layer) - 1):
                 return default
             layer = layer[idx]
             if unused_path:
@@ -1302,7 +1470,7 @@ class RootLayerStack (group.LayerStack):
         if layer is self:
             raise ValueError("Cannot remove the root stack")
         old_current = self.current_path
-        for path, descendent_layer in self.deepenumerate():
+        for path, descendent_layer in self.walk():
             assert len(path) > 0
             if descendent_layer is not layer:
                 continue
@@ -1340,7 +1508,7 @@ class RootLayerStack (group.LayerStack):
                   usecurrent=False, usefirst=False):
         """Verify and return the path for a layer from various criteria
 
-        :param index: index of the layer in deepenumerate() order
+        :param index: index of the layer in walk() order
         :param layer: a layer, which must be a descendent of this root
         :param path: a layer path
         :param usecurrent: if true, use the current path as fallback
@@ -1404,7 +1572,7 @@ class RootLayerStack (group.LayerStack):
         elif index is not None:
             if index < 0:
                 raise ValueError("negative layer index %r" % (index,))
-            for i, (path, layer) in enumerate(self.deepenumerate()):
+            for i, (path, layer) in enumerate(self.walk()):
                 if i == index:
                     assert self.deepget(path) is layer
                     return path
@@ -1522,12 +1690,12 @@ class RootLayerStack (group.LayerStack):
             if idx < 0:
                 raise ValueError("Negative index in path %r" % (path,))
             underlying = []
-            for layer in stack[idx+1:]:
+            for layer in stack[(idx + 1):]:
                 if layer.visible:
                     underlying.append(layer)
             backdrop.extend(reversed(underlying))
             stack = stack[idx]
-            if i == len(path)-1:
+            if i == len(path) - 1:
                 break
             if stack.mode != PASS_THROUGH_MODE:
                 backdrop = []
@@ -1582,7 +1750,9 @@ class RootLayerStack (group.LayerStack):
             if isinstance(srclayer, data.PaintingLayer):
                 return deepcopy(srclayer)  # include strokes
             elif isinstance(srclayer, data.SurfaceBackedLayer):
-                return data.PaintingLayer.new_from_surface_backed_layer(srclayer)
+                return data.PaintingLayer.new_from_surface_backed_layer(
+                    srclayer
+                )
             # Otherwise we're gonna have to render, but we can skip the
             # background removal most of the time.
             if isinstance(srclayer, group.LayerStack):
@@ -1606,9 +1776,9 @@ class RootLayerStack (group.LayerStack):
         # Render loop
         logger.debug("Normalize: render using backdrop %r", backdrop_layers)
         dstsurf = dstlayer._surface
-        N = tiledsurface.N
+        tiledims = (tiledsurface.N, tiledsurface.N, 4)
         for tx, ty in tiles:
-            bd = np.zeros((N, N, 4), dtype='uint16')
+            bd = np.zeros(tiledims, dtype='uint16')
             for layer in backdrop_layers:
                 if layer is self._background_layer:
                     surf = self._background_layer._surface
@@ -1853,7 +2023,7 @@ class RootLayerStack (group.LayerStack):
 
     ## Loading
 
-    def load_from_openraster(self, orazip, elem, cache_dir, feedback_cb,
+    def load_from_openraster(self, orazip, elem, cache_dir, progress,
                              x=0, y=0, **kwargs):
         """Load the root layer stack from an open .ora file
 
@@ -1871,7 +2041,7 @@ class RootLayerStack (group.LayerStack):
         ...         orazip=orazip,
         ...         elem=stack_elem,
         ...         cache_dir=tmpdir,
-        ...         feedback_cb=None,
+        ...         progress=None,
         ...     )
         >>> len(list(root.walk())) > 0
         True
@@ -1884,12 +2054,13 @@ class RootLayerStack (group.LayerStack):
             orazip,
             elem,
             cache_dir,
-            feedback_cb,
+            progress,
             x=x, y=y,
             **kwargs
         )
         del self._no_background
         self._set_current_path_after_ora_load()
+        self._mark_all_layers_for_rethumb()
 
     def _set_current_path_after_ora_load(self):
         """Set a suitable working layer after loading from oradir/orazip"""
@@ -1899,7 +2070,7 @@ class RootLayerStack (group.LayerStack):
         num_loaded = 0
         selected_path = None
         uppermost_child_path = None
-        for path, loaded_layer in self.deepenumerate():
+        for path, loaded_layer in self.walk():
             if not selected_path and loaded_layer.initially_selected:
                 selected_path = path
             if not uppermost_child_path and len(path) == 1:
@@ -1925,7 +2096,7 @@ class RootLayerStack (group.LayerStack):
         self.set_current_path(selected_path)
 
     def _load_child_layer_from_orazip(self, orazip, elem, cache_dir,
-                                      feedback_cb, x=0, y=0, **kwargs):
+                                      progress, x=0, y=0, **kwargs):
         """Loads and appends a single child layer from an open .ora file"""
         attrs = elem.attrib
         # Handle MyPaint's special background tile notation
@@ -1949,7 +2120,7 @@ class RootLayerStack (group.LayerStack):
                 bg_pixbuf = lib.pixbuf.load_from_zipfile(
                     datazip=orazip,
                     filename=bg_src,
-                    feedback_cb=feedback_cb,
+                    progress=progress,
                 )
                 self.set_background(bg_pixbuf)
                 self._no_background = False
@@ -1960,12 +2131,12 @@ class RootLayerStack (group.LayerStack):
             orazip,
             elem,
             cache_dir,
-            feedback_cb,
+            progress,
             x=x, y=y,
             **kwargs
         )
 
-    def load_from_openraster_dir(self, oradir, elem, cache_dir, feedback_cb,
+    def load_from_openraster_dir(self, oradir, elem, cache_dir, progress,
                                  x=0, y=0, **kwargs):
         """Loads layer flags and data from an OpenRaster-style dir"""
         self._no_background = True
@@ -1973,15 +2144,16 @@ class RootLayerStack (group.LayerStack):
             oradir,
             elem,
             cache_dir,
-            feedback_cb,
+            progress,
             x=x, y=y,
             **kwargs
         )
         del self._no_background
         self._set_current_path_after_ora_load()
+        self._mark_all_layers_for_rethumb()
 
     def _load_child_layer_from_oradir(self, oradir, elem, cache_dir,
-                                      feedback_cb, x=0, y=0, **kwargs):
+                                      progress, x=0, y=0, **kwargs):
         """Loads and appends a single child layer from an open .ora file"""
         attrs = elem.attrib
         # Handle MyPaint's special background tile notation
@@ -2004,7 +2176,7 @@ class RootLayerStack (group.LayerStack):
             try:
                 bg_pixbuf = lib.pixbuf.load_from_file(
                     filename = os.path.join(oradir, bg_src),
-                    feedback_cb = feedback_cb,
+                    progress = progress,
                 )
                 self.set_background(bg_pixbuf)
                 self._no_background = False
@@ -2023,7 +2195,7 @@ class RootLayerStack (group.LayerStack):
             oradir,
             elem,
             cache_dir,
-            feedback_cb,
+            progress,
             x=x, y=y,
             **kwargs
         )
@@ -2032,22 +2204,33 @@ class RootLayerStack (group.LayerStack):
     ## Saving
 
     def save_to_openraster(self, orazip, tmpdir, path, canvas_bbox,
-                           frame_bbox, **kwargs):
+                           frame_bbox, progress=None, **kwargs):
         """Saves the stack's data into an open OpenRaster ZipFile"""
+        if not progress:
+            progress = lib.feedback.Progress()
+        progress.items = 10
+
+        # First 90%: save the stack contents normally.
         stack_elem = super(RootLayerStack, self).save_to_openraster(
             orazip, tmpdir, path, canvas_bbox,
-            frame_bbox, **kwargs
+            frame_bbox,
+            progress=progress.open(9),
+            **kwargs
         )
-        # Save background
+
+        # Remaining 10%: save the special background layer too.
         bg_layer = self.background_layer
         bg_layer.initially_selected = False
         bg_path = (len(self),)
         bg_elem = bg_layer.save_to_openraster(
             orazip, tmpdir, bg_path,
             canvas_bbox, frame_bbox,
+            progress=progress.open(1),
             **kwargs
         )
         stack_elem.append(bg_elem)
+
+        progress.close()
         return stack_elem
 
     def save_to_project(self, projdir, path, canvas_bbox,
@@ -2150,7 +2333,8 @@ class RootLayerStack (group.LayerStack):
         assert parent.root is self
         assert oldchild.root is not self
         path = self.deepindex(parent)
-        assert path is not None, "Unable to find parent of deleted child"
+        if path is None:  # e.g. layers within current_layer_overlay
+            return
         path = path + (oldindex,)
         self.layer_deleted(path)
 
@@ -2162,7 +2346,8 @@ class RootLayerStack (group.LayerStack):
         assert parent.root is self
         assert newchild.root is self
         path = self.deepindex(newchild)
-        assert path is not None, "Unable to find child which was inserted"
+        if path is None:  # e.g. layers within current_layer_overlay
+            return
         assert len(path) > 0
         self.layer_inserted(path)
 
@@ -2223,6 +2408,64 @@ class RootLayerStack (group.LayerStack):
     def multiple_layers_selection_updated(self):
         """Notification event, to tell layer selection state changed.
         """
+    ## Layer preview thumbnails
+
+    def _mark_all_layers_for_rethumb(self):
+        self._rethumb_layers[:] = []
+        for path, layer in self.walk():
+            self._rethumb_layers.append(layer)
+        self._restart_rethumb_timer()
+
+    def _mark_layer_for_rethumb(self, root, layer, *_ignored):
+        if layer not in self._rethumb_layers:
+            self._rethumb_layers.append(layer)
+        self._restart_rethumb_timer()
+
+    def _restart_rethumb_timer(self):
+        timer_id = self._rethumb_layers_timer_id
+        if timer_id is not None:
+            GLib.source_remove(timer_id)
+        timer_id = GLib.timeout_add(
+            priority=GLib.PRIORITY_LOW,
+            interval=100,
+            function=self._rethumb_layers_timer_cb,
+        )
+        self._rethumb_layers_timer_id = timer_id
+
+    def _rethumb_layers_timer_cb(self):
+        if len(self._rethumb_layers) >= 1:
+            layer0 = self._rethumb_layers.pop(-1)
+            path0 = self.deepindex(layer0)
+            if not path0:
+                return True
+            layer0.update_thumbnail()
+            self.layer_thumbnail_updated(path0, layer0)
+            # Queue parent layers too
+            path = path0[:-1]
+            parents = []
+            while len(path) > 0:
+                layer = self.deepget(path)
+                if layer not in self._rethumb_layers:
+                    parents.append(layer)
+                path = path[:-1]
+            self._rethumb_layers.extend(reversed(parents))
+            return True
+        # Stop the timer when there is nothing more to be done.
+        self._rethumb_layers_timer_id = None
+        return False
+
+    @event
+    def layer_thumbnail_updated(self, path, layer):
+        """Event: a layer thumbnail was updated.
+
+        :param tuple path: The path to _layer_.
+        :param lib.layer.core.LayerBase layer: The layer that was updated.
+
+        See lib.layer.core.LayerBase.thumbnail
+
+        """
+        pass
+
 
 class RootLayerStackSnapshot (group.LayerStackSnapshot):
     """Snapshot of a root layer stack's state"""
@@ -2276,4 +2519,3 @@ def _test():
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     _test()
-

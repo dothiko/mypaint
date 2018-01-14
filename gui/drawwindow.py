@@ -87,7 +87,7 @@ def with_wait_cursor(func):
                 toplevel_win.set_cursor(wait_cursor)
             toplevel.set_sensitive(False)
         try:
-            func(self, *args, **kwargs)
+            return func(self, *args, **kwargs)
             # gtk main loop may be called in here...
         finally:
             for toplevel in toplevels:
@@ -241,10 +241,6 @@ class DrawWindow (Gtk.Window):
         # Keyboard handling
         for action in self.action_group.list_actions():
             self.app.kbm.takeover_action(action)
-
-        # Brush/color choosers
-        self._brush_chooser = None
-        self._color_chooser = None
 
     def _init_stategroups(self):
         sg = stategroup.StateGroup()
