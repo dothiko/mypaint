@@ -1430,26 +1430,25 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
 
     ## Per-layer flag toggles
 
-    def layer_lock_toggle_cb(self, action):
-        """``LayerLockedToggle`` GtkAction callback"""
-        layers = self.model.layer_stack.get_selected_layers()
-        if len(layers) == 1:
-            layer = self.model.layer_stack.get_current()
-            if bool(layer.locked) != bool(action.get_active()):
-                self.model.set_layer_locked(action.get_active(), layer)
-        elif len(layers) > 1:
-            self.model.set_selected_layers_locked(action.get_active(), layers)
-
-
-    def layer_visible_toggle_cb(self, action):
-        """``LayerVisibleToggle`` GtkAction callback"""
-        layers = self.model.layer_stack.get_selected_layers()
-        if len(layers) == 1:
-            layer = self.model.layer_stack.get_current()
-            if bool(layer.visible) != bool(action.get_active()):
-                self.model.set_layer_visibility(action.get_active(), layer)
-        elif len(layers) > 1:
-            self.model.set_selected_layers_visibility(action.get_active(), layers)
+   #def layer_lock_toggle_cb(self, action):
+   #    """``LayerLockedToggle`` GtkAction callback"""
+   #    layers = self.model.layer_stack.get_selected_layers()
+   #    if len(layers) == 1:
+   #        layer = self.model.layer_stack.get_current()
+   #        if bool(layer.locked) != bool(action.get_active()):
+   #            self.model.set_layer_locked(action.get_active(), layer)
+   #    elif len(layers) > 1:
+   #        self.model.set_selected_layers_locked(action.get_active(), layers)
+   #
+   #def layer_visible_toggle_cb(self, action):
+   #    """``LayerVisibleToggle`` GtkAction callback"""
+   #    layers = self.model.layer_stack.get_selected_layers()
+   #    if len(layers) == 1:
+   #        layer = self.model.layer_stack.get_current()
+   #        if bool(layer.visible) != bool(action.get_active()):
+   #            self.model.set_layer_visibility(action.get_active(), layer)
+   #    elif len(layers) > 1:
+   #        self.model.set_selected_layers_visibility(action.get_active(), layers)
 
     def _update_layer_flag_toggles(self, *_ignored):
         """Updates ToggleActions reflecting the current layer's flags"""
@@ -1463,30 +1462,6 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             action = self.app.find_action(action_name)
             if bool(action.get_active()) != bool(model_state):
                 action.set_active(model_state)
-
-    # XXX Multiple selected layers action
-
-    def merge_selected_layers_cb(self, action):
-        if self.model.merge_selected_layers():
-            self.layerblink_state.activate(action)
-
-    def group_selected_layers_cb(self, action):
-        if self.model.group_selected_layers():
-            self.layerblink_state.activate(action)
-
-    def cut_layer_with_selected_cb(self, action):
-        action_name = action.get_name()
-        if action_name.endswith("Opaque"):
-            if not self.model.cut_current_layer(True):
-                return False
-        elif action_name.endswith("Transparent"):
-            if not self.model.cut_current_layer(False):
-                return False
-        else:
-            raise NotImplementedError("Unknown action %r" % action_name)
-        self.layerblink_state.activate(action)
-
-    # XXX Multiple selected layers action end
 
     ## Brush settings callbacks
 

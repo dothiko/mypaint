@@ -2270,47 +2270,6 @@ class RootLayerStack (group.LayerStack):
         stack_elem.append(bg_elem)
         return stack_elem
 
-    ## Multiple layer selection
-
-    def get_selected_layers(self):
-        selected_list=[]
-        # Actual selected layers query would be done
-        # in the event 'selected_layers_queried'
-        # which would call RootstackTreeView callback method.
-        self.selected_layers_queried(selected_list)
-        return selected_list
-
-    def set_selected_layers(self, paths=None, layers=None):
-        """Set layers selection states from path or layer list.
-        :param paths: a list of path tuple. used prior to param 'layers'.
-        :param layers: a list of layer objects. used when paths is None.
-
-        If Both of paths and layers are None, all selection except for
-        current layer (of RootStackTreeView) would be cancelled.
-        """
-        if paths is None:
-            if layers is not None:
-                paths = []
-                for cl in layers:
-                    paths.append(self.deepindex(cl))
-        self.multiple_layers_selected(paths)
-        self.multiple_layers_selection_updated()
-
-    def add_selected_layers(self, path, layer=None):
-        """Add a layer to selected layers"""
-        if path is None:
-            if layer is not None:
-                path = self.deepindex(layer)
-        self.multiple_layers_selection_added(path)
-        self.multiple_layers_selection_updated()
-
-    def remove_selected_layers(self, path, layer=None):
-        if path is None:
-            if layer is not None:
-                path = self.deepindex(layer)
-        self.multiple_layers_selection_removed(path)
-        self.multiple_layers_selection_updated()
-
     ## Notification mechanisms
 
     @event

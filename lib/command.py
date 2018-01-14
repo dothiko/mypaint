@@ -1082,7 +1082,6 @@ class AddLayer (Command):
         layers.set_current_path(self._prev_currentlayer_path)
         self._prev_currentlayer_path = None
 
-
 class RemoveLayer (Command):
     """Removes the current layer"""
 
@@ -1090,44 +1089,19 @@ class RemoveLayer (Command):
 
     def __init__(self, doc, **kwds):
         super(RemoveLayer, self).__init__(doc, **kwds)
-        rootstack = self.doc.layer_stack
-        assert rootstack.current_path
-        self._before_current_path = Gtk.TreePath(rootstack.current_path)
-        assert self._before_current_path != None
-
-        # This command use `prev` methods of Gtk.TreePath
-        selected_layers = rootstack.get_selected_layers()
-        assert selected_layers is not None
-        assert len(selected_layers) >= 1
-        uwp = [Gtk.TreePath(cp) for cp in selected_layers]
-        self._unwanted_paths = uwp
-        assert self._before_current_path in uwp
-
-        self._removed_rootstack = None
-        self._before_remove_paths = None
+        layers = self.doc.layer_stack
+        assert layers.current_path
+        self._unwanted_path = layers.current_path
+        self._removed_layer = None
         self._replacement_layer = None
 
     def redo(self):
-        assert self._removed_rootstack is None, "double redo()?"
-        rootstack = self.doc.layer_stack
-        targets = []
-        before_paths = []
-
-        for path in self._unwanted_paths:
-            targets.append(rootstack.deepget(path))
-
-        for layer in targets:
-            path = rootstack.deepindex(layer)
-            before_paths.append(path)
-            rootstack.deeppop(path)
-
-        targets.reverse()
-        before_paths.reverse()
-
-        self._removed_layers = targets
-        self._before_remove_paths = before_paths
-
-        if len(rootstack) == 0:
+        assert self._removed_layer is None, "double redo()?"
+        layers = self.doc.layer_stack
+        path = layers.get_current_path()
+        path_above = layers.path_above(path)
+        self._removed_layer = layers.deeppop(self._unwanted_path)
+        if len(layers) == 0:
             logger.debug("Removed last layer")
             if self.doc.CREATE_PAINTING_LAYER_IF_EMPTY:
                 logger.debug("Replacing removed layer")
@@ -1135,29 +1109,24 @@ class RemoveLayer (Command):
                 if repl is None:
                     repl = lib.layer.PaintingLayer()
                     self._replacement_layer = repl
-                    repl.name = rootstack.get_unique_name(repl)
-                rootstack.append(repl)
-                rootstack.set_current_path((0,))
+                    repl.name = layers.get_unique_name(repl)
+                layers.append(repl)
+                layers.set_current_path((0,))
+            assert self._unwanted_path == (0,)
         else:
-            if not rootstack.deepget(self._unwanted_paths[0]):
-                first_path = self._unwanted_paths[0].copy()
-                if first_path.prev():
-                    rootstack.set_current_path(first_path)
+            if not layers.deepget(path):
+                if layers.deepget(path_above):
+                    layers.set_current_path(path_above)
                 else:
-                    rootstack.set_current_path((0,))
+                    layers.set_current_path((0,))
 
     def undo(self):
-        rootstack = self.doc.layer_stack
+        layers = self.doc.layer_stack
         if self._replacement_layer is not None:
-            rootstack.deepremove(self._replacement_layer)
-
-        for i, path in enumerate(self._before_remove_paths):
-            rootstack.deepinsert(path, self._removed_layers[i])
-
-        rootstack.set_current_path(self._before_current_path)
-        self._removed_layers = None
-
-
+            layers.deepremove(self._replacement_layer)
+        layers.deepinsert(self._unwanted_path, self._removed_layer)
+        layers.set_current_path(self._unwanted_path)
+        self._removed_layer = None
 class SelectLayer (Command):
     """Select a layer"""
 
