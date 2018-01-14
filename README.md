@@ -36,19 +36,6 @@ With This feature,you can use Krita-like oncanvas brush size change on MyPaint!!
 
 Kritaライクなキャンバス上でのブラシサイズ変更を可能にします。
 
-#### multiple layer selection : レイヤの複数選択
-From now, we can select multiple layers.
-With this feature, you can ...
-
- * drag-drop layers into group
- * merge selected layers
- * delete selected layers
- * group selected layers
- * erase a active layer contents with opaque pixels of other selected layers.
-
-Although, You can draw only currently **active** layer, which shown bold and underlined at layers panel.
-
-
 #### incremental version save : バージョンセーブ機能
 This menu action will add version number to filename automatically and save it.
 If filename has a version number already, such as 'foobar_002.ora',
