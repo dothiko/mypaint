@@ -476,10 +476,10 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
         return row
 
     def x_tilt_offset_adj_changed_cb(self, adj):
-        FreehandMode._X_TILT_OFFSET = adj.get_value()
+        StabilizedFreehandMode._X_TILT_OFFSET = adj.get_value()
 
     def y_tilt_offset_adj_changed_cb(self, adj):
-        FreehandMode._Y_TILT_OFFSET = adj.get_value()
+        StabilizedFreehandMode._Y_TILT_OFFSET = adj.get_value()
 
     # Handlers
     def _average_toggled_cb(self, checkbox):
