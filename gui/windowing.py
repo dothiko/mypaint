@@ -629,7 +629,7 @@ class ChooserPopup (Gtk.Window):
             elif hasattr(self, 'advance'):
                 self.advance()
            
-class TransparentMixin:
+class TransparentMixin(object):
     """A Mixin for popup window which has transparent background
     """
 
