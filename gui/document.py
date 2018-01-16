@@ -1430,25 +1430,17 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
 
     ## Per-layer flag toggles
 
-   #def layer_lock_toggle_cb(self, action):
-   #    """``LayerLockedToggle`` GtkAction callback"""
-   #    layers = self.model.layer_stack.get_selected_layers()
-   #    if len(layers) == 1:
-   #        layer = self.model.layer_stack.get_current()
-   #        if bool(layer.locked) != bool(action.get_active()):
-   #            self.model.set_layer_locked(action.get_active(), layer)
-   #    elif len(layers) > 1:
-   #        self.model.set_selected_layers_locked(action.get_active(), layers)
-   #
-   #def layer_visible_toggle_cb(self, action):
-   #    """``LayerVisibleToggle`` GtkAction callback"""
-   #    layers = self.model.layer_stack.get_selected_layers()
-   #    if len(layers) == 1:
-   #        layer = self.model.layer_stack.get_current()
-   #        if bool(layer.visible) != bool(action.get_active()):
-   #            self.model.set_layer_visibility(action.get_active(), layer)
-   #    elif len(layers) > 1:
-   #        self.model.set_selected_layers_visibility(action.get_active(), layers)
+    def layer_lock_toggle_cb(self, action):
+        """``LayerLockedToggle`` GtkAction callback"""
+        layer = self.model.layer_stack.get_current()
+        if bool(layer.locked) != bool(action.get_active()):
+            self.model.set_layer_locked(action.get_active(), layer)
+
+    def layer_visible_toggle_cb(self, action):
+        """``LayerVisibleToggle`` GtkAction callback"""
+        layer = self.model.layer_stack.get_current()
+        if bool(layer.visible) != bool(action.get_active()):
+            self.model.set_layer_visibility(action.get_active(), layer)
 
     def _update_layer_flag_toggles(self, *_ignored):
         """Updates ToggleActions reflecting the current layer's flags"""
@@ -2435,4 +2427,24 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         if (mode.ACTION_NAME.startswith('Stabilize')
                 and hasattr(mode, 'expand_range')):
             mode.expand_range()
+
+    # XXX for `marked` layer status
+    def merge_marked_layers_cb(self, action):
+        self.model.merge_marked_layers()
+        self.layerblink_state.activate(action)
+
+    def group_marked_layers_cb(self, action):
+        self.model.group_marked_layers()
+        self.layerblink_state.activate(action)
+
+    def cut_layer_with_marked_cb(self, action):
+        if (action.get_name().endswith('Opaque')):
+            self.model.cut_current_layer_with_marked(opaque=True)
+        else:
+            self.model.cut_current_layer_with_marked(opaque=False)
+        self.layerblink_state.activate(action)
+
+    def clear_all_layers_mark_cb(self, action):
+        self.model.clear_all_layers_mark()
+    # XXX for `marked` layer status
 

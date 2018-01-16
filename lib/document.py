@@ -1382,43 +1382,26 @@ class Document (object):
         """Combine all visible layers into a new one & keep originals"""
         self.do(command.NewLayerMergedFromVisible(self))
 
-    ## Multiple Layers operations
+    # XXX for `marked` layer states
 
-    def merge_selected_layers(self):
-        selected_path = self.layer_stack.get_selected_layers()
-        if len(selected_path) >= 2:
-            self.do(command.MergeSelectedLayers(self, selected_path))
-            return True
-        return False
+    def merge_marked_layers(self):
+        self.do(command.MergeMarkedLayers(self))
 
-    def group_selected_layers(self):
-        selected_path = self.layer_stack.get_selected_layers()
-        if len(selected_path) >= 2:
-            self.do(command.GroupSelectedLayers(self, selected_path))
-            return True
-        return False
+    def group_marked_layers(self):
+        self.do(command.GroupMarkedLayers(self))
 
-    def cut_current_layer(self, opaque):
-        """Sets the input-lock status of selected layers."""
+    def cut_current_layer_with_marked(self, opaque):
+        """Sets the input-lock status of marked layers."""
         rootstack = self.layer_stack
         if not isinstance(rootstack.current, lib.layer.LayerStack):
-            selected_path = rootstack.get_selected_layers()
-            if len(selected_path) >= 2:
-                rootstack.current.autosave_dirty = True
-                cmd = command.CutCurrentLayer(self, opaque, selected_path)
-                self.do(cmd)
-                return True
-            else:
-                return False
+            cmd = command.CutCurrentLayer(self, opaque)
+            self.do(cmd)
         else:
             logger.warning("cut_current_layer called for layergroup.this should not be happen.")
 
-    def clear_layer_selection(self, selected_paths=None):
-        if selected_paths is None:
-            rootstack = self.layer_stack
-            selected_paths = rootstack.get_selected_layers()
-        if selected_paths is not None and len(selected_paths) >= 2:
-            self.do(command.ClearLayerSelection(self, selected_paths))
+    def clear_all_layers_mark(self):
+        self.do(command.ClearLayersMark(self))
+    # XXX for `marked` layer states end.
 
     ## Layer import/export
 
@@ -1468,18 +1451,6 @@ class Document (object):
             cmd = cmd_class(self, locked, layer)
             self.do(cmd)
 
-    def set_selected_layers_visibility(self, visible, layers):
-        """Sets the visibility of selected layers."""
-        assert len(layers) >= 2
-        cmd = command.SetMultipleLayersVisibility(self, visible, layers)
-        self.do(cmd)
-
-    def set_selected_layers_locked(self, locked, layers):
-        """Sets the input-lock status of selected layers."""
-        assert len(layers) >= 2
-        cmd = command.SetMultipleLayersLocked(self, locked, layers)
-        self.do(cmd)
-
     def set_current_layer_opacity(self, opacity):
         """Sets the opacity of the current layer
 
@@ -1511,6 +1482,36 @@ class Document (object):
         logger.debug("Setting current layer mode: %r", mode)
         cmd = command.SetLayerMode(self, mode, layer=current)
         self.do(cmd)
+
+    # XXX for `marked` status
+    def set_layer_marked(self, marked, layer):
+        """Sets the input-locked status of a layer."""
+        if layer is self.layer_stack:
+            return
+        cmd_class = command.SetLayerMarked
+        cmd = self.get_last_command()
+        if isinstance(cmd, cmd_class) and cmd.layer is layer:
+            self.update_last_command(marked=marked)
+        else:
+            cmd = cmd_class(self, marked, layer)
+            self.do(cmd)
+    
+    def get_marked_layers(self, usecurrent=True):
+        """Returns a list of tuple (path, layer).
+        
+        This is needed to know how many layers marked now
+        and set sensitive state of menu items.
+        Also, some Command class use this method.
+        """
+        ret = []
+        rootstack = self.layer_stack
+        current = rootstack.current
+        for p, l in rootstack.walk():
+            if l.marked and not (usecurrent==False and l==current):
+                ret.append((p, l))
+        return ret
+                
+    # XXX for `marked` status end
 
     ## Saving and loading
 

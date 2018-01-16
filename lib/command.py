@@ -1548,6 +1548,7 @@ class SetLayerLocked (Command):
         else:
             return _("Unlock Layer")
 
+
 class SetLayerOpacity (Command):
     """Sets the opacity of a layer"""
 
@@ -1699,371 +1700,196 @@ class ExternalLayerEdit (Command):
         layer = self.doc.layer_stack.deepget(self._layer_path)
         layer.load_snapshot(self._before)
 
-## Multiple layers operations
 
-class RestackMultipleLayers (Command):
-    """Move Multiple layers from one position in the stack to another
+# XXX for `marked` state of layer.
+class SetLayerMarked (Command):
+    """Sets the marked status of a layer"""
 
-    With this class, you can manage/organize multiple layers
-    by drag-drop.
-    However,this operation does not consider layer composite mode,
-    so you might encounter severely wronged image.
+    def __init__(self, doc, marked, layer=None, path=None, index=None,
+                 **kwds):
+        super(SetLayerMarked, self).__init__(doc, **kwds)
+        self.new_marked = marked
+        layers = self.doc.layer_stack
+        self._path = layers.canonpath(layer=layer, path=path, index=index,
+                                      usecurrent=True)
 
-    Layer restacking operations allow layers to be moved inside other
-    layers even if the target layer type doesn't permit sub-layers. In
-    this case, a new parent layer stack is created::
-
-      layer1            layer1
-      targetlayer       newparent
-      layer2        →    ├─ movedlayer1
-      movedlayer1        ├─ movedlayer2
-      movedlayer2        └─ targetlayer         
-                        layer2
-
-    This shows a move of path ``(3,), (4,)`` to the path 
-    ``(1, 0)`` and ``(1, 1)``.
-    """
-
-    display_name = _("Move Multiple Layers in Stack")
-
-    def __init__(self, doc, src_path_list, targ_path, **kwds):
-        """Initialize with source and target paths
-
-        :param tuple src_path: Valid source path
-        :param tuple targ_path: Valid target path for the move
-
-        This style of move requires the source path to exist at the time
-        of creation, and for the target path to be a valid insertion
-        path at the point the command is created. The target's parent
-        path must exist too.
-        """
-        super(RestackMultipleLayers, self).__init__(doc, **kwds)
-        targ_path = tuple(targ_path)
-        rootstack = self.doc.layer_stack
-        self._src_path_list = []
-        for src_path in src_path_list:
-            if lib.layer.path_startswith(targ_path, src_path):
-                raise ValueError("Target path %r is inside source path %r"
-                                 % (targ_path, src_path))
-            if len(targ_path) == 0:
-                raise ValueError("Cannot move a layer to path ()")
-            if rootstack.deepget(src_path) is None:
-                raise ValueError("Source path %r does not exist"
-                                 % (src_path,))
-            if rootstack.deepget(targ_path[:-1]) is None:
-                raise ValueError("Parent of target path %r doesn't exist"
-                                 % (targ_path,))
-            self._src_path_list.append(src_path)
-        self._src_path_after = None
-        self._targ_path = targ_path
-        self._new_parent = None
-        self._after_prev_pathes = None
+    @property
+    def layer(self):
+        return self.doc.layer_stack.deepget(self._path)
 
     def redo(self):
-        """Perform the move"""
-        rootstack = self.doc.layer_stack
-        target = rootstack.deepget(self._targ_path)
-        targ_parent = rootstack.deepget(self._targ_path[:-1])
-
-        _src_list = []
-        _src_parents = []
-        _src_list = [rootstack.deepget(x) for x in self._src_path_list] 
-        _src_parents = [rootstack.deepget(x[:-1]) for x in self._src_path_list] 
-
-        affected = []
-        after_prev_pathes = []
-        oldcurrent = rootstack.current
-
-        for i, src_path in enumerate(self._src_path_list):
-            src = _src_list[i]
-            src_parent = _src_parents[i]
-            current_src_path = rootstack.deepindex(src)
-            src_index = current_src_path[-1]
-            after_prev_pathes.append(current_src_path[:-1] + (src_index,))
-
-            rootstack.deeppop(current_src_path)
-            affected.append(src)
-
-            if self._new_parent != None:
-                self._new_parent.append(src)
-            elif isinstance(target, lib.layer.LayerStack):
-                target.append(src)
-            elif isinstance(targ_parent, lib.layer.LayerStack):
-                if target == None:
-                    # The target position is the end(tail) of layergroup,
-                    # so simply append it.
-                    targ_parent.append(src)
-                else:
-                    targ_path = rootstack.deepindex(target)
-                    targ_index = targ_path[-1]
-                    targ_parent.insert(targ_index, src)
-            else:
-                # TODO could this case happens...?
-                assert len(targ_path) > 1
-                targ_parent_index = targ_path[-2]
-                targ_parent = rootstack.deepget(targ_path[:-2])
-                container = lib.layer.LayerStack()
-                container.name = rootstack.get_unique_name(container)
-                targ_parent[targ_parent_index] = container
-                container.append(src)
-                container.append(targ_parent)
-                self._new_parent = container
-                affected.append(targ_parent)
-
-
-        # We need newest `after` path of sources.
-        # so refreshing it here.
-        # but,we need the list reverse, to restore the tree structure.
-        self._src_path_after = sorted(
-                [rootstack.deepindex(x) for x in _src_list],
-                reverse=True)
-        self._after_prev_pathes = sorted(after_prev_pathes, reverse=True)
-
-        # Current index mgt
-        if oldcurrent is None:
-            rootstack.current_path = (0,)
-        else:
-            rootstack.current_path = rootstack.deepindex(oldcurrent)
-
-        # Issue redraws
-        redraw_bboxes = [a.get_full_redraw_bbox() for a in affected]
+        self.old_marked = self.layer.marked
+        self.layer.marked = self.new_marked
+        redraw_bboxes = [self.layer.get_full_redraw_bbox()]
         self._notify_canvas_observers(redraw_bboxes)
 
     def undo(self):
-        """Unperform the move"""
-        rootstack = self.doc.layer_stack
-        affected = []
-        after_src = [rootstack.deepget(x) for x in self._src_path_after]
-        oldcurrent = rootstack.current
-        for i, src in enumerate(after_src):
-            src_path_after = rootstack.deepindex(src)
-            after_parent_path = src_path_after[:-1]
-            after_parent = rootstack.deepget(after_parent_path)
-            dest_path = self._after_prev_pathes[i]
-            # Remove the layer that was moved
-            rootstack.deeppop(src_path_after)
-            rootstack.deepinsert(dest_path, src)
-
-            affected.append(src)
-
-        # Current index mgt
-        if oldcurrent is None:
-            rootstack.current_path = (0,)
-        else:
-            rootstack.current_path = rootstack.deepindex(oldcurrent)
-
-
-        if self._new_parent:
-            rootstack.deepremove(self._new_parent)
-            self._new_parent = None
-
-        self._src_path_after = None
-        self._after_prev_pathes = None
-        # Redraws
-        redraw_bboxes = [a.get_full_redraw_bbox() for a in affected]
+        self.layer.marked = self.old_marked
+        redraw_bboxes = [self.layer.get_full_redraw_bbox()]
         self._notify_canvas_observers(redraw_bboxes)
 
-class GroupSelectedLayers(Command):
-    """Group the selected layers into a new layer"""
+    def update(self, marked):
+        self.layer.marked = marked
+        self.new_marked = marked
+        redraw_bboxes = [self.layer.get_full_redraw_bbox()]
+        self._notify_canvas_observers(redraw_bboxes)
 
-    display_name = _("Group Selected Layers")
+    @property
+    def display_name(self):
+        if self.new_marked:
+            return _("Mark Layer")
+        else:
+            return _("Unmark Layer")
+         
+            
+class GroupMarkedLayers(Command):
+    """Group the marked layers into a new layer"""
 
-    def __init__(self, doc, selected_path_list, **kwds):
-        super(GroupSelectedLayers, self).__init__(doc, **kwds)
-        self.selected_path = selected_path_list
-        self._after_group_pos = None
+    display_name = _("Group Marked Layers")
+    _replacement_layer = None
+
+    def __init__(self, doc, **kwds):
+        super(GroupMarkedLayers, self).__init__(doc, **kwds)
+        self._marked_paths = doc.get_marked_layers()
         self._group = None
         self._before_pop_info = None
+        
+    def get_replacement_layer(self, rootstack):
+        cls = self.__class__
+        repl = cls._replacement_layer
+        if repl is None:
+            repl = lib.layer.PaintingLayer()
+            cls._replacement_layer = repl       
+        repl.name = rootstack.get_unique_name(repl)
+        return repl
 
-    def _fetch_selected_layers(self):
-        """Setup internal status from self.selected_path
-
-        CAUTION: this method cancells all selection status.
+    def _create_group(self):
+        """Create new group into current selected layer.
+        
+        CAUTION: This method creates self._replacement_layer
+        for just mark the insert point of new group,
+        But not remove it.You MUST deepremove it after you
+        done rest of processing.
         """
         rootstack = self.doc.layer_stack
-        self._first_layer_path = self.selected_path[0]
+        #current = rootstack.current
         before_pop_info = []
         after_path = []
 
-        # The RootstackTreeView(inherit from Gtk.Treeview)
-        # changes selection by doing rootstack.deeppop().
-        # It also affects visible states of layers by
-        # invoking event observer callbacks.
-        # So, instead of modifying callbacks, simply just
-        # unselect all layers before deeppop.
-        # And,select layers again at redo.
-        rootstack.set_selected_layers(None, None)
+        # Create replacement layer (code duplication from RemoveLayer)
+        # And insert it to current path, to follow the change 
+        # of rootstack automatically.
+        repl = self.get_replacement_layer(rootstack)
+            
+        cpath = rootstack.current_path
+        rootstack.deepinsert(cpath, repl)
 
-        # Then, record selected(target) layers
-        # as object, not path.
-        for cpath in self.selected_path:
-            layer_obj = rootstack.deepget(cpath)
-            self._group.append(layer_obj)
-
-        # We need to re-get layer path each time
-        # because (deep)pop/remove changes layer's path.
-        for clayer in self._group:
-            layer_path = rootstack.deepindex(clayer)
-            before_pop_info.append( (layer_path, clayer) )
-            rootstack.deeppop(layer_path)
-
-        # With doing Undo in reversed order,
-        # We can simply reconstruct current layer stack again.
-        self._before_pop_info = sorted(before_pop_info, reverse=True)
-
-    def _do_insert_group(self):
+        # Make group layer.
         if self._group != None:
             del self._group
         self._group = lib.layer.LayerStack()
-
-        self._fetch_selected_layers()
-        rootstack = self.doc.layer_stack
-        rootstack.deepinsert(self._first_layer_path, self._group)
-        self._after_group_pos = rootstack.deepindex(self._group)
-
+                
+        for cpath, layer in self._marked_paths:
+            self._group.append(layer)
+            # cpath is not valid path anymore.
+            # Because replacement layer has already been inserted,
+            # it changed path structure.
+            # Furthermore, marked layers poped from rootstack in this loop,
+            # it also changes that structure.
+            before_pop_path = rootstack.deepindex(layer)
+            before_pop_info.append( (before_pop_path, layer) )
+            rootstack.deeppop(before_pop_path)
+                   
+        # Undo needs reversed order of _before_pop_info.
+        self._before_pop_info = sorted(before_pop_info, reverse=True)  
+        
+        # Just insert new group into placeholder path.
+        # From now on, we can use the group object as placeholder.
+        targ_path = rootstack.deepindex(repl)
+        rootstack.deepinsert(targ_path, self._group)
+        rootstack.deepremove(repl)
+        
     def redo(self):
         rootstack = self.doc.layer_stack
-        self._do_insert_group()
-        rootstack.current_path = self._first_layer_path
-
+        self._create_group()
+        
     def undo(self):
+        assert self._group is not None
         rootstack = self.doc.layer_stack
-        junk = rootstack.deeppop(self._after_group_pos)
+        group = self._group
 
         for before_path, layer in self._before_pop_info:
+            group.remove(layer)
             rootstack.deepinsert(before_path, layer)
+            
+        junk = rootstack.deepremove(self._group)            
 
-        rootstack.set_selected_layers(None, None) # deselect all as first
-        rootstack.set_selected_layers(self.selected_path)
-        rootstack.current_path = self._first_layer_path
 
-class MergeSelectedLayers (GroupSelectedLayers):
-    """Merge the selected layers into a new layer"""
-
-    display_name = _("Merge Selected Layers")
-
-    def __init__(self, doc, selected_path_list, **kwds):
-        super(MergeSelectedLayers, self).__init__(doc, selected_path_list, **kwds)
-
-    def redo(self):
-        rootstack = self.doc.layer_stack
-        self._do_insert_group()
-        
-        group_path = self._after_group_pos
-        new_layer = rootstack.layer_new_normalized(group_path)
-        new_layer.name = _('Merged Layer')
-        new_layer.name = rootstack.get_unique_name(new_layer)
-
-        parent = rootstack.deepget(group_path[:-1])
-        parent[group_path[-1]] = new_layer
-        new_layer.autosave_dirty = True
-        self._group = None # Already flatten
-
-        rootstack.current_path = self._first_layer_path
-
-class SetMultipleLayersVisibility (Command):
-    """Sets the visibility status of Selected layers.
-
-    Different from a single layer command(SetLayerVisibility),
-    To change multiple layers visibility,
-    we need to store different visible states for each layers.
-    So we need this dedicated command class.
+class MergeMarkedLayers (GroupMarkedLayers):
+    """Merge the selected layers into a new layer
+    This class derive GroupMarkedLayers, and shares `undo` method.    
     """
 
-    def __init__(self, doc, visible, layerpaths,**kwds):
-        super(SetMultipleLayersVisibility, self).__init__(doc, **kwds)
-        self._layerpaths = layerpaths
+    display_name = _("Merge Marked Layers")
 
-        self._new_visibility = visible
-        self._old_visibilities = {}
-
-    def redo(self):
-        rootstack = self.doc.layer_stack
-        for path in self._layerpaths:
-            layer = rootstack.deepget(path)
-            self._old_visibilities[path] = layer.visible
-            layer.visible = self._new_visibility 
-
-    def undo(self):
-        rootstack = self.doc.layer_stack
-        layers = []
-        for path in self._layerpaths:
-            layer = rootstack.deepget(path)
-            assert path in self._old_visibilities
-            layer.visible = self._old_visibilities[path]
-
-    @property
-    def display_name(self):
-        if self._new_visibility:
-            return _("Make Selected Layers Visible")
-        else:
-            return _("Make Selected Layers Invisible")
-
-
-class SetMultipleLayersLocked (Command):
-    """Sets the locking status of Selected layers"""
-
-    def __init__(self, doc, locked, layerpaths,
-                 **kwds):
-        super(SetMultipleLayersLocked, self).__init__(doc, **kwds)
-        self._layerpaths = layerpaths
-
-        self._new_locked = locked
-        self._old_locked = {}
+    def __init__(self, doc, **kwds):
+        super(MergeMarkedLayers, self).__init__(doc, **kwds)
+        self._merged_layer = None
 
     def redo(self):
         rootstack = self.doc.layer_stack
-        for path in self._layerpaths:
-            layer = rootstack.deepget(path)
-            self._old_locked[path] = layer.locked
-            layer.locked = self._new_locked
+        # Generate group as parent class,
+        # And flatten(normalized) that group.
+        self._create_group()
+        
+        # Flatten groop.
+        targ_path = rootstack.deepindex(self._group)
+        new_layer = rootstack.layer_new_normalized(targ_path)
+        new_layer.name = _('Merged Layer')
+        new_layer.name = rootstack.get_unique_name(new_layer)
+        new_layer.autosave_dirty = True
+        rootstack.deepinsert(targ_path, new_layer)
+        self._merged_layer = new_layer
+        # Remove group
+        assert self._group is not None
+        rootstack.deepremove(self._group)
+        self._group = None # Already flatten, removed
+        # set focus(current) to new created layer.
+        rootstack.current_path = rootstack.deepindex(new_layer)
 
     def undo(self):
+        assert self._merged_layer is not None
         rootstack = self.doc.layer_stack
-        layers = []
-        for path in self._layerpaths:
-            layer = rootstack.deepget(path)
-            assert path in self._old_locked
-            layer.locked = self._old_locked[path]
-
-
-    @property
-    def display_name(self):
-        if self._new_locked:
-            return _("Lock Selected Layers")
-        else:
-            return _("Unlock Selected Layers")
-
-class ClearLayerSelection(Command):
+        
+        for before_path, layer in self._before_pop_info:
+            rootstack.deepinsert(before_path, layer)
+            
+        junk = rootstack.deepremove(self._merged_layer)    
+ 
+        
+class ClearLayersMark(Command):
     """Clear selection states of multiple layers"""
 
-    display_name = _("Clear Layers Selection")
+    display_name = _("Clear Layers marked state")
     automatic_undo = True
 
-    def __init__(self, doc, path, **kwds):
-        assert path is not None
-        assert len(path) >= 2
-        super(ClearLayerSelection, self).__init__(doc, **kwds)
-        layers = self.doc.layer_stack
-        self.current_layer = layers.deepget(layers.get_current_path())
-        self.selected_paths = path
+    def __init__(self, doc, **kwds):
+        super(ClearLayersMark, self).__init__(doc, **kwds)
+        self._marked_layers = doc.get_marked_layers()
 
     def redo(self):
         layers = self.doc.layer_stack
-        layers.set_selected_layers(None, None)
-
-        idx = layers.deepindex(self.current_layer)
-        layers.set_current_path(idx)
+        for p, l in self._marked_layers:
+            l.marked = False
 
     def undo(self):
-        layers = self.doc.layer_stack
-        layers.set_selected_layers(None, None)
-        layers.set_selected_layers(self.selected_paths)
-
-        idx = layers.deepindex(self.current_layer)
-        layers.set_current_path(idx)
+        for p, l in self._marked_layers:
+            l.marked = True
+# XXX for `marked` state of layer.
 
 
+# XXX for `cut/merge layer opaque/transparent` feature.
+# This also supports `marked` state.
 class CutCurrentLayer (Command):
     """Cut current editing layer with 
     other selected layer(s) ,by using 
@@ -2073,18 +1899,10 @@ class CutCurrentLayer (Command):
 
     display_name = _("Cut Current layer")
 
-    def __init__(self, doc, do_opaque_cut, layerpaths,
-                 **kwds):
+    def __init__(self, doc, do_opaque_cut, **kwds):
         """
         :param boolean do_opaque_cut: the flag to do `cut with opaque area`
                                       Otherwise, cut with transparent area.
-
-        :param list layerpaths: the list of path of other layers 
-                                to create mask area.
-                                this list MUST include the target
-                                (current) layer. Because this param
-                                intended to assign currently selected
-                                (multiple) layers by user interface.
                                 
         """
         assert len(layerpaths) >= 1
@@ -2096,10 +1914,8 @@ class CutCurrentLayer (Command):
         target = rootstack.deepget(targpath)
         assert not isinstance(target, lib.layer.LayerStack)
 
-        if targpath in layerpaths:
-            layerpaths.remove(targpath)
+        self._layers = doc.get_marked_layers(usecurrent=False)
 
-        self._layerpaths = layerpaths
         self._do_opaque_cut = do_opaque_cut
         self._target_snapshot = None
 
@@ -2148,8 +1964,7 @@ class CutCurrentLayer (Command):
         # `Cut with opaque area` can be done with each selected layers.
         # But `cut with transparent area` needed combined final
         # result of selected layers to cut.
-        for path in self._layerpaths:
-            layer = rootstack.deepget(path)
+        for path, layer in self._layers:
             assert layer != target
             if isinstance(layer, lib.layer.LayerStack):
                 layer = rootstack.layer_new_normalized(path)
@@ -2208,8 +2023,10 @@ class MergeLayerDownOpaque(MergeLayerDown):
     def __init__(self, doc, **kwds):
         super(MergeLayerDownOpaque, self).__init__(doc, **kwds)
         self._only_opaque = True
+# XXX for `cut/merge layer opaque/transparent` feature end.
 
 
+# XXX for `close-and-fill / lasso-fill` feature.
 class ClosedAreaFill (FloodFill):
     """Closed area fill on the current layer
     This class inherit from FloodFill and
@@ -2602,3 +2419,4 @@ class LassoFill(ClosedAreaFill):
         if show_flag:
             self._dbg_show_flag(lt)
         #XXX debug code end
+# XXX for `close-and-fill / lasso-fill` feature end.

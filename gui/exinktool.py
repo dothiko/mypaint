@@ -411,8 +411,14 @@ class ExInkingMode (PressureEditableMixin,
             ytilt = lib.helpers.clamp(ytilt, -1.0, 1.0)
             t_abs = max(last_t_abs, t_abs)
             dtime = t_abs - last_t_abs
+            viewzoom = self.doc.tdw.scale
+            viewrotation = self.doc.tdw.rotation   
             self.stroke_to(
-                model, dtime, x, y, pressure, xtilt, ytilt,
+                model, dtime, 
+                x, y, 
+                pressure, 
+                xtilt, ytilt,
+                viewzoom, viewrotation,
                 auto_split=False,
             )
 

@@ -425,14 +425,25 @@ class RootStackTreeView (Gtk.TreeView):
         col = Gtk.TreeViewColumn(_("Flags"))
         col.set_sizing(Gtk.TreeViewColumnSizing.GROW_ONLY)
         area = col.get_property("cell-area")
-        area.set_orientation(Gtk.Orientation.VERTICAL)
+       #area.set_orientation(Gtk.Orientation.VERTICAL) # Original
+        area.set_orientation(Gtk.Orientation.HORIZONTAL) # Changed
         self._flags2_col = col
-
+        
         # Locked cell
         cell = Gtk.CellRendererPixbuf()
-        col.pack_end(cell, False)
+        col.pack_start(cell, False) # XXX Changed
+       #col.pack_end(cell, False) # XXX Original
         datafunc = self._layer_locked_pixbuf_datafunc
         col.set_cell_data_func(cell, datafunc)
+        self._locked_cell = cell
+
+        # XXX `Marked` cell
+        cell = Gtk.CellRendererPixbuf()
+        col.pack_end(cell, False)
+        datafunc = self._layer_marked_pixbuf_datafunc
+        col.set_cell_data_func(cell, datafunc)
+        self._marked_cell = cell
+        # XXX `Marked` cell end
 
         # Column order on screen
         self._columns = [
@@ -478,8 +489,14 @@ class RootStackTreeView (Gtk.TreeView):
             # (Column, CellRenderer, single, double, handler)
             (self._flags1_col, None, True, False,
              self._flags1_col_click_cb),
-            (self._flags2_col, None, True, False,
-             self._flags2_col_click_cb),
+            # XXX For `marked` cell
+            (self._flags2_col, self._locked_cell, True, False,  
+             self._flags2_col_click_cb),  # For locked cell
+            (self._flags2_col, self._marked_cell, True, False, 
+             self._marked_cell_click_cb), # For marked cell
+            # XXX For `marked` cell
+           #(self._flags2_col, None, True, False,  # XXX Original
+           # self._flags2_col_click_cb),
             (self._name_col, None, False, True,
              self._name_col_2click_cb),
             (self._name_col, self._preview_cell, True, False,
@@ -557,6 +574,14 @@ class RootStackTreeView (Gtk.TreeView):
         new_locked = not layer.locked
         self._docmodel.set_layer_locked(new_locked, layer)
         return True
+
+    # XXX for `marked` cell
+    def _marked_cell_click_cb(self, event, layer, path, area):
+        """Toggle the clicked layer's marked state."""
+        new_marked= not layer.marked
+        self._docmodel.set_layer_marked(new_marked, layer)
+        return True 
+    # XXX for `marked` cell end
 
     def _preview_cell_click_cb(self, event, layer, path, area):
         """Expand the clicked layer if the preview is clicked."""
@@ -1018,6 +1043,7 @@ class RootStackTreeView (Gtk.TreeView):
     def _get_layer_locked_icon_state(layer):
         icon_name = None
         sensitive = True
+        locked = False # XXX Isn't it?
         if layer:
             locked = layer.locked
             sensitive = not layer.branch_locked
@@ -1035,6 +1061,31 @@ class RootStackTreeView (Gtk.TreeView):
         cell.set_property("icon-name", icon_name)
         cell.set_visible(icon_visible)
         cell.set_property("sensitive", sensitive)
+
+    # XXX for `marked` cell
+    @staticmethod
+    def _get_layer_marked_icon_state(layer):
+        icon_name = None
+        sensitive = True
+        marked = False
+        if layer:
+            marked = layer.marked
+            sensitive = not layer.branch_marked
+        if marked:
+            icon_name = "mypaint-object-marked-symbolic"
+        else:
+            icon_name = "mypaint-object-unmarked-symbolic"
+        return (icon_name, sensitive)
+
+    def _layer_marked_pixbuf_datafunc(self, column, cell, model, it, data):
+        """Use a marked icon to show layer `marked`(targetted) statuses"""
+        layer = model.get_layer(it=it)
+        icon_name, sensitive = self._get_layer_marked_icon_state(layer)
+        icon_visible = (icon_name is not None)
+        cell.set_property("icon-name", icon_name)
+        cell.set_visible(icon_visible)
+        cell.set_property("sensitive", sensitive)
+    # XXX for `marked` cell end
 
     ## Weird but necessary hacks
 

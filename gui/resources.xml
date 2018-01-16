@@ -682,34 +682,43 @@ Vocabulary
           <signal name="activate" handler="vacuum_document_cb"/>
         </object>
       </child>
+      <!-- XXX for `marked` layer states -->
       <child>
-        <object class="GtkAction" id="MergeSelectedLayers">
-          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Merge Selected Layers</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Merge the selected layers into one layer.</property>
-          <signal name="activate" handler="merge_selected_layers_cb"/>
+        <object class="GtkAction" id="MergeMarkedLayers">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Merge Marked Layers</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Merge the marked layers into one layer.</property>
+          <signal name="activate" handler="merge_marked_layers_cb"/>
         </object>
       </child>
       <child>
-        <object class="GtkAction" id="GroupSelectedLayers">
-          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Group Selected Layers</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Move the selected layers into the new group layer.</property>
-          <signal name="activate" handler="group_selected_layers_cb"/>
+        <object class="GtkAction" id="GroupMarkedLayers">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Group Marked Layers</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Move the marked layers into the new group layer.</property>
+          <signal name="activate" handler="group_marked_layers_cb"/>
         </object>
       </child>
       <child>
-        <object class="GtkAction" id="CutLayerWithSelectedOpaque">
-          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Cut Layer with Selected Opaque</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Cut current layer with opaque area of selected layer(s)</property>
-          <signal name="activate" handler="cut_layer_with_selected_cb"/>
+        <object class="GtkAction" id="CutLayerWithMarkedOpaque">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Cut Layer with Marked Opaque</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Cut current layer with opaque area of marked layer(s)</property>
+          <signal name="activate" handler="cut_layer_with_marked_cb"/>
         </object>
       </child>
       <child>
-        <object class="GtkAction" id="CutLayerWithSelectedTransparent">
-          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Cut Layer with Selected Transparent</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Cut current layer with transparent area of selected layer(s)</property>
-          <signal name="activate" handler="cut_layer_with_selected_cb"/>
+        <object class="GtkAction" id="CutLayerWithMarkedTransparent">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Cut Layer with Marked Transparent</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Cut current layer with transparent area of marked layer(s)</property>
+          <signal name="activate" handler="cut_layer_with_marked_cb"/>
         </object>
       </child>
+      <child>
+        <object class="GtkAction" id="ClearAllLayersMark">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Clear All Layers Mark</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Clear marked flag from all layers.</property>
+          <signal name="activate" handler="clear_all_layers_mark_cb"/>
+        </object>
+      </child>
+      <!-- XXX for `marked` layer states end -->
       <!-- }}} -->
       <!-- {{{ View manipulation -->
       <child>

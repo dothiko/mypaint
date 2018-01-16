@@ -694,9 +694,11 @@ class BezierMode (PressureEditableMixin,
             else:
                 pressure_map = 1.0
             
+            viewzoom = self.doc.tdw.scale
+            viewrotation = self.doc.tdw.rotation  
+                        
             self.stroke_to(
-                model, 
-                dtime,
+                model, dtime,
                 x, y, 
                 lib.helpers.clamp(
                     gui.drawutils.linear_interpolation(
@@ -706,6 +708,7 @@ class BezierMode (PressureEditableMixin,
                     p0.xtilt, p3.xtilt, cur_step),
                 gui.drawutils.linear_interpolation(
                     p0.ytilt, p3.ytilt, cur_step),
+                viewzoom, viewrotation,
                 auto_split=False,
             )
 

@@ -103,6 +103,10 @@ class LayerBase (TileBlittable, TileCompositable):
         #: True if the layer was marked as selected when loaded.
         self.initially_selected = False
 
+        # XXX for `marked` status
+        self._marked = False
+        # XXX for `marked` status end
+
     @classmethod
     def new_from_openraster(cls, orazip, elem, cache_dir, progress,
                             root, x=0, y=0, **kwargs):
@@ -456,6 +460,61 @@ class LayerBase (TileBlittable, TileCompositable):
             return False
 
         return group.locked or group.branch_locked
+
+    # XXX for 'marked' status
+    @property
+    def marked(self):
+        """Whether the layer is marked as operation target.
+
+        Values must permit conversion to a `bool`.
+        Changing this property issues `layer_properties_changed` via the
+        root layer stack if the layer is within a tree structure.
+
+        """
+        return self._marked
+
+    @marked.setter
+    def marked(self, marked):
+        marked = bool(marked)
+        if marked != self._marked:
+            self._marked = marked
+            self._properties_changed(["marked"])
+
+    @property
+    def branch_marked(self):
+        """Check whether the layer's branch is marked.
+
+        Returns True if the layer's group or at least one of its parents
+        is marked, False otherwise.
+
+        Returns False if the layer is not in a group.
+
+        >>> import group
+        >>> outer = group.LayerStack()
+        >>> inner = group.LayerStack()
+        >>> scribble = LayerBase()
+        >>> outer.append(inner)
+        >>> inner.append(scribble)
+        >>> outer.branch_marked
+        False
+        >>> inner.branch_marked
+        False
+        >>> scribble.branch_marked
+        False
+        >>> outer.marked = True
+        >>> outer.branch_marked
+        False
+        >>> inner.branch_marked
+        True
+        >>> scribble.branch_marked
+        True
+        """
+        group = self.group
+        if group is None:
+            return False
+
+        return group.marked or group.branch_marked
+    # XXX for 'marked' status end.
 
     @property
     def mode(self):

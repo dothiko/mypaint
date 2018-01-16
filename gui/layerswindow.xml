@@ -30,11 +30,13 @@
       <menuitem action='NewLayerMergedFromVisible'/>
       <menuitem action='NormalizeLayerMode'/>
       <separator/>
-      <menuitem action='MergeSelectedLayers'/>
-      <menuitem action='GroupSelectedLayers'/>
+      <menuitem action='MergeMarkedLayers'/>
+      <menuitem action='GroupMarkedLayers'/>
       <separator/>
-      <menuitem action='CutLayerWithSelectedOpaque'/>
-      <menuitem action='CutLayerWithSelectedTransparent'/>
+      <menuitem action='CutLayerWithMarkedOpaque'/>
+      <menuitem action='CutLayerWithMarkedTransparent'/>
+      <separator/>
+      <menuitem action='ClearAllLayersMark'/>
     </placeholder>
     <separator/>
     <placeholder name="AdvancedListActions"/>
