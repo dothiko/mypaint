@@ -443,6 +443,13 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             self._update_layer_visible_toggle_from_current_view: [
                 self.model.layer_view_manager.current_view_changed,
             ],
+            # XXX for `marked` layer state
+            self._update_mark_layer_action : [
+                layerstack.layer_properties_changed,
+                layerstack.layer_inserted,
+                layerstack.layer_deleted,
+            ],
+            # XXX for `marked` layer state end.
         }
         for observer_method, events in observed_events.items():
             for event in events:
@@ -1426,7 +1433,28 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         )
         dialog.run()
         dialog.destroy()
+        
+    # XXX for `marked` layer states
+    def _update_mark_layer_action(self, *_ignored):
+        """Updates the layer mark action's sensitivity"""
+        app = self.app
+        model = self.model
+        rootstack = model.layer_stack
+        layers = model.get_marked_layers()
+        markedcnt = len(layers)
+        targ = rootstack.current
+        targ_paintable = isinstance(targ, lib.layer.StrokemappedPaintingLayer)
+        can_group = markedcnt > 0
+        can_cut = (targ_paintable 
+                   and (markedcnt > 1 
+                        or (markedcnt == 1 and targ != layers[0][1])))
 
+        app.find_action("GroupMarkedLayers").set_sensitive(can_group)
+        app.find_action("MergeMarkedLayers").set_sensitive(can_group)
+        app.find_action("ClearAllLayersMark").set_sensitive(can_group)        
+        app.find_action("CutLayerWithMarkedOpaque").set_sensitive(can_cut)
+        app.find_action("CutLayerWithMarkedTransparent").set_sensitive(can_cut)
+    # XXX for `marked` layer states end
 
     ## Per-layer flag toggles
 

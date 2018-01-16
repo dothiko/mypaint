@@ -694,7 +694,7 @@ class Document (object):
         """
         if taskproc == None:
             taskproc = self._autosave_processor
-            
+        
         taskproc.add_work(
                 self._autosave_cleanup_cb,
                 oradir = oradir,
@@ -1392,12 +1392,7 @@ class Document (object):
 
     def cut_current_layer_with_marked(self, opaque):
         """Sets the input-lock status of marked layers."""
-        rootstack = self.layer_stack
-        if not isinstance(rootstack.current, lib.layer.LayerStack):
-            cmd = command.CutCurrentLayer(self, opaque)
-            self.do(cmd)
-        else:
-            logger.warning("cut_current_layer called for layergroup.this should not be happen.")
+        self.do(command.CutCurrentLayer(self, opaque))
 
     def clear_all_layers_mark(self):
         self.do(command.ClearLayersMark(self))
@@ -1485,7 +1480,7 @@ class Document (object):
 
     # XXX for `marked` status
     def set_layer_marked(self, marked, layer):
-        """Sets the input-locked status of a layer."""
+        """Sets the marked status of a layer."""
         if layer is self.layer_stack:
             return
         cmd_class = command.SetLayerMarked
@@ -2189,6 +2184,7 @@ class Document (object):
         try:# Actually, this 'try' is to use 'finally' section.
 
             assert kwargs != None
+            rootstack = self.layer_stack
 
             if 'source_dir' in kwargs:
                 # Current document is a project and now assigned to 'save as 
@@ -2226,13 +2222,12 @@ class Document (object):
                 
                 # Background layer is not included walk generator.
                 # so copy it here.
-                copy_single_layer(self.layer_stack.background_layer)
+                copy_single_layer(rootstack.background_layer)
                                 
-                for path, cl in self.layer_stack.walk():
+                for path, cl in rootstack.walk():
                     copy_single_layer(cl)
 
                 # fallthrough.
-
 
             # All preprocess has done.
             # Then write the project into storage.
@@ -2280,7 +2275,7 @@ class Document (object):
             self._is_project = True
 
 
-    def load_project(self, dirname,feedback_cb=None,**kwargs):
+    def load_project(self, dirname,feedback_cb=None, progress=None, **kwargs):
         """ load a directory as a project
         """
         assert os.path.isdir(dirname)
@@ -2291,7 +2286,6 @@ class Document (object):
         self.clear(new_cache=False)
         self._is_project = True
         self._autosave_dirty = False
-
 
         try:
 
@@ -2328,13 +2322,12 @@ class Document (object):
                 ),
                 investigate_dir = dirname,
             )
-        else:
-            self._cache_dir = app_cache_dir
-
+        else:         
             # All LOADED layers are clean(not dirty), as initial states.
             # On the other hand, NEW layers are always dirty initially.
             for pos, cl in self.layer_stack.walk():
                 cl.clear_project_dirty()
+                
 
     def _project_write(self, dirname, 
             xres=None,yres=None,
@@ -2389,6 +2382,7 @@ class Document (object):
         # 
         # So, to avoid this, every dirty layer are removed its empty tiles
         # in this loop.
+        
         data_bbox = helpers.Rect()
         for s_path, s_layer in root_stack.walk():
             selected = (s_path == root_stack.current_path)

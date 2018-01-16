@@ -1763,6 +1763,12 @@ class GroupMarkedLayers(Command):
         repl.name = rootstack.get_unique_name(repl)
         return repl
 
+    def _set_marked_state(self, marked):
+        """Utility method, to set all layers marked state without using command.
+        """
+        for cpath, layer in self._marked_paths:
+            layer.marked = marked
+
     def _create_group(self):
         """Create new group into current selected layer.
         
@@ -1813,6 +1819,9 @@ class GroupMarkedLayers(Command):
         rootstack = self.doc.layer_stack
         self._create_group()
         
+        # Remove all layers marked status after command executed.
+        self._set_marked_state(False)
+
     def undo(self):
         assert self._group is not None
         rootstack = self.doc.layer_stack
@@ -1821,8 +1830,11 @@ class GroupMarkedLayers(Command):
         for before_path, layer in self._before_pop_info:
             group.remove(layer)
             rootstack.deepinsert(before_path, layer)
-            
-        junk = rootstack.deepremove(self._group)            
+
+        junk = rootstack.deepremove(self._group) 
+        
+        # Restore all layers marked status after command executed.
+        self._set_marked_state(False)          
 
 
 class MergeMarkedLayers (GroupMarkedLayers):
@@ -1878,7 +1890,6 @@ class ClearLayersMark(Command):
         self._marked_layers = doc.get_marked_layers()
 
     def redo(self):
-        layers = self.doc.layer_stack
         for p, l in self._marked_layers:
             l.marked = False
 
@@ -1905,16 +1916,16 @@ class CutCurrentLayer (Command):
                                       Otherwise, cut with transparent area.
                                 
         """
-        assert len(layerpaths) >= 1
         super(CutCurrentLayer, self).__init__(doc, **kwds)
 
-        rootstack = self.doc.layer_stack
+        rootstack = doc.layer_stack
         targpath = rootstack.current_path
         self._target_path = targpath
         target = rootstack.deepget(targpath)
         assert not isinstance(target, lib.layer.LayerStack)
 
         self._layers = doc.get_marked_layers(usecurrent=False)
+        assert len(self._layers) > 0
 
         self._do_opaque_cut = do_opaque_cut
         self._target_snapshot = None
@@ -1958,7 +1969,7 @@ class CutCurrentLayer (Command):
         target = rootstack.deepget(self._target_path)
         self._target_snapshot = target.save_snapshot()
 
-        if not self._do_opaque_cut and len(self._layerpaths) > 2:
+        if not self._do_opaque_cut and len(self._layers) > 2:
             _merged_layer = lib.layer.PaintingLayer(name='')
 
         # `Cut with opaque area` can be done with each selected layers.
@@ -1971,7 +1982,7 @@ class CutCurrentLayer (Command):
 
             if self._do_opaque_cut:
                 self._cut_do_opaque_cut(target, layer)
-            elif len(self._layerpaths) > 1:
+            elif len(self._layers) > 1:
                 CutCurrentLayer._merge(_merged_layer, layer,
                         lib.mypaintlib.CombineNormal)
             else:

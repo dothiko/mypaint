@@ -235,6 +235,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
                 "Only %r are supported" % (suffixes,),
             )
         # Delegate the actual loading part
+                   
         self._load_surface_from_oradir_member(
             oradir,
             cache_dir,
@@ -277,6 +278,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
                 )
             s = os.stat(filename)
             progress.items = int(s.st_size)
+
         try:
             with open(filename, 'rb') as fp:
                 pixbuf = lib.pixbuf.load_from_stream(fp, progress)
@@ -1212,7 +1214,12 @@ class BackgroundLayer (SurfaceBackedLayer):
         return elem
 
     def save_to_project(self, projdir, path,
-                           canvas_bbox, frame_bbox, force_write, **kwargs):
+                           canvas_bbox, frame_bbox, 
+                           force_write, progress=None,
+                           **kwargs):
+        if not progress:
+            progress = lib.feedback.Progress()
+        progress.items = 2
         # Save as a regular layer for other apps.
         # Background surfaces repeat, so just the bit filling the frame.
 
@@ -1225,7 +1232,9 @@ class BackgroundLayer (SurfaceBackedLayer):
         elem = self._save_rect_to_project(
             projdir, 
             frame_bbox, frame_bbox, False, 
-            only_element=True, **kwargs
+            only_element=True, 
+            progress=progress.open(),
+            **kwargs
         )
 
         # Also save as single pattern (with corrected origin)
@@ -1238,7 +1247,14 @@ class BackgroundLayer (SurfaceBackedLayer):
             store_relpath = os.path.join('data', pngname)
             storename = os.path.join(projdir, store_relpath)
             t0 = time.time()
-            self._surface.save_as_png(storename, *rect, **kwargs)
+            self._surface.save_as_png(
+                storename, 
+                x+x0, 
+                y+y0,
+                w, h,
+                progress=progress.open(),
+                **kwargs
+            )
             t1 = time.time()
             logger.debug('%.3fs surface saving %s', t1 - t0, store_relpath)
             self.clear_project_dirty()
@@ -1858,7 +1874,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         # clear the dirty flag of the layer.
         dirty_flag = self.project_dirty or force_write
 
-        elem = super(PaintingLayer, self).save_to_project(
+        elem = super(StrokemappedPaintingLayer, self).save_to_project(
             projdir, path,
             canvas_bbox, frame_bbox, force_write, **kwargs
         )

@@ -1214,6 +1214,9 @@ class FileHandler (object):
         if not self.save_dialog:
             self.save_dialog = self.init_save_dialog(export)
         dialog = self.save_dialog
+        
+        # XXX for project-save
+        is_project = options.get('project', False)
 
         # Set the filename in the dialog
         if suggested_filename:
@@ -1232,44 +1235,56 @@ class FileHandler (object):
                     continue
                 filename = filename.decode('utf-8')
                 name, ext = os.path.splitext(filename)
-                if self.saveformat_combo:
-                    saveformat = self.saveformat_combo.get_active()
-
-                # If no explicitly selected format, use the extension to
-                # figure it out
-                if saveformat == _SaveFormat.ANY:
-                    cfg = self.app.preferences['saving.default_format']
-                    default_saveformat = self.config2saveformat[cfg]
-                    if ext:
-                        try:
-                            saveformat, mime = self.ext2saveformat[ext]
-                        except KeyError:
-                            saveformat = default_saveformat
-                    else:
-                        saveformat = default_saveformat
-
-                # if saveformat isn't a key, it must be SAVE_FORMAT_PNGAUTO.
-                desc, ext_format, options = self.saveformats.get(
-                    saveformat,
-                    ("", ext, {'alpha': None}),
-                )
-
-                if ext:
-                    if ext_format != ext:
-                        # Minor ugliness: if the user types '.png' but
-                        # leaves the default .ora filter selected, we
-                        # use the default options instead of those
-                        # above. However, they are the same at the moment.
-                        options = {}
-                    assert(filename)
-                    dialog.hide()
+                
+                if is_project:
+                    # XXX for project-save.
+                    filename = name
                     if export:
                         # Do not change working file
                         save_method_reference(filename, True, **options)
                     else:
                         save_method_reference(filename, **options)
                     break
+                    # XXX for project_save end.
+                else:
+                    if self.saveformat_combo:
+                        saveformat = self.saveformat_combo.get_active()                   
 
+                    # If no explicitly selected format, use the extension to
+                    # figure it out
+                    if saveformat == _SaveFormat.ANY:
+                        cfg = self.app.preferences['saving.default_format']
+                        default_saveformat = self.config2saveformat[cfg]
+                        if ext:
+                            try:
+                                saveformat, mime = self.ext2saveformat[ext]
+                            except KeyError:
+                                saveformat = default_saveformat
+                        else:
+                            saveformat = default_saveformat
+
+
+                    # if saveformat isn't a key, it must be SAVE_FORMAT_PNGAUTO.
+                    desc, ext_format, options = self.saveformats.get(
+                        saveformat,
+                        ("", ext, {'alpha': None}),
+                    )
+
+                    if ext:
+                        if ext_format != ext:
+                            # Minor ugliness: if the user types '.png' but
+                            # leaves the default .ora filter selected, we
+                            # use the default options instead of those
+                            # above. However, they are the same at the moment.
+                            options = {}
+                        assert(filename)
+                        dialog.hide()
+                        if export:
+                            # Do not change working file
+                            save_method_reference(filename, True, **options)
+                        else:
+                            save_method_reference(filename, **options)
+                        break
 
                 filename = name + ext_format
 

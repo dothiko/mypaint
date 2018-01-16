@@ -2234,8 +2234,14 @@ class RootLayerStack (group.LayerStack):
         return stack_elem
 
     def save_to_project(self, projdir, path, canvas_bbox,
-                           frame_bbox, force_write, **kwargs):
+                           frame_bbox, force_write, progress=None, **kwargs):
         """Saves the stack's data into an project directory"""
+        
+        # Code duplication: from save_to_openraster
+        if not progress:
+            progress = lib.feedback.Progress()
+        progress.items = 10
+        
         # First of all, save background.
         bg_layer = self.background_layer
         bg_layer.initially_selected = False
@@ -2244,12 +2250,15 @@ class RootLayerStack (group.LayerStack):
             projdir, bg_path,
             canvas_bbox, frame_bbox,
             force_write,
+            progress=progress.open(1),
             **kwargs
         )
         # Then, save child layers.
         stack_elem = super(RootLayerStack, self).save_to_project(
             projdir, path, canvas_bbox,
-            frame_bbox, force_write, **kwargs
+            frame_bbox, force_write, 
+            progress=progress.open(9),
+            **kwargs
         )
         # Finally, append bg element into stack element.
         stack_elem.append(bg_elem)
@@ -2324,49 +2333,7 @@ class RootLayerStack (group.LayerStack):
         """Snapshots the state of the layer, for undo purposes"""
         return RootLayerStackSnapshot(self)
 
-    ### Events for multiple layer selection
 
-    @event
-    def selected_layers_queried(self, selected_list):
-        """Query currently selected layers and
-        add/filter them into argument selected_list.
-        This notification is mainly used from gui.layers.RootStackTree"""
-
-    @event
-    def multiple_layers_selected(self, selected_list):
-        """Select multiple layer from the path list.
-        This event is actually not notifier, mainly used
-        to indicate to select layers from code.
-        This would call gui.layers.RootStackTree._multiple_layers_selected_cb
-
-        CAUTION: This method is for SELECTING multiple layers
-        from code, not for user interact notification.
-        For such purpose,
-        use multiple_layers_selection_updated event.
-
-        :param selected_list: a list of layer paths to be selected.
-                              path is any one of tuple or string
-                              or Gtk.TreePath instance.
-
-                              If This is empty or None,
-                              all selection is cancelled(cleared).
-        """
-
-
-    @event
-    def multiple_layers_selection_added(self, path):
-        """Add a layer to current selection, with path.
-        """
-
-    @event
-    def multiple_layers_selection_removed(self, path):
-        """Remove a layer to current selection, with path.
-        """
-
-    @event
-    def multiple_layers_selection_updated(self):
-        """Notification event, to tell layer selection state changed.
-        """
     ## Layer preview thumbnails
 
     def _mark_all_layers_for_rethumb(self):
