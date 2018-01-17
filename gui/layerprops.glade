@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.20.1 -->
+<!-- Generated with glade 3.18.3 -->
 <interface domain="mypaint">
   <requires lib="gtk+" version="3.12"/>
   <object class="GtkAdjustment" id="layer-opacity-adjustment">
@@ -207,6 +207,36 @@ When a layer group is locked, none of the layers inside it can be edited.</prope
                 <property name="expand">True</property>
                 <property name="fill">True</property>
                 <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToggleButton" id="layer-marked-togglebutton">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="tooltip_text" translatable="yes" context="Layer properties widget → Flags → Padlock togglebutton → tooltip">Layer editable or locked.
+
+An open padlock icon indicates that the layer can be edited.
+
+When a layer is locked, you cannot paint to it or otherwise change its pixel content. You cannot pick strokes from it either, so this is useful when painting under a sketch.
+
+When a layer group is locked, none of the layers inside it can be edited.</property>
+                <property name="hexpand">False</property>
+                <property name="vexpand">False</property>
+                <signal name="toggled" handler="_v_layer_marked_togglebutton_toggled_cb" swapped="no"/>
+                <child>
+                  <object class="GtkImage" id="layer-marked-image">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="icon_name">mypaint-object-unlocked-symbolic</property>
+                    <property name="icon_size">3</property>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">2</property>
               </packing>
             </child>
           </object>

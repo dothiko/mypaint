@@ -89,6 +89,18 @@ class LayerPropertiesUI (gui.mvp.BuiltUIPresenter, object):
                 "mypaint-object-visible-symbolic",
             ],
         ),
+        # XXX for `marked` layer flag
+        _LayerFlagUIInfo(
+            togglebutton="layer-marked-togglebutton",
+            image="layer-marked-image",
+            property="marked",
+            togglebutton_active=[False, True],
+            image_icon_name=[
+                "mypaint-object-unmarked-symbolic",
+                "mypaint-object-marked-symbolic",
+            ],
+        ),
+        # XXX for `marked` layer flag end
     ]
     _FLAG_ICON_SIZE = Gtk.IconSize.LARGE_TOOLBAR
 
@@ -161,6 +173,12 @@ class LayerPropertiesUI (gui.mvp.BuiltUIPresenter, object):
             self._m2v_layer_flag(info)
         if "name" in changed:
             self._m2v_name()
+        # XXX for `marked` layer flag
+        if "marked" in changed:
+            info = [i for i in self._BOOL_PROPERTIES
+                    if (i.property == "marked")][0]
+            self._m2v_layer_flag(info)
+        # XXX for `marked` layer flag end
 
     @gui.mvp.view_updater
     def _m_layer_thumbnail_updated_cb(self, root, layerpath, layer):
@@ -181,7 +199,7 @@ class LayerPropertiesUI (gui.mvp.BuiltUIPresenter, object):
         for info in self._BOOL_PROPERTIES:
             self._m2v_layer_flag(info)
         self._m2v_layerview_locked()
-
+        
     def _m2v_preview(self):
         layer = self._layer
         if not layer:
@@ -323,6 +341,12 @@ class LayerPropertiesUI (gui.mvp.BuiltUIPresenter, object):
     def _v_layer_locked_togglebutton_toggled_cb(self, btn):
         info = [i for i in self._BOOL_PROPERTIES
                 if (i.property == "locked")][0]
+        self._v2m_layer_flag(info)
+
+    @gui.mvp.model_updater
+    def _v_layer_marked_togglebutton_toggled_cb(self, btn):
+        info = [i for i in self._BOOL_PROPERTIES
+                if (i.property == "marked")][0]
         self._v2m_layer_flag(info)
 
     def _v2m_layer_flag(self, info):
