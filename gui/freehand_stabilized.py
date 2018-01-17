@@ -61,10 +61,6 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
     ACTION_NAME = 'StabilizedFreehandMode'
     permitted_switch_actions = set()   # Any action is permitted
 
-    _X_TILT_OFFSET = 0.0    # XXX Class global tilt offsets, to
-    _Y_TILT_OFFSET = 0.0    # enable change tilt parameters for
-                            # non-tilt-sensible pen stylus.
-
     # Stabilizer constants.
     #
     # In Stabilizer, self._phase decides how enum_samples()
@@ -407,36 +403,49 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
 
     def init_specialized_widgets(self, row):
         self._updating_ui = True
+        app = self.app
         row = super(StabilizerOptionsWidget, self).init_specialized_widgets(row)
 
         def create_slider(label, handler, 
                           value, min_adj, max_adj, step_incr=1,
-                          digits=1 ):
+                          digits=1 , real_adj=None):
             labelobj = Gtk.Label(halign=Gtk.Align.START)
             labelobj.set_text(label)
             self.attach(labelobj, 0, row, 1, 1)
 
             adj = Gtk.Adjustment(value, min_adj, max_adj, 
                                  step_incr=step_incr)
-            adj.connect('value-changed', handler)
+            adj.connect('value-changed', handler, real_adj)
 
             scale = Gtk.HScale(hexpand_set=True, hexpand=True, 
                     halign=Gtk.Align.FILL, adjustment=adj, digits=digits)
             scale.set_value_pos(Gtk.PositionType.RIGHT)
             self.attach(scale, 1, row, 1, 1)
             return scale
-
-        create_slider(_("X Tilt Offset:"), 
-                      self.x_tilt_offset_adj_changed_cb,
-                      0.0, -1.0, 1.0, 0.01
-                      )
-        row += 1
-
-        create_slider(_("Y Tilt Offset:"), 
-                      self.y_tilt_offset_adj_changed_cb,
-                      0.0, -1.0, 1.0, 0.01
-                      )
-        row += 1
+            
+        # Currently, we use wrapper adjustment
+        # Because X Tilt offset/Y Tilt offset is only for
+        # stablizer.
+        adjs = (
+            (
+                _("X Tilt Offset:"),
+                app.brush_adjustment['tilt_offset_x']
+            ) ,
+            (
+                _("Y Tilt Offset:"),
+                app.brush_adjustment['tilt_offset_y']
+            ) ,
+        )
+        for label, adj in adjs:
+            create_slider(label, 
+                          self.tilt_offset_adj_wrapper_cb, 
+                          adj.get_value(), 
+                          adj.get_lower(),
+                          adj.get_upper(),
+                          adj.get_step_increment(),
+                          real_adj = adj
+                          )
+            row += 1
 
         # Add VBox for Assistant area
         mode = self.mode_ref()
@@ -475,11 +484,9 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
         self._updating_ui = False
         return row
 
-    def x_tilt_offset_adj_changed_cb(self, adj):
-        StabilizedFreehandMode._X_TILT_OFFSET = adj.get_value()
-
-    def y_tilt_offset_adj_changed_cb(self, adj):
-        StabilizedFreehandMode._Y_TILT_OFFSET = adj.get_value()
+    def tilt_offset_adj_wrapper_cb(self, adj, real_adj):
+        # Just set original adjustment.
+        real_adj.set_value(adj.get_value())
 
     # Handlers
     def _average_toggled_cb(self, checkbox):

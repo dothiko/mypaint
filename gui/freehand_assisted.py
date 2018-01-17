@@ -48,10 +48,9 @@ class AssistedFreehandMode (freehand.FreehandMode,
 
     _OPTIONS_WIDGET = None
 
-    
-    _X_TILT_OFFSET = 0.0    # XXX Class global tilt offsets, to
-    _Y_TILT_OFFSET = 0.0    # enable change tilt parameters for
-                            # non-tilt-sensible pen stylus.
+    # Class global brush tilt offset
+    _tilt_offset_x_adj = None
+    _tilt_offset_y_adj = None
 
     _app = None
 
@@ -96,8 +95,21 @@ class AssistedFreehandMode (freehand.FreehandMode,
     @property
     def prev_button(self):
         return self._prev_button
+        
+    @property
+    def tilt_offset_x(self):
+        cls = self.__class__       
+        if cls._tilt_offset_x_adj is None:
+            cls._tilt_offset_x_adj = self.app.brush_adjustment['tilt_offset_x']
+        return cls._tilt_offset_x_adj.get_value()
 
-
+    @property
+    def tilt_offset_y(self):
+        cls = self.__class__       
+        if cls._tilt_offset_y_adj is None:
+            cls._tilt_offset_y_adj = self.app.brush_adjustment['tilt_offset_y']
+        return cls._tilt_offset_y_adj.get_value()
+                
     ## Mode stack & current mode
 
     def enter(self, doc, **kwds):
@@ -249,6 +261,9 @@ class AssistedFreehandMode (freehand.FreehandMode,
         if xtilt is None or ytilt is None or not np.isfinite(xtilt + ytilt):
             xtilt = 0.0
             ytilt = 0.0
+
+        xtilt += self.tilt_offset_x
+        ytilt += self.tilt_offset_y
 
         # Switching from a non-tilt device to a device which reports
         # tilt can cause GDK to return out-of-range tilt values, on X11.

@@ -22,11 +22,17 @@ import gui.mode
 import gui.cursor
 import gui.overlays
 import gui.ui_utils
+import gui.linemode
 
 
 ## Module constants
 
 
+## Enums
+
+class _Mode:
+    SIZE = 0 # Default, size change mode
+    TILT = 1 # tilt-offset change mode
 
 ## Interaction modes for making lines
 
@@ -41,6 +47,8 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
     ACTION_NAME = "OncanvasSizeMode"
 
     _OPTIONS_WIDGET = None
+    
+    _TILT_RADIUS = 64
 
     ## Class configuration.
 
@@ -74,6 +82,43 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         ['RotateViewMode', 'ZoomViewMode', 'PanViewMode']
         + gui.mode.BUTTON_BINDING_ACTIONS)
 
+    ## Mode related
+    @property
+    def setting_mode(self):
+        return self._mode
+        
+    @setting_mode.setter
+    def setting_mode(self, modenum):
+        if self._mode != modenum:
+            self._queue_draw_brush()
+            self._mode = modenum
+            
+    @property
+    def tilt_x_value(self):
+        if self.app is not None:
+            adj = self.app.brush_adjustment['tilt_offset_x']
+            return adj.get_value()
+        return 0.0
+        
+    @property
+    def tilt_y_value(self):
+        if self.app is not None:
+            adj = self.app.brush_adjustment['tilt_offset_y']
+            return adj.get_value()
+        return 0.0
+                    
+    @tilt_x_value.setter
+    def tilt_x_value(self, val):
+        if self.app is not None:
+            adj = self.app.brush_adjustment['tilt_offset_x']
+            adj.set_value(val)
+        
+    @tilt_y_value.setter
+    def tilt_y_value(self, val):
+        if self.app is not None:
+            adj = self.app.brush_adjustment['tilt_offset_y']
+            adj.set_value(val)
+                            
     ## Initialization
 
     def __init__(self, **kwds):
@@ -81,6 +126,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         super(SizechangeMode, self).__init__(**kwds)
         self.app = None
         self._cursor = Gdk.Cursor(Gdk.CursorType.BLANK_CURSOR)
+        self._mode = _Mode.SIZE
 
     ## InteractionMode/DragMode implementation
 
@@ -124,7 +170,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
             self._initial_radius = self.get_cursor_radius(tdw)
             self.base_x = event.x
             self.base_y = event.y
-
+        
         return super(SizechangeMode, self).button_press_cb(tdw, event)
 
     def button_release_cb(self, tdw, event):
@@ -135,6 +181,10 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
     def drag_start_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
         self._queue_draw_brush()
+        
+        if event.state & Gdk.ModifierType.CONTROL_MASK:
+            self.setting_mode = _Mode.TILT
+
         # Storing original cursor position(in screen coodinate)
         # and some needed objects.
         dev = event.get_device()
@@ -143,16 +193,23 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         self._scr = event.get_screen()
         self._ox = pos.x
         self._oy = pos.y
-
         super(SizechangeMode, self).drag_start_cb(tdw, event)
 
     def drag_update_cb(self, tdw, event, dx, dy):
         self._ensure_overlay_for_tdw(tdw)
-            
+        if event.state & Gdk.ModifierType.CONTROL_MASK:
+            self.setting_mode = _Mode.TILT
+
         self._queue_draw_brush()
-        adj = self.app.brush_adjustment['radius_logarithmic']
-        cur_value = adj.get_value() + (dx / 120.0)
-        adj.set_value(cur_value)
+        if self.setting_mode == _Mode.SIZE:
+            adj = self.app.brush_adjustment['radius_logarithmic']
+            cur_value = adj.get_value() + (dx / 120.0)
+            adj.set_value(cur_value)
+        elif self.setting_mode == _Mode.TILT:
+            cur_value = self.tilt_x_value + (dx / 120.0)
+            self.tilt_x_value = cur_value
+            cur_value = self.tilt_y_value + (dy / 120.0)
+            self.tilt_y_value = cur_value
         self._queue_draw_brush()
         super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
 
@@ -167,9 +224,9 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         # Reset cursor positon at start position of dragging.
         Gdk.Device.warp(self._dev, self._scr, self._ox, self._oy)
 
+        # Reset mode as default
+        self._Mode = _Mode.SIZE
         super(SizechangeMode, self).drag_stop_cb(tdw)
-
-        
 
     ## Overlays
 
@@ -179,43 +236,52 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
     def _queue_draw_brush(self):
         space = 2 # I'm unsure why this number brought good result.
                   # might be line width * 2?
+        margin = 3
         for tdw, overlay in self._overlays.items():
             if self.base_x != None:
-                cur_radius = self.get_cursor_radius(tdw)
-                areasize = cur_radius*2 + space*2 +1
-                if areasize < 32:
+                if self.setting_mode == _Mode.SIZE:
+                    cur_radius = self.get_cursor_radius(tdw)
+                    areasize = cur_radius*2 + space*2 +1
+                    if areasize < 32:
+                        tdw.queue_draw_area(
+                                self.base_x - cur_radius - space,  
+                                self.base_y - cur_radius - space,
+                                areasize, areasize)
+                    else:
+                        # To reduce redrawing area
+                        dx = cur_radius * math.sin(math.pi / 4.0)
+                        dw = dx * 2
+                        dh = cur_radius - dx
+                        dw += margin * 2
+                        dh += margin * 2
+                        # Top
+                        tdw.queue_draw_area(
+                                self.base_x - dx - margin,
+                                self.base_y - cur_radius - margin,
+                                dw, dh)
+                        # Left
+                        tdw.queue_draw_area(
+                                self.base_x - cur_radius - margin,
+                                self.base_y - dx - margin,
+                                dh, dw)
+                        # Right
+                        tdw.queue_draw_area(
+                                self.base_x + dx - margin,
+                                self.base_y - dx - margin,
+                                dh, dw)
+                        # Bottom
+                        tdw.queue_draw_area(
+                                self.base_x - dx - margin,
+                                self.base_y + dx - margin,
+                                dw, dh)
+                
+                elif self.setting_mode == _Mode.TILT:
+                    t_rad = self._TILT_RADIUS + margin
                     tdw.queue_draw_area(
-                            self.base_x - cur_radius - space,  
-                            self.base_y - cur_radius - space,
-                            areasize, areasize)
-                else:
-                    # To reduce redrawing area
-                    dx = cur_radius * math.sin(math.pi / 4.0)
-                    dw = dx * 2
-                    dh = cur_radius - dx
-                    margin = 3
-                    dw += margin * 2
-                    dh += margin * 2
-                    # Top
-                    tdw.queue_draw_area(
-                            self.base_x - dx - margin,
-                            self.base_y - cur_radius - margin,
-                            dw, dh)
-                    # Left
-                    tdw.queue_draw_area(
-                            self.base_x - cur_radius - margin,
-                            self.base_y - dx - margin,
-                            dh, dw)
-                    # Right
-                    tdw.queue_draw_area(
-                            self.base_x + dx - margin,
-                            self.base_y - dx - margin,
-                            dh, dw)
-                    # Bottom
-                    tdw.queue_draw_area(
-                            self.base_x - dx - margin,
-                            self.base_y + dx - margin,
-                            dw, dh)
+                            self.base_x - t_rad,
+                            self.base_y - t_rad,
+                            t_rad * 2,
+                            t_rad * 2)
 
     ## Mode options
 
@@ -235,7 +301,15 @@ class _Overlay (gui.overlays.Overlay):
         super(_Overlay, self).__init__()
         self._sizemode = weakref.ref(sizemode)
         self._tdw = weakref.ref(tdw)
-
+        
+    def _draw_dashed(self, cr):        
+        cr.stroke_preserve()
+        cr.save()
+        cr.set_source_rgb(1, 1, 1)
+        cr.set_dash( (8,) )
+        cr.stroke()
+        cr.restore()
+        
     def paint(self, cr):
         """Draw brush size to the screen"""
 
@@ -244,21 +318,49 @@ class _Overlay (gui.overlays.Overlay):
         mode = self._sizemode()
         tdw = self._tdw()
 
-        if mode is not None and tdw is not None:
+        if mode is not None and tdw is not None and mode.base_x is not None:
             cr.set_source_rgb(0, 0, 0)
             cr.set_line_width(1)
-            if mode.base_x != None:
+            if mode.setting_mode == _Mode.SIZE:                
                 cr.arc( mode.base_x,
                         mode.base_y,
                         mode.get_cursor_radius(tdw),
                         0.0,
                         2*math.pi)
-            cr.stroke_preserve()
-            cr.set_dash( (10,) )
-            cr.set_source_rgb(1, 1, 1)
-            cr.stroke()
-            cr.restore()
-
+                self._draw_dashed(cr)
+                cr.restore()
+            elif mode.setting_mode == _Mode.TILT:
+                cr.translate(mode.base_x, mode.base_y)
+                rad = mode._TILT_RADIUS
+                
+                # Draw base rectangle
+                cr.rectangle(  -rad, -rad, rad*2, rad*2)
+                self._draw_dashed(cr)
+                
+                # Drawing tilt crosshair
+                cr.move_to(0, -rad)
+                cr.line_to(0, rad)
+                self._draw_dashed(cr)
+                cr.move_to(-rad, 0)
+                cr.line_to(rad, 0)
+                self._draw_dashed(cr)
+                
+                # Drawing tilt indicator
+                cr.save()
+                cr.set_line_width(2)
+                cr.move_to(0, 0)
+                x = mode.tilt_x_value
+                y = mode.tilt_y_value
+                #nx, ny = gui.linemode.normal(0, 0, x, y)
+                cr.line_to(
+                    x * rad,
+                    y * rad
+                )
+                self._draw_dashed(cr)
+                cr.restore()
+                
+                cr.restore()
+                
 class _SizeChangerOptionWidget(gui.mode.PaintingModeOptionsWidgetBase):
     """ Because OncanvasSizeMode use from dragging + modifier
     combination, thus this option widget mostly unoperatable.

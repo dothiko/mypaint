@@ -635,11 +635,25 @@ class Application (object):
                                  step_incr=0.01, page_incr=0.1)
             self.brush_adjustment[s.cname] = adj
             adj.connect("value-changed", changed_cb, s.cname)
+        # XXX for `tilt_offset`
+        b_adjs = self.brush_adjustment
+        tilt_names = ('tilt_offset_x', 'tilt_offset_y')
+        for n in tilt_names:
+            assert not n in b_adjs
+            adj = Gtk.Adjustment(value=0.0, lower=-1.0, upper=1.0,
+                                 step_incr=0.01, page_incr=0.1)  
+            b_adjs[n] = adj
+            adj.connect("value_changed", changed_cb, n)
+        # XXX for `tilt_offset` end
         self.brush.observers.append(self._brush_modified_cb)
 
     def _brush_adjustment_value_changed_cb(self, adj, cname):
         """Updates a brush setting when the user tweaks it using a scale"""
-        newvalue = adj.get_value()
+        # XXX for `tilt_offset`        
+        if cname.startswith('tilt_offset'):
+            return # Ignore tilt_offset psuedo setting value.
+        # XXX for `tilt_offset` end       
+        newvalue = adj.get_value()         
         if self.brush.get_base_value(cname) != newvalue:
             self.brush.set_base_value(cname, newvalue)
 
