@@ -214,13 +214,12 @@ When a layer group is locked, none of the layers inside it can be edited.</prope
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
                 <property name="receives_default">True</property>
-                <property name="tooltip_text" translatable="yes" context="Layer properties widget → Flags → Padlock togglebutton → tooltip">Layer editable or locked.
+                <property name="tooltip_text" translatable="yes" context="Layer properties widget → Flags → Padlock togglebutton → tooltip">Layer unmarked or marked.
 
-An open padlock icon indicates that the layer can be edited.
+An small circle(dot) icon indicates that the layer can be marked.
+An double-circle icon indicates the layer is marked.
 
-When a layer is locked, you cannot paint to it or otherwise change its pixel content. You cannot pick strokes from it either, so this is useful when painting under a sketch.
-
-When a layer group is locked, none of the layers inside it can be edited.</property>
+With marking layer(s),you can do some actions which uses other layer(s) as source or some sort of limitation, such as 'Cut Layer with Marked Opacue`.</property>
                 <property name="hexpand">False</property>
                 <property name="vexpand">False</property>
                 <signal name="toggled" handler="_v_layer_marked_togglebutton_toggled_cb" swapped="no"/>

@@ -343,12 +343,14 @@ class LayerPropertiesUI (gui.mvp.BuiltUIPresenter, object):
                 if (i.property == "locked")][0]
         self._v2m_layer_flag(info)
 
+    # XXX 'marked' layer flag
     @gui.mvp.model_updater
     def _v_layer_marked_togglebutton_toggled_cb(self, btn):
         info = [i for i in self._BOOL_PROPERTIES
                 if (i.property == "marked")][0]
         self._v2m_layer_flag(info)
-
+    # XXX 'marked' layer flag end
+    
     def _v2m_layer_flag(self, info):
         layer = self._layer
         if not layer:
