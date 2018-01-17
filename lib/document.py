@@ -1492,11 +1492,13 @@ class Document (object):
             self.do(cmd)
     
     def get_marked_layers(self, usecurrent=True):
-        """Returns a list of tuple (path, layer).
+        """Utility method, Returns a list of tuple (path, layer).
         
-        This is needed to know how many layers marked now
+        :param usecurrent: Whether include the current layer or not.
+        
+        This is used to know how many layers marked now
         and set sensitive state of menu items.
-        Also, some Command class use this method.
+        Also, some `Command` class use this method.
         """
         ret = []
         rootstack = self.layer_stack
@@ -1505,7 +1507,6 @@ class Document (object):
             if l.marked and not (usecurrent==False and l==current):
                 ret.append((p, l))
         return ret
-                
     # XXX for `marked` status end
 
     ## Saving and loading

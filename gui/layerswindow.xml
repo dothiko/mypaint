@@ -4,6 +4,7 @@
       <menuitem action='LayerProperties'/>
       <menuitem action='LayerLockedToggle'/>
       <menuitem action='LayerVisibleToggle'/>
+      <menuitem action='LayerMarkedToggle'/>
       <separator/>
       <menuitem action='LayerMode'/>
     </placeholder>

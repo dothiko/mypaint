@@ -987,6 +987,15 @@ class RootStackTreeView (Gtk.TreeView):
                     "Layers dockable: description parts: layer locked flag",
                     u"Locked",
                 ))
+                
+            # XXX for `marked` layer flag
+            # Marked flag (locked is interesting)
+            if layer.marked:
+                desc_parts.append(C_(
+                    "Layers dockable: description parts: layer marked flag",
+                    u"Marked",
+                ))                
+            # XXX for `marked` layer flag end
 
             # Description of the layer's type.
             # Currently always used, for visual rhythm reasons, but it goes

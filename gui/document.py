@@ -1470,6 +1470,14 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         if bool(layer.visible) != bool(action.get_active()):
             self.model.set_layer_visibility(action.get_active(), layer)
 
+    # XXX `marked` layer flag
+    def layer_mark_toggle_cb(self, action):
+        """``LayerLockedToggle`` GtkAction callback"""
+        layer = self.model.layer_stack.get_current()
+        if bool(layer.marked) != bool(action.get_active()):
+            self.model.set_layer_marked(action.get_active(), layer)
+    # XXX `marked` layer flag end
+
     def _update_layer_flag_toggles(self, *_ignored):
         """Updates ToggleActions reflecting the current layer's flags"""
         rootstack = self.model.layer_stack
@@ -1477,6 +1485,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         action_updates = [
             ("LayerLockedToggle", current_layer.locked),
             ("LayerVisibleToggle", current_layer.visible),
+            ("LayerMarkedToggle", current_layer.marked), # XXX for `marked` layer flag
         ]
         for action_name, model_state in action_updates:
             action = self.app.find_action(action_name)
