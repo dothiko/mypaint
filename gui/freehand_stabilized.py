@@ -423,29 +423,6 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
             self.attach(scale, 1, row, 1, 1)
             return scale
             
-        # Currently, we use wrapper adjustment
-        # Because X Tilt offset/Y Tilt offset is only for
-        # stablizer.
-        adjs = (
-            (
-                _("X Tilt Offset:"),
-                app.brush_adjustment['tilt_offset_x']
-            ) ,
-            (
-                _("Y Tilt Offset:"),
-                app.brush_adjustment['tilt_offset_y']
-            ) ,
-        )
-        for label, adj in adjs:
-            create_slider(label, 
-                          self.tilt_offset_adj_wrapper_cb, 
-                          adj.get_value(), 
-                          adj.get_lower(),
-                          adj.get_upper(),
-                          adj.get_step_increment(),
-                          real_adj = adj
-                          )
-            row += 1
 
         # Add VBox for Assistant area
         mode = self.mode_ref()
@@ -483,10 +460,6 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
 
         self._updating_ui = False
         return row
-
-    def tilt_offset_adj_wrapper_cb(self, adj, real_adj):
-        # Just set original adjustment.
-        real_adj.set_value(adj.get_value())
 
     # Handlers
     def _average_toggled_cb(self, checkbox):

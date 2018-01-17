@@ -602,6 +602,11 @@ class PaintingModeOptionsWidgetBase (Gtk.Grid):
         ('hardness', _("Sharp:")),
         # TRANSLATORS:"Additional pressure gain" for the options panel. Short.
         ('pressure_gain_log', _("Gain:")),
+        # XXX for `tilt-offset`
+        # TRANSLATORS:"Tilt offset x and y" for the options panel. Short.
+        ('tilt_offset_x', _("Tilt X:")),
+        ('tilt_offset_y', _("Tilt Y:")),
+        # XXX for `tilt-offset` end
     ]
 
     def __init__(self):

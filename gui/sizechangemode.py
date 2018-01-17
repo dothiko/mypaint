@@ -83,33 +83,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         if self._mode != modenum:
             self._queue_draw_brush()
             self._mode = modenum
-            
-    @property
-    def tilt_x_value(self):
-        if self.app is not None:
-            adj = self.app.brush_adjustment['tilt_offset_x']
-            return adj.get_value()
-        return 0.0
-        
-    @property
-    def tilt_y_value(self):
-        if self.app is not None:
-            adj = self.app.brush_adjustment['tilt_offset_y']
-            return adj.get_value()
-        return 0.0
-                    
-    @tilt_x_value.setter
-    def tilt_x_value(self, val):
-        if self.app is not None:
-            adj = self.app.brush_adjustment['tilt_offset_x']
-            adj.set_value(val)
-        
-    @tilt_y_value.setter
-    def tilt_y_value(self, val):
-        if self.app is not None:
-            adj = self.app.brush_adjustment['tilt_offset_y']
-            adj.set_value(val)
-                            
+                                       
     ## Initialization
 
     def __init__(self, **kwds):
@@ -283,7 +257,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         """Get the (class singleton) options widget"""
         cls = self.__class__
         if cls._OPTIONS_WIDGET is None:
-            widget = _SizeChangerOptionWidget()#self._generate_options_widget()
+            widget = self._generate_options_widget()
             cls._OPTIONS_WIDGET = widget
         return cls._OPTIONS_WIDGET
 
@@ -303,6 +277,32 @@ class TiltchangeMode(SizechangeMode):
     def __init__(self, **kwds):
         """Initialize"""
         super(TiltchangeMode, self).__init__(**kwds)
+        
+    @property
+    def tilt_x_value(self):
+        if self.app is not None:
+            adj = self.app.brush_adjustment['tilt_offset_x']
+            return adj.get_value()
+        return 0.0
+        
+    @property
+    def tilt_y_value(self):
+        if self.app is not None:
+            adj = self.app.brush_adjustment['tilt_offset_y']
+            return adj.get_value()
+        return 0.0
+                    
+    @tilt_x_value.setter
+    def tilt_x_value(self, val):
+        if self.app is not None:
+            adj = self.app.brush_adjustment['tilt_offset_x']
+            adj.set_value(val)
+        
+    @tilt_y_value.setter
+    def tilt_y_value(self, val):
+        if self.app is not None:
+            adj = self.app.brush_adjustment['tilt_offset_y']
+            adj.set_value(val)
             
     def _queue_draw_brush(self):
         space = 2 # I'm unsure why this number brought good result.
@@ -330,7 +330,7 @@ class TiltchangeMode(SizechangeMode):
         
     def _generate_options_widget(self):
         """Called from get_options_widget. for code-sharing. """
-        return _TiltChangerOptionWidget()        
+        return _TiltOffsetOptionWidget()
     
     def draw_ui(self, tdw, cr):
         cr.set_source_rgb(0, 0, 0)
@@ -389,6 +389,8 @@ class _Overlay (gui.overlays.Overlay):
             cr.save()
             mode.draw_ui(tdw, cr)
             cr.restore()
+        
+        cr.restore()
                 
 class _SizeChangerOptionWidget(gui.mode.PaintingModeOptionsWidgetBase):
     """ Because OncanvasSizeMode use from dragging + modifier
@@ -411,4 +413,22 @@ class _SizeChangerOptionWidget(gui.mode.PaintingModeOptionsWidgetBase):
     def init_reset_widgets(self, row):
         """To cancel creating 'reset setting' button"""
         pass
+        
+class _TiltOffsetOptionWidget(gui.mode.PaintingModeOptionsWidgetBase):
+    def __init__(self):
+        # Overwrite self._COMMON_SETTINGS
+        # to use(show) only 'radius_logarithmic' scale.
+        overridden_settings = []
+        for cname, text in self._COMMON_SETTINGS:
+            if cname.startswith('tilt_offset'):
+                overridden_settings.append((cname, text))
+        self._COMMON_SETTINGS = overridden_settings
+        
+        # And then,call superclass method
+        super(_TiltOffsetOptionWidget, self).__init__()
+
+    def init_reset_widgets(self, row):
+        """To cancel creating 'reset setting' button"""
+        pass
+
 
