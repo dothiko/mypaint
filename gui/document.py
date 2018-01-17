@@ -1382,7 +1382,18 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         """Action callback: squash current layer into the one below it"""
         if self.model.merge_current_layer_down():
             self.layerblink_state.activate(action)
+    
+    def new_layer_merged_from_visible_cb(self, action):
+        """Action callback: combine all visible layers into a new one"""
+        self.model.new_layer_merged_from_visible()
+        self.layerblink_state.activate(action)
 
+    def merge_visible_layers_cb(self, action):
+        """Action callback: squash all visible layers into one"""
+        self.model.merge_visible_layers()
+        self.layerblink_state.activate(action)
+        
+    # XXX for `merge opaque area` / cut function
     def merge_layer_down_opaque_cb(self, action):
         """Action callback: squash current layer into the one below it,
         only on opaque area."""
@@ -1394,17 +1405,8 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         below layer."""
         if self.model.cut_current_layer_down():
             self.layerblink_state.activate(action)
-
-    def merge_visible_layers_cb(self, action):
-        """Action callback: squash all visible layers into one"""
-        self.model.merge_visible_layers()
-        self.layerblink_state.activate(action)
-
-    def new_layer_merged_from_visible_cb(self, action):
-        """Action callback: combine all visible layers into a new one"""
-        self.model.new_layer_merged_from_visible()
-        self.layerblink_state.activate(action)
-
+    # XXX for `merge opaque area` / cut function end
+    
     def _update_merge_layer_down_action(self, *_ignored):
         """Updates the layer Merge Down action's sensitivity"""
         # This may change in response to the path changing *or* the
@@ -1415,9 +1417,9 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         can_merge = (current is not rootstack
                      and bool(rootstack.get_merge_down_target(current)))
         app.find_action("MergeLayerDown").set_sensitive(can_merge)
-        app.find_action("CutLayerDown").set_sensitive(can_merge)
-        app.find_action("MergeLayerDownOpaque").set_sensitive(can_merge)
-
+        app.find_action("CutLayerDown").set_sensitive(can_merge) # XXX for `cut` function
+        app.find_action("MergeLayerDownOpaque").set_sensitive(can_merge) # XXX for `merge opaque area` function
+    
     def duplicate_layer_cb(self, action):
         """``DuplicateLayer`` GtkAction callback: clone the current layer"""
         self.model.duplicate_current_layer()

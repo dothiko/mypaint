@@ -4,7 +4,7 @@
       <menuitem action='LayerProperties'/>
       <menuitem action='LayerLockedToggle'/>
       <menuitem action='LayerVisibleToggle'/>
-      <menuitem action='LayerMarkedToggle'/>
+      <menuitem action='LayerMarkedToggle'/> <!-- Added for `marked` layer -->
       <separator/>
       <menuitem action='LayerMode'/>
     </placeholder>
