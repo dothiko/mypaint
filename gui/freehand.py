@@ -585,36 +585,13 @@ class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
         self.attach(scale, 1, row, 1, 1)
         row += 1
         # XXX for `tilt-offset`
-        # TRANSLATORS:"Tilt offset of x axis" for the options panel. Short.
         cname = "tilt_offset_x"
-        label = Gtk.Label()
-        label.set_text(_("Tilt X:"))
-        label.set_alignment(1.0, 0.5)
-        label.set_hexpand(False)
-        self.adjustable_settings.add(cname)
         adj = self.app.brush_adjustment[cname]
         adj.connect("value-changed", self._tilt_x_change_cb)
-        scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL, adj)
-        scale.set_draw_value(False)
-        scale.set_hexpand(True)
-        self.attach(label, 0, row, 1, 1)
-        self.attach(scale, 1, row, 1, 1)
-        row += 1
-        # TRANSLATORS:"Tilt offset of y axis" for the options panel. Short.
+
         cname = "tilt_offset_y"
-        label = Gtk.Label()
-        label.set_text(_("Tilt Y:"))
-        label.set_alignment(1.0, 0.5)
-        label.set_hexpand(False)
-        self.adjustable_settings.add(cname)
         adj = self.app.brush_adjustment[cname]
         adj.connect("value-changed", self._tilt_y_change_cb)
-        scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL, adj)
-        scale.set_draw_value(False)
-        scale.set_hexpand(True)
-        self.attach(label, 0, row, 1, 1)
-        self.attach(scale, 1, row, 1, 1)
-        row += 1
         # XXX for `tilt-offset` end
         return row
         
@@ -622,7 +599,7 @@ class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
         FreehandMode._TILT_OFFSET_X = adj.get_value()
 
     def _tilt_y_change_cb(self, adj):
-        FreehandMode._TILT_OFFSET_X = adj.get_value()        
+        FreehandMode._TILT_OFFSET_Y = adj.get_value()        
 
 class PressureAndTiltInterpolator (object):
     """Interpolates event sequences, filling in null pressure/tilt data

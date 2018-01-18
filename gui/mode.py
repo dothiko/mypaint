@@ -602,8 +602,23 @@ class PaintingModeOptionsWidgetBase (Gtk.Grid):
         ('hardness', _("Sharp:")),
         # TRANSLATORS:"Additional pressure gain" for the options panel. Short.
         ('pressure_gain_log', _("Gain:")),
+        # XXX for 'tilt-offset'        
+        # TRANSLATORS:"Tilt offset of x axis" for the options panel. Short.
+        ('tilt_offset_x', _("Tilt X:")),
+        # TRANSLATORS:"Tilt offset of y axis" for the options panel. Short.
+        ('tilt_offset_y', _("Tilt Y:")),        
+        # XXX for 'tilt-offset end'
     ]
-
+ 
+    # XXX for 'tilt-offset'    
+    # Default values of psuedo brush-input values.
+    # These value do not exist in real brush setting.
+    _DEFAULT_DUMMY_VALUES = {
+        'tilt_offset_x' : 0.0,
+        'tilt_offset_y' : 0.0,
+    }
+    # XXX for 'tilt-offset' end
+                
     def __init__(self):
         super(PaintingModeOptionsWidgetBase, self).__init__()
         self.set_row_spacing(6)
@@ -651,8 +666,13 @@ class PaintingModeOptionsWidgetBase (Gtk.Grid):
         if parent_brush:
             parent_binf = parent_brush.get_brushinfo()
             for cname in self.adjustable_settings:
-                parent_value = parent_binf.get_base_value(cname)
+                # XXX for 'tilt-offset'
                 adj = self.app.brush_adjustment[cname]
+                if cname in self._DEFAULT_DUMMY_VALUES:
+                    parent_value = self._DEFAULT_DUMMY_VALUES[cname]
+                else:
+                    parent_value = parent_binf.get_base_value(cname)
+                # XXX for 'tilt-offset' end
                 adj.set_value(parent_value)
         app.brushmodifier.normal_mode.activate()
 
