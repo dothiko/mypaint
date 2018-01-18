@@ -23,6 +23,7 @@ import gui.cursor
 import gui.overlays
 import gui.ui_utils
 import gui.linemode
+import lib.helpers
 
 
 ## Module constants
@@ -321,12 +322,16 @@ class TiltchangeMode(SizechangeMode):
         self._ensure_overlay_for_tdw(tdw)
  
         self._queue_draw_brush()
+
         p = self._PIXEL_PRECISION
         cur_value = self.tilt_x_value + (dx / p)
         self.tilt_x_value = cur_value
         cur_value = self.tilt_y_value + (dy / p)
         self.tilt_y_value = cur_value
         self._queue_draw_brush()
+        
+        # Call parent of `SizechangeMode`(parent class) method.
+        # Not parent class method, we need to bypass that callback.
         super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
         
     def _generate_options_widget(self):
