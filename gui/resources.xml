@@ -2355,6 +2355,15 @@ Vocabulary
         </object>
       </child>
       <!-- }}} -->
+      <!-- {{{ Brush history popup -->
+      <child>
+        <object class="GtkAction" id="BrushHistoryPopup">
+          <property name="label" translatable="yes" context="Menu→Color (labels), Accel Editor (labels)">Brush History Popup</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Popup brush history palette to select it quickly on canvas.</property>
+          <signal name="activate" handler="quick_chooser_popup_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->      
     </object>
   </child>
   <!-- }}} -->

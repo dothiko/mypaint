@@ -632,34 +632,48 @@ class ChooserPopup (Gtk.Window):
 class TransparentMixin(object):
     """A Mixin for popup window which has transparent background
     """
+    
+    def check_composited(self):
+        """ 
+        Note: method name `is_composited` is conflict with Gtk and
+        does not work.
+        """
+        if not hasattr(self, '_composited'):
+            screen = self.get_screen()
+            visual = screen.get_rgba_visual()
+            self._composited = (visual != None and screen.is_composited())
+            if self._composited:
+                self.set_visual(visual)
+        return self._composited
 
     def setup_background(self):
         """Setup screen background.
         If there is no composition mode in current window manager, 
         create its own capture buffer.
         """
-        # Transparent window supports
-        screen = self.get_screen()
-        visual = screen.get_rgba_visual()
-        if visual != None and screen.is_composited():
-            self.set_visual(visual)
+        # Ensure transparent window supports
+        self.check_composited()
 
         self.set_app_paintable(True)
         self.set_decorated(False)
         self.bgpix = None
 
-    def capture_screen(self):
-        """Capture background screen.
+    def update_background(self):
+        """Update(Capture) background screen.
         This method is used when desktop compositor disabled.
         """
-        x, y = self.get_position()
-        w, h = self.get_size()
-        win = Gdk.get_default_root_window()
-        self.bgpix = Gdk.pixbuf_get_from_window(win, x, y, w, h)
+        if not self.check_composited():
+            x, y = self.get_position()
+            w, h = self.get_size()
+            win = Gdk.get_default_root_window()
+            self.bgpix = Gdk.pixbuf_get_from_window(win, x, y, w, h)
 
     def draw_background(self, cr):
         """Draw background.  call this from draw_cb.
-        You should use this method between cr.save() - cr.restore(),
+        
+        IMPORTANT:
+        You must use this method between cr.save() - cr.restore()
+        to enable alpha-blending translucent effect of cairo. 
         For example,
 
         cr.save()

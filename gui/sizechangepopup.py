@@ -80,9 +80,8 @@ class SizePopup (windowing.PopupWindow,
         self._close_timer_id = None
         self._zone = _Zone.INVALID
         self._current_cursor = None
-
         self.setup_background()
-
+        
     @property
     def active_cursor(self):
         cls = self.__class__
@@ -136,6 +135,11 @@ class SizePopup (windowing.PopupWindow,
         return (dx - RADIUS, dy - RADIUS)
 
     def popup(self):
+        # For environment which has no desktop compositor,
+        # we need to get background image below the window.
+        # So setup bacoground here, after the window moved.
+        self.update_background()
+        
         self.enter()
 
     def enter(self):
@@ -149,7 +153,7 @@ class SizePopup (windowing.PopupWindow,
         self._leave_cancel = True
 
         self._brush_normal = self.get_brushsize_normalized_from_adj()
-
+ 
     def leave(self, reason):
         if self._brush_normal is not None:
             # Restore `normalized` brush size into logarithmic.

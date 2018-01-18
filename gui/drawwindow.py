@@ -47,8 +47,9 @@ import uicolor
 import gui.picker
 import gui.footer
 import brushselectionwindow
-import sizechangepopup
-import toolpalettepopup
+import sizechangepopup # XXX for `sizechange` popup
+import toolpalettepopup # XXX for `toolpalette` popup
+import brushhistorypopup # XXX for `brushhistory` popup
 
 import xml.etree.ElementTree as ET
 
@@ -123,12 +124,21 @@ class DrawWindow (Gtk.Window):
         "ColorChooserPopupFastSubset": (
             quickchoice.ColorChooserPopup, ["fast_subset", True],
         ),
+        # XXX for `size-change` popup
         "SizeChangePopup": (
             sizechangepopup.SizePopup, [],
         ),
+        # XXX for `size-change` popup end
+        # XXX for `toolpalette` popup
         "ToolPalettePopup": (
             toolpalettepopup.ToolPalettePopup, [],
         ),
+        # XXX for `toolpalette` popup end
+        # XXX for `brushhistory` popup
+        "BrushHistoryPopup": (
+            brushhistorypopup.BrushHistoryPopup, [],
+        ),
+        # XXX for `brushhistory` popup end
     }
 
     ## Initialization and lifecycle
@@ -492,8 +502,8 @@ class DrawWindow (Gtk.Window):
         """Pops up a named quick chooser instance, hides the others"""
         chooser = self._get_quick_chooser(name)
         if chooser.get_visible():
-           #chooser.advance()
-            chooser.hide()
+           #chooser.advance() # XXX Original code
+            chooser.hide() # XXX Changed to hide
             return
         for other_name in self._QUICK_CHOOSER_CONSTRUCT_INFO:
             if other_name == name:
