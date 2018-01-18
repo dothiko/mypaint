@@ -301,14 +301,6 @@ Vocabulary
         </object>
         <accelerator key="d"/>
       </child>
-      <child>
-        <object class="GtkAction" id="SizeChangePopup">
-          <property name="label" translatable="yes" context="Menu→Color (labels), Accel Editor (labels)">BrushSize Change Popup</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Make change the working brush size</property>
-          <signal name="activate" handler="quick_chooser_popup_cb"/>
-        </object>
-        <accelerator key="x"/>
-      </child>
       <!-- Brush opacity -->
       <child>
         <object class="GtkAction" id="MoreOpaque">
@@ -1076,6 +1068,33 @@ Vocabulary
         </object>
       </child>
       <!-- }}} -->
+      <!-- {{{ Size Change popup -->
+      <child>
+        <object class="GtkAction" id="SizeChangePopup">
+          <property name="label" translatable="yes" context="Menu→Color (labels), Accel Editor (labels)">BrushSize Change Popup</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Make change the working brush size</property>
+          <signal name="activate" handler="quick_chooser_popup_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
+      <!-- {{{ Tool palette popup -->
+      <child>
+        <object class="GtkAction" id="ToolPalettePopup">
+          <property name="label" translatable="yes" context="Menu→Color (labels), Accel Editor (labels)">Tool Palette Popup</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Popup tool palette to select it quickly on canvas.</property>
+          <signal name="activate" handler="quick_chooser_popup_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
+      <!-- {{{ Brush history popup -->
+      <child>
+        <object class="GtkAction" id="BrushHistoryPopup">
+          <property name="label" translatable="yes" context="Menu→Color (labels), Accel Editor (labels)">Brush History Popup</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Popup brush history palette to select it quickly on canvas.</property>
+          <signal name="activate" handler="quick_chooser_popup_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->      
     </object>
   </child>
   <!--}}} -->
@@ -2132,26 +2151,6 @@ Vocabulary
         <accelerator key="g"/>
       </child>
       <!-- }}} -->
-      <!-- {{{ Resizing Brush radio and flip actions -->
-      <child>
-        <object class="GtkRadioAction" id="OncanvasSizeMode">
-          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">On-Canvas Brush Size Changer</property>
-          <property name="short-label" translatable="yes" context="Toolbar (short labels)">Brushsize adj.</property>
-          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">On-canvas brush size change: change brush size with dragging a pointing device on canvas.</property>
-          <property name="icon-name">mypaint-size-change-symbolic</property>
-          <property name="group">OncanvasSizeMode</property>
-          <property name="value">12</property>
-        </object>
-      </child>
-      <child>
-        <object class="GtkAction" id="FlipOncanvasSizeMode">
-          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">On-Canvas Brush Size Changer</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">change brush size with dragging a pointing device on canvas.</property>
-          <property name="icon-name">mypaint-size-change-symbolic</property>
-          <signal name="activate" handler="mode_flip_action_activated_cb"/>
-        </object>
-      </child>
-      <!-- }}} -->
       <!-- {{{ Bezier curve tool and flip actions -->
       <child>
         <object class="GtkRadioAction" id="BezierCurveMode">
@@ -2160,7 +2159,7 @@ Vocabulary
           <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Bezier Curve: draw cubic bezier curve.</property>
           <property name="group">EllipseMode</property>
           <property name="icon-name">mypaint-tool-bezier-symbolic</property>
-          <property name="value">13</property>
+          <property name="value">15</property>
         </object>
       </child>
       <child>
@@ -2187,7 +2186,7 @@ Vocabulary
           <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Polygon fill: fill a polygon area,with current color.</property>
           <property name="group">EllipseMode</property>
           <property name="icon-name">mypaint-tool-bezier-symbolic</property>
-          <property name="value">14</property>
+          <property name="value">16</property>
         </object>
       </child>
       <child>
@@ -2207,7 +2206,7 @@ Vocabulary
           <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Stamp bitmap file,clipboard or portion of a layer.</property>
           <property name="group">StampMode</property>
           <property name="icon-name">mypaint-tool-bezier-symbolic</property>
-          <property name="value">15</property>
+          <property name="value">17</property>
         </object>
       </child>
       <child>
@@ -2227,7 +2226,7 @@ Vocabulary
           <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Selection Mode: select on-canvas item or area.</property>
           <property name="icon-name">mypaint-size-change-symbolic</property>
           <property name="group">SelectionMode</property>
-          <property name="value">16</property>
+          <property name="value">18</property>
         </object>
       </child>
       <child>
@@ -2247,7 +2246,7 @@ Vocabulary
           <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Experimantal Inking: draw smooth controlled lines.</property>
           <property name="icon-name">mypaint-tool-inking-symbolic</property>
           <property name="group">EllipseMode</property>
-          <property name="value">17</property>
+          <property name="value">19</property>
         </object>
       </child>
       <child>
@@ -2266,7 +2265,7 @@ Vocabulary
           <property name="short-label" translatable="yes" context="Toolbar (short labels)">Stabilized</property>
           <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Stabilized Freehand: draw and paint freely, with a stabilizing circle.</property>
           <property name="icon-name">mypaint-brush-symbolic</property>
-          <property name="value">18</property>
+          <property name="value">20</property>
           <signal name="changed" handler="mode_radioaction_changed_cb"/>
         </object>
       </child>
@@ -2293,7 +2292,7 @@ Vocabulary
           <property name="short-label" translatable="yes" context="Toolbar (short labels)">Parallel</property>
           <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Parallel ruler Freehand: draw and paint with a parallel ruler.</property>
           <property name="icon-name">mypaint-brush-symbolic</property>
-          <property name="value">19</property>
+          <property name="value">21</property>
           <signal name="changed" handler="mode_radioaction_changed_cb"/>
         </object>
       </child>
@@ -2313,7 +2312,7 @@ Vocabulary
           <property name="short-label" translatable="yes" context="Toolbar (short labels)">Centerpoint</property>
           <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Centerpoint Freehand: draw and paint with a centerpoint ruler.</property>
           <property name="icon-name">mypaint-brush-symbolic</property>
-          <property name="value">20</property>
+          <property name="value">22</property>
           <signal name="changed" handler="mode_radioaction_changed_cb"/>
         </object>
       </child>
@@ -2334,7 +2333,7 @@ Vocabulary
           <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Close fill: test for 'close and fill'</property>
           <property name="icon-name">mypaint-fill-symbolic</property>
           <property name="group">ColorPickMode</property>
-          <property name="value">22</property>
+          <property name="value">23</property>
         </object>
       </child>
       <child>
@@ -2346,24 +2345,44 @@ Vocabulary
         </object>
       </child>
       <!-- }}} -->
-      <!-- {{{ Tool palette popup -->
+      <!-- {{{ Oncanvas resizing Brush radio and flip actions -->
       <child>
-        <object class="GtkAction" id="ToolPalettePopup">
-          <property name="label" translatable="yes" context="Menu→Color (labels), Accel Editor (labels)">Tool Palette Popup</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Popup tool palette to select it quickly on canvas.</property>
-          <signal name="activate" handler="quick_chooser_popup_cb"/>
+        <object class="GtkRadioAction" id="OncanvasSizeMode">
+          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">OnCanvas Size Changer</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">SizeChange</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">On-canvas brush size change: change brush size with dragging on-canvas.</property>
+          <property name="icon-name">mypaint-size-change-symbolic</property>
+          <property name="group">OncanvasSizeMode</property>
+          <property name="value">24</property>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="FlipOncanvasSizeMode">
+          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">OnCanvas Brush Size Changer</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Interactively change brush size with dragging on-canvas.</property>
+          <property name="icon-name">mypaint-size-change-symbolic</property>
+          <signal name="activate" handler="mode_flip_action_activated_cb"/>
         </object>
       </child>
       <!-- }}} -->
-      <!-- {{{ Brush history popup -->
+      <!-- {{{ Oncanvas-Tilt-Change actions -->
       <child>
-        <object class="GtkAction" id="BrushHistoryPopup">
-          <property name="label" translatable="yes" context="Menu→Color (labels), Accel Editor (labels)">Brush History Popup</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Popup brush history palette to select it quickly on canvas.</property>
-          <signal name="activate" handler="quick_chooser_popup_cb"/>
+        <object class="GtkRadioAction" id="OncanvasTiltMode">
+          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">OnCanvas Tilt Changer</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">TiltChange</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">OnCanvas Brush Tilt Change:change brush tilt with dragging on-canvas.</property>
+          <property name="group">OncanvasSizeMode</property>
+          <property name="value">25</property>
         </object>
       </child>
-      <!-- }}} -->      
+      <child>
+        <object class="GtkAction" id="FlipOncanvasTiltMode">
+          <property name="label" translatable="yes" context="Menu→View (labels), Accel Editor (labels)">OnCanvas Tilt Changer</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Interactively change brush size with draggin on-canvas.</property>
+          <signal name="activate" handler="mode_flip_action_activated_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
     </object>
   </child>
   <!-- }}} -->
