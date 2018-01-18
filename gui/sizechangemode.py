@@ -89,8 +89,8 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         """Initialize"""
         super(SizechangeMode, self).__init__(**kwds)
         self.app = None
-        self._cursor = Gdk.Cursor(Gdk.CursorType.BLANK_CURSOR)
-
+        self._cursor = None
+        
     ## InteractionMode/DragMode implementation
 
     def enter(self, doc, **kwds):
@@ -122,14 +122,15 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         b = tdw.doc.brush.brushinfo
         base_radius = math.exp(b.get_base_value('radius_logarithmic'))
         r = base_radius
-       #r += 2 * base_radius * b.get_base_value('offset_by_random')
         r *= tdw.scale
         return r
         
     def button_press_cb(self, tdw, event):
         # getting returning point of cursor,in screen coordinate
         self._queue_draw_brush() # erase previous brush circle (if exists)
+        
         if self.base_x is None:
+            self._cursor = Gdk.Cursor(Gdk.CursorType.BLANK_CURSOR)
             self._initial_radius = self.get_cursor_radius(tdw)
             self.base_x = event.x
             self.base_y = event.y
@@ -137,7 +138,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         return super(SizechangeMode, self).button_press_cb(tdw, event)
 
     def button_release_cb(self, tdw, event):
-        # Some button(such as Bamboo pad) might not report release event!
+        # Some button(such as Bamboo pad) might not this report release event!
         result = super(SizechangeMode, self).button_release_cb(tdw, event)
         return result
 
@@ -178,6 +179,8 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
 
         # Reset cursor positon at start position of dragging.
         Gdk.Device.warp(self._dev, self._scr, self._ox, self._oy)
+        
+        self._cursor = None
 
         # Reset mode as default
         super(SizechangeMode, self).drag_stop_cb(tdw)
