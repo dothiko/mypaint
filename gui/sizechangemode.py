@@ -40,7 +40,8 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
     ACTION_NAME = "OncanvasSizeMode"
     _OPTIONS_WIDGET = None
     _PIXEL_PRECISION = 120.0 # Divider, per pixel precision. practical value.
-
+    _BLANK_CURSOR = Gdk.Cursor(Gdk.CursorType.BLANK_CURSOR)
+    
     ## Class configuration.
     permitted_switch_actions = set([
         "PanViewMode",
@@ -53,19 +54,18 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
 
     @property
     def active_cursor(self):
-        return self._cursor  # Completely blank cursor
+        return self._cursor
     
+    @property
+    def inactive_cursor(self):
+        return self._cursor  
+          
     @classmethod
     def get_name(cls):
         return _(u"On-canvas brush size changer")
 
     def get_usage(self):
         return _(u"Change brush size on canvas.when drag toward up/left,size is decreased.down/right for increasing.vertical movement changes size largely.")
-
-    @property
-    def inactive_cursor(self):
-        return self._cursor  # Completely blank cursor
-
 
     unmodified_persist = True
     permitted_switch_actions = set(
@@ -130,17 +130,16 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         self._queue_draw_brush() # erase previous brush circle (if exists)
         
         if self.base_x is None:
-            self._cursor = Gdk.Cursor(Gdk.CursorType.BLANK_CURSOR)
+            self._cursor = self._BLANK_CURSOR
             self._initial_radius = self.get_cursor_radius(tdw)
             self.base_x = event.x
             self.base_y = event.y
         
         return super(SizechangeMode, self).button_press_cb(tdw, event)
 
-    def button_release_cb(self, tdw, event):
-        # Some button(such as Bamboo pad) might not this report release event!
-        result = super(SizechangeMode, self).button_release_cb(tdw, event)
-        return result
+   #def button_release_cb(self, tdw, event):
+   #    # Some button(such as Bamboo pad) might not this report release event!
+   #    return super(SizechangeMode, self).button_release_cb(tdw, event)
 
     def drag_start_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
@@ -180,6 +179,8 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         # Reset cursor positon at start position of dragging.
         Gdk.Device.warp(self._dev, self._scr, self._ox, self._oy)
         
+        # Restore the cursor. 
+        # (But, DragMode baseclass automatically restore it?)
         self._cursor = None
 
         # Reset mode as default
@@ -270,6 +271,7 @@ class TiltchangeMode(SizechangeMode):
 
     ACTION_NAME = "OncanvasTiltMode"   
     _TILT_RADIUS = 64.0   
+    _OPTIONS_WIDGET = None # This class needs same name attribute.
     
     @classmethod
     def get_name(cls):
