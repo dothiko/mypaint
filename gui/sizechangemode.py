@@ -159,8 +159,10 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
 
         self._queue_draw_brush()
         adj = self.app.brush_adjustment['radius_logarithmic']
-        cur_value = adj.get_value() + (dx / self._PIXEL_PRECISION)
-        adj.set_value(cur_value)
+        diff_val = (dx / self._PIXEL_PRECISION)
+        # Faster change along with y direction move.
+        diff_val += ((dy / self._PIXEL_PRECISION) * 2)
+        adj.set_value(adj.get_value() + diff_val)
 
         self._queue_draw_brush()
         super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
