@@ -321,6 +321,9 @@ class TiltchangeMode(SizechangeMode):
         self._ensure_overlay_for_tdw(tdw)
  
         self._queue_draw_brush()
+        
+        
+        
         cur_value = self.tilt_x_value + (dx / 120.0)
         self.tilt_x_value = cur_value
         cur_value = self.tilt_y_value + (dy / 120.0)
@@ -336,20 +339,27 @@ class TiltchangeMode(SizechangeMode):
         cr.set_source_rgb(0, 0, 0)
         cr.set_line_width(1)
         cr.translate(self.base_x, self.base_y)
-        rad = self._TILT_RADIUS
+        r = self._TILT_RADIUS
         
         # Draw base rectangle
-        cr.rectangle(  -rad, -rad, rad*2, rad*2)
+        #cr.rectangle(  -rad, -rad, rad*2, rad*2)
+        cr.arc( 
+            0,
+            0,
+            r,
+            0.0,
+            2*math.pi
+        )
         cr.stroke_preserve()
         self._draw_dashed(cr)
         
         # Drawing tilt crosshair
-        cr.move_to(0, -rad)
-        cr.line_to(0, rad)
+        cr.move_to(0, -r)
+        cr.line_to(0, r)
         cr.stroke_preserve()
         self._draw_dashed(cr)
-        cr.move_to(-rad, 0)
-        cr.line_to(rad, 0)
+        cr.move_to(-r, 0)
+        cr.line_to(r, 0)
         cr.stroke_preserve()
         self._draw_dashed(cr)
         
@@ -359,10 +369,12 @@ class TiltchangeMode(SizechangeMode):
         cr.move_to(0, 0)
         x = self.tilt_x_value
         y = self.tilt_y_value
-        #nx, ny = gui.linemode.normal(0, 0, x, y)
+        # Remap input values into 
+        nx, ny = gui.linemode.normal(0, 0, x, y)
+        s = gui.linemode.get_radian(1.0, 0, nx, ny)
         cr.line_to(
-            x * rad,
-            y * rad
+            x * abs(math.cos(s)) * r, # `abs` is to show inverted axis value.
+            y * math.sin(s) * r
         )
         cr.stroke_preserve()
         self._draw_dashed(cr)
