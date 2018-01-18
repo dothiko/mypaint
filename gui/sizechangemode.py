@@ -36,13 +36,11 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
     """Oncanvas brush Size change mode"""
 
     ## Class constants
-
     ACTION_NAME = "OncanvasSizeMode"
-
     _OPTIONS_WIDGET = None
+    _PIXEL_PRECISION = 120.0 # Divider, per pixel precision. practical value.
 
     ## Class configuration.
-
     permitted_switch_actions = set([
         "PanViewMode",
         "ZoomViewMode",
@@ -161,7 +159,7 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
 
         self._queue_draw_brush()
         adj = self.app.brush_adjustment['radius_logarithmic']
-        cur_value = adj.get_value() + (dx / 120.0)
+        cur_value = adj.get_value() + (dx / self._PIXEL_PRECISION)
         adj.set_value(cur_value)
 
         self._queue_draw_brush()
@@ -321,18 +319,11 @@ class TiltchangeMode(SizechangeMode):
         self._ensure_overlay_for_tdw(tdw)
  
         self._queue_draw_brush()
-        r = self._TILT_RADIUS
-        rx = (event.x - self.base_x) / r
-        ry = (event.y - self.base_y) / r
-        nx, ny = gui.linemode.normal(0, 0, rx, ry)
-        s = gui.linemode.get_radian(1.0, 0, nx, ny)
-        self.tilt_x_value = (rx * abs(math.cos(s))) # To be clumped with gtk.adj
-        self.tilt_y_value = (ry * math.sin(s))
-                
-       #cur_value = self.tilt_x_value + (dx / 120.0)
-       #self.tilt_x_value = cur_value
-       #cur_value = self.tilt_y_value + (dy / 120.0)
-       #self.tilt_y_value = cur_value
+        p = self._PIXEL_PRECISION
+        cur_value = self.tilt_x_value + (dx / p)
+        self.tilt_x_value = cur_value
+        cur_value = self.tilt_y_value + (dy / p)
+        self.tilt_y_value = cur_value
         self._queue_draw_brush()
         super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
         
