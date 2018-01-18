@@ -433,12 +433,10 @@ class _TiltOffsetOptionWidget(gui.mode.PaintingModeOptionsWidgetBase):
     def __init__(self):
         # Overwrite self._COMMON_SETTINGS
         # to use(show) only 'radius_logarithmic' scale.
-        overridden_settings = []
-        for cname, text in self._COMMON_SETTINGS:
-            if cname.startswith('tilt_offset'):
-                overridden_settings.append((cname, text))
-        self._COMMON_SETTINGS = overridden_settings
-        
+        self._COMMON_SETTINGS = (
+            ('tilt_offset_x', _("Tilt X:")),
+            ('tilt_offset_y', _("Tilt Y:")),
+        )   
         # And then,call superclass method
         super(_TiltOffsetOptionWidget, self).__init__()
 

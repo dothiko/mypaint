@@ -69,6 +69,11 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
     # possible directly handling each event received. Disconnecting
     # stroke rendering from event processing buys the user the ability
     # to quit out of a slowly/laggily rendering stroke if desired.
+    
+    # XXX for `tilt-offset`
+    _TILT_OFFSET_X = 0.0 # To cache Gtk.Adjustment value.
+    _TILT_OFFSET_Y = 0.0
+    # XXX for `tilt-offset` end
 
     ## Initialization
 
@@ -406,6 +411,14 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         if xtilt is None or ytilt is None or not np.isfinite(xtilt + ytilt):
             xtilt = 0.0
             ytilt = 0.0
+            
+        # XXX for `tilt-offset`
+        # Tilt value is decided even if the current device does not have it.
+        # So, add the offsets.
+        # If the value exceed its limit, it would be clamped later.
+        xtilt += self._TILT_OFFSET_X
+        ytilt += self._TILT_OFFSET_Y
+        # XXX for `tilt-offset` end
 
         # Switching from a non-tilt device to a device which reports
         # tilt can cause GDK to return out-of-range tilt values, on X11.
@@ -571,8 +584,45 @@ class FreehandOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
         self.attach(label, 0, row, 1, 1)
         self.attach(scale, 1, row, 1, 1)
         row += 1
+        # XXX for `tilt-offset`
+        # TRANSLATORS:"Tilt offset of x axis" for the options panel. Short.
+        cname = "tilt_offset_x"
+        label = Gtk.Label()
+        label.set_text(_("Tilt X:"))
+        label.set_alignment(1.0, 0.5)
+        label.set_hexpand(False)
+        self.adjustable_settings.add(cname)
+        adj = self.app.brush_adjustment[cname]
+        adj.connect("value-changed", self._tilt_x_change_cb)
+        scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL, adj)
+        scale.set_draw_value(False)
+        scale.set_hexpand(True)
+        self.attach(label, 0, row, 1, 1)
+        self.attach(scale, 1, row, 1, 1)
+        row += 1
+        # TRANSLATORS:"Tilt offset of y axis" for the options panel. Short.
+        cname = "tilt_offset_y"
+        label = Gtk.Label()
+        label.set_text(_("Tilt Y:"))
+        label.set_alignment(1.0, 0.5)
+        label.set_hexpand(False)
+        self.adjustable_settings.add(cname)
+        adj = self.app.brush_adjustment[cname]
+        adj.connect("value-changed", self._tilt_y_change_cb)
+        scale = Gtk.Scale.new(Gtk.Orientation.HORIZONTAL, adj)
+        scale.set_draw_value(False)
+        scale.set_hexpand(True)
+        self.attach(label, 0, row, 1, 1)
+        self.attach(scale, 1, row, 1, 1)
+        row += 1
+        # XXX for `tilt-offset` end
         return row
+        
+    def _tilt_x_change_cb(self, adj):
+        FreehandMode._TILT_OFFSET_X = adj.get_value()
 
+    def _tilt_y_change_cb(self, adj):
+        FreehandMode._TILT_OFFSET_X = adj.get_value()        
 
 class PressureAndTiltInterpolator (object):
     """Interpolates event sequences, filling in null pressure/tilt data
