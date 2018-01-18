@@ -265,7 +265,7 @@ class TiltchangeMode(SizechangeMode):
     """Oncanvas tilt-offset change mode"""
 
     ACTION_NAME = "OncanvasTiltMode"   
-    _TILT_RADIUS = 64    
+    _TILT_RADIUS = 64.0   
     
     @classmethod
     def get_name(cls):
@@ -321,13 +321,18 @@ class TiltchangeMode(SizechangeMode):
         self._ensure_overlay_for_tdw(tdw)
  
         self._queue_draw_brush()
-        
-        
-        
-        cur_value = self.tilt_x_value + (dx / 120.0)
-        self.tilt_x_value = cur_value
-        cur_value = self.tilt_y_value + (dy / 120.0)
-        self.tilt_y_value = cur_value
+        r = self._TILT_RADIUS
+        rx = (event.x - self.base_x) / r
+        ry = (event.y - self.base_y) / r
+        nx, ny = gui.linemode.normal(0, 0, rx, ry)
+        s = gui.linemode.get_radian(1.0, 0, nx, ny)
+        self.tilt_x_value = (rx * abs(math.cos(s))) # To be clumped with gtk.adj
+        self.tilt_y_value = (ry * math.sin(s))
+                
+       #cur_value = self.tilt_x_value + (dx / 120.0)
+       #self.tilt_x_value = cur_value
+       #cur_value = self.tilt_y_value + (dy / 120.0)
+       #self.tilt_y_value = cur_value
         self._queue_draw_brush()
         super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
         
@@ -369,7 +374,7 @@ class TiltchangeMode(SizechangeMode):
         cr.move_to(0, 0)
         x = self.tilt_x_value
         y = self.tilt_y_value
-        # Remap input values into 
+        # Remap input values into circle
         nx, ny = gui.linemode.normal(0, 0, x, y)
         s = gui.linemode.get_radian(1.0, 0, nx, ny)
         cr.line_to(
