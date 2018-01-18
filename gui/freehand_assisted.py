@@ -244,8 +244,10 @@ class AssistedFreehandMode (freehand.FreehandMode,
             xtilt = 0.0
             ytilt = 0.0
 
+        # XXX for 'tilt-offset'
         xtilt += self._TILT_OFFSET_X
         ytilt += self._TILT_OFFSET_Y
+        # XXX For 'tilt-offset' end
 
         # Switching from a non-tilt device to a device which reports
         # tilt can cause GDK to return out-of-range tilt values, on X11.
