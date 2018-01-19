@@ -39,8 +39,9 @@ class BrushHistoryPopup (windowing.PopupWindow):
     def _button_clicked_cb(self, history_view):
         self.leave("clicked")
      
-    def popup(self):       
+    def popup(self):
         self.enter()
+        self._autoleave_start(True) # XXX for `autoleave`
 
     def enter(self):
         # Popup this window, in current position.
@@ -49,6 +50,7 @@ class BrushHistoryPopup (windowing.PopupWindow):
         self.show_all()
                
     def leave(self, reason):
+        self._autoleave_start(False) # XXX for `autoleave`
         self.hide()
 
     def advance(self):

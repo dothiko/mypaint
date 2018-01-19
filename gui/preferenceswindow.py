@@ -213,12 +213,18 @@ class PreferencesWindow (windowing.Dialog):
         oncanvas_modifier_combo.set_active_id(modifier_id)
         # XXX for `Oncanvas item modifier` end
         
-        # for `close quickchooser`
+        # XXX for `close quickchooser`
         # quick-chooser-behavior checkbutton
         btn = getobj("checkbutton_quickchooser_behavior")
         btn.set_active(p.get("ui.quickchooser_close_on_tap", False))
-        # for `close quickchooser` end
+        # XXX for `close quickchooser` end
         
+        # XXX for `autoleave chooser`
+        adj = getobj("adjustment_quickchooser_timeout")
+        adj.set_value(
+            self.app.preferences.get("ui.quickchooser_timeout", 0)
+        )
+        # XXX for `autoleave chooser` end        
         # XXX for `other configuration panel` end
         
         self.in_update_ui = False
@@ -375,3 +381,9 @@ class PreferencesWindow (windowing.Dialog):
             active = btn.get_active()
             self.app.preferences["ui.quickchooser_close_on_tap"] = active
     # XXX for `close quickchooser` end
+    
+    # XXX for `autoleave chooser`
+    def adjustment_quickchooser_timeout_value_changed_cb(self, adj):
+        if not self.in_update_ui:
+            self.app.preferences["ui.quickchooser_timeout"] = adj.get_value()
+    # XXX for `autoleave chooser` end

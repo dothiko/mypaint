@@ -21,6 +21,7 @@ import gi
 from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GLib
+from gi.repository import GObject # XXX for `autoleave`
 import cairo # XXX for `transparent-dialog`  
 
 from lib.helpers import clamp
@@ -96,8 +97,41 @@ class SubWindow (Gtk.Window):
         self.pre_hide_pos = self.get_position()
         Gtk.Window.hide(self)
 
+# XXX for `autoleave`
+class AutoleaveMixin(object):
 
-class PopupWindow (Gtk.Window):
+    def _autoleave_init(self):
+        self._autoleave_id = None
+        
+    def _autoleave_start(self, enable):
+        """Start/Stop autoleave timer.
+        
+        :param enable: Boolean. If true, and user-configured timeout value
+                       is greater than 0, timeout timer start.
+        """
+        if self._autoleave_id is not None:
+            GObject.source_remove(self._autoleave_id)
+            self._autoleave_id = None
+            
+        if enable:
+            timeout = self.app.preferences.get('ui.quickchooser_timeout', 0)
+            if timeout > 0:
+                self._autoleave_id = GObject.timeout_add(
+                    timeout,
+                    self._autoleave_timeout_cb
+                )
+                        
+    def _autoleave_timeout_cb(self):
+        if self.get_visible():
+            self.hide()
+        self._autoleave_id = None
+        return False
+
+# XXX for `autoleave` end 
+
+
+class PopupWindow (Gtk.Window,
+                   AutoleaveMixin): # XXX for `autoleave`
     """
     A popup window, with no decoration. Popups always appear centred under the
     mouse, and don't accept keyboard input.
@@ -108,9 +142,11 @@ class PopupWindow (Gtk.Window):
         self.set_position(Gtk.WindowPosition.MOUSE)
         self.app = app
         self.app.kbm.add_window(self)
+        self._autoleave_init() # XXX for `autoleave`
 
 
-class ChooserPopup (Gtk.Window):
+class ChooserPopup (Gtk.Window, 
+                    AutoleaveMixin): # XXX for `autoleave`
     """A resizable popup window used for making fast choices
 
     Chooser popups can be used for fast selection of items
@@ -156,7 +192,6 @@ class ChooserPopup (Gtk.Window):
             Gdk.WindowEdge.SOUTH: Gdk.CursorType.BOTTOM_SIDE,
             Gdk.WindowEdge.NORTH: Gdk.CursorType.TOP_SIDE,
         }
-
     ## Method defs
 
     def __init__(self, app, actions, config_name):
@@ -184,6 +219,8 @@ class ChooserPopup (Gtk.Window):
         self._outside_grab_active = False
         self._outside_cursor = Gdk.Cursor(Gdk.CursorType.LEFT_PTR)
         self._popup_info = None
+        
+        self._autoleave_init() # XXX for `autoleave`
 
         # Initial positioning
         self._initial_move_pos = None  # used when forcing a specific position
@@ -209,7 +246,7 @@ class ChooserPopup (Gtk.Window):
 
         # Register with the keyboard manager, but only let certain actions be
         # driven from the keyboard.
-        app.kbm.add_window(self, actions)
+        app.kbm.add_window(self, actions)     
 
         # Event handlers
         self.connect("realize", self._realize_cb)
@@ -220,9 +257,7 @@ class ChooserPopup (Gtk.Window):
         self.connect("hide", self._hide_cb)
         self.connect("button-press-event", self._button_press_cb)
         self.connect("button-release-event", self._button_release_cb)
-        self.connect("key-press-event", self._key_press_cb) # XXX for `tab-advance`
         self.add_events( Gdk.EventMask.BUTTON_PRESS_MASK |
-                         Gdk.EventMask.KEY_PRESS_MASK | # XXX for `tab-advance`
                          Gdk.EventMask.BUTTON_RELEASE_MASK )
 
         # Appearance
@@ -386,7 +421,9 @@ class ChooserPopup (Gtk.Window):
             popup_info = (event.get_device(), event.time)
         self._popup_info = popup_info
         self.present()
-
+        
+        self._autoleave_start(True) # XXX for `autoleave`
+        
     def _do_initial_move(self):
         x, y, w, h = self._get_size()
         x, y = self._initial_move_pos
@@ -483,6 +520,7 @@ class ChooserPopup (Gtk.Window):
 
     def _button_press_cb(self, widget, event):
         """Internal: starts resizing if the pointer is at the edge"""
+        # XXX for 'autoleave' : does not work(never called) for QuickColorChooser??
         win = self.get_window()
         if not win:
             return False
@@ -515,6 +553,8 @@ class ChooserPopup (Gtk.Window):
             return False
         if self._resize_info:
             self._resize_info = None
+        self._pressed_button = None # XXX for `autoleave`
+        self._autoleave_start(True) # XXX for `autoleave` : restart autoleave
         # IDEA: re-grab the pointer here if the event is inside?
         return True
 
@@ -529,7 +569,11 @@ class ChooserPopup (Gtk.Window):
             return
         size = self._get_size()
         assert size is not None
-
+        # XXX for `autoleave`
+        if event.state & Gdk.ModifierType.BUTTON1_MASK: 
+            self._autoleave_start(False) # Temporary disable while mouse used.
+        # XXX for `autoleave` end
+        
         # Resizing
         px, py = event.x_root, event.y_root
         if self._resize_info:
@@ -616,20 +660,7 @@ class ChooserPopup (Gtk.Window):
         if outside_tolerance:
             self.hide()
             return True
-    
-    # XXX for `tab-advance`
-    def _key_press_cb(self, widget, event):
-        # I would like to invoke hide action with Gdk.KEY_Escape
-        # But this handler does not respond that key.why?
-        if event.keyval in (Gdk.KEY_Tab, Gdk.KEY_Page_Down):
-            if hasattr(self, 'advance'):
-                self.advance()
-        elif event.keyval in (Gdk.KEY_Page_Up,):
-            if hasattr(self, 'backward'):
-                self.backward()
-            elif hasattr(self, 'advance'):
-                self.advance()
-    # XXX for `tab-advance` end
+        
 
 # XXX for `transparent-dialog`    
 class TransparentMixin(object):
