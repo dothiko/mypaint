@@ -25,7 +25,7 @@ import history
 class BrushHistoryPopup (windowing.PopupWindow):
     """Brush History popup
     """
-
+    
     def __init__(self, app, prefs_id=quickchoice._DEFAULT_PREFS_ID):
         super(BrushHistoryPopup, self).__init__(app)
         # FIXME: This duplicates stuff from the PopupWindow
@@ -38,7 +38,14 @@ class BrushHistoryPopup (windowing.PopupWindow):
         vbox.pack_start(brush_hist_view, True, False, 0)
         self.add(vbox)
         
-        brush_hist_view.button_clicked += self._button_clicked_cb      
+        brush_hist_view.button_clicked += self._button_clicked_cb   
+        
+        icon_size = history.HISTORY_PREVIEW_SIZE 
+        margin = 8      
+        self.set_size_request(
+            (icon_size + margin) * 5 + margin * 2,
+            icon_size + margin * 2
+        )
 
     def _button_clicked_cb(self, history_view):
         self.leave("clicked")
