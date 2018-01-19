@@ -7,13 +7,7 @@
 # (at your option) any later version.
 
 from gi.repository import Gtk
-from gi.repository import Gdk
-from gi.repository import GLib
-from gi.repository import GdkPixbuf
-import cairo
 
-from lib import helpers
-from lib.observable import event
 import windowing
 import quickchoice
 import history
@@ -23,27 +17,22 @@ import history
 ## Class definitions
 
 class BrushHistoryPopup (windowing.PopupWindow):
-    """Brush History popup
+    """Brush History popup, to quick access recent brushes on canvas.
     """
     
     def __init__(self, app, prefs_id=quickchoice._DEFAULT_PREFS_ID):
         super(BrushHistoryPopup, self).__init__(app)
-        # FIXME: This duplicates stuff from the PopupWindow
-        #self.set_position(Gtk.WindowPosition.MOUSE)
-        self.app = app
-        self.app.kbm.add_window(self)
-        
         vbox = Gtk.VBox()
         brush_hist_view = history.BrushHistoryView(app)
         vbox.pack_start(brush_hist_view, True, False, 0)
         self.add(vbox)
-        
         brush_hist_view.button_clicked += self._button_clicked_cb   
         
+        bm = app.brushmanager
         icon_size = history.HISTORY_PREVIEW_SIZE 
         margin = 8      
         self.set_size_request(
-            (icon_size + margin) * 5 + margin * 2,
+            (icon_size + margin) * len(bm.history) + margin * 2,
             icon_size + margin * 2
         )
 
