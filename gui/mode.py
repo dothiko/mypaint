@@ -329,33 +329,37 @@ class InteractionMode (object):
 
     def button_press_cb(self, tdw, event):
         """Handler for ``button-press-event``s."""
+        # XXX `Previewtool suppressor`
         # When realtime update notification disabled (especially PreviewTool)
         # we need to trigger update notifier for such widgets.
         if tdw.app is not None:
             tdw.app.doc.model.start_realtime_event()
-
+        # XXX `Previewtool suppressor` end
         assert not hasattr(super(InteractionMode, self), "button_press_cb")
 
     def motion_notify_cb(self, tdw, event):
         """Handler for ``motion-notify-event``s."""
-
-        # If the device has changed,call notify callback. 
+        
+        # XXX for `device switch`
+        # Detect change of device, and call `device_monitor.device_used()`.
+        # Inside that method we change previously selected brush with
+        # that device.
         if tdw.app is not None:
             device = event.get_source_device()
             same_device = tdw.app.device_monitor.device_used(device)
             if not same_device:
                 tdw.doc.brush.reset()
-
+        # XXX for `device switch` end
         assert not hasattr(super(InteractionMode, self), "motion_notify_cb")
 
     def button_release_cb(self, tdw, event):
         """Handler for ``button-release-event``s."""
-
+        # XXX `Previewtool suppressor`
         # When realtime update notification disabled (especially PreviewTool)
         # we need to trigger update notifier for such widgets.
         if tdw.app is not None:
             tdw.app.doc.model.end_realtime_event()
-
+        # XXX `Previewtool suppressor` end
         assert not hasattr(super(InteractionMode, self), "button_release_cb")
 
     def scroll_cb(self, tdw, event):

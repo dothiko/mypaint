@@ -707,7 +707,8 @@ class DrawWindow (Gtk.Window):
         model = self.app.doc.model
         model.sync_pending_changes()
         
-        # XXX My added code, to wait pending autosave finished.
+        # XXX for `project-save` and `pending autosave fix`
+        # This code is to wait pending autosave finished.
         # This might be needed when extremely large picture editing.
         proc = model.get_autosave_processor()
         if proc.has_work():
@@ -715,7 +716,8 @@ class DrawWindow (Gtk.Window):
             # Projectsave_progress.run() returns False when cancelled
             if progress.run() == False: 
                 return True
-
+        # XXX for `project-save` and `pending autosave fix` end
+        
         self.app.save_gui_config()  # FIXME: should do this periodically, not only on quit
 
         ok_to_quit = self.app.filehandler.confirm_destructive_action(

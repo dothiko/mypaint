@@ -355,7 +355,8 @@ class Application (object):
         self.line_mode_settings = linemode.LineModeSettings(self)
         self.stroke_pressure_settings = exinktool.StrokePressureSettings(self)
 
-        self.modemanager_for_device = {}
+        # For device-switching dictionary.
+        self.modemanager_for_device = {} # XXX for `device-switch`
 
         # Button press mapping
         self.button_mapping = ButtonMapping()

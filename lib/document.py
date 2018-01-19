@@ -294,9 +294,11 @@ class Document (object):
         self.stroke = None
         self.command_stack = command.CommandStack()
 
+        # XXX for `previewtool suppressor`
         # Surpressing realtime update for additional widgets
         # especially PreviewTool.
         self._suppress_update = False
+        # XXX for `previewtool suppressor` end 
 
         # Cache and auto-saving to the cache
         self._painting_only = painting_only
@@ -322,15 +324,17 @@ class Document (object):
         self._autosave_countdown_id = None
         self._autosave_dirty = False
 
+        # XXX for `project-save`
         # Project flag.place here to avoid exception
         # from _command_stack_updated_cb
         self._is_project = False
+        # XXX for `project-save` end
 
         if (not painting_only) and self._owns_cache_dir:
             self._autosave_processor = lib.idletask.Processor()
             self.command_stack.stack_updated += self._command_stack_updated_cb
             self.effective_bbox_changed += self._effective_bbox_changed_cb
-            self._projectsave_processor = lib.idletask.Processor()
+            self._projectsave_processor = lib.idletask.Processor() # XXX for `project-save`
 
         # Optional page area and resolution information
         self._frame = [0, 0, 0, 0]
@@ -586,7 +590,7 @@ class Document (object):
 
     ## Queued autosave writes: low priority & chunked
 
-    def _queue_autosave_writes(self,dirname=None):
+    def _queue_autosave_writes(self, dirname=None): # XXX for `project-save` : added `dirname` param
         """Add autosaved backup tasks to the background processor
 
         These tasks consist of nicely chunked writes for all layers
@@ -671,8 +675,14 @@ class Document (object):
             os.path.join(oradir, stackfile_rel),
         )
         manifest.add(stackfile_rel)
-        self._autosave_launch_cleanup(oradir, manifest)
+        # Cleanup
+        taskproc.add_work(
+            self._autosave_cleanup_cb,
+            oradir = oradir,
+            manifest = manifest,
+        )
 
+    # XXX for `project-save` and `pending autosave fix`
     def get_autosave_processor(self):
         """
         Getter method for autosave processor.
@@ -688,20 +698,8 @@ class Document (object):
         and their position (might) be misplaced.
         """
         return self._autosave_processor
+    # XXX for `project-save` and `pending autosave fix` end
     
-    def _autosave_launch_cleanup(self, oradir, manifest, taskproc=None):
-        """The common method of launching autosave cleanup task.
-        """
-        if taskproc == None:
-            taskproc = self._autosave_processor
-        
-        taskproc.add_work(
-                self._autosave_cleanup_cb,
-                oradir = oradir,
-                manifest = manifest,
-            )
-    
-
     def _autosave_thumbnail_cb(self, rootstack, bbox, filename):
         """Autosaved backup task: write Thumbnails/thumbnail.png
 
@@ -980,20 +978,6 @@ class Document (object):
         cmd = command.RestackLayer(self, src_path, targ_path)
         self.do(cmd)
 
-    def restack_multiple_layers(self, src_path_list, targ_path):
-        """Moves multiple layers within the layer stack by path, undoably
-
-        :param tuple src_path_list: a list of path of the layers to be moved
-        :param tuple targ_path: target insert path
-
-        The source paths must identify an existing layer. The target
-        path must be a valid insertion path at the time this method is
-        called.
-        """
-        logger.debug("Restack multiple layers at %r to %r", src_path_list, targ_path)
-        cmd = command.RestackMultipleLayers(self, src_path_list, targ_path)
-        self.do(cmd)
-
     def bubble_current_layer_up(self):
         """Moves the current layer up in the stack (undoable)"""
         cmd = command.BubbleLayerUp(self)
@@ -1073,28 +1057,6 @@ class Document (object):
                                 **kwargs)
         self.do(cmd)
 
-    def grabcut_fill(self, result_layer, path, removed_hint_layer):
-        """Doing POST-PROCESS of OpenCV grabcut fill.
-
-        Actually, the result layer is already generated
-        before call this method.
-        This method (and command.GrabcutAddLayer) does just
-        inserting that result layer into current RootLayerStack.
-
-        :param result_layer: the grabcutfill result layer.
-        :param path: layer insertion path in rootlayerstack.
-        """
-
-        # Actually, that layer srcs are already painted.
-        # so this command just appends new layers into the path.
-        cmd = command.GrabcutAddLayer(
-            self, 
-            result_layer, 
-            path, 
-            removed_hint_layer
-        )
-        self.do(cmd)
-
     ## Graphical refresh
 
     def _canvas_modified_cb(self, root, layer, x, y, w, h):
@@ -1123,7 +1085,8 @@ class Document (object):
     def invalidate_all(self):
         """Marks everything as invalid"""
         self.canvas_area_modified(0, 0, 0, 0)
-
+    
+    # XXX `Previewtool suppressor`
     ## Providing facility to suppress realtime(freehand) events refresh
     #  for some classes such as PreviewTool.
 
@@ -1136,6 +1099,7 @@ class Document (object):
     @property
     def suppress_update(self):
         return self._suppress_update
+    # XXX `Previewtool suppressor` end
 
     ## Undo/redo command stack
 
@@ -1343,7 +1307,7 @@ class Document (object):
         layers = self.layer_stack
         self.do(command.NormalizeLayerMode(self, layers.current))
 
-    def merge_current_layer_down(self, only_opaque=False):
+    def merge_current_layer_down(self, only_opaque=False): # XXX for `merge-only-limited-area` : add only_opaque param.
         """Merge the current layer into the one below"""
         rootstack = self.layer_stack
         cur_path = rootstack.current_path
@@ -1353,12 +1317,15 @@ class Document (object):
         if dst_path is None:
             logger.info("Merge Down is not possible here")
             return False
-        if only_opaque:
+        # XXX for `merge-only-limited-area`
+        if only_opaque: 
             self.do(command.MergeLayerDownOpaque(self))
         else:
-            self.do(command.MergeLayerDown(self))
+            self.do(command.MergeLayerDown(self)) # In this part, original code has only this line.
+        # XXX for `merge-only-limited-area` end.
         return True
 
+    # XXX for `cut with another layer`
     def cut_current_layer_down(self):
         """Cut the current layer with the transparent area of below one."""
         rootstack = self.layer_stack
@@ -1373,6 +1340,7 @@ class Document (object):
             command.CutLayerDown(self, dst_path)
         )
         return True
+    # XXX for `cut with another layer` end
 
     def merge_visible_layers(self):
         """Merge all visible layers into one & discard originals."""
@@ -1531,7 +1499,8 @@ class Document (object):
         ``save_*()`` method is chosen to perform the save.
         """
         self.sync_pending_changes(flush=True)
-
+        
+        # XXX for `project-save`
         if 'project' in kwargs and kwargs['project']:
             # Project-save should have 'project' kwarg.
             # And that valus should be True.
@@ -1540,7 +1509,8 @@ class Document (object):
             junk, ext = os.path.splitext(filename)
             ext = ext.lower().replace('.', '')
             assert ext != "" # To detect older project code bug
-
+        # XXX for `project-save` end
+        
         save = getattr(self, 'save_' + ext, self._unsupported)
         result = None
         try:
@@ -1602,16 +1572,16 @@ class Document (object):
             "basename": os.path.basename(filename),
         }
 
-
-        if not os.access(filename, os.R_OK):
+        if not os.access(filename, os.R_OK): # XXX for `permission problem`
             msg = C_(
                 "Document IO: loading errors",
                 u"{error_loading_common}\n"
-                u"You do not have the permissions needed "
-                u"to open this file."
+                u"You do not have the permissions needed " # XXX for `permission problem`
+                u"to open this file." # XXX for `permission problem`
             ).format(**error_kwargs)
             raise FileHandlingError(msg)
 
+        # XXX for `project-save`
         ext = None
         self._is_project = False
         if not os.path.isfile(filename):
@@ -1636,12 +1606,13 @@ class Document (object):
         elif os.path.exists(filename):
             junk, ext = os.path.splitext(filename)
             ext = ext.lower().replace('.', '')
-
-        if ext == None:
+        # XXX for `project-save` end
+        
+        if ext == None: # XXX for `permission problem`
             msg = C_(
                 "Document IO: loading errors",
                 u"{error_loading_common}\n"
-                u"The file does not exist."
+                u"The file does not exist." # XXX for `permission problem`
             ).format(**error_kwargs)
             raise FileHandlingError(msg)
 
