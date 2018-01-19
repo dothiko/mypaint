@@ -204,13 +204,23 @@ class PreferencesWindow (windowing.Dialog):
         blink_interval = p.get("ui.blink_interval", default_timeout) 
         blink_interval_adj.set_value(blink_interval * 1000.0)
 
+        # XXX for `other configuration panel`
         # Other configurations
+        # XXX for `Oncanvas item modifier`
         oncanvas_modifier_combo = getobj("combobox_oncanvas_modifier")
         self.oncanvas_modifier_combo = oncanvas_modifier_combo
         modifier_id = p.get("ui.oncanvas_modifier", 'alt')
-       #assert modifier_id in ('alt', 'windows', 'meta')
         oncanvas_modifier_combo.set_active_id(modifier_id)
-
+        # XXX for `Oncanvas item modifier` end
+        
+        # for `close quickchooser`
+        # quick-chooser-behavior checkbutton
+        btn = getobj("checkbutton_quickchooser_behavior")
+        btn.set_active(p.get("ui.quickchooser_close_on_tap", False))
+        # for `close quickchooser` end
+        
+        # XXX for `other configuration panel` end
+        
         self.in_update_ui = False
 
     ## Callbacks for widgets that manipulate settings
@@ -343,6 +353,7 @@ class PreferencesWindow (windowing.Dialog):
             self.app.preferences["ui.blink_interval"] = interval
             gui.stategroup.State.autoleave_timeout = interval
 
+    # XXX for 'Oncanvas item modifier'
     def combobox_oncanvas_modifier_changed_cb(self, combobox):
         self.app.preferences["ui.oncanvas_modifier"] = combobox.get_active_id()
 
@@ -356,4 +367,11 @@ class PreferencesWindow (windowing.Dialog):
                 # Exit when the first modifier found.
                 # So do not press combination.
                 break
-
+    # XXX for 'Oncanvas item modifier' end
+    
+    # XXX for `close quickchooser`
+    def quickchooser_behavior_checked_cb(self, btn):
+        if not self.in_update_ui:
+            active = btn.get_active()
+            self.app.preferences["ui.quickchooser_close_on_tap"] = active
+    # XXX for `close quickchooser` end

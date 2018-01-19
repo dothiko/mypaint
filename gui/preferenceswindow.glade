@@ -1336,6 +1336,7 @@ Different traditions have different color harmonies.</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="tooltip_text" translatable="yes">Modifier key use for editing oncanvas item. Mod1 is 'alt key', Mod4 is 'windows key' in many platform.</property>
+                    <property name="halign">start</property>
                     <property name="label" translatable="yes">Oncanvas Editing Modifier :</property>
                     <property name="xalign">0</property>
                   </object>
@@ -1349,8 +1350,7 @@ Different traditions have different color harmonies.</property>
                     <property name="visible">True</property>
                     <property name="can_focus">False</property>
                     <property name="tooltip_text" translatable="yes">You can change selected item by actually right-clicking this combobox with holding modifier key you want to use.</property>
-                    <property name="hexpand">True</property>
-                    <property name="vexpand">False</property>
+                    <property name="halign">start</property>
                     <items>
                       <item id="mod1">Mod1</item>
                       <item id="mod2">Mod2</item>
@@ -1368,6 +1368,35 @@ Different traditions have different color harmonies.</property>
                   <packing>
                     <property name="left_attach">1</property>
                     <property name="top_attach">0</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="label42">
+                    <property name="visible">True</property>
+                    <property name="can_focus">False</property>
+                    <property name="halign">start</property>
+                    <property name="label" translatable="yes">Quick chooser behavior:</property>
+                  </object>
+                  <packing>
+                    <property name="left_attach">0</property>
+                    <property name="top_attach">1</property>
+                  </packing>
+                </child>
+                <child>
+                  <object class="GtkCheckButton" id="checkbutton_quickchooser_behavior">
+                    <property name="label" translatable="yes">Close when it is already shown.</property>
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="receives_default">False</property>
+                    <property name="tooltip_text" translatable="yes">With checking this checkbox, when shortcut key or button pressed,  and if the quick chooser popup already shown, that popup is closed, instead of advancing.</property>
+                    <property name="halign">start</property>
+                    <property name="xalign">0</property>
+                    <property name="draw_indicator">True</property>
+                    <signal name="toggled" handler="quickchooser_behavior_checked_cb" swapped="no"/>
+                  </object>
+                  <packing>
+                    <property name="left_attach">1</property>
+                    <property name="top_attach">1</property>
                   </packing>
                 </child>
               </object>

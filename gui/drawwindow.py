@@ -502,8 +502,12 @@ class DrawWindow (Gtk.Window):
         """Pops up a named quick chooser instance, hides the others"""
         chooser = self._get_quick_chooser(name)
         if chooser.get_visible():
-           #chooser.advance() # XXX Original code
-            chooser.hide() # XXX Changed to hide
+            # XXX for `close quickchooser`
+            if not self.app.preferences.get('ui.quickchooser_close_on_tap', False):
+                chooser.advance() # Original code
+            else:
+                chooser.hide()
+            # XXX for `close quickchooser` end 
             return
         for other_name in self._QUICK_CHOOSER_CONSTRUCT_INFO:
             if other_name == name:

@@ -21,7 +21,7 @@ import gi
 from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GLib
-import cairo
+import cairo # XXX for `transparent-dialog`  
 
 from lib.helpers import clamp
 
@@ -220,9 +220,9 @@ class ChooserPopup (Gtk.Window):
         self.connect("hide", self._hide_cb)
         self.connect("button-press-event", self._button_press_cb)
         self.connect("button-release-event", self._button_release_cb)
-        self.connect("key-press-event", self._key_press_cb) # Added for tab-advance
+        self.connect("key-press-event", self._key_press_cb) # XXX for `tab-advance`
         self.add_events( Gdk.EventMask.BUTTON_PRESS_MASK |
-                         Gdk.EventMask.KEY_PRESS_MASK | # Added for tab-advance
+                         Gdk.EventMask.KEY_PRESS_MASK | # XXX for `tab-advance`
                          Gdk.EventMask.BUTTON_RELEASE_MASK )
 
         # Appearance
@@ -616,7 +616,8 @@ class ChooserPopup (Gtk.Window):
         if outside_tolerance:
             self.hide()
             return True
-
+    
+    # XXX for `tab-advance`
     def _key_press_cb(self, widget, event):
         # I would like to invoke hide action with Gdk.KEY_Escape
         # But this handler does not respond that key.why?
@@ -628,7 +629,9 @@ class ChooserPopup (Gtk.Window):
                 self.backward()
             elif hasattr(self, 'advance'):
                 self.advance()
-           
+    # XXX for `tab-advance` end
+
+# XXX for `transparent-dialog`    
 class TransparentMixin(object):
     """A Mixin for popup window which has transparent background
     """
@@ -689,3 +692,5 @@ class TransparentMixin(object):
         else:
             Gdk.cairo_set_source_pixbuf(cr, self.bgpix, 0, 0)
             cr.paint()
+
+# XXX for `transparent-dialog`  end
