@@ -30,6 +30,7 @@ from curve import CurveWidget
 
 import gui.mode
 import gui.cursor
+import gui.dialogs # XXX for `pressure preset`
 
 
 ## Module constants
@@ -74,7 +75,7 @@ class LineModeSettings (object):
                                  step_incr=0.01, page_incr=0.1)
             adj.connect("value-changed", self._value_changed_cb, prefs_key)
             self.adjustments[cname] = adj
-
+    
     def _value_changed_cb(self, adj, prefs_key):
         # Direct GtkAdjustment callback for a single adjustment being changed.
         value = float(adj.get_value())
@@ -115,13 +116,26 @@ class LineModeCurveWidget (CurveWidget):
         CurveWidget.__init__(self, npoints=4, ylockgroups=((1, 2),),
                              changed_cb=self._changed_cb)
         self.app.line_mode_settings.observers.append(self._adjs_changed_cb)
+        # XXX for `pressure preset`
+        self._updating_ui = False # To detect updating UI
+        self._edited = False # Whether the curve has been edited by user.
+        
+        self.start_update_ui()
+        # XXX for `pressure preset` end
         self._update()
 
     def _adjs_changed_cb(self, changed):
         logger.debug("Updating curve (changed: %r)", changed)
-        self._update()
+        self._update()        
+        # XXX for `pressure preset`
+        if self._updating_ui:
+            self.__end_update_ui()
+        else:
+            self._edited = True
+        # XXX for `pressure preset` end
 
     def _update(self, from_defaults=False):
+        # XXX for `pressure preset` TODO from_defaults should be united with LineModeOptionsWidget?
         if from_defaults:
             self.points = [(0.0, 0.2), (0.33, 0.5), (0.66, 0.5), (1.0, 0.33)]
         for setting, coord_pair in self._SETTINGS_COORDINATE:
@@ -136,9 +150,9 @@ class LineModeCurveWidget (CurveWidget):
                 value = defaults[0]
             index, subindex = coord_pair
             if not setting.startswith('line'):
-                value = 1.0 - value
+                value = 1.0 - value                
             if subindex == 0:
-                coord = (value, self.points[index][1])
+                coord = (value, self.points[index][1])                
             else:
                 coord = (self.points[index][0], value)
             self.set_point(index, coord)
@@ -156,29 +170,294 @@ class LineModeCurveWidget (CurveWidget):
             value = max(0.0001, value)
             adj = self.app.line_mode_settings.adjustments[setting]
             adj.set_value(value)
+            
+    # XXX for `pressure preset`
+    def start_update_ui(self):
+        self._updating_ui = True
+        
+    def __end_update_ui(self):
+        """Updating curve is done in asynchronously,
+        So this method should not called from outside this class.
+        """
+        self._updating_ui = False
+        self._edited = False
+    
+    @property
+    def edited(self):
+        return self._edited
+    # XXX for `pressure preset` end
 
 
 ## Options UI
 
 class LineModeOptionsWidget (gui.mode.PaintingModeOptionsWidgetBase):
     """Options widget for geometric line modes"""
+    
+    # XXX for `pressure preset`
+    ## Class constants
+    
+    # The name indicates user-editied current setting.
+    _CURRENT_PRESET_NAME = "Current"
+    
+    # Base name for Application.preferences setting.
+    _PREF_BASE = "ui.line_mode.preset"
+    
+    # Spacing for grid widget
+    _SPACING = 6 
+
+    # Default pressure presets.
+    _PRESSURE_PRESETS = { 
+    #   preset-name :  ( pressure-values, location-value ),
+        'Default' : ( (0.1, 0.7, 0.1), (0.25, 0.75) ),
+        'Flurent' : ( (0.9, 0.4, 0.1), (0.25, 0.8) ),
+        'Thick'   : ( (0.4, 0.8, 0.4), (0.1, 0.9) ),
+        'Thin'    : ( (0.01, 0.3, 0.01), (0.25, 0.75) ),
+        'Head'    : ( (0.3, 0.1, 0.6), (0.25, 0.8) ),
+        'Tail'    : ( (0.6, 0.1, 0.3), (0.2, 0.75) ),
+    }
+    
+    # Name of Gtk.Adjustments in LineModeCurveWidget.
+    # XXX Copyed from LineModeCurveWidget
+    _ADJ_PRESSURE_NAMES = (
+        'entry_pressure',
+        'midpoint_pressure',
+        'exit_pressure'
+    )    
+    _ADJ_LOCATION_NAMES = (
+        'line_head',
+        'line_tail'
+    )    
+    # XXX for `pressure preset` end
 
     def init_specialized_widgets(self, row=0):
+        self._updating_ui = True # XXX for `pressure preset`
         curve = LineModeCurveWidget()
         curve.set_size_request(175, 125)
         self._curve = curve
         exp = Gtk.Expander()
         exp.set_label(_("Pressure variation..."))
-        exp.set_use_markup(False)
-        exp.add(curve)
-        self.attach(exp, 0, row, 2, 1)
+        exp.set_use_markup(False) 
+        #exp.add(curve) # XXX Original code
+        # XXX for `pressure preset`
+        prefs = self.app.preferences
+        exp.set_expanded(prefs.get("%s.expanded" % self._PREF_BASE, False))
+        exp.connect("activate", self._expander_toggled_cb )
+        curve.set_hexpand(True)
+        curve.set_halign(Gtk.Align.FILL)
+        # We needs a grid to arrange curve and combo-box togather,
+        # and for future expansion.
+        v_row = 0
+        v_grid = Gtk.Grid()
+        v_grid.set_row_spacing(self._SPACING)
+        v_grid.set_column_spacing(self._SPACING)
+        v_grid.set_hexpand(True)
+        v_grid.set_halign(Gtk.Align.FILL)
+        v_grid.attach(curve, 0, v_row, 2, 1)
+        v_row += 1
+        self._init_variation_preset_combo(v_grid, v_row) 
+        exp.add(v_grid)
+        # XXX for `pressure preset` end
+        self.attach(exp, 0, row, 2, 1) 
         row += 1
+        self._updating_ui = False # XXX for `pressure preset`
         return row
 
     def reset_button_clicked_cb(self, button):
         super(LineModeOptionsWidget, self).reset_button_clicked_cb(button)
         self._curve._update(from_defaults=True)
+    
+    # XXX for `pressure preset`
+    def _init_variation_preset_combo(self, grid, row):
+        """This method sets up combo box.
+        That box is just a `Selector`, Gtk.ListStore of that
+        box has only a label(name) of preset.
+        The preset values are actually stored in self._presets dictionary.
+        """
+        store = Gtk.ListStore(str)
+        self._preset_store = store
+        prefs = self.app.preferences
+        pref_base = self._PREF_BASE
+        working_name = self._CURRENT_PRESET_NAME
+        
+        datas = prefs.get("%s.datas" % pref_base, None)
+        
+        # Insert `Current` (i.e. user edited setting) as first.
+        store.append( (self._CURRENT_PRESET_NAME, ) )
+        
+        if datas is not None:
+            for name in datas:      
+                store.append((name, ))
+            self._presets = datas
+        else:
+            for i, name in enumerate(self._PRESSURE_PRESETS):
+                store.append((name, ))
+            self._presets = self._PRESSURE_PRESETS  
+            
+        if not working_name in self._presets:
+            # Working preset MUST be list, not tuple.
+            self._presets[working_name] = (
+                [0.2, 0.5, 0.33], [0.25, 0.75]
+            )
+        
+        combo = Gtk.ComboBox.new_with_model(store)
+        cell = Gtk.CellRendererText()       
+        combo.pack_start(cell, True)
+        combo.add_attribute(cell, 'text', 0)
+        combo.set_active(0)
+        combo.set_sensitive(True) # variation preset always can be changed
+        combo.set_halign(Gtk.Align.FILL)
+        combo.connect('changed', self._preset_combo_changed_cb)
+        self._preset_combo = combo
+        grid.attach(combo, 0, row, 2, 1) 
+        row += 1      
+        
+        # `Add` and `Remove` buttons.
+        button_src = (
+            (_("Add"), self._button_add_clicked_cb, 0),
+            (_("Remove"), self._button_remove_clicked_cb, 1)
+        )
+        for label, cb, pos in button_src:
+            btn = Gtk.Button(label)
+            btn.connect("clicked", cb)
+            grid.attach(btn, pos, row, 1, 1)
+            if pos == 0:
+                self._button_add = btn
+            elif pos == 1:
+                self._button_remove = btn            
 
+        # Set last active setting.
+        last_used = prefs.get("%s.last_used" % pref_base, 
+                              self._CURRENT_PRESET_NAME)
+        self.preset_name = last_used
+        
+    def _preset_combo_changed_cb(self, widget):
+        app = self.app
+        prefs = app.preferences
+        pref_base = self._PREF_BASE
+        curve = self._curve
+        adjs = app.line_mode_settings.adjustments
+        preset_name = self.preset_name
+        if preset_name is None:
+            self.preset_name = self._CURRENT_PRESET_NAME
+            return
+        assert preset_name in self._presets
+        
+        # If the curve edited, save it.
+        if curve.edited and preset_name != self._CURRENT_PRESET_NAME:
+            edited_preset = self._presets[self._CURRENT_PRESET_NAME]
+            
+            pressure_list, location_list = edited_preset
+            for i in range(len(pressure_list)):    
+                adjname = self._ADJ_PRESSURE_NAMES[i]   
+                adj = adjs[adjname]
+                pressure_list[i] = adj.get_value()
+                
+            for i in range(len(location_list)):
+                adjname = self._ADJ_LOCATION_NAMES[i]   
+                adj = adjs[adjname]
+                location_list[i] = adj.get_value()
+
+        prefs["%s.last_used" % pref_base] = preset_name
+        
+        self._button_remove.set_sensitive(
+            preset_name != self._CURRENT_PRESET_NAME
+        )
+        
+        # Update curve widget.
+        curve.start_update_ui()        
+        pressure_preset , location_preset = self._presets[preset_name]
+        for i, v in enumerate(pressure_preset):    
+            adjname = self._ADJ_PRESSURE_NAMES[i]   
+            adj = app.line_mode_settings.adjustments[adjname]
+            adj.set_value(v)
+            
+        for i, v in enumerate(location_preset):    
+            adjname = self._ADJ_LOCATION_NAMES[i]   
+            adj = app.line_mode_settings.adjustments[adjname]
+            adj.set_value(v)
+            
+    @property
+    def preset_name(self):
+        c_iter = self._preset_combo.get_active_iter()
+        if c_iter is not None:
+            return self._preset_store[c_iter][0]
+            
+    @preset_name.setter
+    def preset_name(self, name):
+        combo = self._preset_combo
+        def walk_combo_cb(model, path, iter, user_data):
+            if model[iter][0] == name:
+                combo.set_active_iter(iter)
+                return True
+        self._preset_store.foreach(walk_combo_cb, None)
+
+    def exists_in_preset(self, name):
+        """Tells whether the name already
+        exists in the preset store or not.
+        """
+        store = self._preset_store
+        iter = store.get_iter_first()
+        while iter != None:
+            cname = store[iter][0]
+            if cname == name:
+                return True
+            iter = store.iter_next(iter)
+        return False
+        
+    def _get_current_preset_values(self):
+        adjs = self.app.line_mode_settings.adjustments
+        pressures = []
+        for adjname in self._ADJ_PRESSURE_NAMES:
+            adj = adjs[adjname]
+            pressures.append(adj.get_value())
+        locations = []
+        for adjname in self._ADJ_LOCATION_NAMES:
+            adj = adjs[adjname]
+            locations.append(adj.get_value())
+        return (pressures, locations)
+        
+    def _button_add_clicked_cb(self, btn):
+        result = gui.dialogs.ask_for_name(
+            self,
+            _("Input name for new preset"),
+            None
+        )
+        if result is not None:
+            if not self.exists_in_preset(result):
+                self._preset_store.append((result, ))
+                self._presets[result] = self._get_current_preset_values()
+                # Refresh current presets to preferences
+                self.app.preferences["%s.datas" % self._PREF_BASE] = self._presets                
+            else:
+                gui.dialogs.error(
+                    self,
+                    _('the preset named "%s" already exists.' % result)
+                )
+        
+    def _button_remove_clicked_cb(self, btn):
+        preset_name = self.preset_name
+        if preset_name is not None:
+            assert preset_name != self._CURRENT_PRESET_NAME
+            do_remove = gui.dialogs.confirm(
+                self,
+                _('Really remove preset "%s"?' % preset_name)
+            )
+            if do_remove:
+                c_iter = self._preset_combo.get_active_iter()
+                self._preset_store.remove(c_iter)
+                del self._presets[preset_name]
+                # Refresh current presets to preferences
+                self.app.preferences["%s.datas" % self._PREF_BASE] = self._presets
+    
+    def _expander_toggled_cb(self, expander):
+        if not self._updating_ui:
+            # NOTE: expander widget is not expanded when
+            # this callback called. 
+            # So, the expanded state is inverted.
+            expanded = not expander.get_expanded()
+            self.app.preferences["%s.expanded" % self._PREF_BASE] = expanded
+                
+    # XXX for `pressure preset` end
 
 ## Interaction modes for making lines
 

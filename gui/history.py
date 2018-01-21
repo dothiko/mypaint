@@ -42,6 +42,7 @@ class BrushHistoryView (Gtk.HBox):
         self._history_images = []
         s = HISTORY_PREVIEW_SIZE
         self.set_border_width(widgets.SPACING)
+        self._buttons = []
         for i, brush in enumerate(bm.history):
             image = ManagedBrushPreview()
             image.set_size_request(s, s)
@@ -51,7 +52,7 @@ class BrushHistoryView (Gtk.HBox):
             button.connect("clicked", self._history_button_clicked_cb, i)
             self.pack_end(button, True, False, 0)
         app.doc.input_stroke_ended += self._stroke_ended_cb
-        self._update_history_images()
+        self._update_history_images()    
 
     def _stroke_ended_cb(self, doc, event):
         GLib.idle_add(self._update_history_images)

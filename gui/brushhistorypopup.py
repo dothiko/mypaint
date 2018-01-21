@@ -27,6 +27,7 @@ class BrushHistoryPopup (windowing.PopupWindow):
         vbox.pack_start(brush_hist_view, True, False, 0)
         self.add(vbox)
         brush_hist_view.button_clicked += self._button_clicked_cb   
+        self._hist_view = brush_hist_view        
         
         bm = app.brushmanager
         icon_size = history.HISTORY_PREVIEW_SIZE 
