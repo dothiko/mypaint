@@ -2080,6 +2080,7 @@ class ClosedAreaFill (FloodFill):
                 (1 << self.progress_level) * 4 * 2))
         self.alpha_threshold = float(kwds.get('alpha_threshold', 0.2))
         self.fill_all_holes = bool(kwds.get('fill_all_holes', False))
+        self.erase_pixel = kwds.get('erase_pixel', False)
                 
         self._restore_bg = False
 
