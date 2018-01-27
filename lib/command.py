@@ -707,10 +707,6 @@ class FloodFill (Command):
         self.new_layer = None
         self.new_layer_path = None
         self.snapshot = None
-        # Only erase_pixel is extracted from kwds.
-        # We need this for checking coexistable option.
-        self.erase_pixel = kwds.get('erase_pixel', False)
-
         self.kwds = kwds
 
     def redo(self):
@@ -1750,7 +1746,7 @@ class GroupMarkedLayers(Command):
 
     def __init__(self, doc, **kwds):
         super(GroupMarkedLayers, self).__init__(doc, **kwds)
-        self._marked_paths = doc.get_marked_layers()
+        self._marked_layers = doc.get_marked_layers()
         self._group = None
         self._before_pop_info = None
         
@@ -1766,7 +1762,7 @@ class GroupMarkedLayers(Command):
     def _set_marked_state(self, marked):
         """Utility method, to set all layers marked state without using command.
         """
-        for cpath, layer in self._marked_paths:
+        for cpath, layer in self._marked_layers:
             layer.marked = marked
 
     def _create_group(self):
@@ -1795,15 +1791,14 @@ class GroupMarkedLayers(Command):
             del self._group
         self._group = lib.layer.LayerStack()
                 
-        for cpath, layer in self._marked_paths:
+        for layer in self._marked_layers:
             self._group.append(layer)
-            # cpath is not valid path anymore.
-            # Because replacement layer has already been inserted,
-            # it changed path structure.
-            # Furthermore, marked layers poped from rootstack in this loop,
-            # it also changes that structure.
+            # Every `layer insertion/pop` would change entire path structure 
+            # of rootstack.
+            # So we need to record each of path before such operation.
             before_pop_path = rootstack.deepindex(layer)
             before_pop_info.append( (before_pop_path, layer) )
+            
             rootstack.deeppop(before_pop_path)
                    
         # Undo needs reversed order of _before_pop_info.
@@ -1910,7 +1905,7 @@ class CutCurrentLayer (Command):
 
     display_name = _("Cut Current layer")
 
-    def __init__(self, doc, do_opaque_cut, **kwds):
+    def __init__(self, doc, do_opaque_cut, layers, **kwds):
         """
         :param boolean do_opaque_cut: the flag to do `cut with opaque area`
                                       Otherwise, cut with transparent area.
@@ -1924,7 +1919,7 @@ class CutCurrentLayer (Command):
         target = rootstack.deepget(targpath)
         assert not isinstance(target, lib.layer.LayerStack)
 
-        self._layers = doc.get_marked_layers(usecurrent=False)
+        self._layers = layers
         assert len(self._layers) > 0
 
         self._do_opaque_cut = do_opaque_cut
@@ -1969,23 +1964,31 @@ class CutCurrentLayer (Command):
         target = rootstack.deepget(self._target_path)
         self._target_snapshot = target.save_snapshot()
 
+        # `Cut with opaque area` can be done with each selected layers.
+        # But `Cut with transparent area` need a combined layer
+        # of selected layers to cut. 
+        # Otherwise, transparent area of each layers would erase the final 
+        # result layer over and over again, and most of pixels would be deleted.
         if not self._do_opaque_cut and len(self._layers) > 2:
             _merged_layer = lib.layer.PaintingLayer(name='')
-
-        # `Cut with opaque area` can be done with each selected layers.
-        # But `cut with transparent area` needed combined final
-        # result of selected layers to cut.
-        for path, layer in self._layers:
+                    
+        for layer in self._layers:
             assert layer != target
             if isinstance(layer, lib.layer.LayerStack):
+                path = rootstack.deepindex(layer)
                 layer = rootstack.layer_new_normalized(path)
 
             if self._do_opaque_cut:
                 self._cut_do_opaque_cut(target, layer)
-            elif len(self._layers) > 1:
+            elif len(self._layers) > 2:
+                # Create merged layer for `Cut with transparent area`,
+                # If there are multiple marked layers.
                 CutCurrentLayer._merge(_merged_layer, layer,
                         lib.mypaintlib.CombineNormal)
             else:
+                # Only a layer for `Cut with transparent area`.
+                # Then, just substitute the marked layer into _merged_layer.
+                # It is used after this loop end.
                 _merged_layer = layer
 
         if not self._do_opaque_cut:
@@ -2016,11 +2019,11 @@ class CutLayerDown(CutCurrentLayer):
 
     display_name = _("Cut With Benath")
 
-    def __init__(self, doc, path, **kwds):
+    def __init__(self, doc, layer, **kwds):
         super(CutLayerDown, self).__init__(
             doc, 
             False, 
-            (path,), 
+            (layer, ), 
             **kwds
         )
 

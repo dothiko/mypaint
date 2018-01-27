@@ -1336,8 +1336,10 @@ class Document (object):
         if dst_path is None:
             logger.info("Cut with below layer is not possible here")
             return False
+        dst_layer = rootstack.deepget(dst_path)
+        assert dst_layer is not None
         self.do(
-            command.CutLayerDown(self, dst_path)
+            command.CutLayerDown(self, dst_layer)
         )
         return True
     # XXX for `cut with another layer` end
@@ -1360,7 +1362,8 @@ class Document (object):
 
     def cut_current_layer_with_marked(self, opaque):
         """Sets the input-lock status of marked layers."""
-        self.do(command.CutCurrentLayer(self, opaque))
+        layers = self.get_marked_layers(usecurrent=False)
+        self.do(command.CutCurrentLayer(self, opaque, layers))
 
     def clear_all_layers_mark(self):
         self.do(command.ClearLayersMark(self))
@@ -1460,7 +1463,7 @@ class Document (object):
             self.do(cmd)
     
     def get_marked_layers(self, usecurrent=True):
-        """Utility method, Returns a list of tuple (path, layer).
+        """Utility method, Returns a list of layers.
         
         :param usecurrent: Whether include the current layer or not.
         
@@ -1471,9 +1474,9 @@ class Document (object):
         ret = []
         rootstack = self.layer_stack
         current = rootstack.current
-        for p, l in rootstack.walk():
+        for junk, l in rootstack.walk():
             if l.marked and not (usecurrent==False and l==current):
-                ret.append((p, l))
+                ret.append(l)
         return ret
     # XXX for `marked` status end
 

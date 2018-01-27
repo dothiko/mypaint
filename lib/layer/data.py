@@ -338,7 +338,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
     ## Flood fill
 
     def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None,
-                   dilation_size=0):
+                   **kwargs): # XXX for `progress-fill`
         """Fills a point on the surface with a color
 
         See `PaintingLayer.flood_fill() for parameters and semantics. This
@@ -1482,7 +1482,8 @@ class SimplePaintingLayer (SurfaceBackedLayer):
         """True if this layer currently accepts flood fill"""
         return not self.locked
 
-    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None):
+    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None,
+                   **kwargs): # XXX for `progress-fill`
         """Fills a point on the surface with a color
 
         :param x: Starting point X coordinate
@@ -1509,7 +1510,8 @@ class SimplePaintingLayer (SurfaceBackedLayer):
             dst_layer = self
         dst_layer.autosave_dirty = True   # XXX hmm, not working?
         self._surface.flood_fill(x, y, color, bbox, tolerance,
-                                 dst_surface=dst_layer._surface)
+                                 dst_surface=dst_layer._surface,
+                                 **kwargs)  # XXX for `progress-fill`
 
     ## Simple painting
 
@@ -1701,7 +1703,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
     ## Flood fill
 
     def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None, 
-                   dilation_size=0):
+                   **kwargs): # XXX for `progress-fill`
         """Fills a point on the surface with a color
 
         :param x: Starting point X coordinate
@@ -1729,7 +1731,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         dst_layer.autosave_dirty = True   # XXX hmm, not working?
         self._surface.flood_fill(x, y, color, bbox, tolerance,
                                  dst_surface=dst_layer._surface,
-                                 dilation_size=dilation_size)
+                                 **kwargs) # XXX for `progress-fill`
 
     ## Stroke recording and rendering
 
