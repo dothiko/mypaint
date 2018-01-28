@@ -157,12 +157,21 @@ def _info(exctyp, value, tb):
     primary = _(
         "<big><b>A programming error has been detected.</b></big>"
     )
+    # XXX for `my_build branch`
+   #secondary = _(
+   #    "You may be able to ignore this error and carry on working, "
+   #    "but you should probably save your work soon.\n\n"
+   #    "Please tell the developers about this using the issue tracker "
+   #    "if no-one else has reported it yet."
+   #)    
     secondary = _(
         "You may be able to ignore this error and carry on working, "
         "but you should probably save your work soon.\n\n"
-        "Please tell the developers about this using the issue tracker "
-        "if no-one else has reported it yet."
+        "But, this is personal experimental branch,\n"
+        "so DO NOT use the official issue tracker. \n"
+        "Please tell me(twitter: @dothiko) if not reported yet."
     )
+    # XXX for `my_build branch` end
     dialog.set_markup(primary)
     dialog.format_secondary_text(secondary)
 
