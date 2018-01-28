@@ -1449,7 +1449,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         can_group = markedcnt > 0
         can_cut = (targ_paintable 
                    and (markedcnt > 1 
-                        or (markedcnt == 1 and targ != layers[0][1])))
+                        or (markedcnt == 1 and targ != layers[0])))
 
         app.find_action("GroupMarkedLayers").set_sensitive(can_group)
         app.find_action("MergeMarkedLayers").set_sensitive(can_group)
