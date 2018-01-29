@@ -48,8 +48,33 @@ class BufferCombineFunc <DSTALPHA, BUFSIZE, BlendNormal, CompositeSourceOver>
             dst[i+0] = fix15_sumprods(src[i], opac, one_minus_Sa, dst[i]);
             dst[i+1] = fix15_sumprods(src[i+1], opac, one_minus_Sa, dst[i+1]);
             dst[i+2] = fix15_sumprods(src[i+2], opac, one_minus_Sa, dst[i+2]);
-            if (DSTALPHA) {
-                dst[i+3] = fix15_short_clamp(Sa + fix15_mul(dst[i+3], one_minus_Sa));
+            if (DSTALPHA) {                
+                dst[i+3] = fix15_short_clamp(Sa + fix15_mul(dst[i+3], one_minus_Sa)); 
+                // XXX for `channel error workaround`
+                /*
+                // Alternatively...
+                // Under very rare case, channel(s) going wrong.
+                // for example,
+                // src = [129, 120, 116, 129]
+                // dst = [257, 257, 257, 257]
+                // opac = 17733 (54%)                
+                // result = [326, 321, 319, 325]
+                // In result pixel, red channel exceed alpha value.
+                // It is not exposed as problem in release version,
+                // but something might going wrong in some function
+                // which requires precisely premulted pixels.
+                // Also, under heavy debug environment, it causes assertion
+                // and mypaint would end as segfault.
+                // As far as I know, the error would be just `1` difference,
+                // it is slightest value for 16-bit fix floating point.
+                // so it is enough getting minimum value of channel or alpha.
+                
+                fix15_t alpha = dst[i+3];
+                dst[i] = MIN(dst[i], alpha);
+                dst[i+1] = MIN(dst[i+1], alpha);
+                dst[i+2] = MIN(dst[i+2], alpha);
+                */
+                // XXX for `channel error workaround`
             }
         }
     }

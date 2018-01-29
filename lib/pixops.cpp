@@ -196,9 +196,22 @@ tile_convert_rgba16_to_rgba8_c (const uint16_t* const src,
       assert(r<=(1<<15));
       assert(g<=(1<<15));
       assert(b<=(1<<15));
+      // XXX for `channel error workaround`
+      /* Original codes
       assert(r<=a);
       assert(g<=a);
       assert(b<=a);
+      */
+      if(r > a || g > a || b > a) {
+        printf(
+            "pixops.cpp/Warning:channels might going wrong (rgba:%d,%d,%d,%d)\n",
+            r, g, b, a
+        );
+        r = MIN(r, a);
+        g = MIN(g, a);
+        b = MIN(b, a);
+      }
+      // XXX for `channel error workaround` end
 #endif
       // un-premultiply alpha (with rounding)
       if (a != 0) {
