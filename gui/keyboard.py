@@ -146,12 +146,14 @@ class KeyboardManager:
             # try hardcoded keys
             action = self.keymap2.get((keyval_lower, modifiers))
 
+
         # Don't dispatch if the window is only sensitive to a subset of
         # actions, and the action is not in that set.
         if action is not None and isinstance(action, Gtk.Action):
             win_actions = self.window_actions.get(widget, None)
             if win_actions is not None:
                 if action.get_name() not in win_actions:
+                    print('exitting here')
                     return False
 
         # If the lookup succeeded, activate the corresponding action.

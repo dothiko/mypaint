@@ -1094,7 +1094,25 @@ Vocabulary
           <signal name="activate" handler="quick_chooser_popup_cb"/>
         </object>
       </child>
-      <!-- }}} -->      
+      <!-- }}} -->  
+      <!-- XXX for `Advance/Backward chooser` -->    
+      <!-- {{{ Chooser Movement -->
+      <child>
+        <object class="GtkAction" id="AdvanceChooser">
+          <property name="label" translatable="yes" context="Menu→Color (labels), Accel Editor (labels)">Advance Chooser</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Do 'Advance' action of current quick chooser dialog explicitly.</property>
+          <signal name="activate" handler="chooser_movement_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="BackwardChooser">
+          <property name="label" translatable="yes" context="Menu→Color (labels), Accel Editor (labels)">Backward Chooser</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Do 'Backward' action of current quick chooser dialog explicitly.</property>
+          <signal name="activate" handler="chooser_movement_cb"/>
+        </object>
+      </child>      
+      <!-- }}} -->         
+      <!-- XXX for `Advance/Backword chooser` end -->
     </object>
   </child>
   <!--}}} -->
