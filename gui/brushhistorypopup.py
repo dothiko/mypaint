@@ -18,15 +18,17 @@ from lib.observable import event
 
 ## Class definitions
 
-class BlendButtonView (Gtk.HBox):
+class BlendButtonView (Gtk.Grid):
     """A set of clickable images showing the blending modes.
     Based on BrushHistoryView of gui/history.py"""
 
     def __init__(self, app):
-        Gtk.HBox.__init__(self)
+        Gtk.Grid.__init__(self)
         self._app = app
         s = history.HISTORY_PREVIEW_SIZE
         self.set_border_width(widgets.SPACING)
+        self.set_hexpand(True)
+        self.set_halign(Gtk.Align.FILL)
         self._buttons = []
         
         actions = (
@@ -37,16 +39,20 @@ class BlendButtonView (Gtk.HBox):
         )
         self._actions = actions
         
-        for act in actions:
+        for i, act in enumerate(actions):
             button = widgets.borderless_button(
                 icon_name = act.get_icon_name(),
                 size = s
             )
             button.connect("clicked", self._blendbutton_clicked_cb, act)
-            self.pack_end(button, True, False, 0)
+            button.set_hexpand(True)
+            button.set_halign(Gtk.Align.FILL)
+            self.attach(button, i, 0, 1, 1)
+            self._buttons.append(button)
 
     def _blendbutton_clicked_cb(self, button, act):
-        act.activate()
+        if not act.get_active():
+            act.activate()
         self.button_clicked()
     
     @event
@@ -70,7 +76,7 @@ class BrushHistoryPopup (windowing.PopupWindow):
        #vbox.attach(brush_hist_view, 0, 0, 1, 1)
         
         blend_method_view = BlendButtonView(app)
-        vbox.pack_end(blend_method_view, True, False, 0)
+        vbox.pack_end(blend_method_view, True, True, 0)
         #vbox.attach(blend_method_view, 0, 1, 1, 1)
         
                 
