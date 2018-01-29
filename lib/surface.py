@@ -177,8 +177,8 @@ class TileRequestWrapper (TileAccessible):
 
     def _request_single_tile(self, tx, ty):
         """Utility method.
-        To share same codes between `tile_request` 
-        and a method for dilation-fill of 
+        To share same codes between `tile_request`
+        and a method for dilation-fill of
         `ensure_surrounding_tiles`.
         """
         tile = self._cache.get((tx, ty), None)
@@ -198,7 +198,7 @@ class TileRequestWrapper (TileAccessible):
 
     @property
     def tiledict(self):
-        """ Return cache dict. but you will need preceding call 
+        """ Return cache dict. but you will need preceding call
         of fetch_surrounding_tiles() to work this dictionary correctly.
         """
         return self._cache
@@ -384,7 +384,7 @@ def save_as_png(surface, filename, *rect, **kwargs):
         if writer_fp:
             writer_fp.close()
 
-
+# XXX for `project-save`
 def finalize_surface(dstsurf, tiles=None):
     """Finalize surface processing, to remove empty tiles.
     """
@@ -395,3 +395,4 @@ def finalize_surface(dstsurf, tiles=None):
     bbox = lib.surface.get_tiles_bbox(tiles)
     dstsurf.notify_observers(*bbox)
     dstsurf.remove_empty_tiles()
+# XXX for `project-save` end

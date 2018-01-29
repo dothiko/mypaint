@@ -457,6 +457,7 @@ class RootLayerStack (group.LayerStack):
 
         if dst_8bit is not None:
             if dst_has_alpha:
+                np.save('/tmp/out.npy', dst)
                 lib.mypaintlib.tile_convert_rgba16_to_rgba8(dst, dst_8bit)
             else:
                 lib.mypaintlib.tile_convert_rgbu16_to_rgbu8(dst, dst_8bit)
@@ -2236,12 +2237,12 @@ class RootLayerStack (group.LayerStack):
     def save_to_project(self, projdir, path, canvas_bbox,
                            frame_bbox, force_write, progress=None, **kwargs):
         """Saves the stack's data into an project directory"""
-        
+
         # Code duplication: from save_to_openraster
         if not progress:
             progress = lib.feedback.Progress()
         progress.items = 10
-        
+
         # First of all, save background.
         bg_layer = self.background_layer
         bg_layer.initially_selected = False
@@ -2256,7 +2257,7 @@ class RootLayerStack (group.LayerStack):
         # Then, save child layers.
         stack_elem = super(RootLayerStack, self).save_to_project(
             projdir, path, canvas_bbox,
-            frame_bbox, force_write, 
+            frame_bbox, force_write,
             progress=progress.open(9),
             **kwargs
         )

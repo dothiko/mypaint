@@ -916,13 +916,14 @@ class FileHandler (object):
         if "multifile" in options:  # thumbs & recents are inappropriate
             return
 
-        #+ Project check.
+        # XXX for `project-save`
         if "project" in options:
             self.filename = os.path.abspath(filename)
             self.register_recent_project(self.filename)
             # As project, recent file management is inappropriate,for now
             return
-
+        # XXX for `project-save` end
+        
         if not os.path.isfile(filename):  # failed to save
             return
         if not export:
