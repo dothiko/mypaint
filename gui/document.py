@@ -2485,6 +2485,6 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
 
     def clear_all_layers_mark_cb(self, action):
         self.model.clear_all_layers_mark()
-    # XXX for `marked` layer status
-
+    # XXX for `marked` layer status end  
+    
 

@@ -1162,7 +1162,16 @@ Vocabulary
           <signal name="activate" handler="blend_mode_colorize_cb"/>
         </object>
         <accelerator key="e" modifiers="GDK_SHIFT_MASK"/>
-      </child>
+      </child>           
+      <!-- XXX for `Blend mode toggle` --> 
+      <child>
+        <object class="GtkAction" id="BlendModeToggle">
+          <property name="label" translatable="yes" context="Menu→Brush→Blend Mode (labels), Accel Editor (labels)">Paint Mode Toggle</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Toggle between 4 paint blending modes with one key.</property>
+          <signal name="activate" handler="blend_mode_toggle_cb"/>
+        </object>
+      </child>      
+      <!-- XXX for `Blend mode toggle` end -->        
     </object>
   </child>
   <!--}}} /BrushModifierActions -->
