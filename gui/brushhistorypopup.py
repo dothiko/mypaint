@@ -13,6 +13,7 @@ import windowing
 import quickchoice
 import history
 from lib.observable import event
+from gettext import gettext as _
 
 """Brush History popup."""
 
@@ -53,6 +54,9 @@ class BlendButtonView (Gtk.Grid):
     def _blendbutton_clicked_cb(self, button, act):
         if not act.get_active():
             act.activate()
+            self._app.show_transient_message(
+                _("Set brush blending mode as %s." % act.get_label())
+            )
         self.button_clicked()
     
     @event
@@ -96,6 +100,12 @@ class BrushHistoryPopup (windowing.PopupWindow):
         )
 
     def _button_clicked_cb(self, history_view):
+        if history_view is self._hist_view:
+            app = self.app
+            brushinfo = app.brush
+            app.show_transient_message(
+                _("Set brush as %s." % brushinfo.get_string_property('parent_brush_name'))
+            )
         self.leave("clicked")
      
     def popup(self):
