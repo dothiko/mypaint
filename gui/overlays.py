@@ -274,3 +274,4 @@ class LastPaintPosOverlay (FadingOverlay):
         cr.set_line_width(self.inner_line_width)
         cr.stroke()
         return area
+    

@@ -288,7 +288,8 @@ class BrushModifier (object):
         
     # XXX for `blend mode toggler` 
     def blend_mode_toggle_cb(self, action):
-        bm = self.app.brushmodifier
+        app = self.app
+        bm = app.brushmodifier
         actions = (
             bm.normal_mode,  
             bm.lock_alpha_mode,
@@ -306,6 +307,7 @@ class BrushModifier (object):
         
         newmode = actions[curidx]
         newmode.set_active(True)
+        app.show_transient_message(_("Blendingmode set as %s") % newmode.get_label())
                 
     # XXX for `blend mode toggler` end
 
