@@ -39,6 +39,20 @@ class _Phase:
     INVALID = -1
     INIT = 0
     DRAW = 1
+    
+class _Prefs:
+    """Preference key constants"""
+    AVERAGE_PREF_KEY = "assisted.stabilizer.average_previous"
+    STABILIZE_RANGE_KEY = "assisted.stabilizer.range"
+    ACTIVATE_BY_MOD_KEY = "assisted.stabilizer.activate_by_modifier"
+    FORCE_TAPERING_KEY = "assisted.stabilizer.force_tapering"
+    
+    DEFAULT_AVERAGE_PREF = True
+    DEFAULT_STABILIZE_RANGE = 48
+    DEFAULT_ACTIVATE_BY_MOD = False
+    DEFAULT_FORCE_TAPERING = False
+    STABILIZE_RANGE_LOW = 32
+    STABILIZE_RANGE_HIGH = 64
 
 class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
     """Freehand drawing mode with stablizer
@@ -76,10 +90,7 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
     # as MODE_FINALIZE, to avoid trailing stroke glitches.
     # And self._phase returns its own normal state, i.e. MODE_INVALID.
     
-    _AVERAGE_PREF_KEY = "assisted.stabilizer.average_previous"
-    _STABILIZE_RANGE_KEY = "assisted.stabilizer.range"
-    _ACTIVATE_BY_MOD_KEY = "assisted.stabilizer.activate_by_modifier"
-    _FORCE_TAPERING_KEY = "assisted.stabilizer.force_tapering"
+
 
     _TAPERING_LENGTH = 32.0 
     _TIMER_PERIOD = 500.0
@@ -111,14 +122,30 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
 
     def __init__(self, ignore_modifiers=True, **args):
 
-        # Initialize class attributes.
+        # Initialize class attributes cache.
         if self._average_previous is None:
             pref = self.app.preferences
             cls = self.__class__
-            cls._average_previous = pref.get(self._AVERAGE_PREF_KEY, True)
-            cls._stabilize_range = pref.get(self._STABILIZE_RANGE_KEY, 48)
-            cls._activate_by_mod = pref.get(self._ACTIVATE_BY_MOD_KEY, True)
-            cls._force_tapering = pref.get(self._FORCE_TAPERING_KEY, False)
+            cls._average_previous = pref.get(
+                _Prefs.AVERAGE_PREF_KEY, 
+                _Prefs.DEFAULT_AVERAGE_PREF
+            )
+            cls._stabilize_range = pref.get(
+                _Prefs.STABILIZE_RANGE_KEY, 
+                _Prefs.DEFAULT_STABILIZE_RANGE
+            )
+            cls._activate_by_mod = pref.get(
+                _Prefs.ACTIVATE_BY_MOD_KEY, 
+                _Prefs.DEFAULT_ACTIVATE_BY_MOD
+            )
+            cls._force_tapering = pref.get(
+                _Prefs.FORCE_TAPERING_KEY, 
+                _Prefs.DEFAULT_FORCE_TAPERING
+            )
+            
+        # Initialize private members.
+        self._initialize_attrs(_Phase.INVALID, 0.0, 0.0, 0.0)        
+        self._current_range = 0
 
         # Ignore the additional arg that flip actions feed us
         super(StabilizedFreehandMode, self).__init__(**args)
@@ -145,9 +172,8 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
 
         self._init_stabilize() # this should be called after _rx/_ry is set.
 
-        if (self._activate_by_mod 
-                and event.state & self.ASSITANT_MODIFIER):
-            self._activate_stabilizer(tdw, event.state)
+        # Activate stabilizer (if needed)
+        self._activate_stabilizer(tdw, event.state)
 
     def drag_update_cb(self, tdw, event, pressure):
         """ motion notify callback for assisted freehand drawing
@@ -163,10 +189,11 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
 
         # If Modifier key pressed, preference set as `activate by modifier`,
         # and not activated yet, then expand the stabilizer range immidiately.
-        if (self._activate_by_mod 
-                and event.state & self.ASSITANT_MODIFIER
-                and self._current_range < self._stabilize_range):
-            self._activate_stabilizer(tdw, event.state)
+        state = event.state
+        if (self._current_range < self._stabilize_range
+                and self._activate_by_mod 
+                and state & self.ASSITANT_MODIFIER):
+            self._activate_stabilizer(tdw, state & Gdk.ModifierType.SHIFT_MASK)
 
         # If the stylus cursor is inside stabilize circle,
         # all drawing events should be ignored.
@@ -174,6 +201,13 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
         return self._current_range > length
 
     def motion_notify_cb(self, tdw, event, fakepressure=None):
+        
+        if self._current_range > 0 and not self.in_drag:
+            self.queue_draw_ui(tdw, True) # To Erase
+            self._ensure_overlay_for_tdw(tdw)            
+            self._cx = event.x
+            self._cy = event.y
+            self.queue_draw_ui(tdw)
 
         if self.last_button is None:
             # XXX This also needed to eliminate stroke glitches.
@@ -270,16 +304,23 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
         raise StopIteration
         
 
-    def reset_assist(self):
-        # We need special initialization for resetting this class
-        # So do not supercall
-        self._initialize_attrs(_Phase.INVALID,
-                               0.0, 0.0, 0.0)
+   #def reset_assist(self):
+   #    # We need special initialization for resetting this class
+   #    # So do not supercall
+   #    self._initialize_attrs(_Phase.INVALID,
+   #                           0.0, 0.0, 0.0)
+   #    self._current_range = 0
 
     def _init_stabilize(self):
         self._initialize_attrs(_Phase.INIT,
                                self._rx, self._ry, 0.0)
-
+        if self._activate_by_mod:
+            self._start_time = time.time()
+            # _current_range might be changed from Gtk.Action
+            # so left unchanged.
+        else:
+            self._current_range = self._stabilize_range
+            
     def _initialize_attrs(self, phase, x, y, pressure):
         self._latest_pressure = pressure
         self._cx = x
@@ -289,11 +330,8 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
         self._phase = phase
         self._actual_drawn_length = 0.0
         self._drag_length = 0.0
-        if self._activate_by_mod:
-            self._start_time = time.time()
-            self._current_range = 0.0
-        else:
-            self._current_range = self._stabilize_range
+        # self._current_range is set at constructor or other methods.
+        # Do not modify it at here.
 
     def fetch(self, x, y, pressure, time):
         """ Fetch samples(i.e. current stylus input datas) 
@@ -309,22 +347,35 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
         self._ry = y
 
     def _activate_stabilizer(self, tdw, state):
-        """Inner utility method to activate stabilizer.
-
-        :param state: the event.state attribute.
-                      This would be bitwise conbination of
-                      Gdk.ModifierType.*_MASK
+        """Activate stabilizer if needed.
+        
+        :param tdw: tiledrawwidget to redraw.
+        :param state: event.state attribute of drag callback.
         """
-        if (state & Gdk.ModifierType.SHIFT_MASK
+        if (self._activate_by_mod 
+                and state & self.ASSITANT_MODIFIER
                 and self._current_range < self._stabilize_range):
-            self._current_range = self._stabilize_range
-        else:
-            self._current_range = self._stabilize_range / 2
-        self.queue_draw_ui(tdw)
+            
+            if (state & Gdk.ModifierType.SHIFT_MASK
+                    and self._current_range < self._stabilize_range):
+                # Do full expand
+                self._current_range = self._stabilize_range
+            else:
+                self._current_range = self._stabilize_range / 2
+            self.queue_draw_ui(tdw)
 
     def expand_range(self):
-        """Expand stabilizer range temporary (from keyboard shortcut)"""
-        self._current_range = self._stabilize_range
+        """Expand stabilizer range temporary.
+        
+        This method called from outside of this class.
+        (typically, from gui.document)
+        """
+        if self._current_range == 0:
+            self._current_range = self._stabilize_range / 2
+        elif self._current_range == self._stabilize_range:
+            self._current_range = 0
+        else:
+            self._current_range = self._stabilize_range
         self.queue_draw_ui(None)
 
     ## Overlay related
@@ -332,19 +383,24 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
     def _generate_overlay(self, tdw):
         return _Overlay_Stabilizer(self, tdw)
 
-    def queue_draw_ui(self, tdw):
+    def queue_draw_ui(self, tdw, force_queue=False):
         """ Queue draw area for overlay """
         if tdw is None:
             for tdw in self._overlays:
                 self.queue_draw_ui(tdw)
             return
 
-        if self._ready:
-            half_rad = int(self._current_range+ 2)
-            full_rad = half_rad * 2
-            tdw.queue_draw_area(self._cx - half_rad, self._cy - half_rad,
-                    full_rad, full_rad)
-
+        if self._current_range > 0 or force_queue:
+            if force_queue:
+                r = int(self.stabilize_range + 2)
+            else:
+                r = int(self._current_range + 2)
+            tdw.queue_draw_area(
+                self._cx - r, 
+                self._cy - r,
+                r * 2, 
+                r * 2
+            )
 
     ## Stabilizer configuration related
     @property
@@ -359,8 +415,7 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
     @average_previous.setter
     def average_previous(self, flag):
         cls = self.__class__
-        cls._average_previous = flag
-        self.app.preferences[self._AVERAGE_PREF_KEY] = flag
+        cls._average_previous = flag       
 
     @property
     def stabilize_range(self):
@@ -372,7 +427,10 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
         cls._stabilize_range = value
         if self._current_range > value:
             self._current_range = value
-        self.app.preferences[self._STABILIZE_RANGE_KEY] = value
+    
+    @property
+    def current_range(self):
+        return self._current_range
 
     @property
     def range_switcher(self):
@@ -382,7 +440,6 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
     def range_switcher(self, flag):
         cls = self.__class__
         cls._activate_by_mod = flag
-        self.app.preferences[self._ACTIVATE_BY_MOD_KEY] = flag
 
     @property
     def force_tapering(self):
@@ -392,18 +449,18 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
     def force_tapering(self, flag):
         cls = self.__class__
         cls._force_tapering = flag
-        self.app.preferences[self._FORCE_TAPERING_KEY] = flag
 
 
 class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
     """Configuration widget for freehand mode"""
-
+    
     def __init__(self, mode):
         super(StabilizerOptionsWidget, self).__init__(mode)
 
     def init_specialized_widgets(self, row):
         self._updating_ui = True
         app = self.app
+        pref = app.preferences
         row = super(StabilizerOptionsWidget, self).init_specialized_widgets(row)
 
         def create_slider(label, handler, 
@@ -423,21 +480,22 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
             self.attach(scale, 1, row, 1, 1)
             return scale
             
-
-        # Add VBox for Assistant area
-        mode = self.mode_ref()
-        assert mode is not None
-
         # Scale slider for range circle setting.
-        create_slider(_("Range:"), 
-                      self._range_changed_cb,
-                      mode.stabilize_range, 32, 64)
+        create_slider(
+            _("Range:"), 
+            self._range_changed_cb,
+            pref.get(_Prefs.STABILIZE_RANGE_KEY, _Prefs.DEFAULT_STABILIZE_RANGE),
+            _Prefs.STABILIZE_RANGE_LOW, 
+            _Prefs.STABILIZE_RANGE_HIGH
+        )
         row += 1
 
         # Checkbox for average direction.
         checkbox = Gtk.CheckButton(_("Average direction"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
-        checkbox.set_active(mode.average_previous)
+        checkbox.set_active(
+            pref.get(_Prefs.AVERAGE_PREF_KEY, _Prefs.DEFAULT_AVERAGE_PREF)
+        )
         checkbox.connect('toggled', self._average_toggled_cb)
         self.attach(checkbox, 0, row, 2, 1)
         row += 1
@@ -445,7 +503,9 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
         # Checkbox for use 'range switcher' feature.
         checkbox = Gtk.CheckButton(_("Activate by modifier"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
-        checkbox.set_active(mode.range_switcher) 
+        checkbox.set_active(
+            pref.get(_Prefs.ACTIVATE_BY_MOD_KEY, _Prefs.DEFAULT_ACTIVATE_BY_MOD)
+        )        
         checkbox.connect('toggled', self._activate_by_mod_toggled_cb)
         self.attach(checkbox, 0, row, 2, 1)
         row += 1
@@ -453,7 +513,9 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
         # Checkbox for use 'Force start tapering' feature.
         checkbox = Gtk.CheckButton(_("Force start tapering"),
             hexpand_set=True, hexpand=True, halign=Gtk.Align.FILL)
-        checkbox.set_active(mode.force_tapering) 
+        checkbox.set_active(
+            pref.get(_Prefs.FORCE_TAPERING_KEY, _Prefs.DEFAULT_FORCE_TAPERING)
+        )      
         checkbox.connect('toggled', self._force_tapering_toggled_cb)
         self.attach(checkbox, 0, row, 2, 1)
         row += 1
@@ -464,20 +526,29 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
     # Handlers
     def _average_toggled_cb(self, checkbox):
         if not self._updating_ui:
-            self.mode.average_previous = checkbox.get_active()
-
+            flag = checkbox.get_active()
+            self.mode.average_previous = flag
+            self.app.preferences[_Prefs.AVERAGE_PREF_KEY] = flag
+            
     def _range_changed_cb(self, adj):
         if not self._updating_ui:
-            self.mode.stabilize_range = adj.get_value()
-
+            value = adj.get_value()
+            self.mode.stabilize_range = value
+            self.app.preferences[_Prefs.STABILIZE_RANGE_KEY] = value
+            
     def _activate_by_mod_toggled_cb(self, checkbox):
         if not self._updating_ui:
-            self.mode.range_switcher = checkbox.get_active()
-
+            flag = checkbox.get_active()
+            self.mode.range_switcher = flag
+            self.app.preferences[_Prefs.ACTIVATE_BY_MOD_KEY] = flag
+            
     def _force_tapering_toggled_cb(self, checkbox):
         if not self._updating_ui:
-            self.mode.force_tapering = checkbox.get_active()
-
+            flag = checkbox.get_active()
+            self.mode.force_tapering = flag
+            self.app.preferences[_Prefs.FORCE_TAPERING_KEY] = flag
+            
+            
 class _Overlay_Stabilizer(gui.overlays.Overlay):
     """Overlay for stabilized freehand mode """
 
@@ -489,10 +560,9 @@ class _Overlay_Stabilizer(gui.overlays.Overlay):
     def paint(self, cr):
         """Draw brush size to the screen"""
         mode = self._mode_ref()
-        if mode is not None and mode._ready:
+        if mode is not None and mode.current_range > 0:
             x, y = mode._cx, mode._cy
-            self._draw_dashed_circle(cr, 
-                    (x, y, mode._current_range))
+            self._draw_dashed_circle(cr, (x, y, mode._current_range))
 
             # XXX Drawing actual stroke point.
             # This should be same size as current brush radius,
@@ -500,8 +570,7 @@ class _Overlay_Stabilizer(gui.overlays.Overlay):
             # extremely large.
             # so, currently this is fixed size, only shows the center
             # point of stroke.
-            self._draw_dashed_circle(cr, 
-                    (x, y, 2))
+            self._draw_dashed_circle(cr, (x, y, 2))
 
     @dashedline_wrapper
     def _draw_dashed_circle(self, cr, info):

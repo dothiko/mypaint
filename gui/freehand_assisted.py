@@ -91,6 +91,12 @@ class AssistedFreehandMode (freehand.FreehandMode,
     @property
     def prev_button(self):
         return self._prev_button
+        
+    @property
+    def in_drag(self):
+        """For compatibility with DragMode.
+        """
+        return self._last_button is not None
                 
     ## Mode stack & current mode
 
