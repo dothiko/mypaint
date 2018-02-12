@@ -61,6 +61,12 @@ class BrushModifier (object):
             action.set_draw_as_radio(True)
             self.app.kbm.takeover_action(action)
 
+        # XXX for `blend mode toggler` 
+        # Register BlendmodeToggle action for kbm.
+        action = self.app.find_action("BlendModeToggle")
+        self.app.kbm.takeover_action(action)
+        # XXX for `blend mode toggler` end
+
         # Faking radio items, but ours can be disabled by re-activating them
         # and backtrack along their history.
         self._hist = []
@@ -279,4 +285,30 @@ class BrushModifier (object):
         :param old_mode: old mode. 
         :param new_mode: newly entered mode. 
         """
+        
+    # XXX for `blend mode toggler` 
+    def blend_mode_toggle_cb(self, action):
+        app = self.app
+        bm = app.brushmodifier
+        actions = (
+            bm.normal_mode,  
+            bm.lock_alpha_mode,
+            bm.eraser_mode,
+            bm.colorize_mode
+        )
+        newmode = None
+        curidx = -1
+        for i, ca in enumerate(actions):
+            if ca.get_active():
+                curidx = i
+                break
+                
+        curidx = (curidx + 1) % len(actions)
+        
+        newmode = actions[curidx]
+        newmode.set_active(True)
+        app.show_transient_message(_("Blendingmode set as %s") % newmode.get_label())
+                
+    # XXX for `blend mode toggler` end
+
 

@@ -351,6 +351,10 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
                 self.app.kbm.takeover_action(action)
             for action in self.modes_action_group.list_actions():
                 self.app.kbm.takeover_action(action)
+            # XXX for `ModeControlActions`
+            for action in self.control_action_group.list_actions():
+                self.app.kbm.takeover_action(action)
+            # XXX for `ModeControlActions` end
             self._init_extra_keys()
 
             toggle_action = self.app.builder.get_object('ContextRestoreColor')
@@ -387,6 +391,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         builder = self.app.builder
         self.action_group = builder.get_object('DocumentActions')
         self.modes_action_group = builder.get_object("ModeStackActions")
+        self.control_action_group = builder.get_object("ModeControlActions") # XXX for `ModeControlActions`
 
         # Fine-grained observation of various model objects
         cmdstack = self.model.command_stack
@@ -2485,5 +2490,6 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
 
     def clear_all_layers_mark_cb(self, action):
         self.model.clear_all_layers_mark()
-    # XXX for `marked` layer status
+    # XXX for `marked` layer status end  
+    
 

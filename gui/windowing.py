@@ -243,6 +243,15 @@ class ChooserPopup (Gtk.Window,
         self.set_transient_for(app.drawWindow)
         self.set_default_size(*default_size)
         self.set_position(Gtk.WindowPosition.MOUSE)
+        
+        # XXX for `Advance/Backward chooser`
+        # Add default actions, which manage chooser movement.
+        if not type(actions) == list:
+            actions = [n for n in actions]
+        if not 'AdvanceChooser' in actions:
+            actions.append('AdvanceChooser')
+            actions.append('BackwardChooser')
+        # XXX for `Advance/Backward chooser` end
 
         # Register with the keyboard manager, but only let certain actions be
         # driven from the keyboard.

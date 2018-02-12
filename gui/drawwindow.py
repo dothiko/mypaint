@@ -522,6 +522,27 @@ class DrawWindow (Gtk.Window):
         chooser_name = action.get_name()
         self._popup_quick_chooser(chooser_name)
 
+    # XXX for `Chooser Movement`
+    def chooser_movement_cb(self, action):
+        """Action callback: show the named quick chooser (new system)"""
+        chooser = None
+        choosers = self._quick_choosers
+        # Get currently active quick chooser
+        for ck in choosers:
+            c = choosers[ck]
+            if c.get_visible():
+                chooser = c 
+        
+        if chooser is not None:
+            action_name = action.get_name()
+            if (action_name.startswith('Advance') 
+                    and hasattr(chooser, 'advance')):
+                chooser.advance()
+            elif (action_name.startswith('Backward') 
+                    and hasattr(chooser, 'backward')):
+                chooser.backward()
+    # XXX for `Chooser Movement` end
+    
     @property
     def brush_chooser(self):
         """Property: the brush chooser"""
