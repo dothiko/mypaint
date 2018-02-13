@@ -1762,7 +1762,7 @@ class GroupMarkedLayers(Command):
     def _set_marked_state(self, marked):
         """Utility method, to set all layers marked state without using command.
         """
-        for cpath, layer in self._marked_layers:
+        for layer in self._marked_layers:
             layer.marked = marked
 
     def _create_group(self):
