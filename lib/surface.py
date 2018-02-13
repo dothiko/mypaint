@@ -392,7 +392,10 @@ def finalize_surface(dstsurf, tiles=None):
         tiles = dstsurf.get_tiles()
     for pos in tiles:
         dstsurf._mark_mipmap_dirty(*pos)
+    # Is this line should be placed prior to notify_observers??
+    dstsurf.remove_empty_tiles()
+    
     bbox = lib.surface.get_tiles_bbox(tiles)
     dstsurf.notify_observers(*bbox)
-    dstsurf.remove_empty_tiles()
+   #dstsurf.remove_empty_tiles()
 # XXX for `project-save` end
