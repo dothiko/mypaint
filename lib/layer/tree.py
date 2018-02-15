@@ -1927,15 +1927,8 @@ class RootLayerStack (group.LayerStack):
         # and make final layer image.
         if only_opaque:
             masklayer = data.PaintingLayer()
-           #tiles = set()
-           #for layer in opaque_masks:
-           #    tiles.update(layer.get_tile_coords())
-           #    assert isinstance(layer, data.PaintingLayer)
-           #    assert not layer.locked
-           #    assert not layer.branch_locked
-           #    #masklayer.strokes[:0] = layer.strokes
 
-            # Build target 'mask' layer surface.
+            # Build target (i.e. `mask`) layer surface.
             masksurf = masklayer._surface
             for tx, ty in tiles:
                 with masksurf.tile_request(tx, ty, readonly=False) as dst:
@@ -1951,7 +1944,8 @@ class RootLayerStack (group.LayerStack):
                 with masksurf.tile_request(tx, ty, readonly=False) as dst:
                     dstlayer.composite_tile(dst, True, tx, ty, mipmap_level=0)
 
-            lib.surface.finalize_surface(masksurf, tiles)
+            # Finalizing (Notifying) surface changes.
+            lib.surface.finalize_surface_changes(masksurf, tiles)
 
             # Pretend masklayer as dstlayer.
             masklayer.name = dstlayer.name

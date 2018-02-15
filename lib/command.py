@@ -1935,7 +1935,7 @@ class CutCurrentLayer (Command):
                 layer._surface.composite_tile(dst, True, tx, ty, mipmap_level=0,
                         mode=mode)
 
-        lib.surface.finalize_surface(dstsurf, tiles)
+        lib.surface.finalize_surface_changes(dstsurf, tiles)
 
     def _cut_do_opaque_cut(self, target_layer, cutting_layer):
         CutCurrentLayer._merge(target_layer, cutting_layer,
@@ -1957,8 +1957,8 @@ class CutCurrentLayer (Command):
                                 dst, True, tx, ty, mipmap_level=0,
                                 mode = lib.mypaintlib.CombineDestinationIn)
 
-        lib.surface.finalize_surface(dstsurf, tiles)
-
+        lib.surface.finalize_surface_changes(dstsurf, tiles)
+        
     def redo(self):
         rootstack = self.doc.layer_stack
         target = rootstack.deepget(self._target_path)

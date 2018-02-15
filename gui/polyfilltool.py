@@ -120,7 +120,7 @@ def _render_polygon_to_layer(model, target_layer, shape, nodes,
                 layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
 
 
-    lib.surface.finalize_surface(dstsurf, tiles)
+    lib.surface.finalize_surface_changes(dstsurf, tiles)
 
     bbox = tuple(target_layer.get_full_redraw_bbox())
     target_layer.root.layer_content_changed(target_layer, *bbox)
