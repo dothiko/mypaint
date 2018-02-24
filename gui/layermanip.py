@@ -15,6 +15,7 @@ from gettext import gettext as _
 
 from gi.repository import Gdk
 from gi.repository import GLib
+from gi.repository import Gtk # XXX for `relative move`
 
 import gui.mode
 import lib.command
@@ -38,6 +39,7 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
     ## API properties and informational methods
 
     ACTION_NAME = 'LayerMoveMode'
+    _OPTIONS_PRESENTER = None
 
     pointer_behavior = gui.mode.Behavior.CHANGE_VIEW
     scroll_behavior = gui.mode.Behavior.CHANGE_VIEW
@@ -74,7 +76,15 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
         'ZoomViewMode',
         'PanViewMode',
     ] + gui.mode.BUTTON_BINDING_ACTIONS)
-
+    
+    # XXX for `relative move`
+    def get_options_widget(self):
+        cls = self.__class__
+        if cls._OPTIONS_PRESENTER is None:
+            cls._OPTIONS_PRESENTER = _OptionsPresenter()
+        return cls._OPTIONS_PRESENTER    
+    # XXX for `relative move` end
+    
     ## Initialization
 
     def __init__(self, **kwds):
@@ -219,3 +229,114 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
             if self.initial_modifiers:
                 if (self.final_modifiers & self.initial_modifiers) == 0:
                     self.doc.modes.pop()
+
+# XXX for `relative move`
+class _OptionsPresenter(Gtk.Grid):
+    """Configuration widget for the LayerMove tool"""
+
+    _SPACING = 6
+    _LABEL_MARGIN_LEFT = 32
+
+    def __init__(self):
+        # XXX Code duplication: from closefill.py
+        Gtk.Grid.__init__(self)
+        self._update_ui = True
+        self.set_row_spacing(self._SPACING)
+        self.set_column_spacing(self._SPACING)
+        from application import get_app
+        self.app = get_app()
+        self._mode_ref = None
+        prefs = self.app.preferences
+        row = 0
+
+        def generate_label(text, tooltip, row, grid, alignment, margin_left):
+            label = Gtk.Label()
+            label.set_markup(text)
+            label.set_tooltip_text(tooltip)
+            label.set_alignment(*alignment)
+            label.set_hexpand(False)
+            label.set_margin_start(margin_left)
+            grid.attach(label, 0, row, 1, 1)
+            return label
+            
+        frame = Gtk.Frame()
+        frame.set_label(_("Relative offset :"))
+        frame.set_shadow_type(Gtk.ShadowType.NONE)       
+        subgrid = Gtk.Grid()
+        subgrid.set_margin_top(self._SPACING)
+        subgrid.set_row_spacing(self._SPACING)
+        subgrid.set_column_spacing(self._SPACING)
+        frame.add(subgrid)
+        self.attach(frame, 0 ,row, 1, 1)
+
+        # Minimum/Maximum of relative offset is currently 
+        # 2^16, This would be enough in most case.
+        extreme_value = 2**16
+                
+        subrow = 0
+        label = generate_label(
+            _("X:"),
+            _("The relative offset x position of current layer"),
+            subrow,
+            subgrid,
+            (1.0, 0.1),
+            self._LABEL_MARGIN_LEFT
+        )
+                
+        adj = Gtk.Adjustment(
+            value=0, 
+            lower=-extreme_value,
+            upper=extreme_value,
+            step_increment=1, page_increment=1,
+            page_size=0
+        )
+        self._offset_x_adj = adj
+        spinbtn = Gtk.SpinButton()
+        spinbtn.set_hexpand(True)
+        spinbtn.set_adjustment(adj)
+        subgrid.attach(spinbtn, 1, subrow, 1, 1)
+        
+        subrow += 1
+        label = generate_label(
+            _("Y:"),
+            _("The relative offset y position of current layer"),
+            subrow,
+            subgrid,
+            (1.0, 0.1),
+            self._LABEL_MARGIN_LEFT
+        )
+        adj = Gtk.Adjustment(
+            value=0, 
+            lower=-extreme_value,
+            upper=extreme_value,
+            step_increment=1, page_increment=1,
+            page_size=0
+        )
+        self._offset_y_adj = adj
+        spinbtn = Gtk.SpinButton()
+        spinbtn.set_hexpand(True)
+        spinbtn.set_adjustment(adj)
+        subgrid.attach(spinbtn, 1, subrow, 1, 1)    
+        
+        subrow += 1
+        btn = Gtk.Button()
+        btn.set_label(_("Move current layer"))
+        btn.connect("clicked", self._move_button_clicked_cb)
+        subgrid.attach(btn, 0, subrow, 2, 1)    
+        
+        self._update_ui = False
+        
+    def _move_button_clicked_cb(self, btn):
+        app = self.app
+        model = app.doc.model
+        layer_path = model.layer_stack.current_path
+        assert layer_path is not None 
+        cmd = lib.command.MoveLayer(model, layer_path, 0, 0)
+        cmd.move_to(
+            self._offset_x_adj.get_value(),
+            self._offset_y_adj.get_value()
+        )
+        cmd.process_move()
+        model.do(cmd)
+
+# XXX for `relative move` end

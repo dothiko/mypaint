@@ -1367,6 +1367,79 @@ class Document (object):
 
     def clear_all_layers_mark(self):
         self.do(command.ClearLayersMark(self))
+        
+    def align_current_layer_with_marked(self):
+        marked = self.get_marked_layers(usecurrent=False)
+        if len(marked) == 0:
+            return 
+        # Inner functions, to know the `real` border of a layer.
+        def get_edge_position(layer):
+            if hasattr(layer, "_surface"):
+                surf = layer._surface
+            else:
+                surf = lib.surface.TileRequestWrapper(layer)
+                
+            x, y, w, h = layer.get_bbox()
+            # Get leftmost pixel position
+            tx = x // N
+            lpx = x
+            for cy in range(y, y+h, N):
+                ty = cy // N
+                with surf.tile_request(tx, ty, False) as tile:
+                    for px in range(N):
+                        for py in range(N):
+                            if tile[py, px, 3] != 0:
+                                lpx = min(px, lpx)
+                                break
+                        else:
+                            continue
+                        break
+            assert lpx is not None
+            # Get topmost pixel position
+            ty = y // N
+            lpy = y
+            for cx in range(x, x+w, N):
+                tx = cx // N
+                with surf.tile_request(tx, ty, False) as tile:
+                    for py in range(N):
+                        for px in range(N):
+                            if tile[py, px, 3] != 0:
+                                lpy = min(py, lpy)
+                                break
+                        else:
+                            continue
+                        break
+            assert lpy is not None
+            return (x+lpx, y+lpy)
+        
+        # First of all, remove transparent tiles from all layers.
+        rootstack = self.layer_stack
+        rootstack.remove_empty_tiles()
+        
+        current = rootstack.current
+        x, y = get_edge_position(current)
+        cmd = command.MoveLayer(
+            self, 
+            rootstack.current_path,
+            x, y
+        )       
+
+        left = None
+        top = None    
+        for ml in marked:
+            x, y = get_edge_position(ml)
+            if left is None:
+                left = x
+                top = y
+            else:
+                left = min(left, x)
+                top = min(top, y)            
+        
+        cmd.move_to(left, top)
+        cmd.process_move()
+        self.do(cmd)
+        
+        current = rootstack.current
     # XXX for `marked` layer states end.
 
     ## Layer import/export

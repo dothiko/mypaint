@@ -1452,15 +1452,15 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         targ = rootstack.current
         targ_paintable = isinstance(targ, lib.layer.StrokemappedPaintingLayer)
         can_group = markedcnt > 0
-        can_cut = (targ_paintable 
-                   and (markedcnt > 1 
-                        or (markedcnt == 1 and targ != layers[0])))
+        other_marked = (markedcnt > 1 or (markedcnt == 1 and targ not in layers))
+        can_cut = (targ_paintable and other_marked)
 
         app.find_action("GroupMarkedLayers").set_sensitive(can_group)
         app.find_action("MergeMarkedLayers").set_sensitive(can_group)
         app.find_action("ClearAllLayersMark").set_sensitive(can_group)        
         app.find_action("CutLayerWithMarkedOpaque").set_sensitive(can_cut)
         app.find_action("CutLayerWithMarkedTransparent").set_sensitive(can_cut)
+        app.find_action("AlignWithMarkedLayer").set_sensitive(other_marked)
     # XXX for `marked` layer states end
 
     ## Per-layer flag toggles
@@ -2490,6 +2490,11 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
 
     def clear_all_layers_mark_cb(self, action):
         self.model.clear_all_layers_mark()
+        
+    def align_layer_with_marked_cb(self, action):
+        self.model.align_current_layer_with_marked()
+        self.layerblink_state.activate(action)
+        
     # XXX for `marked` layer status end  
     
 

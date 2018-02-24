@@ -659,15 +659,6 @@ Vocabulary
         </object>
         <accelerator key="Home" modifiers="GDK_CONTROL_MASK"/>
       </child>
-      <!-- for `marked` layer flag -->
-      <child>
-        <object class="GtkToggleAction" id="LayerMarkedToggle">
-          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Layer Marked</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Toggle the current layer’s marked state. Marked layers are targets of multiple layer operation, such as `Cut Layer with Marked Opaque`.</property>
-          <signal name="activate" handler="layer_mark_toggle_cb"/>
-        </object>
-      </child>
-      <!-- for `marked` layer flag end -->
       <child>
         <object class="GtkToggleAction" id="ShowBackgroundToggle">
           <property name="label" translatable="yes" context="Menu→View (labels), Accel Editor (labels)">Show Background</property>
@@ -684,6 +675,13 @@ Vocabulary
         </object>
       </child>
       <!-- XXX for `marked` layer states -->
+      <child>
+        <object class="GtkToggleAction" id="LayerMarkedToggle">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Layer Marked</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Toggle the current layer’s marked state. Marked layers are targets of multiple layer operation, such as `Cut Layer with Marked Opaque`.</property>
+          <signal name="activate" handler="layer_mark_toggle_cb"/>
+        </object>
+      </child>      
       <child>
         <object class="GtkAction" id="MergeMarkedLayers">
           <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Merge Marked Layers</property>
@@ -719,6 +717,13 @@ Vocabulary
           <signal name="activate" handler="clear_all_layers_mark_cb"/>
         </object>
       </child>
+      <child>
+        <object class="GtkAction" id="AlignWithMarkedLayer">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Align current layer with marked layers position</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Align(Move) current layer with top-left most position of currently marked layer(s)</property>
+          <signal name="activate" handler="align_layer_with_marked_cb"/>
+        </object>
+      </child>      
       <!-- XXX for `marked` layer states end -->
       <!-- }}} -->
       <!-- {{{ View manipulation -->

@@ -30,6 +30,7 @@
       <menuitem action='MergeVisibleLayers'/>
       <menuitem action='NewLayerMergedFromVisible'/>
       <menuitem action='NormalizeLayerMode'/>
+      <!-- Added for `marked` layer -->
       <separator/>
       <menuitem action='MergeMarkedLayers'/>
       <menuitem action='GroupMarkedLayers'/>
@@ -37,7 +38,10 @@
       <menuitem action='CutLayerWithMarkedOpaque'/>
       <menuitem action='CutLayerWithMarkedTransparent'/>
       <separator/>
+      <menuitem action='AlignWithMarkedLayer'/>
+      <separator/>
       <menuitem action='ClearAllLayersMark'/>
+      <!-- Added for `marked` layer end -->
     </placeholder>
     <separator/>
     <placeholder name="AdvancedListActions"/>

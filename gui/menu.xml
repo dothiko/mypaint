@@ -242,6 +242,7 @@
       <menuitem action='FlipLayerMoveMode'/>
       <menuitem action="RaiseLayerInStack"/>
       <menuitem action="LowerLayerInStack"/>
+      <menuitem action='AlignWithMarkedLayer'/> <!-- Added for `marked` layer -->
       <!-- Current layer: creation -->
       <separator/>
       <menuitem action='NewPaintingLayerAbove'/>
@@ -272,8 +273,8 @@
       <menuitem action='MergeVisibleLayers'/>
       <menuitem action='NewLayerMergedFromVisible'/>
       <menuitem action='NormalizeLayerMode'/>
-      <menuitem action='CutLayerWithMarkedOpaque'/>
-      <menuitem action='CutLayerWithMarkedTransparent'/>
+      <menuitem action='CutLayerWithMarkedOpaque'/><!-- Added for `marked` layer -->
+      <menuitem action='CutLayerWithMarkedTransparent'/><!-- Added for `marked` layer -->
       <!-- Current layer: external editing -->
       <separator/>
       <menuitem action='BeginExternalLayerEdit'/>
