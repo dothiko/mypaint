@@ -1368,7 +1368,7 @@ class Document (object):
     def clear_all_layers_mark(self):
         self.do(command.ClearLayersMark(self))
         
-    def align_current_layer_with_marked(self):
+    def align_current_layer_with_marked(self, wait_complete_cb, called_action):
         marked = self.get_marked_layers(usecurrent=False)
         if len(marked) == 0:
             return 
@@ -1385,7 +1385,7 @@ class Document (object):
             lpx = x
             for cy in range(y, y+h, N):
                 ty = cy // N
-                with surf.tile_request(tx, ty, False) as tile:
+                with surf.tile_request(tx, ty, True) as tile:
                     for px in range(N):
                         for py in range(N):
                             if tile[py, px, 3] != 0:
@@ -1400,7 +1400,7 @@ class Document (object):
             lpy = y
             for cx in range(x, x+w, N):
                 tx = cx // N
-                with surf.tile_request(tx, ty, False) as tile:
+                with surf.tile_request(tx, ty, True) as tile:
                     for py in range(N):
                         for px in range(N):
                             if tile[py, px, 3] != 0:
@@ -1436,10 +1436,7 @@ class Document (object):
                 top = min(top, y)            
         
         cmd.move_to(left, top)
-        cmd.process_move()
-        self.do(cmd)
-        
-        current = rootstack.current
+        GLib.idle_add(wait_complete_cb, cmd, called_action)
     # XXX for `marked` layer states end.
 
     ## Layer import/export

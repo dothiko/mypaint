@@ -20,6 +20,7 @@ from gi.repository import Gtk # XXX for `relative move`
 import gui.mode
 import lib.command
 import gui.cursor
+import gui.tileddrawwidget # XXX for `relative move`
 
 
 ## Class defs
@@ -184,7 +185,7 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
             # Still need cleanup for tracking state, cursors etc.
             self._drag_cleanup()
         return super(LayerMoveMode, self).drag_stop_cb(tdw)
-
+        
     def _finalize_move_idler(self):
         """Finalizes everything in chunks once the drag's finished"""
         if self._cmd is None:
@@ -238,6 +239,8 @@ class _OptionsPresenter(Gtk.Grid):
     _LABEL_MARGIN_LEFT = 32
 
     def __init__(self):
+        self._cmd = None
+        
         # XXX Code duplication: from closefill.py
         Gtk.Grid.__init__(self)
         self._update_ui = True
@@ -327,20 +330,41 @@ class _OptionsPresenter(Gtk.Grid):
         self._update_ui = False
         
     def _move_button_clicked_cb(self, btn):
+        # Exit when the move already ongoing.
+        if self._cmd is not None:
+            return
+            
         app = self.app
         model = app.doc.model
-        x_adj = self._offset_x_adj
-        y_adj = self._offset_y_adj
         layer_path = model.layer_stack.current_path
         assert layer_path is not None 
         cmd = lib.command.MoveLayer(model, layer_path, 0, 0)
         cmd.move_to(
-            x_adj.get_value(),
-            y_adj.get_value()
+            self._offset_x_adj.get_value(),
+            self._offset_y_adj.get_value()
         )
-        cmd.process_move()
+        #cmd.process_move()  
+        self._cmd = cmd      
+        #model.do(cmd)
+        for tdw in gui.tileddrawwidget.TiledDrawWidget.get_visible_tdws():
+            tdw.set_sensitive(False)
+        GLib.idle_add(self._wait_move_complete)
+        
+    def _wait_move_complete(self):
+        """Nearly same as LayerMoveMode._finalize_move_idler 
+        """
+        cmd = self._cmd
+        if cmd is None:
+            return False  # something else cleaned up        
+        while cmd.process_move():
+            return True
+        app = self.app
+        model = app.doc.model            
         model.do(cmd)
-        x_adj.set_value(0)
-        y_adj.set_value(0)
-
+        self._cmd = None
+        self._offset_x_adj.set_value(0)
+        self._offset_y_adj.set_value(0)        
+        for tdw in gui.tileddrawwidget.TiledDrawWidget.get_visible_tdws():
+            tdw.set_sensitive(True)        
+        return False
 # XXX for `relative move` end

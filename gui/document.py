@@ -51,6 +51,7 @@ import gui.backgroundwindow
 import gui.exinktool   # registration only
 from lib.gettext import gettext as _
 from lib.gettext import C_
+import gui.tileddrawwidget # XXX for `align layer`
 
 logger = logging.getLogger(__name__)
 
@@ -2492,8 +2493,21 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         self.model.clear_all_layers_mark()
         
     def align_layer_with_marked_cb(self, action):
-        self.model.align_current_layer_with_marked()
+        for tdw in gui.tileddrawwidget.TiledDrawWidget.get_visible_tdws():
+            tdw.set_sensitive(False)            
+        self.model.align_current_layer_with_marked(
+            self._wait_move_complete,
+            action
+        )
+    
+    def _wait_move_complete(self, cmd, action):  
+        while cmd.process_move():
+            return True
+        self.model.do(cmd)      
+        for tdw in gui.tileddrawwidget.TiledDrawWidget.get_visible_tdws():
+            tdw.set_sensitive(True)                       
         self.layerblink_state.activate(action)
+        return False
         
     # XXX for `marked` layer status end  
     
