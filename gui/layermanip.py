@@ -329,14 +329,18 @@ class _OptionsPresenter(Gtk.Grid):
     def _move_button_clicked_cb(self, btn):
         app = self.app
         model = app.doc.model
+        x_adj = self._offset_x_adj
+        y_adj = self._offset_y_adj
         layer_path = model.layer_stack.current_path
         assert layer_path is not None 
         cmd = lib.command.MoveLayer(model, layer_path, 0, 0)
         cmd.move_to(
-            self._offset_x_adj.get_value(),
-            self._offset_y_adj.get_value()
+            x_adj.get_value(),
+            y_adj.get_value()
         )
         cmd.process_move()
         model.do(cmd)
+        x_adj.set_value(0)
+        y_adj.set_value(0)
 
 # XXX for `relative move` end
