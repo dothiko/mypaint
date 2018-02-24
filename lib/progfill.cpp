@@ -1126,6 +1126,7 @@ FlagtileSurface::progress_tiles(const int reject_targ_level,
 * progress_tiles method should be called before this method.
 * LassofillSurface has dedicated version of finalize.
 */
+/*
 void 
 FlagtileSurface::finalize(const int threshold,
                           const int dilation_size,
@@ -1173,6 +1174,72 @@ FlagtileSurface::finalize(const int threshold,
         filter_tiles((KernelWorker*)&ak);
     }
      
+}
+*/
+
+/**
+* @remove_small_areas
+* Remove small areas, and fill all small holes if needed.
+*
+* @param threshold: The threshold value of filled area perimeter.
+*                   If an area which perimeter is less than this value,
+*                   that area is removed(filled with PIXEL_AREA)
+* 
+* @detail 
+* This method is to reject small needless areas by counting its perimeter, 
+* and fill it if it is `hole` (i.e. counter-clockwised area).
+* 
+*/
+void
+FlagtileSurface::remove_small_areas(const int threshold, const bool fill_all_holes)
+{
+    // Remove annoying small glich-like pixel area.
+    // `Progressive fill` would mistakenly fill some
+    // concaved areas around jagged contour edges as gap.
+    // Theorically, such area cannot be produced when
+    // gap-closing-level is less or equal to 1.
+    if (threshold > 0 && m_level > 1) {
+        // CountPerimeterKernel just marks such needless
+        // pixels, not remove it yet.
+        CountPerimeterKernel ck(this, 0, threshold, true, fill_all_holes);
+        filter_tiles((KernelWorker*)&ck);
+
+        // RemoveGarbageKernel actually remove
+        // that marked areas.
+        RemoveGarbageKernel rk(this, 0);
+        filter_tiles((KernelWorker*)&rk);
+    }
+    else if (fill_all_holes) {
+        // No area removal. Just fill hole.
+        CountPerimeterKernel ck(this, 0, 0, true, fill_all_holes);
+        filter_tiles((KernelWorker*)&ck);
+    }    
+}
+
+void
+FlagtileSurface::dilate(const int dilation_size)
+{
+    if (dilation_size > 0) {
+        DilateKernel dk(this);
+        for(int i=0; i<dilation_size; i++) {
+            filter_tiles((KernelWorker*)&dk);
+        }
+    }
+}
+
+/**
+* @draw_antialias
+* Draw antialias lines around the final result pixels.
+*
+* @detail 
+* This method should be called the last of fill process.
+* 
+*/
+void
+FlagtileSurface::draw_antialias()
+{
+    AntialiasKernel ak(this);
+    filter_tiles((KernelWorker*)&ak);
 }
 
 // XXX for DEBUG
@@ -1747,6 +1814,7 @@ LassofillSurface::~LassofillSurface()
 * @detail 
 * This is a dedicated version of finalize of Lassofill.
 */
+/*
 void 
 LassofillSurface::finalize(const int dilation_size,
                            const bool antialias,
@@ -1793,6 +1861,26 @@ LassofillSurface::finalize(const int dilation_size,
     }
      
 }
+*/
+
+/**
+* @convert_result_area
+* convert PIXEL_AREA as final result(PIXEL_FILLED)
+*
+* @detail 
+* Just convert valid pixel area as filled area.
+* This method should be called next to `dilate` method 
+* and prior to `draw_antialias` method,
+*/
+void
+LassofillSurface::convert_result_area()
+{
+    ConvertKernel ck(this, 0, PIXEL_CONTOUR, PIXEL_OUTSIDE);
+    filter_tiles((KernelWorker*)&ck);
+    ck.setup(0, PIXEL_AREA, PIXEL_FILLED);
+    filter_tiles((KernelWorker*)&ck);
+}
+
 //-----------------------------------------------------------------------------
 // Functions
 

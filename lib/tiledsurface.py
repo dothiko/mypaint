@@ -1371,15 +1371,20 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
             erase_pixel
         )
     # XXX DEBUG END
+    
+    # Progress pixels.
     ft.progress_tiles(-1, 0) # Flood-fill does not need `early area rejection`
-    ft.finalize(
-        MN * 4 * 2,
-        dilation_size,
-        anti_alias,
-        fill_all_holes
-    )
-    print("end tile")
+
+    # Finalize pixels.
+    # The processing sequence MUST be : 
+    # removing needless areas -> dilation -> finally, draw anti-aliasing pixels.
+    ft.remove_small_areas(MN * 4 * 2, fill_all_holes)
+    ft.dilate(dilation_size)
+    if (anti_alias):
+        ft.draw_antialias()
+            
     # XXX DEBUG START
+    print("end tile")
     if kwargs.get('show_flag', False):
         _dbg_show_flag(ft)
     print("--- finalize end ---")

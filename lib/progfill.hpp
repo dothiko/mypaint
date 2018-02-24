@@ -386,10 +386,16 @@ assert(ct != NULL);
     void filter_tiles(KernelWorker *k);
     
     // Finalize all processing. 
+    /*
     void finalize(const int threshold,
                   const int dilation_size,
                   const bool antialias,
                   const bool fill_all_holes);
+    */     
+    // Finalize related methods.
+    void remove_small_areas(const int threshold, const bool fill_all_holes);
+    void dilate(const int dilation_size);
+    void draw_antialias();
     
     // XXX for Debug (might be used even not in HEAVY_DEBUG)
     PyObject*
@@ -497,10 +503,12 @@ public:
     */
     LassofillSurface(PyObject* node_list);
     virtual ~LassofillSurface();
-
+    /*
     void finalize(const int dilation_size, 
                   const bool antialias,
                   const bool fill_all_holes);
+    */
+    void convert_result_area();
 };
 
 //// functions
