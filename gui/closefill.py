@@ -1140,6 +1140,7 @@ class OptionsPresenter(Gtk.Grid):
         row = 0
 
         def generate_label(text, tooltip, row, grid=self, alignment=(1.0, 0.5)):
+            # Generate a label and return it.
             label = Gtk.Label()
             label.set_markup(text)
             label.set_tooltip_text(tooltip)
@@ -1147,7 +1148,19 @@ class OptionsPresenter(Gtk.Grid):
             label.set_hexpand(False)
             grid.attach(label, 0, row, 1, 1)
             return label
-
+            
+        def generate_spinbtn(row, grid, adj):
+            # Generate a spinbtn, and return it.
+            spinbtn = Gtk.SpinButton()
+            spinbtn.set_hexpand(True)
+            spinbtn.set_adjustment(adj)
+            # We need spinbutton focus event callback, to disable/re-enable
+            # Keyboard manager for them.            
+            spinbtn.connect("focus-in-event", self._spin_focus_in_cb)
+            spinbtn.connect("focus-out-event", self._spin_focus_out_cb)
+            grid.attach(spinbtn, 1, row, 1, 1)
+            return spinbtn
+        
         label = generate_label(
             _("Fill method:"),
             _("The fill method to use"),
@@ -1197,10 +1210,7 @@ class OptionsPresenter(Gtk.Grid):
         )
         adj.connect("value-changed", self._dilation_size_changed_cb)
         self._dilation_size_adj = adj
-        spinbtn = Gtk.SpinButton()
-        spinbtn.set_hexpand(True)
-        spinbtn.set_adjustment(adj)
-        self.attach(spinbtn, 1, row, 1, 1)
+        generate_spinbtn(row, self, adj)
 
         row += 1
         label = generate_label(
@@ -1244,11 +1254,7 @@ class OptionsPresenter(Gtk.Grid):
         )
         adj.connect("value-changed", self._gap_level_changed_cb)
         self._gap_level_adj = adj
-        spinbtn = Gtk.SpinButton()
-        spinbtn.set_hexpand(True)
-        spinbtn.set_adjustment(adj)
-        self.attach(spinbtn, 1, row, 1, 1)
-        self._gap_level_spin = spinbtn
+        self._gap_level_spin = generate_spinbtn(row, self, adj)
 
         # XXX `Sample Merged` and `New Layer (once)` is 
         # almost same as fill.py
@@ -1739,6 +1745,16 @@ class OptionsPresenter(Gtk.Grid):
         if not self._update_ui:
             self.app.preferences[_Prefs.SHARE_SETTING_PREF] = btn.get_active()
             self._refresh_ui_from_fillmethod(self.fill_method, force=True)
+
+    def _spin_focus_in_cb(self, widget, event):
+        if self._update_ui:
+            return
+        kbm = self.app.kbm
+        kbm.enabled = False
+
+    def _spin_focus_out_cb(self, widget, event):
+        kbm = self.app.kbm
+        kbm.enabled = True        
 
     def _reset_clicked_cb(self, button):
         # Use self.get_pref_value method 

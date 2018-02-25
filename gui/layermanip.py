@@ -253,6 +253,7 @@ class _OptionsPresenter(Gtk.Grid):
         row = 0
 
         def generate_label(text, tooltip, row, grid, alignment, margin_left):
+            # Generate a label, and return it.
             label = Gtk.Label()
             label.set_markup(text)
             label.set_tooltip_text(tooltip)
@@ -261,6 +262,26 @@ class _OptionsPresenter(Gtk.Grid):
             label.set_margin_start(margin_left)
             grid.attach(label, 0, row, 1, 1)
             return label
+            
+        def generate_spinbtn(row, grid, extreme_value):
+            # Generate a Adjustment and spinbutton
+            # and return Adjustment.
+            adj = Gtk.Adjustment(
+                value=0, 
+                lower=-extreme_value,
+                upper=extreme_value,
+                step_increment=1, page_increment=1,
+                page_size=0
+            )
+            spinbtn = Gtk.SpinButton()
+            spinbtn.set_hexpand(True)
+            spinbtn.set_adjustment(adj)
+            # We need spinbutton focus event callback, to disable/re-enable
+            # Keyboard manager for them.
+            spinbtn.connect("focus-in-event", self._spin_focus_in_cb)
+            spinbtn.connect("focus-out-event", self._spin_focus_out_cb)
+            grid.attach(spinbtn, 1, row, 1, 1)
+            return adj
             
         frame = Gtk.Frame()
         frame.set_label(_("Relative offset :"))
@@ -285,19 +306,7 @@ class _OptionsPresenter(Gtk.Grid):
             (1.0, 0.1),
             self._LABEL_MARGIN_LEFT
         )
-                
-        adj = Gtk.Adjustment(
-            value=0, 
-            lower=-extreme_value,
-            upper=extreme_value,
-            step_increment=1, page_increment=1,
-            page_size=0
-        )
-        self._offset_x_adj = adj
-        spinbtn = Gtk.SpinButton()
-        spinbtn.set_hexpand(True)
-        spinbtn.set_adjustment(adj)
-        subgrid.attach(spinbtn, 1, subrow, 1, 1)
+        self._offset_x_adj = generate_spinbtn(subrow, subgrid, extreme_value)
         
         subrow += 1
         label = generate_label(
@@ -315,19 +324,25 @@ class _OptionsPresenter(Gtk.Grid):
             step_increment=1, page_increment=1,
             page_size=0
         )
-        self._offset_y_adj = adj
-        spinbtn = Gtk.SpinButton()
-        spinbtn.set_hexpand(True)
-        spinbtn.set_adjustment(adj)
-        subgrid.attach(spinbtn, 1, subrow, 1, 1)    
+        self._offset_y_adj = generate_spinbtn(subrow, subgrid, extreme_value)
         
         subrow += 1
         btn = Gtk.Button()
         btn.set_label(_("Move current layer"))
         btn.connect("clicked", self._move_button_clicked_cb)
         subgrid.attach(btn, 0, subrow, 2, 1)    
-        
+
         self._update_ui = False
+        
+    def _spin_focus_in_cb(self, widget, event):
+        if self._update_ui:
+            return
+        kbm = self.app.kbm
+        kbm.enabled = False
+
+    def _spin_focus_out_cb(self, widget, event):
+        kbm = self.app.kbm
+        kbm.enabled = True        
         
     def _move_button_clicked_cb(self, btn):
         # Exit when the move already ongoing.
@@ -343,9 +358,7 @@ class _OptionsPresenter(Gtk.Grid):
             self._offset_x_adj.get_value(),
             self._offset_y_adj.get_value()
         )
-        #cmd.process_move()  
         self._cmd = cmd      
-        #model.do(cmd)
         for tdw in gui.tileddrawwidget.TiledDrawWidget.get_visible_tdws():
             tdw.set_sensitive(False)
         GLib.idle_add(self._wait_move_complete)
