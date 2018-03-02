@@ -1100,7 +1100,7 @@ FlagtileSurface::progress_tiles(const int reject_targ_level,
             if (i == reject_targ_level) {
                 // CountPerimeterKernel just marks such needless
                 // pixels, not remove it yet.
-                CountPerimeterKernel ck(this, i, perimeter, false, false);
+                CountPerimeterKernel ck(this, i, perimeter, false);
                 filter_tiles((KernelWorker*)&ck);
                 
                 // RemoveGarbageKernel actually remove
@@ -1113,69 +1113,6 @@ FlagtileSurface::progress_tiles(const int reject_targ_level,
         }
     }
 }
-
-/**
-* @finalize
-* Finalize painting target area.
-*
-* @param threshold: The threshold value of filled area perimeter.
-*                   If an area which perimeter is less than this value,
-*                   that area is removed(filled with PIXEL_AREA)
-* @detail 
-* This is a default finalize method.
-* progress_tiles method should be called before this method.
-* LassofillSurface has dedicated version of finalize.
-*/
-/*
-void 
-FlagtileSurface::finalize(const int threshold,
-                          const int dilation_size,
-                          const bool antialias,
-                          const bool fill_all_holes)
-{
-#ifdef HEAVY_DEBUG
-    assert(dilation_size >= 0);
-    assert(dilation_size < MYPAINT_TILE_SIZE);
-#endif
-    
-    // Remove annoying small glich-like pixel area.
-    // `Progressive fill` would mistakenly fill some
-    // concaved areas around jagged contour edges as gap.
-    // Theorically, such area cannot be produced when
-    // gap-closing-level is less or equal to 1.
-    if (threshold > 0 && m_level > 1) {
-        // CountPerimeterKernel just marks such needless
-        // pixels, not remove it yet.
-        CountPerimeterKernel ck(this, 0, threshold, true, fill_all_holes);
-        filter_tiles((KernelWorker*)&ck);
-
-        // RemoveGarbageKernel actually remove
-        // that marked areas.
-        RemoveGarbageKernel rk(this, 0);
-        filter_tiles((KernelWorker*)&rk);
-    }
-    else if (fill_all_holes) {
-        // No area removal. Just fill hole.
-        CountPerimeterKernel ck(this, 0, 0, true, fill_all_holes);
-        filter_tiles((KernelWorker*)&ck);
-    }
-
-    // Dilate it. This should be prior to anti-aliasing.
-    if (dilation_size > 0) {
-        DilateKernel dk(this);
-        for(int i=0; i<dilation_size; i++) {
-            filter_tiles((KernelWorker*)&dk);
-        }
-    }
-
-    // At last, do Psuedo Antialias for result pixels.
-    if (antialias) {
-        AntialiasKernel ak(this);
-        filter_tiles((KernelWorker*)&ak);
-    }
-     
-}
-*/
 
 /**
 * @remove_small_areas
@@ -1201,7 +1138,7 @@ FlagtileSurface::remove_small_areas(const int threshold, const bool fill_all_hol
     if (threshold > 0 && m_level > 1) {
         // CountPerimeterKernel just marks such needless
         // pixels, not remove it yet.
-        CountPerimeterKernel ck(this, 0, threshold, true, fill_all_holes);
+        CountPerimeterKernel ck(this, 0, threshold, fill_all_holes);
         filter_tiles((KernelWorker*)&ck);
 
         // RemoveGarbageKernel actually remove
@@ -1211,7 +1148,7 @@ FlagtileSurface::remove_small_areas(const int threshold, const bool fill_all_hol
     }
     else if (fill_all_holes) {
         // No area removal. Just fill hole.
-        CountPerimeterKernel ck(this, 0, 0, true, fill_all_holes);
+        CountPerimeterKernel ck(this, 0, 0, fill_all_holes);
         filter_tiles((KernelWorker*)&ck);
     }    
 }
@@ -1253,7 +1190,7 @@ FlagtileSurface::dbg_progress_single_level(const int level, const int perimeter)
     if (perimeter > 0) {
         // CountPerimeterKernel just marks such needless
         // pixels, not remove it yet.
-        CountPerimeterKernel ck(this, level, perimeter, false, false);
+        CountPerimeterKernel ck(this, level, perimeter, false);
         filter_tiles((KernelWorker*)&ck);
         
         // RemoveGarbageKernel actually remove
@@ -1805,65 +1742,6 @@ LassofillSurface::~LassofillSurface()
 }
 
 /**
-* @finalize
-* overrided Finalize method.
-*
-* @param threshold: The threshold value of filled area perimeter.
-*                   If an area which perimeter is less than this value,
-*                   that area is removed(filled with PIXEL_AREA)
-* @detail 
-* This is a dedicated version of finalize of Lassofill.
-*/
-/*
-void 
-LassofillSurface::finalize(const int dilation_size,
-                           const bool antialias,
-                           const bool fill_all_holes)
-{
-#ifdef HEAVY_DEBUG
-    assert(dilation_size >= 0);
-    assert(dilation_size < MYPAINT_TILE_SIZE);
-#endif
-    
-    if (fill_all_holes) {
-        // Use CountPerimeterKernel with threshold 0,
-        // This means `disable small area rejection`
-        // So this kernel only do `fill_all_holes` functionality.
-        CountPerimeterKernel ck(this, 0, 0, true, fill_all_holes);
-        filter_tiles((KernelWorker*)&ck);
-    }
-    
-    // Before converting pixels, dilate it.
-    // But, for Lassofill dilation is something 
-    // complicated.
-    // We needs not dilating PIXEL_FILLED
-    // but eroding PIXEL_CONTOUR pixels. 
-    // Otherwise, dilated pixels would exceed the 
-    // lasso area.
-    if (dilation_size > 0) {        
-        for(int i=0; i<dilation_size; i++) {
-            ErodeContourKernel ek(this);
-            filter_tiles((KernelWorker*)&ek);
-        }
-    }
-    
-    // for this surface, just convert PIXEL_AREA
-    // to PIXEL_FILLED completes fill the area.
-    ConvertKernel ck(this, 0, PIXEL_CONTOUR, PIXEL_OUTSIDE);
-    filter_tiles((KernelWorker*)&ck);
-    ck.setup(0, PIXEL_AREA, PIXEL_FILLED);
-    filter_tiles((KernelWorker*)&ck);
-    
-    // Doing Psuedo Antialias for result pixels
-    if (antialias) {
-        AntialiasKernel ak(this);
-        filter_tiles((KernelWorker*)&ak);
-    }
-     
-}
-*/
-
-/**
 * @convert_result_area
 * convert PIXEL_AREA as final result(PIXEL_FILLED)
 *
@@ -2155,69 +2033,11 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
 PyObject*
 FlagtileSurface::render_to_numpy(PyObject *npbuf,
                                  int tflag,
-                                 int tr, int tg, int tb)
+                                 int tr, int tg, int tb,
+                                 int level)
 {
     int w = get_width(); 
     int h = get_height();
-
-    PyArrayObject *array;
-    if (npbuf != Py_None) {
-        array = (PyArrayObject*)npbuf;
-        Py_INCREF(array);
-    }     
-    else {
-        npy_intp dims[] = {
-            h * TILE_SIZE, 
-            w * TILE_SIZE, 
-            3
-        };
-        array = (PyArrayObject*)PyArray_ZEROS(3, dims, NPY_UINT8, 0);
-    }
-
-    const unsigned int xstride = PyArray_STRIDE(array, 1);
-    const unsigned int ystride = PyArray_STRIDE(array, 0);
-    uint8_t *tptr;
-    uint8_t *lptr;
-    uint8_t *baseptr = (uint8_t*)PyArray_BYTES(array);
-
-    int px;
-    int py=0;
-
-    for(int ty=0; ty<h; ty++) {
-        px = 0;
-        for(int tx=0; tx<w; tx++) {
-            Flagtile *t = get_tile(tx, ty, false);
-            if ( t != NULL) {
-                lptr = baseptr + (ystride * py + xstride * px);
-                for (int y=0; y < TILE_SIZE; y++) {
-                    tptr = lptr;
-                    for (int x=0; x < TILE_SIZE; x++) {
-                        if (t->get(0, x, y) == tflag) {
-                            tptr[0] = (uint8_t)tr;
-                            tptr[1] = (uint8_t)tg;
-                            tptr[2] = (uint8_t)tb;
-                        }
-                        tptr+=xstride;
-                    }
-                    lptr+=ystride;
-                }
-            }
-            px+=TILE_SIZE;
-        }
-        py+=TILE_SIZE;
-    }
-    return (PyObject*)array;
-}
-#ifdef HEAVY_DEBUG
-PyObject*
-progfill_render_to_numpy(FlagtileSurface *surf,
-                         PyObject *npbuf,
-                         int tflag,
-                         int level,
-                         int tr, int tg, int tb)
-{
-    int w = surf->get_width(); 
-    int h = surf->get_height();
 
     PyArrayObject *array;
     if (npbuf != Py_None) {
@@ -2249,7 +2069,7 @@ progfill_render_to_numpy(FlagtileSurface *surf,
         for(int ty=0; ty<h; ty++) {
             px = 0;
             for(int tx=0; tx<w; tx++) {
-                Flagtile *t = surf->get_tile(tx, ty, false);
+                Flagtile *t = get_tile(tx, ty, false);
                 if ( t != NULL) {
                     lptr = baseptr + (ystride * py + xstride * px);
                     for (int y=0; y < TILE_SIZE; y+=step) {
@@ -2282,7 +2102,7 @@ progfill_render_to_numpy(FlagtileSurface *surf,
             py += TILE_SIZE;
         }
     }
-    else if(level == -1) {
+    else if (level == -1) {
         // XXX Antialiasing debugging test: remove later!
         // The pixel appearance number array.
         int pixel_counts[MAX_AA_LEVEL];
@@ -2291,7 +2111,7 @@ progfill_render_to_numpy(FlagtileSurface *surf,
         for(int ty=0; ty<h; ty++) {
             px = 0;
             for(int tx=0; tx<w; tx++) {
-                Flagtile *t = surf->get_tile(tx, ty, false);
+                Flagtile *t = get_tile(tx, ty, false);
                 if ( t != NULL) {
                     lptr = baseptr + (ystride * py + xstride * px);
                     for (int y=0; y < TILE_SIZE; y++) {
@@ -2327,17 +2147,16 @@ progfill_render_to_numpy(FlagtileSurface *surf,
         }
     }
     else {
-        // Otherwise, we draw ordinary non-scaled pixel.
         for(int ty=0; ty<h; ty++) {
             px = 0;
             for(int tx=0; tx<w; tx++) {
-                Flagtile *t = surf->get_tile(tx, ty, false);
+                Flagtile *t = get_tile(tx, ty, false);
                 if ( t != NULL) {
                     lptr = baseptr + (ystride * py + xstride * px);
                     for (int y=0; y < TILE_SIZE; y++) {
                         tptr = lptr;
                         for (int x=0; x < TILE_SIZE; x++) {
-                            if (t->get(level, x, y) == tflag) {
+                            if (t->get(0, x, y) == tflag) {
                                 tptr[0] = (uint8_t)tr;
                                 tptr[1] = (uint8_t)tg;
                                 tptr[2] = (uint8_t)tb;
@@ -2347,11 +2166,11 @@ progfill_render_to_numpy(FlagtileSurface *surf,
                         lptr+=ystride;
                     }
                 }
-                px += TILE_SIZE;
+                px+=TILE_SIZE;
             }
-            py += TILE_SIZE;
+            py+=TILE_SIZE;
         }
     }
     return (PyObject*)array;
 }
-#endif
+

@@ -793,7 +793,6 @@ class CountPerimeterKernel: public WalkingKernel
 {
 protected:
     const int m_threshold;
-    const bool m_finalizing;
     uint8_t m_replacing_pixel;
     FillHoleWorker m_fillworker;
     const bool m_fill_all_holes;
@@ -829,12 +828,6 @@ protected:
         }
     }
 
-    virtual bool _is_wall_pixel(const uint8_t pix) 
-    {
-        return ((pix & PIXEL_MASK) == PIXEL_FILLED 
-                    || (pix & PIXEL_MASK) == PIXEL_REMOVE);
-    }
-
     virtual void _on_rotate_cb(const bool right) 
     {
         if (right)
@@ -850,10 +843,6 @@ public:
     *                   If an area has smaller perimeter than this
     *                   threshold, it would be removed.
     *                   If this is 0, area removal is disabled.
-    * @param finalizing: When this flag is true,this kernel includes
-    *                    PIXEL_CONTOUR as target pixel.
-    *                    Otherwise, ignore PIXEL_CONTOUR which is neiboring
-    *                    PIXEL_FILLED.
     * @param fill_all_holes: When this flag is true, and if there is a hole
     *                        (i.e. counter-clockwize area), it will be filled
     *                        with flood-fill algorithm.
@@ -875,11 +864,9 @@ public:
     CountPerimeterKernel(FlagtileSurface *surf, 
                          const int targ_level,
                          const int threshold,
-                         const bool finalizing,
                          const bool fill_all_holes) 
         :   WalkingKernel(surf, targ_level), 
             m_threshold(threshold),
-            m_finalizing(finalizing),
             m_fillworker(surf, targ_level),
             m_fill_all_holes(fill_all_holes)  
     {}
@@ -904,34 +891,40 @@ public:
         uint8_t pix = targ->get(m_level, x, y) & PIXEL_MASK;
         if (pix == PIXEL_AREA 
                 || pix == 0
-                || (m_finalizing && pix == PIXEL_CONTOUR)) {
+                || pix == PIXEL_CONTOUR) {
             for(int i=0; i<4; i++) {
                 uint8_t kpix = get_kernel_pixel(m_level, sx, sy, i);
+                
+                // When kpix is EXACTLY filled pixel... 
+                // (A ridge of already detected area would be a combination of
+                // PIXEL_FILLED | FLAG_DECIDED, so skip it.)
                 if (kpix == PIXEL_FILLED) {
                     // Start from current kernel pixel.
                     // We'll proceed to `right` of that pixel,
                     // so _get_hand_dir(i) is the initial direction.
                     m_replacing_pixel = PIXEL_FILLED | FLAG_DECIDED;
                     _walk(sx, sy, _get_left_dir(i));
-                    // After walking, we might remove current pixel area.
-                    // But if it is counter-clockwise, it would be a hole
-                    // in large pixel area. so ignore it.
-                    if (is_clockwise()) {
-                        if (m_step < m_threshold) {
-                            // There might `diagonally connected areas`.
-                            // Such areas cannot be removed with flood-fill.
-                            // Therefore,walk the current area again and 
-                            // replace PIXEL_REMOVE to rim pixels.
-                            // Actual removal of the area should be 
-                            // executed later.
-                            m_replacing_pixel = PIXEL_REMOVE;
-                            _walk(sx, sy, _get_left_dir(i));
+                    if (m_step > 0) {
+                        // After walking, we might remove current pixel area.
+                        // But if it is counter-clockwise, it would be a hole
+                        // in large pixel area. so ignore it.
+                        if (is_clockwise()) {
+                            if (m_step < m_threshold) {
+                                // There might `diagonally connected areas`.
+                                // Such areas cannot be removed with our flood-fill.
+                                // Therefore,walk the current area again and 
+                                // replace PIXEL_REMOVE to rim pixels.
+                                // Actual removal of the area should be 
+                                // executed later by another worker(RemoveAreaWorker).
+                                m_replacing_pixel = PIXEL_REMOVE;
+                                _walk(sx, sy, _get_left_dir(i));
+                            }
                         }
+                        else if (m_fill_all_holes) {
+                            m_surf->flood_fill(sx, sy, &m_fillworker);
+                        }
+                        return;
                     }
-                    else if (m_fill_all_holes) {
-                        m_surf->flood_fill(sx, sy, &m_fillworker);
-                    }
-                    return;
                 }
             }
         }

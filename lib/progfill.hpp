@@ -385,13 +385,6 @@ assert(ct != NULL);
     // Make it public.
     void filter_tiles(KernelWorker *k);
     
-    // Finalize all processing. 
-    /*
-    void finalize(const int threshold,
-                  const int dilation_size,
-                  const bool antialias,
-                  const bool fill_all_holes);
-    */     
     // Finalize related methods.
     void remove_small_areas(const int threshold, const bool fill_all_holes);
     void dilate(const int dilation_size);
@@ -401,7 +394,8 @@ assert(ct != NULL);
     PyObject*
     render_to_numpy(PyObject *npbuf,
                     int tflag,
-                    int tr, int tg, int tb);
+                    int tr, int tg, int tb,
+                    int level);
 };
 
 /* FloodfillSurface for flood-fill.
@@ -503,11 +497,7 @@ public:
     */
     LassofillSurface(PyObject* node_list);
     virtual ~LassofillSurface();
-    /*
-    void finalize(const int dilation_size, 
-                  const bool antialias,
-                  const bool fill_all_holes);
-    */
+ 
     void convert_result_area();
 };
 
@@ -521,14 +511,5 @@ progfill_flood_fill(Flagtile *tile, /* output HxWx4 array of uint16 */
                     PyObject *seeds, /* List of 2-tuples */
                     int min_x, int min_y, int max_x, int max_y,
                     int level);
-
-#ifdef HEAVY_DEBUG
-PyObject*
-progfill_render_to_numpy(FlagtileSurface *surf,
-                         PyObject *npbuf,
-                         int tflag, // Ignored when level >= 0
-                         int level, // Ignored when level < 0
-                         int tr, int tg, int tb);
-#endif
 
 #endif

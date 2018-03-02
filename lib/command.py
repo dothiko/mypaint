@@ -2089,7 +2089,7 @@ class ClosedAreaFill (FloodFill):
         self.show_flag = kwds.get('show_flag', False)
         print("rejecting perimeter %d" %  self.reject_perimeter)
 
-    def _dbg_show_flag(self, ft):
+    def _dbg_show_flag(self, ft, level=0):
         # XXX debug method
         
         # From lib/progfilldefine.h
@@ -2097,9 +2097,14 @@ class ClosedAreaFill (FloodFill):
         PIXEL_CONTOUR = 0x06
         PIXEL_AREA = 0x02
         npbuf = None
-        npbuf = ft.render_to_numpy(npbuf, PIXEL_FILLED, 0, 255, 255) 
-        npbuf = ft.render_to_numpy(npbuf, PIXEL_CONTOUR, 255, 0, 0) 
-        npbuf = ft.render_to_numpy(npbuf, PIXEL_AREA, 255, 255, 0) 
+
+        if level > 0:
+            npbuf = ft.render_to_numpy(npbuf, PIXEL_CONTOUR, 255, 0, 0, level) 
+            npbuf = ft.render_to_numpy(npbuf, PIXEL_AREA, 255, 255, 0, level) 
+        else:
+            npbuf = ft.render_to_numpy(npbuf, PIXEL_FILLED, 0, 255, 255, level) 
+            npbuf = ft.render_to_numpy(npbuf, PIXEL_CONTOUR, 255, 0, 0, level) 
+            npbuf = ft.render_to_numpy(npbuf, PIXEL_AREA, 255, 255, 0, level) 
         
         print('---- rendering tiles completed')
         from PIL import Image
@@ -2211,7 +2216,7 @@ class ClosedAreaFill (FloodFill):
             return lib.surface.TileRequestWrapper(cl)
         
     def redo(self):
-        # TODO Implement 'fill once' option.
+        # [TODO] Implement 'fill once' option.
 
         _TILE_SIZE = lib.mypaintlib.TILE_SIZE
         layers = self.doc.layer_stack
@@ -2248,21 +2253,17 @@ class ClosedAreaFill (FloodFill):
         # XXX Debug code End
         
         # Get target color if needed
-        targ_a = 0 # Important, use this as initialize flag later.
+        targ_r = targ_g = targ_b = targ_a = 0
         if tcpos is not None:
             px, py = tcpos
             tx = px // _TILE_SIZE 
             ty = py // _TILE_SIZE 
-            px = px % _TILE_SIZE
-            py = py % _TILE_SIZE
+            px = int(px % _TILE_SIZE)
+            py = int(py % _TILE_SIZE)
             with src.tile_request(tx, ty, readonly=True) as sample:
                 targ_r, targ_g, targ_b, targ_a = [int(c) for c in sample[py][px]]
-        if targ_a == 0:
-            targ_r = 0
-            targ_g = 0
-            targ_b = 0
-            targ_a = 0
 
+        # Convert contours into flagtile.
         for fty in range(0, th):
             for ftx in range(0, tw):
                 with src.tile_request(ftx+ox, fty+oy, readonly=True) as src_tile:
@@ -2277,8 +2278,8 @@ class ClosedAreaFill (FloodFill):
                         )
 
         # XXX Debug/profiling code
-        if show_flag:
-            self._dbg_show_flag(ft)
+       #if show_flag:
+       #    self._dbg_show_flag(ft)
         #XXX debug code end
 
         # Mipmap build
@@ -2286,12 +2287,17 @@ class ClosedAreaFill (FloodFill):
 
         # Deciding filling area
         ft.decide_area()
-            
+          
         # Then, start progressing tiles.
         ft.progress_tiles(
             level-1, 
             int((1<<(level-1)) * 4 * 2)
         )
+
+        # XXX Debug/profiling code
+        if show_flag:
+            self._dbg_show_flag(ft)
+        #XXX debug code end
 
         # Finalize progressive fill.
         # The processing sequence MUST be : 
