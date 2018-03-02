@@ -2089,26 +2089,82 @@ class ClosedAreaFill (FloodFill):
         self.show_flag = kwds.get('show_flag', False)
         print("rejecting perimeter %d" %  self.reject_perimeter)
 
-    def _dbg_show_flag(self, ft, level=0):
+    def _dbg_show_flag(self, ft, method, level=0, title=None):
         # XXX debug method
         
-        # From lib/progfilldefine.h
-        PIXEL_FILLED = 0x05
-        PIXEL_CONTOUR = 0x06
+        # From lib/progfilldefine.hpp
         PIXEL_AREA = 0x02
+        PIXEL_OUTSIDE = 0x03 
+        PIXEL_REMOVE = 0x04
+        PIXEL_FILLED = 0x05        
+        PIXEL_CONTOUR = 0x06
+        FLAG_WORK = 0x10
+        FLAG_DECIDED = 0x20
+        FLAG_AA = 0x80
         npbuf = None
+        if title is None:
+            title = method
+        title = title.decode('UTF-8')
 
-        if level > 0:
-            npbuf = ft.render_to_numpy(npbuf, PIXEL_CONTOUR, 255, 0, 0, level) 
-            npbuf = ft.render_to_numpy(npbuf, PIXEL_AREA, 255, 255, 0, level) 
-        else:
-            npbuf = ft.render_to_numpy(npbuf, PIXEL_FILLED, 0, 255, 255, level) 
-            npbuf = ft.render_to_numpy(npbuf, PIXEL_CONTOUR, 255, 0, 0, level) 
-            npbuf = ft.render_to_numpy(npbuf, PIXEL_AREA, 255, 255, 0, level) 
-        
-        print('---- rendering tiles completed')
-        from PIL import Image
+        colors = {
+            PIXEL_FILLED : (255, 160, 0),
+            PIXEL_AREA : (0, 255, 255),
+            PIXEL_CONTOUR : (255, 255, 0),
+            0 : (0, 255, 0), # level color
+            PIXEL_OUTSIDE : (255, 0, 128),
+            PIXEL_FILLED | FLAG_DECIDED: (0, 255, 0),
+            FLAG_WORK : (255, 0, 0),
+            FLAG_AA : (0, 255, 255)
+        }
+
+        def create_npbuf(npbuf, level, pix):
+            r, g, b = colors[pix]
+            return ft.render_to_numpy(
+                npbuf, pix,
+                r, g, b,
+                level
+            )
+            
+        for m in method.split(","):
+            m = m.strip()
+
+            if m == 'filled' or m == 'show_all':
+                npbuf = create_npbuf(npbuf, level, PIXEL_FILLED)
+                npbuf = create_npbuf(npbuf, level, PIXEL_CONTOUR)
+            elif m == 'area':
+                npbuf = create_npbuf(npbuf, level, PIXEL_AREA)
+            elif m == 'close_area':
+                npbuf = create_npbuf(npbuf, 0, PIXEL_AREA)
+            elif m == 'initial_level':
+                npbuf = create_npbuf(npbuf, level, 0)
+            elif m == 'contour':
+                npbuf = create_npbuf(npbuf, level, PIXEL_CONTOUR)
+            elif m == 'outside':
+                npbuf = create_npbuf(npbuf, level, PIXEL_OUTSIDE)
+            elif m == 'level':
+                npbuf = create_npbuf(npbuf, level, PIXEL_AREA)
+                npbuf = create_npbuf(npbuf, level, PIXEL_FILLED)
+                npbuf = create_npbuf(npbuf, level, PIXEL_CONTOUR)
+                npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED | FLAG_DECIDED)
+            elif m == 'result':
+                npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED)
+                npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED | FLAG_DECIDED)
+            elif m == 'walking':
+                npbuf = create_npbuf(npbuf, -1, FLAG_WORK)
+            elif m == 'alias':
+                npbuf = create_npbuf(npbuf, -1, FLAG_AA)
+            elif show_all:
+                npbuf = create_npbuf(npbuf, 0, PIXEL_AREA)
+                npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED)
+                npbuf = create_npbuf(npbuf, 0, PIXEL_CONTOUR)
+            else:
+                print("[ERROR] there is no case for %s in _dbg_show_flag" % m)        
+
+        from PIL import Image, ImageDraw
         newimg = Image.fromarray(npbuf)
+        d = ImageDraw.Draw(newimg)
+        d.text((0,0),title, (0, 0, 0))
+        d.text((1,1),title, (255, 255, 255))        
         newimg.save('/tmp/closefill_check.jpg')
         newimg.show()
 
@@ -2279,7 +2335,7 @@ class ClosedAreaFill (FloodFill):
 
         # XXX Debug/profiling code
        #if show_flag:
-       #    self._dbg_show_flag(ft)
+       #    self._dbg_show_flag(ft, 'contour,filled',title='post-convert tile')
         #XXX debug code end
 
         # Mipmap build
@@ -2296,7 +2352,11 @@ class ClosedAreaFill (FloodFill):
 
         # XXX Debug/profiling code
         if show_flag:
-            self._dbg_show_flag(ft)
+            self._dbg_show_flag(
+                ft, 
+                'contour,filled', 
+                title='post-progress'
+            )
         #XXX debug code end
 
         # Finalize progressive fill.
@@ -2316,7 +2376,11 @@ class ClosedAreaFill (FloodFill):
         # XXX Debug/profiling code
         print("processing time %s" % str(time.time()-ctm))
         if show_flag:
-            self._dbg_show_flag(ft)
+            self._dbg_show_flag(
+                ft,
+                'result', 
+                title='final result'
+            )
         #XXX debug code end
 
 class LassoFill(ClosedAreaFill):
