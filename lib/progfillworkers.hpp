@@ -833,6 +833,14 @@ protected:
         if (right)
             m_step--;
     }
+    
+    // CountPerimeterKernel would target neighboring(or surrounded by) PIXEL_AREA 
+    // and vacant and PIXEL_CONTOUR pixel. 
+    virtual bool _is_target_pixel(const uint8_t pixel) {
+        return  (pixel == PIXEL_AREA 
+                    || pixel == 0
+                    || pixel == PIXEL_CONTOUR);
+    }
 
 public:
     /**
@@ -888,10 +896,9 @@ public:
                       const int x, const int y,
                       const int sx, const int sy)
     {
-        uint8_t pix = targ->get(m_level, x, y) & PIXEL_MASK;
-        if (pix == PIXEL_AREA 
-                || pix == 0
-                || pix == PIXEL_CONTOUR) {
+        uint8_t pixel = targ->get(m_level, x, y) & PIXEL_MASK;
+        if (pixel == PIXEL_AREA 
+                || pixel == 0) {
             for(int i=0; i<4; i++) {
                 uint8_t kpix = get_kernel_pixel(m_level, sx, sy, i);
                 

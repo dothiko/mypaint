@@ -2345,9 +2345,12 @@ class ClosedAreaFill (FloodFill):
         ft.decide_area()
           
         # Then, start progressing tiles.
+        e_level = level - 1
+        MAX_PROGRESS_LEVEL = 6
+        rev_level = MAX_PROGRESS_LEVEL - e_level
         ft.progress_tiles(
-            level-1, 
-            int((1<<(level-1)) * 4 * 2)
+            e_level,  
+            int((1<<rev_level) * 4 * 2)
         )
 
         # XXX Debug/profiling code

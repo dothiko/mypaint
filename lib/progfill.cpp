@@ -1098,7 +1098,7 @@ FlagtileSurface::progress_tiles(const int reject_targ_level,
         ProgressKernel k(this); 
         for (int i=m_level; i>0; i--) {
             if (i == reject_targ_level) {
-                // CountPerimeterKernel just marks such needless
+                // EarlyRejectionKernel just marks such needless
                 // pixels, not remove it yet.
                 CountPerimeterKernel ck(this, i, perimeter, false);
                 filter_tiles((KernelWorker*)&ck);
