@@ -1451,9 +1451,12 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         layers = model.get_marked_layers()
         markedcnt = len(layers)
         targ = rootstack.current
-        targ_paintable = isinstance(targ, lib.layer.StrokemappedPaintingLayer)
+        targ_paintable = (
+            isinstance(targ, lib.layer.StrokemappedPaintingLayer)
+                and not targ.locked
+        )
         can_group = markedcnt > 0
-        other_marked = (markedcnt > 1 or (markedcnt == 1 and targ not in layers))
+        other_marked = (markedcnt > 1 or (markedcnt == 1 and targ != layers[0]))
         can_cut = (targ_paintable and other_marked)
 
         app.find_action("GroupMarkedLayers").set_sensitive(can_group)
