@@ -209,7 +209,7 @@ class Projectsaveable(lib.autosave.Autosaveable):
         # forgetting to implement this method...
         raise StopIteration  
         yield None # Dummy yield, to return generator function.
-
+        
 
 class Versionsave(object):
     """Version save class, manage project version infomation.

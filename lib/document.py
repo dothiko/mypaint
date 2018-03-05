@@ -324,12 +324,6 @@ class Document (object):
         self._autosave_countdown_id = None
         self._autosave_dirty = False
 
-        # XXX for `project-save`
-        # Project flag.place here to avoid exception
-        # from _command_stack_updated_cb
-        self._is_project = False
-        # XXX for `project-save` end
-
         if (not painting_only) and self._owns_cache_dir:
             self._autosave_processor = lib.idletask.Processor()
             self.command_stack.stack_updated += self._command_stack_updated_cb
@@ -1656,7 +1650,6 @@ class Document (object):
 
         # XXX for `project-save`
         ext = None
-        self._is_project = False
         if not os.path.isfile(filename):
             # Filename is not file.
             # But it might be oradir(project)...
@@ -1665,9 +1658,9 @@ class Document (object):
             thumbpath = os.path.join(dirname, 'Thumbnails',
                     'thumbnail.png')
             datapath = os.path.join(dirname, 'data')
-            if (os.path.exists(xmlname) and
-                    os.path.exists(thumbpath) and
-                    os.path.exists(datapath) ):
+            if (os.path.isfile(xmlname) and
+                    os.path.isfile(thumbpath) and
+                    os.path.isdir(datapath) ):
                 # It must be something oradir type directory.
                 # But, currently oradir supported 
                 # autosave and project-save only.
@@ -2182,9 +2175,16 @@ class Document (object):
         return self._layer_view_manager
 
     ## XXX Project Related
-    @property
-    def is_project(self):
-        return self._is_project
+    def is_project(self, filename):
+        try:
+            if os.path.isdir(filename):
+                xmlpath = os.path.join(filename, "stack.xml")
+                datadir = os.path.join(filename, "data")
+                if os.path.isfile(xmlpath) and os.path.isdir(datadir):
+                    return True
+        except TypeError:
+            pass
+        return False
 
     @property
     def project_version(self):
@@ -2329,7 +2329,6 @@ class Document (object):
         self._stop_cache_updater()
         self._stop_autosave_writes()
         self.clear(new_cache=False)
-        self._is_project = True
         self._autosave_dirty = False
 
         try:

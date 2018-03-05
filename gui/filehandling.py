@@ -1165,7 +1165,11 @@ class FileHandler (object):
         if not self.filename:
             self.save_as_cb(action)
         else:
-            self.save_file(self.filename, project=self.doc.model.is_project)
+            # XXX for `project-save`
+            self.save_file(
+                self.filename, 
+                project=self.doc.model.is_project(self.filename)
+            )
 
     def save_as_cb(self, action):
         if self.filename:
@@ -1618,6 +1622,9 @@ class FileHandler (object):
         return True
 
     ##+ Project related
+    @property
+    def model_is_project(self):
+        return self.doc.model.is_project(self.filename)
 
     def update_project_preview_cb(self, file_chooser, preview):
         """Project-Save specialized version of update_preview_cb()
@@ -1656,11 +1663,10 @@ class FileHandler (object):
             self.register_recent_project(self.filename)
 
     def save_current_project_cb(self, action):
-        if self.doc.model.is_project == False:
+        if self.model_is_project == False:
             self.save_as_project_cb(action)
         else:
             self.save_file(self.filename, project=True)
-
 
     def save_as_project_cb(self, action):
 
@@ -1691,7 +1697,6 @@ class FileHandler (object):
         else:
             ext = ''
 
-
         if ext != "":
             # Current extension(document type) is not empty -
             # This means 'export current document as project directory'
@@ -1712,8 +1717,7 @@ class FileHandler (object):
                 project=True, source_dir=self.filename)
 
     def save_project_as_new_version_cb(self, action):
-
-        if self.doc.model.is_project == False:
+        if self.model_is_project == False:
             self.save_as_project_cb(action)
         else:
             self.save_file(self.filename, project=True, create_version=True)
@@ -1724,7 +1728,7 @@ class FileHandler (object):
         # should trigger backupping.
 
     def manage_project_cb(self, action):
-        if self.doc.model.is_project:
+        if self.model_is_project:
             filename = self.filename
             manager = self.app.project_manager_window
             # set_directory makes this manager window as
