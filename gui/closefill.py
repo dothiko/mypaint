@@ -96,7 +96,6 @@ class _Prefs:
     FILL_IMMIDIATELY_PREF = 'fill_immidiately'
     REJECT_FACTOR_PREF = 'reject_factor'
     FILL_METHOD_PREF = 'fill_method'
-    ERASE_PIXEL_PREF = 'erase_pixel'
     SHARE_SETTING_PREF = 'share_setting'
     ALPHA_THRESHOLD_PREF = 'alpha_threshold'
     FILL_ALL_HOLES_PREF = 'fill_all_holes'
@@ -109,7 +108,6 @@ class _Prefs:
     DEFAULT_FILL_IMMIDIATELY = False
     DEFAULT_REJECT_FACTOR = 2.0
     DEFAULT_FILL_METHOD = _FillMethod.FLOOD_FILL
-    DEFAULT_ERASE_PIXEL = False
     DEFAULT_SHARE_SETTING = True
     DEFAULT_ALPHA_THRESHOLD = 0.0156
     DEFAULT_FILL_ALL_HOLES = False
@@ -150,19 +148,6 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
     def get_usage(self):
         return _(u"Fill areas with color. Holding Shift changes fill method temporary. Holding Alt fill with transparent color.")
 
-    @property
-    def inactive_cursor(self):
-        return None
-
-    @property
-    def active_cursor(self):
-        if self.phase == _Phase.ADJUST:
-            if self.zone == _EditZone.CONTROL_NODE:
-                return self._crosshair_cursor
-            elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
-                return self._arrow_cursor
-        return None
-
     ## Class config vars
 
     # Input node capture settings:
@@ -179,18 +164,55 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
     MAX_INTERNODE_DISTANCE_ENDS = 2   # display pixels
 
     ## Cursors
-    _arrow_cursor = None
-    _crosshair_cursor = None
-    _pencil_cursor = None
+    _cursors = {}
+    _CURSOR_ARROW = 0
+    _CURSOR_CROSS = 1
+    _CURSOR_PENCIL = 2
+    _CURSOR_ERASER = 3
+    _CURSOR_CROSS_ERASER = 4
 
     ## Other class vars
 
     _OPTIONS_PRESENTER = None   #: Options presenter singleton
-   #_MODIFIER_CHANGE_FILL = Gdk.ModifierType.SHIFT_MASK
     _MODIFIER_CHANGE_FILL = (Gdk.KEY_Shift_L, Gdk.KEY_Shift_R)
-   #_MODIFIER_ERASE_PIXEL = Gdk.ModifierType.MOD1_MASK   # Alt key.
-    _MODIFIER_ERASE_PIXEL = (Gdk.KEY_Alt_L, Gdk.KEY_Alt_R) # Alt key.
 
+    ## Class methods
+    @classmethod
+    def _init_cursors(cls, app):
+        cursor_dict = cls._cursors
+        cursors = app.cursors
+        name = gui.cursor.Name
+        c = cursors.get_action_cursor(
+            cls.ACTION_NAME,
+            name.ARROW,
+        )
+        cursor_dict[cls._CURSOR_ARROW] = c
+
+        c = cursors.get_action_cursor(
+            cls.ACTION_NAME,
+            name.CROSSHAIR_OPEN_PRECISE,
+        )
+        cursor_dict[cls._CURSOR_CROSS] = c
+
+        c = cursors.get_action_cursor(
+            cls.ACTION_NAME,
+            name.PENCIL,
+        )
+        cursor_dict[cls._CURSOR_PENCIL] = c
+
+        # Use eraser icon. so, using get_icon_cursor method.
+        eraser_icon_name = "mypaint-eraser-symbolic" 
+        c = cursors.get_icon_cursor(
+            eraser_icon_name, 
+            name.PENCIL,
+        )
+        cursor_dict[cls._CURSOR_ERASER] = c
+
+        c = cursors.get_icon_cursor(
+            eraser_icon_name, 
+            name.CROSSHAIR_OPEN_PRECISE,
+        )
+        cursor_dict[cls._CURSOR_CROSS_ERASER] = c
 
     ## Initialization & lifecycle methods
 
@@ -215,7 +237,6 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         self._button_down = None
 
         self._overridden_fill_method = None
-        self._override_erase_pixel = False
 
     def _reset_nodes(self):
         self.nodes = []  # nodes that met the distance+time criteria
@@ -231,6 +252,12 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
 
         # marker shares _dragged_node_start_pos with nodes.
 
+    def _is_active(self):
+        for mode in self.doc.modes:
+            if mode is self:
+                return True
+        return False
+
     def _ensure_overlay_for_tdw(self, tdw):
         overlay = self._overlays.get(tdw)
         if not overlay:
@@ -238,12 +265,6 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
             tdw.display_overlays.append(overlay)
             self._overlays[tdw] = overlay
         return overlay
-
-    def _is_active(self):
-        for mode in self.doc.modes:
-            if mode is self:
-                return True
-        return False
 
     def _discard_overlays(self):
         for tdw, overlay in self._overlays.items():
@@ -260,25 +281,20 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         opt = self.options_presenter
         opt.target = self
 
+        app = self.doc.app
         cls = self.__class__
-        if cls._arrow_cursor is None:
-            cls._arrow_cursor = self.doc.app.cursors.get_action_cursor(
-                self.ACTION_NAME,
-                gui.cursor.Name.ARROW,
-            )
-            cls._crosshair_cursor = self.doc.app.cursors.get_action_cursor(
-                self.ACTION_NAME,
-                gui.cursor.Name.CROSSHAIR_OPEN_PRECISE,
-            )
-            cls._pencil_cursor = self.doc.app.cursors.get_action_cursor(
-                self.ACTION_NAME,
-                gui.cursor.Name.PENCIL,
-            )
+        if len(cls._cursors) == 0:
+            cls._init_cursors(app)
+
+        app.brushmodifier.blend_mode_changed += self._blend_mode_changed_cb
         
     def leave(self, **kwds):
         """Leaves the mode: called by `ModeStack.pop()` etc."""
         if not self._is_active():
             self._discard_overlays()
+
+        app = self.doc.app
+        app.brushmodifier.blend_mode_changed -= self._blend_mode_changed_cb
        #self._stop_task_queue_runner(complete=True)
         super(ClosefillMode, self).leave(**kwds)  # supercall will commit
 
@@ -442,8 +458,6 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
             self._overridden_fill_method = opts.fill_method
             opts.override_fill_method(self.fill_method_option)
             self._update_cursor(tdw)
-        elif event.keyval in self._MODIFIER_ERASE_PIXEL:
-            self._override_erase_pixel = True
 
     def key_release_cb(self, win ,tdw, event):
         """Keyboard release handler, for overriding fill method.
@@ -454,8 +468,13 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
             opts.override_fill_method(self._overridden_fill_method)
             self._overridden_fill_method = None
             self._update_cursor(tdw)
-        elif event.keyval in self._MODIFIER_ERASE_PIXEL:
-            self._override_erase_pixel = False
+
+    def _blend_mode_changed_cb(self, old_mode, new_mode):
+        """ Notify the blend mode has changed.
+        mode arguments might be None, it means 'BlendModeNormal'
+        :param new_blend_mode: newly entered mode. 
+        """
+        self._update_cursor(None, blendmode=new_mode)
 
     def _update_current_node_index(self):
         """Updates current_node_index from target_node_index & redraw"""
@@ -528,21 +547,45 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         # Update the "real" inactive cursor too:
         self._update_cursor(tdw)
 
-    def _update_cursor(self, tdw):
+    def _update_cursor(self, tdw, blendmode=None):
+        """Update self._override_cursor.
+        :param blendmode: Used when blendmode callback.
+                          At the time when blendmode changed callback,
+                          we cannot get actual blendmode state from
+                          brushinfo object. So use this.
+        """
         cursor = None
         fill_method = self.fill_method_option
+        if blendmode:
+            erase_pixel = blendmode.get_name() == "BlendModeEraser"
+        else:
+            erase_pixel = self.doc.model.brush.brushinfo.is_eraser()
+        cursors = self._cursors
 
         if fill_method == _FillMethod.FLOOD_FILL:
-            cursor = self._crosshair_cursor
+            if erase_pixel:
+                cursor = cursors[self._CURSOR_CROSS_ERASER]
+            else:
+                cursor = cursors[self._CURSOR_CROSS]
         else:
             if self.phase == _Phase.ADJUST:
                 if self.zone == _EditZone.CONTROL_NODE: 
-                    cursor = self._crosshair_cursor
-                elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
-                    cursor = self._arrow_cursor
+                    cursor = cursors[self._CURSOR_ARROW]
+                    print("CONTROL NODE")
+                else:
+                    print("CONTROL CROSS")
+                    if erase_pixel:
+                        cursor = cursors[self._CURSOR_CROSS_ERASER]
+                        print("CONTROL ERASE")
+                    else:
+                        cursor = cursors[self._CURSOR_CROSS]
+                        print("NO ERASE %s" % str(erase_pixel))
             elif self.phase == _Phase.CAPTURE:
                 # Without this, ordinary brush cursor(circle) shown
-                cursor = self._pencil_cursor 
+                if erase_pixel:
+                    cursor = cursors[self._CURSOR_ERASER]
+                else:
+                    cursor = cursors[self._CURSOR_PENCIL]
 
         if cursor is not self._current_override_cursor:
             if tdw is not None:
@@ -770,7 +813,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         opts = self.options_presenter
         nodes = self.nodes
         color = app.brush_color_manager.get_color().get_rgb()
-        erase_pixel = self._override_erase_pixel or opts.erase_pixel
+        erase_pixel = model.brush.brushinfo.is_eraser()
         make_new_layer = opts.make_new_layer
 
         if fill_method == _FillMethod.FLOOD_FILL:
@@ -1279,18 +1322,6 @@ class OptionsPresenter(Gtk.Grid):
         self._sample_merged_toggle = checkbut
 
         row += 1
-        text = _("Erase pixels")
-        checkbut = Gtk.CheckButton.new_with_label(text)
-        checkbut.set_tooltip_text(
-            _("Instead of filling color, "
-              "erase target area with transparent pixels.")
-        )
-        self.attach(checkbut, 1, row, 1, 1)
-        checkbut.set_active(_Prefs.DEFAULT_ERASE_PIXEL)
-        checkbut.connect("toggled", self._erase_pixel_toggled_cb)
-        self._erase_pixel_toggle = checkbut
-
-        row += 1
         label = generate_label(
             _("Target:"),
             _("Where the output should go"),
@@ -1526,12 +1557,6 @@ class OptionsPresenter(Gtk.Grid):
             self._sample_merged_toggle.set_active(bool(active))
 
             active = self.get_pref_value(
-                _Prefs.ERASE_PIXEL_PREF ,
-                _Prefs.DEFAULT_ERASE_PIXEL
-            )
-            self._erase_pixel_toggle.set_active(bool(active))
-
-            active = self.get_pref_value(
                 _Prefs.FILL_IMMIDIATELY_PREF ,
                 _Prefs.DEFAULT_FILL_IMMIDIATELY
             )
@@ -1651,10 +1676,6 @@ class OptionsPresenter(Gtk.Grid):
         return int(math.floor(self._gap_level_adj.get_value()))
 
     @property
-    def erase_pixel(self):
-        return bool(self._erase_pixel_toggle.get_active())
-
-    @property
     def reject_perimeter(self):
         f = self._reject_factor_adj.get_value()
         g = self.gap_level
@@ -1714,12 +1735,6 @@ class OptionsPresenter(Gtk.Grid):
             btn.get_active()
         )
 
-    def _erase_pixel_toggled_cb(self, btn):
-        self.set_pref_value(
-            _Prefs.ERASE_PIXEL_PREF,
-            btn.get_active()
-        )
-        
     def _alpha_threshold_changed_cb(self, adj):
         self.set_pref_value(
             _Prefs.ALPHA_THRESHOLD_PREF,
@@ -1779,11 +1794,6 @@ class OptionsPresenter(Gtk.Grid):
             self.get_pref_value(
                 _Prefs.SAMPLE_MERGED_PREF,
                 _Prefs.DEFAULT_SAMPLE_MERGED)
-        )
-        self._erase_pixel_toggle.set_active(
-            self.get_pref_value(
-                _Prefs.ERASE_PIXEL_PREF,
-                _Prefs.DEFAULT_ERASE_PIXEL)
         )
 
         # make_new_layer is independent option, not per method option.
