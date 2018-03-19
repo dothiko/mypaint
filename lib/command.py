@@ -1937,12 +1937,12 @@ class CutCurrentLayer (Command):
 
         lib.surface.finalize_surface_changes(dstsurf, tiles)
 
-    def _cut_do_opaque_cut(self, target_layer, cutting_layer):
+    def _cut_with_opaque(self, target_layer, cutting_layer):
         CutCurrentLayer._merge(target_layer, cutting_layer,
                 lib.mypaintlib.CombineDestinationOut)
 
 
-    def _cut_transparent(self, target_layer, cutting_layer):
+    def _cut_with_transparent(self, target_layer, cutting_layer):
         tiles = set()
         tiles.update(target_layer.get_tile_coords())
         dstsurf = target_layer._surface
@@ -1960,40 +1960,47 @@ class CutCurrentLayer (Command):
         lib.surface.finalize_surface_changes(dstsurf, tiles)
         
     def redo(self):
+        assert len(self._layers) >= 1
         rootstack = self.doc.layer_stack
         target = rootstack.deepget(self._target_path)
         self._target_snapshot = target.save_snapshot()
+        do_merge_layers = len(self._layers) >= 2
+        do_opaque_cut = self._do_opaque_cut
 
         # `Cut with opaque area` can be done with each selected layers.
         # But `Cut with transparent area` need a combined layer
         # of selected layers to cut. 
-        # Otherwise, transparent area of each layers would erase the final 
+        # Because, transparent area of each layers would erase the final 
         # result layer over and over again, and most of pixels would be deleted.
-        if not self._do_opaque_cut and len(self._layers) > 2:
-            _merged_layer = lib.layer.PaintingLayer(name='')
-                    
-        for layer in self._layers:
-            assert layer != target
-            if isinstance(layer, lib.layer.LayerStack):
-                path = rootstack.deepindex(layer)
-                layer = rootstack.layer_new_normalized(path)
-
-            if self._do_opaque_cut:
-                self._cut_do_opaque_cut(target, layer)
-            elif len(self._layers) > 2:
-                # Create merged layer for `Cut with transparent area`,
-                # If there are multiple marked layers.
-                CutCurrentLayer._merge(_merged_layer, layer,
-                        lib.mypaintlib.CombineNormal)
+        if not do_opaque_cut:
+            if do_merge_layers:
+                _merged_layer = lib.layer.PaintingLayer(name='')
             else:
-                # Only a layer for `Cut with transparent area`.
-                # Then, just substitute the marked layer into _merged_layer.
-                # It is used after this loop end.
-                _merged_layer = layer
+                _merged_layer = self._layers[0]
+                    
+        # This loop itself also used when doing `opaque_cut` which does not need
+        # merged layer.
+        if do_merge_layers:
+            for layer in self._layers:
+                assert layer != target
+                if isinstance(layer, lib.layer.LayerStack):
+                    path = rootstack.deepindex(layer)
+                    layer = rootstack.layer_new_normalized(path)
 
-        if not self._do_opaque_cut:
+                if do_opaque_cut:
+                    self._cut_with_opaque(target, layer)
+                else:
+                    # Create merged layer for `Cut with transparent area`,
+                    # If there are multiple marked layers.
+                    CutCurrentLayer._merge(
+                        _merged_layer, 
+                        layer,
+                        lib.mypaintlib.CombineNormal
+                    )
+
+        if not do_opaque_cut:
             assert _merged_layer != None
-            self._cut_transparent(target, _merged_layer)
+            self._cut_with_transparent(target, _merged_layer)
             _merged_layer = None
 
         target.autosave_dirty = True
