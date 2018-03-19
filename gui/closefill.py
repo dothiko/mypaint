@@ -571,15 +571,11 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
             if self.phase == _Phase.ADJUST:
                 if self.zone == _EditZone.CONTROL_NODE: 
                     cursor = cursors[self._CURSOR_ARROW]
-                    print("CONTROL NODE")
                 else:
-                    print("CONTROL CROSS")
                     if erase_pixel:
                         cursor = cursors[self._CURSOR_CROSS_ERASER]
-                        print("CONTROL ERASE")
                     else:
                         cursor = cursors[self._CURSOR_CROSS]
-                        print("NO ERASE %s" % str(erase_pixel))
             elif self.phase == _Phase.CAPTURE:
                 # Without this, ordinary brush cursor(circle) shown
                 if erase_pixel:
@@ -1755,6 +1751,9 @@ class OptionsPresenter(Gtk.Grid):
         if not self._update_ui and btn.get_active():
             self.app.preferences[_Prefs.FILL_METHOD_PREF] = idx
             self._refresh_ui_from_fillmethod(idx)
+            target = self.target
+            target.checkpoint(flush=True)# Reset overlay contents with this.
+            target._update_cursor(None)  # Fill mode changed, so update cursor.
 
     def _share_setting_toggled_cb(self, btn):
         if not self._update_ui:
