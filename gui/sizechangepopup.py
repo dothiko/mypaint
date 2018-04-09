@@ -80,6 +80,10 @@ class SizePopup (windowing.PopupWindow,
         self._close_timer_id = None
         self._zone = _Zone.INVALID
         self._current_cursor = None
+
+        # Transparent window initialize..
+        # CAUTION: Place this line here (after call set_size_request)
+        # to determine exact dimension of this popup(window).
         self.setup_background()
         
     @property
@@ -134,16 +138,8 @@ class SizePopup (windowing.PopupWindow,
     def display_to_local(self, dx, dy):
         return (dx - RADIUS, dy - RADIUS)
 
-    def popup(self):
-        # For environment which has no desktop compositor,
-        # we need to get background image below the window.
-        # So setup bacoground here, after the window moved.
-        self.update_background()
-        
-        self.enter()
-
     def enter(self):
-        # Popup this window, in current position.
+        # Called when popup this window.
         x, y = self.get_position()
         self.move(x, y)
         self.show_all()
@@ -224,10 +220,6 @@ class SizePopup (windowing.PopupWindow,
         self.current_cursor = cursor
         self._zone = zone
 
-    def queue_redraw(self, widget):
-        a = widget.get_allocation()
-        t = widget.queue_draw_area(a.x, a.y, a.width, a.height)       
-        
     @property
     def brush_size(self):
         """Get brush size in pixels"""

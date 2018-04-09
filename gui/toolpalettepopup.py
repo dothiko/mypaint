@@ -29,6 +29,7 @@ LABEL_SPACE = 10
 LABEL_HEIGHT = 30
 FONT_SIZE = 16
 TIMEOUT_LEAVE = int(0.7 * 1000) # Auto timeout, when once change size.
+LINE_WIDTH = ICON_SIZE * 1.4 # 1.4 is adjustment factor to thicken base circle
 
 class _Zone:
     INVALID = 0
@@ -46,8 +47,8 @@ class ToolPalettePopup (windowing.PopupWindow,
     """
 
     outside_popup_timeout = 0
-    _canvas_size = None
     buttons = None
+    canvas_size = None
 
     def __init__(self, app, prefs_id=quickchoice._DEFAULT_PREFS_ID):
         super(ToolPalettePopup, self).__init__(app)
@@ -73,11 +74,7 @@ class ToolPalettePopup (windowing.PopupWindow,
         self._button = None
         self._close_timer_id = None
         self._zone = _Zone.INVALID
-        self._sub_radius = None
         self._current_button_index = -1
-
-        # Transparent window supports
-        self.setup_background()
 
         # Initialize buttons
         cls = self.__class__
@@ -136,13 +133,25 @@ class ToolPalettePopup (windowing.PopupWindow,
 
             cls.buttons = sorted(buttons, _sort_buttons)
 
-        # Button setup completed. now we can get self.canvas_size
-        # and set size_request.
-        
-        canvas_size = self.canvas_size
+        # Button setup completed. now we can set class.canvas_size
+        cls = self.__class__
+        if cls.canvas_size is None:
+            canvas_size = ((len(self.buttons) * (ICON_SIZE * 1.1)) / math.pi) * 2
+            cls.canvas_size = canvas_size
+            # Initialize toolpalette radius and center hole radius.
+            cls.radius = (canvas_size - LINE_WIDTH) / 2 
+        else:
+            canvas_size = cls.canvas_size
+
+        # Then, make window.
         width = canvas_size
         height = canvas_size + LABEL_HEIGHT + LABEL_SPACE * 2
         self.set_size_request(width, height)
+
+        # Initialize transparent window background if needed.
+        # XXX Place this line after set_size_request called
+        # to determine exact dimension of this popup(window).
+        self.setup_background()
 
     def update_zone(self, x, y):
         """ Get zone information, to know where user clicked.
@@ -151,8 +160,9 @@ class ToolPalettePopup (windowing.PopupWindow,
         x -= w/2
         y -= w/2
         dist = math.hypot(x, y)
-        sub_r = self.sub_radius
         r = self.radius
+        hole_r = r - (LINE_WIDTH / 2)
+        edge_r = hole_r + LINE_WIDTH
 
         old_zone = self._zone
         old_btn_idx = self._current_button_index
@@ -161,7 +171,7 @@ class ToolPalettePopup (windowing.PopupWindow,
 
         self._current_button_index = -1
 
-        if dist >= sub_r and dist <= r:
+        if dist >= hole_r and dist <= edge_r:
             zone = _Zone.CIRCLE
 
             for i in xrange(len(self.buttons)):
@@ -176,11 +186,8 @@ class ToolPalettePopup (windowing.PopupWindow,
                 old_btn_idx != self._current_button_index):
             self.queue_redraw(self)
 
-    def popup(self):
-        self.enter()
-
     def enter(self):
-        # Popup this window, in current position.
+        # Called when popup this window.
         x, y = self.get_position()
         self.move(x, y)
         self.show_all()
@@ -247,26 +254,13 @@ class ToolPalettePopup (windowing.PopupWindow,
     def motion_cb(self, widget, event):
         self.update_zone(event.x, event.y)
 
-    def queue_redraw(self, widget):
-        a = widget.get_allocation()
-        t = widget.queue_draw_area(a.x, a.y, a.width, a.height)       
-
-    def _draw_button(self, cr, btninfo, x, y, active):
-        radius = ICON_SIZE / 2
-        if active:
-            color = gui.style.ACTIVE_ITEM_COLOR
-        else:
-            color = gui.style.EDITABLE_ITEM_COLOR
-
-        icon_pixbuf, junk, junk = btninfo
-        gui.drawutils.render_round_floating_button(
-            cr=cr, x=x, y=y,
-            color=color,
-            pixbuf=icon_pixbuf,
-            radius=radius,
-        )
 
     def _draw_label(self, cr, idx): 
+        """Drawing tool name label.
+        This method should be done in original(left-top originated)
+        coordinate.
+        So any translation should be restored before calling this method.
+        """
         if idx == -1:
             return
         junk, cs, act = self.buttons[idx]
@@ -304,28 +298,21 @@ class ToolPalettePopup (windowing.PopupWindow,
 
         cr.save() # Saving before transparent state
         self.draw_background(cr)
+        cr.restore()
 
         w = self.canvas_size
         r = self.radius
-        sub_r = self.sub_radius
 
-        cr.translate(w/2, w/2)
+        cr.save()
+        cr.translate(w/2, w/2) 
 
         # Drawing background of presets
-        cr.save()
+        cr.set_line_width(LINE_WIDTH)
         cr.set_source_rgba(1.0, 1.0, 1.0, 0.6)
         cr.arc(0, 0, r, 0, math.pi * 2)
-        cr.fill()
-        # Erase center
-        cr.set_source_rgba(1.0, 1.0, 1.0, 0.0)
-        cr.arc(0, 0, sub_r, 0, math.pi * 2)
-        cr.fill()
-        cr.restore()
+        cr.stroke()
 
-        cr.restore() # Restoring from transparent state
-
-        cr.save()
-        cr.translate(w/2, w/2)
+        # Drawing buttons.
         btncnt = len(self.buttons)
         for i, cbtn in enumerate(self.buttons):
             dx, dy = self._get_button_pos(i)
@@ -334,8 +321,10 @@ class ToolPalettePopup (windowing.PopupWindow,
                 dx, dy, 
                 i == self._current_button_index
             )
-        cr.restore()
+        cr.restore() # Important. do before calling self._draw_label.
 
+        # Drawing label.
+        # self._draw_label should be done in original(not centered) coordinate.
         self._draw_label(cr, self._current_button_index)
         
         return True
@@ -348,27 +337,16 @@ class ToolPalettePopup (windowing.PopupWindow,
         """Currently,nothing to do."""
         pass
 
-    @property
-    def radius(self):
-        return self.canvas_size / 2
 
-    @property
-    def sub_radius(self):
-        if self._sub_radius == None:
-            adj = 1.4
-            self._sub_radius = int(self.radius - ICON_SIZE * adj)
-        return self._sub_radius
-
-
+    # Tool Icon Buttons (not pointing device buttons) related.
+    
     def _get_button_pos(self, i):
         """Get button position, from origin (i.e. from center of the window)
         """
         btn_rad = (math.pi / len(self.buttons)) * 2.0 * i
-        sub_r = self.sub_radius # Center radius of buttons.
-        adj = 1.4
-        sub_r += (ICON_SIZE * adj) / 2
-        dx = - sub_r * math.sin(btn_rad)
-        dy = sub_r * math.cos(btn_rad)
+        r = self.radius
+        dx = - r * math.sin(btn_rad)
+        dy = r * math.cos(btn_rad)
         return (dx, dy)
 
     def get_button_idx(self, x, y):
@@ -380,14 +358,17 @@ class ToolPalettePopup (windowing.PopupWindow,
                 return i
         return -1
 
-    @property
-    def canvas_size(self):
-        """CAUTION: Use this after buttons setup!!
-        """
-        cls = self.__class__
-        if cls._canvas_size == None:
-            # We can get suitable canvas size from circumference.
-            canvas_size = ((len(self.buttons) * (ICON_SIZE * 1.1)) / math.pi) * 2
-            cls._canvas_size = canvas_size
-        return self._canvas_size
+    def _draw_button(self, cr, btninfo, x, y, active):
+        radius = ICON_SIZE / 2
+        if active:
+            color = gui.style.ACTIVE_ITEM_COLOR
+        else:
+            color = gui.style.EDITABLE_ITEM_COLOR
 
+        icon_pixbuf, junk, junk = btninfo
+        gui.drawutils.render_round_floating_button(
+            cr=cr, x=x, y=y,
+            color=color,
+            pixbuf=icon_pixbuf,
+            radius=radius,
+        )

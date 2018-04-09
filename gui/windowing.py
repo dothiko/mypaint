@@ -675,8 +675,8 @@ class ChooserPopup (Gtk.Window,
 class TransparentMixin(object):
     """A Mixin for popup window which has transparent background
     """
-    
-    def check_composited(self):
+
+    def is_desktop_composited(self):
         """ 
         Note: method name `is_composited` is conflict with Gtk and
         does not work.
@@ -695,7 +695,7 @@ class TransparentMixin(object):
         create its own capture buffer.
         """
         # Ensure transparent window supports
-        self.check_composited()
+        self.is_desktop_composited()
 
         self.set_app_paintable(True)
         self.set_decorated(False)
@@ -705,7 +705,7 @@ class TransparentMixin(object):
         """Update(Capture) background screen.
         This method is used when desktop compositor disabled.
         """
-        if not self.check_composited():
+        if not self.is_desktop_composited():
             x, y = self.get_position()
             w, h = self.get_size()
             win = Gdk.get_default_root_window()
@@ -732,5 +732,18 @@ class TransparentMixin(object):
         else:
             Gdk.cairo_set_source_pixbuf(cr, self.bgpix, 0, 0)
             cr.paint()
+
+    def popup(self):
+        # For environment which has no desktop compositor,
+        # we need to get background image below the window.
+        # So setup bacoground here, after the window moved.
+        #
+        # If there is desktop compositer, update_background does nothing.
+        self.update_background()
+        self.enter()
+
+    def queue_redraw(self, widget):
+        a = widget.get_allocation()
+        t = widget.queue_draw_area(a.x, a.y, a.width, a.height)       
 
 # XXX for `transparent-dialog`  end
