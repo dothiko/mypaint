@@ -35,6 +35,7 @@ import lib.observable
 import lib.layer
 import lib.surface
 import lib.command 
+from gui.inktool import _LayoutNode
 
 ## Constants
 
@@ -883,7 +884,8 @@ class Overlay (gui.overlays.Overlay):
         self.reject_button_pos = None
 
     def update_button_positions(self):
-        """Recalculates the positions of the mode's buttons."""
+        """XXX Code Duplication from inktool.py
+        Recalculates the positions of the mode's buttons."""
         nodes = self._mode.nodes
         num_nodes = len(nodes)
         if num_nodes == 0:
@@ -902,9 +904,29 @@ class Overlay (gui.overlays.Overlay):
         # points corresponding to the nodes the user manipulates.
         fixed = []
 
-        for i, node in enumerate(nodes):
+        # XXX Modified part:
+        # We now deal with unmodifiable closed region for closefill, 
+        # so just enough to get extream position of nodes here.
+
+        # Original Code:
+       #for i, node in enumerate(nodes):
+       #    x, y = self._tdw.model_to_display(node.x, node.y)
+       #    fixed.append(_LayoutNode(x, y))
+
+        node = nodes[0]
+        min_x, min_y = self._tdw.model_to_display(node.x, node.y)
+        max_x, max_y = min_x, min_y
+
+        for node in nodes[1:]:
             x, y = self._tdw.model_to_display(node.x, node.y)
-            fixed.append(_LayoutNode(x, y))
+            min_x = min(x, min_x)
+            min_y = min(y, min_y)
+            max_x = max(x, max_x)
+            max_y = max(y, max_y)
+
+        fixed.append(_LayoutNode(min_x, min_y))
+        fixed.append(_LayoutNode(max_x, max_y))
+        # XXX Modified part ends.
 
         # The reject and accept buttons are connected to different nodes
         # in the stroke by virtual springs.
@@ -1049,118 +1071,6 @@ class Overlay (gui.overlays.Overlay):
                     pixbuf=icon_pixbuf,
                     radius=radius,
                 )
-
-# XXX Code duplication: from gui/inktool.py
-class _LayoutNode (object):
-    """Vertex/point for the button layout algorithm."""
-
-    def __init__(self, x, y, force=(0.,0.), velocity=(0.,0.)):
-        self.x = float(x)
-        self.y = float(y)
-        self.force = tuple(float(c) for c in force[:2])
-        self.velocity = tuple(float(c) for c in velocity[:2])
-
-    def __repr__(self):
-        return "_LayoutNode(x=%r, y=%r, force=%r, velocity=%r)" % (
-            self.x, self.y, self.force, self.velocity,
-        )
-
-    @property
-    def pos(self):
-        return (self.x, self.y)
-
-    @property
-    def speed(self):
-        return math.hypot(*self.velocity)
-
-    def add_forces_inverse_square(self, others, k=20.0):
-        """Adds inverse-square components to the effective force.
-
-        :param sequence others: _LayoutNodes affecting this one
-        :param float k: scaling factor
-        :returns: self
-
-        The forces applied are proportional to k, and inversely
-        proportional to the square of the distances. Examples:
-        gravity, electrostatic repulsion.
-
-        With the default arguments, the added force components are
-        attractive. Use negative k to simulate repulsive forces.
-
-        """
-        fx, fy = self.force
-        for other in others:
-            if other is self:
-                continue
-            rsquared = (self.x-other.x)**2 + (self.y-other.y)**2
-            if rsquared == 0:
-                continue
-            else:
-                fx += k * (other.x - self.x) / rsquared
-                fy += k * (other.y - self.y) / rsquared
-        self.force = (fx, fy)
-        return self
-
-    def add_forces_linear(self, others, k=0.05):
-        """Adds linear components to the total effective force.
-
-        :param sequence others: _LayoutNodes affecting this one
-        :param float k: scaling factor
-        :returns: self
-
-        The forces applied are proportional to k, and to the distance.
-        Example: springs.
-
-        With the default arguments, the added force components are
-        attractive. Use negative k to simulate repulsive forces.
-
-        """
-        fx, fy = self.force
-        for other in others:
-            if other is self:
-                continue
-            fx += k * (other.x - self.x)
-            fy += k * (other.y - self.y)
-        self.force = (fx, fy)
-        return self
-
-    def update_position(self, damping=0.85):
-        """Updates velocity & position from total force, then resets it.
-
-        :param float damping: Damping factor for velocity/speed.
-        :returns: self
-
-        Calling this method should be done just once per iteration,
-        after all the force components have been added in. The effective
-        force is reset to zero after calling this method.
-
-        """
-        fx, fy = self.force
-        self.force = (0., 0.)
-        vx, vy = self.velocity
-        vx = (vx + fx) * damping
-        vy = (vy + fy) * damping
-        self.velocity = (vx, vy)
-        self.x += vx
-        self.y += vy
-        return self
-
-    def constrain_position(self, x0, x1, y0, y1):
-        vx, vy = self.velocity
-        if self.x < x0:
-            self.x = x0
-            vx = 0
-        elif self.x > x1:
-            self.x = x1
-            vx = 0
-        if self.y < y0:
-            self.y = y0
-            vy = 0
-        elif self.y > y1:
-            self.y = y1
-            vy = 0
-        self.velocity = (vx, vy)
-        return self
 
 class OptionsPresenter(Gtk.Grid):
     """Configuration widget for the flood fill tool"""
