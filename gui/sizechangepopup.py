@@ -71,7 +71,7 @@ class SizePopup (windowing.PopupWindow,
         self.connect("enter-notify-event", self.popup_enter_cb)
         self.connect("motion-notify-event", self.motion_cb)
 
-        self.connect("draw", self.draw_cb)
+        self.init_transparent_mixin()
 
         self.set_size_request(CANVAS_SIZE, CANVAS_SIZE)
 
@@ -259,11 +259,7 @@ class SizePopup (windowing.PopupWindow,
         return 1.0 - (a / rad) # Reverse, to increase right direction.
 
     def draw_cb(self, widget, cr):
-       #cr.set_source_rgba(0.9, 0.9, 0.9, 1.0)
-       #cr.paint()
         cr.save()
-
-        self.draw_background(cr)
 
         r = (CANVAS_SIZE / 2)
         sub_r = r - LINE_WIDTH

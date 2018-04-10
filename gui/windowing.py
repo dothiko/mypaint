@@ -676,6 +676,9 @@ class TransparentMixin(object):
     """A Mixin for popup window which has transparent background
     """
 
+    def init_transparent_mixin(self):
+        self.connect("draw", self._draw_cb)
+
     def is_desktop_composited(self):
         """ 
         Note: method name `is_composited` is conflict with Gtk and
@@ -713,17 +716,8 @@ class TransparentMixin(object):
 
     def draw_background(self, cr):
         """Draw background.  call this from draw_cb.
-        
-        IMPORTANT:
-        You must use this method between cr.save() - cr.restore()
-        to enable alpha-blending translucent effect of cairo. 
-        For example,
-
-        cr.save()
-        self.draw_background(cr)
-        draw_something_in_cairo_with_alpha_transparency
-        cr.restore() # Exit from transparent state
         """
+        cr.save()
         cr.set_operator(cairo.OPERATOR_SOURCE)
         # Drawing background for transparent.
         if self.bgpix is None:
@@ -732,6 +726,12 @@ class TransparentMixin(object):
         else:
             Gdk.cairo_set_source_pixbuf(cr, self.bgpix, 0, 0)
             cr.paint()
+        cr.restore() # Exit from transparent state
+
+    def _draw_cb(self, widget, cr):
+        self.draw_background(cr)
+        # Call user class callback `draw_cb`.
+        self.draw_cb(widget, cr)
 
     def popup(self):
         # For environment which has no desktop compositor,

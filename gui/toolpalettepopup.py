@@ -68,8 +68,7 @@ class ToolPalettePopup (windowing.PopupWindow,
         self.connect("enter-notify-event", self.popup_enter_cb)
         self.connect("motion-notify-event", self.motion_cb)
 
-        self.connect("draw", self.draw_cb)
-
+        self.init_transparent_mixin()
 
         self._button = None
         self._close_timer_id = None
@@ -292,14 +291,6 @@ class ToolPalettePopup (windowing.PopupWindow,
         cr.restore()
 
     def draw_cb(self, widget, cr):
-        if not self.is_composited and self.bgpix is None:
-            self.capture_screen() # test
-            assert(self.bgpix is not None)
-
-        cr.save() # Saving before transparent state
-        self.draw_background(cr)
-        cr.restore()
-
         w = self.canvas_size
         r = self.radius
 
