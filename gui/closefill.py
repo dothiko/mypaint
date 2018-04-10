@@ -341,6 +341,15 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
 
     ## Properties
 
+    # Cursor properties: Needed when device cursor move out from canvas.
+    @property
+    def inactive_cursor(self):
+        return None
+
+    @property
+    def active_cursor(self):
+        return self._current_override_cursor
+
     ## Raw event handling (prelight & zone selection in adjust phase)
 
     def button_press_cb(self, tdw, event):
