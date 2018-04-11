@@ -729,21 +729,33 @@ class TransparentMixin(object):
         cr.restore() # Exit from transparent state
 
     def _draw_cb(self, widget, cr):
+        # If there is desktop compositer, update_background does nothing.
+        if self.bgpix is None:
+            self.update_background()
+
         self.draw_background(cr)
         # Call user class callback `draw_cb`.
         self.draw_cb(widget, cr)
 
+    def queue_redraw(self, widget):
+        # Utility Method.
+        a = widget.get_allocation()
+        t = widget.queue_draw_area(a.x, a.y, a.width, a.height)       
+
+    # Popup related.
     def popup(self):
         # For environment which has no desktop compositor,
         # we need to get background image below the window.
         # So setup bacoground here, after the window moved.
-        #
-        # If there is desktop compositer, update_background does nothing.
-        self.update_background()
         self.enter()
 
-    def queue_redraw(self, widget):
-        a = widget.get_allocation()
-        t = widget.queue_draw_area(a.x, a.y, a.width, a.height)       
+    def popup_enter_cb(self, widget, event):
+        if self._leave_cancel:
+            self._leave_cancel = False
+            
+    def popup_leave_cb(self, widget, event):
+        if not self._leave_cancel:
+            self.leave('outside')
+        self.bgpix = None
 
 # XXX for `transparent-dialog`  end

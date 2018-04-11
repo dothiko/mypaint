@@ -187,14 +187,6 @@ class SizePopup (windowing.PopupWindow,
 
         self._button = None
 
-    def popup_enter_cb(self, widget, event):
-        if self._leave_cancel:
-            self._leave_cancel = False
-            
-    def popup_leave_cb(self, widget, event):
-        if not self._leave_cancel:
-            self.leave('outside')
-
     def motion_cb(self, widget, event):
         self.update_zone(event.x, event.y)
         if self._button == 1:
