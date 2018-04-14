@@ -14,7 +14,7 @@
           <separator/>
           <menuitem action='SaveCurrentProject'/>
           <menuitem action='SaveAsProject'/>
-          <menuitem action='SaveProjectAsNewVersion'/>
+          <menuitem action='SetProjecCheckPoint'/>
           <separator/>
           <menuitem action='ManageProject'/>
       </menu>

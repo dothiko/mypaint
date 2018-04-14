@@ -1716,16 +1716,15 @@ class FileHandler (object):
                 start_in_folder=current_dirname,
                 project=True, source_dir=self.filename)
 
-    def save_project_as_new_version_cb(self, action):
+    def set_project_checkpoint_cb(self, action):
+        """Set project checkpoint with current contents.
+        With this, you can 'rewind' your painting work easily.
+        """
         if self.model_is_project == False:
+            # Current content is not project. so just make it project. 
             self.save_as_project_cb(action)
         else:
             self.save_file(self.filename, project=True, create_version=True)
-
-        # new_version saving use kwargs of "backup_dir",
-        # when this kwarg exists, self.save_file()->_save_doc_to_file()->
-        # doc.model.save()->doc.model.save_project()
-        # should trigger backupping.
 
     def manage_project_cb(self, action):
         if self.model_is_project:

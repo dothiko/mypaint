@@ -40,7 +40,6 @@ class _Store_index:
     DESC=3
     VER=4
 
-
 _THUMBNAIL_WIDTH = 128
 _THUMBNAIL_HEIGHT = 90
 
@@ -50,8 +49,6 @@ _CURRENT_VERSION_NUM = 0
 
 class VersionStoreWrapper(object):
     """Version Store wrapper, used from version listview"""
-
-
 
     # temporary flag file name.
     # if a file named as this in a version directory,
@@ -169,9 +166,6 @@ class VersionStoreWrapper(object):
                 append_store(thumbnail_path, datestr, status, desc, ver_num) 
 
 
-
-
-
 class ThumbnailRenderer(Gtk.CellRenderer):
     """renderer used from version thumbnail"""
 
@@ -239,6 +233,7 @@ class ThumbnailRenderer(Gtk.CellRenderer):
             print(cell_area)
         return (0, 0, _THUMBNAIL_WIDTH, _THUMBNAIL_HEIGHT)
 
+
 class IgnorestateRenderer(Gtk.CellRenderer):
     """Renderer to be draw Status bitflags """
 
@@ -246,7 +241,6 @@ class IgnorestateRenderer(Gtk.CellRenderer):
     VISIBLE_ICON = None
     INVISIBLE_ICON = None
     ICON_SIZE = 32
-    
 
     def __init__(self):
         super(IgnorestateRenderer, self).__init__()
@@ -317,6 +311,7 @@ class IgnorestateRenderer(Gtk.CellRenderer):
 
     def do_get_preferred_width(self, view_widget):
         return (self.ICON_SIZE * 2, self.ICON_SIZE * 2) 
+
 
 class ProjectManagerWindow (SubWindow):
     """Window for the project manager
@@ -455,7 +450,6 @@ class ProjectManagerWindow (SubWindow):
 
         self.set_size_request(self._DEFAULT_WIDTH, self._DEFAULT_HEIGHT)
         self._updating_ui = False
-    
 
     def set_directory(self, projdir, filehandler):
         """ Set target directory, which should contain 
@@ -581,9 +575,8 @@ class ProjectManagerWindow (SubWindow):
                         "before revert?"),
                         )
 
-
             if save_before_revert:
-                filehandler.save_project_as_new_version_cb(None)
+                filehandler.set_project_checkpoint_cb(None)
                 # Recreate version info, to update new version information
                 version_info = lib.projectsave.Versionsave(
                         self.project_dir)
@@ -593,9 +586,6 @@ class ProjectManagerWindow (SubWindow):
                         _("Automatically created revision,"
                           "before revert to version %d." % target_version)
                         )
-
-                                        
-
 
             prefs = filehandler.app.preferences
             display_colorspace_setting = prefs["display.colorspace"]
@@ -646,7 +636,6 @@ class ProjectManagerWindow (SubWindow):
         self.hide()
 
     ## window handlers
-
     def hide_window_cb(self, widget):
         """For unit testing only.
         Actually this callback is not binded.
@@ -656,7 +645,6 @@ class ProjectManagerWindow (SubWindow):
 
         if __name__ == '__main__':
             Gtk.main_quit()
-        
 
     ## Version store(model) handlers
     def version_store_deleted_cb(self, store, path):
@@ -754,11 +742,5 @@ def _test():
     win.show()
     Gtk.main()
 
-
 if __name__ == '__main__':
     _test()
-
-
-
-
-
