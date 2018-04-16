@@ -2296,7 +2296,7 @@ class Document (object):
 
             self._version = 0 
 
-            if 'create_version' in kwargs:
+            if 'create_checkpoint' in kwargs:
                 # In this case,
                 # Writed project should be marked as new version
                 # right after writing is finished.

@@ -1724,7 +1724,9 @@ class FileHandler (object):
             # Current content is not project. so just make it project. 
             self.save_as_project_cb(action)
         else:
-            self.save_file(self.filename, project=True, create_version=True)
+            # Optional argument `create_checkpoint` will trigger making 
+            # checkpoint codes in lib.document(model).
+            self.save_file(self.filename, project=True, create_checkpoint=True)
 
     def manage_project_cb(self, action):
         if self.model_is_project:
