@@ -29,6 +29,7 @@ from lib.naming import make_unique_name
 
 from gi.repository import GObject
 from gi.repository import GLib
+from gi.repository import Gtk # XXX for project-save
 
 import numpy as np
 
@@ -2428,22 +2429,14 @@ class Document (object):
         # in this loop.
         
         data_bbox = helpers.Rect()
-        # Prior to all processing, remove all empty tiles.
+        # Prior to all processing, end all pending tasks.
+        # And then, remove all empty tiles.
+        self.sync_pending_changes(flush=True)
         root_stack.remove_empty_tiles()
         
+        # Generating boundary box.
         for s_path, s_layer in root_stack.walk():
             selected = (s_path == root_stack.current_path)
-            
-            # Removing empty tile is currently done by above line(rootstack)
-           #if s_layer.project_dirty or force_write:
-           #    if hasattr(s_layer, '_surface'):
-           #        # Just call s_layer._surface.remove_empty_tiles
-           #        # does not work well.
-           #        # It sometimes remove empty tiles well, 
-           #        # but sometimes remove no tiles at all. 
-           #        # So call finalize_surface function
-           #        lib.surface.finalize_surface(s_layer._surface)
-            
             s_layer.initially_selected = selected
             data_bbox.expandToIncludeRect(s_layer.get_bbox())
         data_bbox = tuple(data_bbox)
