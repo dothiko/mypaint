@@ -370,41 +370,15 @@ class Monitor (object):
             old_device = self._last_pen_device
 
         bm = self._app.brushmanager
-        doc = self._app.doc # XXX for `device switch`
         if old_device:
             # Clone for saving
             old_brush = bm.clone_selected_brush(name=None)
             bm.store_brush_for_device(old_device.name, old_brush)
-           ## XXX for `device switch`
-           #self._app.modemanager_for_device[old_device.name] = \
-           #        doc.modes.top.ACTION_NAME
-           ## XXX for `device switch` end
 
         if new_device.source == Gdk.InputSource.MOUSE:
             # Avoid fouling up unrelated devbrushes at stroke end
             self._prefs.pop('devbrush.last_used', None)
         else:
-           ## XXX for `device switch`
-           ## Changing gui.mode(tool) for device
-           ## Place this mode-change codes before brush change.
-           ## because if brush were changed prior to mode change,
-           ## and there were 'not yet finalized inktool stroke',
-           ## finalizing stoke might done by unintentional wrong brush.
-           #try:
-           #    action_name = self._app.modemanager_for_device[new_device.name]
-           #except KeyError:
-           #    action_name = doc.modes.default_mode_class.ACTION_NAME
-           #
-           #if action_name != doc.modes.top.ACTION_NAME:
-           #    mode_class = gui.mode.ModeRegistry.get_mode_class(action_name)
-           #    if issubclass(mode_class, gui.mode.OneshotDragMode):
-           #        mode = mode_class(ignore_modifiers=True, 
-           #                          temporary_activation=False)
-           #    else:
-           #        mode = mode_class(ignore_modifiers=True)
-           #    doc.modes.context_push(mode)
-           ## XXX for `device switch` end
-            
             # Select the brush and update the UI.
             # Use a sane default if there's nothing associated
             # with the device yet.

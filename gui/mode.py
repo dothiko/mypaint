@@ -339,17 +339,6 @@ class InteractionMode (object):
 
     def motion_notify_cb(self, tdw, event):
         """Handler for ``motion-notify-event``s."""
-        
-        # XXX for `device switch`
-        # Detect change of device, and call `device_monitor.device_used()`.
-        # Inside that method we change previously selected brush with
-        # that device.
-       #if tdw.app is not None:
-       #    device = event.get_source_device()
-       #    same_device = tdw.app.device_monitor.device_used(device)
-       #    if not same_device:
-       #        tdw.doc.brush.reset()
-        # XXX for `device switch` end
         assert not hasattr(super(InteractionMode, self), "motion_notify_cb")
 
     def button_release_cb(self, tdw, event):
