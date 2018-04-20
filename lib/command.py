@@ -1938,9 +1938,12 @@ class CutCurrentLayer (Command):
         lib.surface.finalize_surface_changes(dstsurf, tiles)
 
     def _cut_with_opaque(self, target_layer, cutting_layer):
-        CutCurrentLayer._merge(target_layer, cutting_layer,
-                lib.mypaintlib.CombineDestinationOut)
-
+        print("CUTTING!")
+        CutCurrentLayer._merge(
+            target_layer, 
+            cutting_layer,
+            lib.mypaintlib.CombineDestinationOut
+        )
 
     def _cut_with_transparent(self, target_layer, cutting_layer):
         tiles = set()
@@ -1954,9 +1957,11 @@ class CutCurrentLayer (Command):
                         lib.mypaintlib.tile_clear_rgba16(dst)
                     else:
                         cutting_layer._surface.composite_tile(
-                                dst, True, tx, ty, mipmap_level=0,
-                                mode = lib.mypaintlib.CombineDestinationIn)
-
+                            dst, True, 
+                            tx, ty, 
+                            mipmap_level=0,
+                            mode = lib.mypaintlib.CombineDestinationIn
+                        )
         lib.surface.finalize_surface_changes(dstsurf, tiles)
         
     def redo(self):
@@ -1980,7 +1985,7 @@ class CutCurrentLayer (Command):
                     
         # This loop itself also used when doing `opaque_cut` which does not need
         # merged layer.
-        if do_merge_layers:
+        if do_merge_layers or do_opaque_cut:
             for layer in self._layers:
                 assert layer != target
                 if isinstance(layer, lib.layer.LayerStack):
@@ -2001,7 +2006,6 @@ class CutCurrentLayer (Command):
         if not do_opaque_cut:
             assert _merged_layer != None
             self._cut_with_transparent(target, _merged_layer)
-            _merged_layer = None
 
         target.autosave_dirty = True
         # Redraw target layer 
