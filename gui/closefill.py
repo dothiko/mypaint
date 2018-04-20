@@ -288,6 +288,10 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
             cls._init_cursors(app)
 
         app.brushmodifier.blend_mode_changed += self._blend_mode_changed_cb
+
+        # Needed this when overrided by scroll-mode or something.
+        self._current_override_cursor = None
+        self._update_cursor(self.doc.tdw)
         
     def leave(self, **kwds):
         """Leaves the mode: called by `ModeStack.pop()` etc."""
@@ -564,13 +568,14 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                           we cannot get actual blendmode state from
                           brushinfo object. So use this.
         """
+        cursors = self._cursors
         cursor = None
         fill_method = self.fill_method_option
+
         if blendmode:
             erase_pixel = blendmode.get_name() == "BlendModeEraser"
         else:
             erase_pixel = self.doc.model.brush.brushinfo.is_eraser()
-        cursors = self._cursors
 
         if fill_method == _FillMethod.FLOOD_FILL:
             if erase_pixel:
@@ -592,6 +597,8 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                     cursor = cursors[self._CURSOR_ERASER]
                 else:
                     cursor = cursors[self._CURSOR_PENCIL]
+
+        print(cursor)
 
         if cursor is not self._current_override_cursor:
             if tdw is not None:
