@@ -2397,25 +2397,24 @@ class Document (object):
         """
         root_stack = self.layer_stack
 
-
-        # Update the initially-selected flag on all layers.
-        # Also, get the contents bounding box simultaneously.
-        #
-        # And furthermore, * MOST IMPORTANTLY *,
-        # remove empty tiles to avoid misplacement of layer.
+        # Different from other ordinary save methods,
+        # we need to remove empty tiles before layers saved into files
+        # to avoid misplacement of layer for projectsave.
         # 
-        # Without this 'removing empty tiles'... some problems happen.
-        # Usually, mypaint seems to remove transparent area when 
-        # loading picture. (but not every time? I dont know exactly...)
+        # Without this ... some problems happen.
+        # As a premise, mypaint remove transparent area at loading picture(layers). 
         #
-        # Under this circumstance, as an example, suppose there was a layer 
+        # The problem is, for example, when there is a layer 
         # with a region of large transparent pixels on the left side.
         #
-        # Without removing empty tiles, the topleft position of that layer 
-        # is transparent area.
+        # If we save layers without removing empty tiles, 
+        # the topleft position of png file of that layer is transparent area.
         # But, that transparent area actually removed once after we load that
-        # project from the directory. And it is without setting dirty flag.
-        # So that layer would be treated as 'unchanged' one.
+        # project from the directory. 
+        # And it is done without setting dirty flag (This is important thing).
+        #
+        # So that layer would be treated as 'unchanged' one... actually it removed
+        # large part of its leftside (empty) space.
         # But stack.xml position is updated as after transparent area removed.
         # Therefore, after 2nd time project load, that layer is placed at
         # wrong position.
@@ -2430,8 +2429,13 @@ class Document (object):
         
         data_bbox = helpers.Rect()
         # Prior to all processing, end all pending tasks.
-        # And then, remove all empty tiles.
         self.sync_pending_changes(flush=True)
+        # Also, execute all pending GTK events (including idle task)
+        # This is not only for complete transparent tiles operation,
+        # also to avoid conflict with checkpoint-creation(backup) task.
+        while Gtk.events_pending():
+            Gtk.main_iteration()
+        # After then, remove all empty tiles.
         root_stack.remove_empty_tiles()
         
         # Generating boundary box.
