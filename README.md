@@ -21,6 +21,7 @@ I also use this branch as my personal backup.
 このブランチは個人的なバックアップ用途としても使っています。
 
 This branch is *not* intended to pull request. This is *purely experimental* build.
+I create/test this in Linux mainly, also I tested in windows, at least run but not heavily tested.
 
 Customized features : カスタム機能について
 ----
