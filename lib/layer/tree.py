@@ -457,7 +457,6 @@ class RootLayerStack (group.LayerStack):
 
         if dst_8bit is not None:
             if dst_has_alpha:
-                np.save('/tmp/out.npy', dst)
                 lib.mypaintlib.tile_convert_rgba16_to_rgba8(dst, dst_8bit)
             else:
                 lib.mypaintlib.tile_convert_rgbu16_to_rgbu8(dst, dst_8bit)

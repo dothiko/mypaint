@@ -371,7 +371,6 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
                     if dst_has_alpha:
                         mypaintlib.tile_convert_rgba16_to_rgba8(src, dst)
                     else:
-                        print('here')
                         mypaintlib.tile_convert_rgbu16_to_rgbu8(src, dst)
 
     def composite_tile(self, dst, dst_has_alpha, tx, ty, mipmap_level=0,
