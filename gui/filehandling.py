@@ -524,6 +524,9 @@ class FileHandler (object):
             'jpeg-90%': _SaveFormat.JPEG,
             'png-solid': _SaveFormat.PNG_SOLID,
         }
+        # XXX for `project-save`
+        self._recent_project_changed = False
+        # XXX for `project-save end`
 
     def _update_recent_items(self):
         """Updates self._recent_items from the GTK RecentManager.
