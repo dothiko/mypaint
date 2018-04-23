@@ -190,7 +190,8 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             'shift' : Gdk.ModifierType.SHIFT_MASK,
             'super' : Gdk.ModifierType.SUPER_MASK,
             'hyper' : Gdk.ModifierType.HYPER_MASK,
-            'meta' : Gdk.ModifierType.META_MASK
+            'meta' : Gdk.ModifierType.META_MASK,
+            'alt' : Gdk.ModifierType.MOD1_MASK, # In many case...but not sure.
     }
 
     @classmethod
