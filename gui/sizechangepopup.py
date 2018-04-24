@@ -33,7 +33,7 @@ MARGIN = LINE_WIDTH / 4
 
 ## Class definitions
 class _Zone:
-    INVALID = 0
+    INVALID = windowing.TransparentMixin.ZONE_INVALID
     CIRCLE = 1
 
 class SizePopup (windowing.PopupWindow, 
@@ -56,29 +56,11 @@ class SizePopup (windowing.PopupWindow,
     def __init__(self, app, prefs_id=quickchoice._DEFAULT_PREFS_ID):
         super(SizePopup, self).__init__(app)
         # FIXME: This duplicates stuff from the PopupWindow
-        self.set_position(Gtk.WindowPosition.MOUSE)
-        self.app = app
-        self.app.kbm.add_window(self)
-        self.set_events(Gdk.EventMask.BUTTON_PRESS_MASK |
-                        Gdk.EventMask.BUTTON_RELEASE_MASK |
-                        Gdk.EventMask.ENTER_NOTIFY_MASK |
-                        Gdk.EventMask.LEAVE_NOTIFY_MASK |
-                        Gdk.EventMask.POINTER_MOTION_MASK 
-                        )
-        self.connect("button-release-event", self.button_release_cb)
-        self.connect("button-press-event", self.button_press_cb)
-        self.connect("leave-notify-event", self.popup_leave_cb)
-        self.connect("enter-notify-event", self.popup_enter_cb)
-        self.connect("motion-notify-event", self.motion_cb)
-
-        self.init_transparent_mixin()
+        self.init_transparent_mixin(app)
 
         self.set_size_request(CANVAS_SIZE, CANVAS_SIZE)
 
         self._brush_normal = None
-        self._button = None
-        self._close_timer_id = None
-        self._zone = _Zone.INVALID
         self._current_cursor = None
 
         # Transparent window initialize..
@@ -261,7 +243,20 @@ class SizePopup (windowing.PopupWindow,
         cr.translate(r, r)
 
         # As first, draw label background.
+
+        # We need base circle, because when mouse pointer entered 
+        # completely transparent pixel, `leave-notify-event` will be triggered
+        # in some environment (for example, Windows OS).
         cr.set_line_width(1)
+        cr.set_source_rgba(1.0, 1.0, 1.0, 0.1)
+        cr.arc(
+            0, 0, 
+            sub_r - LINE_WIDTH / 2, 
+            angle_offset, 
+            math.pi*2+angle_offset
+        )
+        cr.fill()
+
         cr.set_source_rgba(1.0, 1.0, 1.0, 0.6)
         w = sub_r
         h = FONT_SIZE * 0.7
@@ -271,14 +266,14 @@ class SizePopup (windowing.PopupWindow,
         # Draw base circle.
         cr.set_line_width(LINE_WIDTH)
         cr.set_source_rgba(*self.base_color)
-        cr.arc(0, 0, sub_r, angle_offset, math.pi*2 +angle_offset)
+        cr.arc(0, 0, sub_r, angle_offset, math.pi*2+angle_offset)
         drawutils.render_drop_shadow(cr)
         cr.stroke()
 
         # Draw base `empty` circle, with a bit narrower line.
         cr.set_line_width(LINE_WIDTH * 0.5)
         cr.set_source_rgba(0.0, 0.0, 0.0, 0.5)
-        cr.arc(0, 0, sub_r, angle_offset, math.pi*2 +angle_offset)
+        cr.arc(0, 0, sub_r, angle_offset, math.pi*2+angle_offset)
         cr.stroke()
 
         # Draw colored circle, this shows the size setting.

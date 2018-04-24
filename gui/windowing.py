@@ -676,8 +676,29 @@ class TransparentMixin(object):
     """A Mixin for popup window which has transparent background
     """
 
-    def init_transparent_mixin(self):
+    # Common zone value between derived classes.
+    ZONE_INVALID = 0
+
+    def init_transparent_mixin(self, app):
+        self.set_position(Gtk.WindowPosition.MOUSE)
+        self.app = app
+        self.app.kbm.add_window(self)
+        self.set_events(Gdk.EventMask.BUTTON_PRESS_MASK |
+                        Gdk.EventMask.BUTTON_RELEASE_MASK |
+                        Gdk.EventMask.ENTER_NOTIFY_MASK |
+                        Gdk.EventMask.LEAVE_NOTIFY_MASK |
+                        Gdk.EventMask.POINTER_MOTION_MASK 
+                        )
+        self.connect("button-release-event", self.button_release_cb)
+        self.connect("button-press-event", self.button_press_cb)
+        self.connect("leave-notify-event", self.popup_leave_cb)
+        self.connect("enter-notify-event", self.popup_enter_cb)
+        self.connect("motion-notify-event", self.motion_cb)
         self.connect("draw", self._draw_cb)
+
+        self._button = None
+        self._close_timer_id = None
+        self._zone = self.ZONE_INVALID
 
     def is_desktop_composited(self):
         """ 
@@ -746,7 +767,7 @@ class TransparentMixin(object):
     def popup(self):
         # For environment which has no desktop compositor,
         # we need to get background image below the window.
-        # So setup bacoground here, after the window moved.
+        # So setup background here, after the window moved.
         self.enter()
 
     def popup_enter_cb(self, widget, event):

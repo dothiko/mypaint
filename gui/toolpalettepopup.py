@@ -32,7 +32,7 @@ TIMEOUT_LEAVE = int(0.7 * 1000) # Auto timeout, when once change size.
 LINE_WIDTH = ICON_SIZE * 1.4 # 1.4 is adjustment factor to thicken base circle
 
 class _Zone:
-    INVALID = 0
+    INVALID = windowing.TransparentMixin.ZONE_INVALID
     CIRCLE = 1
     BUTTON = 2
 
@@ -53,26 +53,9 @@ class ToolPalettePopup (windowing.PopupWindow,
     def __init__(self, app, prefs_id=quickchoice._DEFAULT_PREFS_ID):
         super(ToolPalettePopup, self).__init__(app)
         # FIXME: This duplicates stuff from the PopupWindow
-        self.set_position(Gtk.WindowPosition.MOUSE)
-        self.app = app
-        self.app.kbm.add_window(self)
-        self.set_events(Gdk.EventMask.BUTTON_PRESS_MASK |
-                        Gdk.EventMask.BUTTON_RELEASE_MASK |
-                        Gdk.EventMask.ENTER_NOTIFY_MASK |
-                        Gdk.EventMask.LEAVE_NOTIFY_MASK |
-                        Gdk.EventMask.POINTER_MOTION_MASK 
-                        )
-        self.connect("button-release-event", self.button_release_cb)
-        self.connect("button-press-event", self.button_press_cb)
-        self.connect("leave-notify-event", self.popup_leave_cb)
-        self.connect("enter-notify-event", self.popup_enter_cb)
-        self.connect("motion-notify-event", self.motion_cb)
 
-        self.init_transparent_mixin()
+        self.init_transparent_mixin(app)
 
-        self._button = None
-        self._close_timer_id = None
-        self._zone = _Zone.INVALID
         self._current_button_index = -1
 
         # Initialize buttons
