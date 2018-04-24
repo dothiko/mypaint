@@ -127,8 +127,12 @@ KernelWorker::KernelWorker(FlagtileSurface *surf, const int level)
 } 
 
 // We can enumerate kernel window(surrounding) 4 pixels with for-loop
-// by these offset, in the order of top, right, bottom, left (clockwise)
-// AntialiasKernel depends the order of this offsets.
+// by these offset, in the order of 
+//
+// TOP, RIGHT, BOTTOM, LEFT (i.e. clockwise).
+//
+// Derived from WalkingKernel(especially AntialiasKernel) depends 
+// the order of this offsets.
 // DO NOT CHANGE THIS ORDER.
 const int KernelWorker::xoffset[] = { 0, 1, 0, -1};
 const int KernelWorker::yoffset[] = {-1, 0, 1,  0};
@@ -1100,7 +1104,7 @@ FlagtileSurface::progress_tiles(const int reject_targ_level,
             if (i == reject_targ_level) {
                 // EarlyRejectionKernel just marks such needless
                 // pixels, not remove it yet.
-                CountPerimeterKernel ck(this, i, perimeter, false);
+                CountPerimeterKernel ck(this, i, perimeter);
                 filter_tiles((KernelWorker*)&ck);
                 
                 // RemoveGarbageKernel actually remove
@@ -1123,12 +1127,10 @@ FlagtileSurface::progress_tiles(const int reject_targ_level,
 *                   that area is removed(filled with PIXEL_AREA)
 * 
 * @detail 
-* This method is to reject small needless areas by counting its perimeter, 
-* and fill it if it is `hole` (i.e. counter-clockwised area).
-* 
+* This method is to reject small needless areas by counting its perimeter. 
 */
 void
-FlagtileSurface::remove_small_areas(const int threshold, const bool fill_all_holes)
+FlagtileSurface::remove_small_areas(const int threshold)
 {
     // Remove annoying small glich-like pixel area.
     // `Progressive fill` would mistakenly fill some
@@ -1138,7 +1140,7 @@ FlagtileSurface::remove_small_areas(const int threshold, const bool fill_all_hol
     if (threshold > 0 && m_level > 1) {
         // CountPerimeterKernel just marks such needless
         // pixels, not remove it yet.
-        CountPerimeterKernel ck(this, 0, threshold, fill_all_holes);
+        CountPerimeterKernel ck(this, 0, threshold);
         filter_tiles((KernelWorker*)&ck);
 
         // RemoveGarbageKernel actually remove
@@ -1146,11 +1148,21 @@ FlagtileSurface::remove_small_areas(const int threshold, const bool fill_all_hol
         RemoveGarbageKernel rk(this, 0);
         filter_tiles((KernelWorker*)&rk);
     }
-    else if (fill_all_holes) {
-        // No area removal. Just fill hole.
-        CountPerimeterKernel ck(this, 0, 0, fill_all_holes);
-        filter_tiles((KernelWorker*)&ck);
-    }    
+}
+
+/**
+* @fill_holes
+* Fill all small holes if needed.
+*
+* @detail 
+* This method is to reject small needless areas by counting its perimeter, 
+* and fill it if it is `hole` (i.e. counter-clockwised area).
+*/
+void
+FlagtileSurface::fill_holes()
+{
+    FillHoleKernel fk(this, 0);
+    filter_tiles((KernelWorker*)&fk);
 }
 
 void
@@ -1190,7 +1202,7 @@ FlagtileSurface::dbg_progress_single_level(const int level, const int perimeter)
     if (perimeter > 0) {
         // CountPerimeterKernel just marks such needless
         // pixels, not remove it yet.
-        CountPerimeterKernel ck(this, level, perimeter, false);
+        CountPerimeterKernel ck(this, level, perimeter);
         filter_tiles((KernelWorker*)&ck);
         
         // RemoveGarbageKernel actually remove
@@ -1218,13 +1230,13 @@ FloodfillSurface::FloodfillSurface(PyObject* tiledict,
 
     PyObject *keys = PyDict_Keys(tiledict);// New reference
     int length = PyObject_Length(keys);
-    int min_x;
-    int min_y;
-    int max_x;
-    int max_y;
+    int min_x = 0;
+    int min_y = 0;
+    int max_x = 0;
+    int max_y = 0;
 
     // Get surface dimension and generate it.
-    for (int i=0; i < length; i++ ){
+    for (int i=0; i < length; i++ ) {
         PyObject *ck = PyList_GetItem(keys, i);
 #ifdef HEAVY_DEBUG
     assert(PyTuple_Check(ck));

@@ -2376,8 +2376,10 @@ class ClosedAreaFill (FloodFill):
         # Finalize progressive fill.
         # The processing sequence MUST be : 
         # removing needless areas -> dilation -> draw anti-aliasing pixels.        
-        ft.remove_small_areas(self.reject_perimeter, self.fill_all_holes)
+        ft.remove_small_areas(self.reject_perimeter)
         ft.dilate(self.dilation_size)
+        if self.fill_all_holes:
+            ft.fill_holes()
         ft.draw_antialias()
         
         # Convert flagtiles into that new layer.
@@ -2499,16 +2501,13 @@ class LassoFill(ClosedAreaFill):
                         )
         
         # Finalize lasso fill
-       #lt.finalize(
-       #    self.dilation_size, 
-       #    True,
-       #    self.fill_all_holes
-       #)
         # For lasso fill, there is no rejecting perimeter.
         # But (might) use fill_all_holes option.
-        lt.remove_small_areas(0, self.fill_all_holes)
+        lt.remove_small_areas(0)
         lt.dilate(self.dilation_size)
         lt.convert_result_area()
+        if self.fill_all_holes:
+            lt.fill_holes()
         lt.draw_antialias()
         
         # Convert flagtiles into that new layer.

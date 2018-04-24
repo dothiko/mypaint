@@ -386,8 +386,9 @@ assert(ct != NULL);
     void filter_tiles(KernelWorker *k);
     
     // Finalize related methods.
-    void remove_small_areas(const int threshold, const bool fill_all_holes);
+    void remove_small_areas(const int threshold);
     void dilate(const int dilation_size);
+    void fill_holes();
     void draw_antialias();
     
     // XXX for Debug (might be used even not in HEAVY_DEBUG)
