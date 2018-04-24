@@ -598,8 +598,6 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                 else:
                     cursor = cursors[self._CURSOR_PENCIL]
 
-        print(cursor)
-
         if cursor is not self._current_override_cursor:
             if tdw is not None:
                 tdws = (tdw)
@@ -1532,10 +1530,8 @@ class OptionsPresenter(Gtk.Grid):
 
     @property
     def target(self):
-        if self._mode_ref is not None:
-            return self._mode_ref()
-        else:
-            print('no target')
+        assert self._mode_ref is not None
+        return self._mode_ref()
 
     @target.setter
     def target(self, mode):
