@@ -214,8 +214,7 @@ protected:
     void _init_nodes(const int max_count);
 
     // Offsets used for pixel search kernel.
-    inline int _get_tile_index(const int tx, const int ty) 
-    {
+    inline int _get_tile_index(const int tx, const int ty) {
         return (ty * m_width + tx);
     }
 
@@ -242,28 +241,24 @@ public:
     // progress tile have different dimension.
     // So, maximum size of surface or pixel coordinate
     // is different from original(progress level 0).
-    inline int get_pixel_max_x(const int level) 
-    {
+    inline int get_pixel_max_x(const int level) {
         return m_width * PROGRESS_TILE_SIZE(level);
     }
 
-    inline int get_pixel_max_y(const int level) 
-    {
+    inline int get_pixel_max_y(const int level) {
         return m_height * PROGRESS_TILE_SIZE(level);
     }
 
     inline int get_target_level(){ return m_level;}
 
     inline Flagtile* get_tile(const int tx, const int ty, 
-                              const bool request=false) 
-    {
+                              const bool request=false) {
         return get_tile(_get_tile_index(tx, ty), request);
     }
 
     inline Flagtile* get_tile_from_pixel(const int sx, const int sy, 
                                          const bool request, 
-                                         const int level)
-    {
+                                         const int level) {
         int tile_size = PROGRESS_TILE_SIZE(level);
         int raw_tx = sx / tile_size;
         int raw_ty = sy / tile_size;
@@ -278,8 +273,7 @@ public:
         return get_tile(raw_ty * m_width + raw_tx, request);
     }
     
-    inline Flagtile* get_tile(const int idx, const bool request=false) 
-    {
+    inline Flagtile* get_tile(const int idx, const bool request=false) {
 #ifdef HEAVY_DEBUG
 // XXX DEBUG
 if (idx >= (m_width * m_height)) {
@@ -298,15 +292,13 @@ assert(idx < (m_width * m_height));
     
     // Check existence of a tile, 
     // without generating/discarding a wrapper object.
-    inline bool tile_exists(const int tx, const int ty) 
-    {
+    inline bool tile_exists(const int tx, const int ty) {
         return get_tile(_get_tile_index(tx, ty), false) != NULL;
     }
 
     inline void combine_pixel(const int level, 
                               const int sx, const int sy, 
-                              const uint8_t val) 
-    {
+                              const uint8_t val) {
         Flagtile *ct = get_tile_from_pixel(sx, sy, true, level);
         
 #ifdef HEAVY_DEBUG
@@ -319,8 +311,7 @@ assert(ct != NULL);
 
     inline void put_pixel(const int level, 
                           const int sx, const int sy, 
-                          const uint8_t val) 
-    {
+                          const uint8_t val) {
         Flagtile *ct = get_tile_from_pixel(sx, sy, true, level);
         
 #ifdef HEAVY_DEBUG
@@ -334,8 +325,7 @@ assert(ct != NULL);
     }
 
     inline uint8_t get_pixel(const int level, 
-                             const int sx, const int sy) 
-    {
+                             const int sx, const int sy) {
         Flagtile *ct = get_tile_from_pixel(sx, sy, false, level);
         if (ct == NULL)
             return 0; 
@@ -344,13 +334,11 @@ assert(ct != NULL);
         return ct->get(level,
                        positive_mod(sx, tile_size), 
                        positive_mod(sy, tile_size));
-        
     }
 
     inline void replace_pixel(const int level, 
                               const int sx, const int sy, 
-                              const uint8_t val) 
-    {
+                              const uint8_t val) {
         Flagtile *ct = get_tile_from_pixel(sx, sy, true, level);
         
 #ifdef HEAVY_DEBUG
@@ -369,8 +357,6 @@ assert(ct != NULL);
     // Actually progress pixels based on progress seeds.
     void progress_tiles(const int reject_targ_level,
                         const int perimeter);
-    void dbg_progress_single_level(const int level,
-                                   const int perimeter); // XXX for DEBUG
 
     // flood_fill method. 
     // This should not be called from Python codes.
@@ -447,8 +433,7 @@ protected:
 
     inline bool _is_inside_polygon_point(const int x, const int y,
                                          const int sx, const int sy,      
-                                         const int ex, const int ey)
-    {
+                                         const int ex, const int ey) {
       return (((sy > y) != (ey > y)) 
                 && (x < (ex - sx) * (y - sy) / (ey - sy) + sx));
     } 

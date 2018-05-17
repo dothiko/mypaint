@@ -159,7 +159,7 @@ KernelWorker::set_target_level(const int level)
 * The method called before the kernel worker is operated
 * (especially in FlagtileSurface::filter method).
 * If this `start` method return false, the tile processing cancelled and
-* proceed next tile.
+* forward next tile.
 */
 bool 
 KernelWorker::start(Flagtile* targ) 
@@ -226,7 +226,7 @@ WalkingKernel::_get_pixel_with_direction(const int x, const int y,
 }
 
 // Check whether the right side pixel of current position / direction
-// is match to proceed.
+// is match to forward.
 bool 
 WalkingKernel::_is_match_pixel(const uint8_t pixel) 
 {
@@ -257,7 +257,7 @@ WalkingKernel::_rotate_left()
 }
 
 bool 
-WalkingKernel::_proceed() 
+WalkingKernel::_forward() 
 {
     uint8_t pix;
 
@@ -275,7 +275,7 @@ WalkingKernel::_proceed()
             return false; // Exit from infnite loop of 1px hole!
     } 
     else {
-        // Then, proceed.
+        // Then, forward.
 
         int nx = m_x + xoffset[m_cur_dir];
         int ny = m_y + yoffset[m_cur_dir];
@@ -299,14 +299,14 @@ WalkingKernel::_proceed()
 // Walk single step.
 // when end walking, return false.
 bool 
-WalkingKernel::_walk_single() 
+WalkingKernel::_proceed() 
 {
     if (!_is_match_pixel(_get_hand_pixel())) {
         // Right hand of kernel misses the wall.
-        // Couldn't proceed.
+        // Couldn't forward.
         _rotate_right();
     }
-    return _proceed();
+    return _forward();
 }
 
 void 
@@ -325,7 +325,7 @@ WalkingKernel::_walk(const int sx, const int sy, const int direction)
     
     m_cur_dir = direction;
 
-    while (_walk_single()) {
+    while (_proceed()) {
 #ifdef HEAVY_DEBUG
         cnt++;
         // `Walking over 100 million pixel` cannot happen.
@@ -1096,20 +1096,13 @@ FlagtileSurface::build_progress_seed()
 */
 void 
 FlagtileSurface::progress_tiles(const int reject_targ_level,
-                                const int perimeter) 
+                                const int threshold) 
 {
     if (m_level > 0) {
         ProgressKernel k(this); 
         for (int i=m_level; i>0; i--) {
             if (i == reject_targ_level) {
-                // EarlyRejectionKernel just marks such needless
-                // pixels, not remove it yet.
-                CountPerimeterKernel ck(this, i, perimeter);
-                filter_tiles((KernelWorker*)&ck);
-                
-                // RemoveGarbageKernel actually remove
-                // that marked areas.
-                RemoveGarbageKernel rk(this, i);
+                RemoveGarbageKernel rk(this, i, threshold);
                 filter_tiles((KernelWorker*)&rk);    
             }
             k.set_target_level(i);            
@@ -1138,14 +1131,7 @@ FlagtileSurface::remove_small_areas(const int threshold)
     // Theorically, such area cannot be produced when
     // gap-closing-level is less or equal to 1.
     if (threshold > 0 && m_level > 1) {
-        // CountPerimeterKernel just marks such needless
-        // pixels, not remove it yet.
-        CountPerimeterKernel ck(this, 0, threshold);
-        filter_tiles((KernelWorker*)&ck);
-
-        // RemoveGarbageKernel actually remove
-        // that marked areas.
-        RemoveGarbageKernel rk(this, 0);
+        RemoveGarbageKernel rk(this, 0, threshold);
         filter_tiles((KernelWorker*)&rk);
     }
 }
@@ -1189,27 +1175,6 @@ FlagtileSurface::draw_antialias()
 {
     AntialiasKernel ak(this);
     filter_tiles((KernelWorker*)&ak);
-}
-
-// XXX for DEBUG
-void
-FlagtileSurface::dbg_progress_single_level(const int level, const int perimeter) 
-{
-    ProgressKernel k(this); 
-    k.set_target_level(level);
-    filter_tiles((KernelWorker*)&k);
-    
-    if (perimeter > 0) {
-        // CountPerimeterKernel just marks such needless
-        // pixels, not remove it yet.
-        CountPerimeterKernel ck(this, level, perimeter);
-        filter_tiles((KernelWorker*)&ck);
-        
-        // RemoveGarbageKernel actually remove
-        // that marked areas.
-        RemoveGarbageKernel rk(this, level);
-        filter_tiles((KernelWorker*)&rk);    
-    }
 }
 
 //--------------------------------------

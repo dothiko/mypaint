@@ -325,7 +325,7 @@ protected:
     int m_ox;
     int m_oy;
 
-    // Current proceeding direction. Initially, DIR_TOP.
+    // Current forwarding direction. Initially, DIR_TOP.
     // And `current hand direction` would be
     // (m_cur_dir + 1) % 4 == (m_cur_dir + 1) & 3
     int m_cur_dir;
@@ -348,13 +348,11 @@ protected:
     virtual uint8_t _get_pixel_with_direction(const int x, const int y, 
                                               const int direction);
 
-    inline uint8_t _get_front_pixel() 
-    { 
+    inline uint8_t _get_front_pixel() {
         return _get_pixel_with_direction(m_x, m_y, m_cur_dir);
     }
 
-    inline uint8_t _get_hand_pixel() 
-    { 
+    inline uint8_t _get_hand_pixel() {
         return _get_pixel_with_direction(m_x, m_y, _get_hand_dir(m_cur_dir));
     }
 
@@ -365,7 +363,7 @@ protected:
     virtual void _on_rotate_cb(const bool right) = 0;
 
     // Check whether the right side pixel of current position / direction
-    // is match to proceed.
+    // is match to forward.
     virtual bool _is_match_pixel(const uint8_t pixel);
 
     // Rotate to right.
@@ -373,14 +371,16 @@ protected:
     void _rotate_right();
     
     // Rotate to left. 
-    // This is used when we face `wall`
+    // This is used when we face `wall`. called from _proceed().
     void _rotate_left();
 
-    bool _proceed();
+    // Go forward. 
+    // Called from _proceed().
+    bool _forward();
 
-    // Walk single step.
-    // when end walking, return false.
-    bool _walk_single();
+    // Rotate or Proceed (walk) single step, around the target area.
+    // when reaches end of walking, return false.
+    bool _proceed();
 
     void _walk(const int sx, const int sy, const int direction);
     

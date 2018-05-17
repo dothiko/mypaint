@@ -309,67 +309,31 @@ protected:
         ) & PIXEL_MASK;
     }
 
-    // Process only 4 corner pixel for FILLED_AREA tile.
-    void _step_corner(Flagtile *targ, 
+    // Process only 4 ridges for FILLED_AREA (entirely filled) tile.
+    void _progress_only_ridge(Flagtile *targ, 
                       const int x, const int y,
                       const int sx, const int sy)
     {
-        int corner = PROGRESS_TILE_SIZE(m_level) - 1;
+        int ridge = PROGRESS_TILE_SIZE(m_level) - 1;
         int bx = x << 1;
         int by = y << 1;
         int direction;
                         
         if (x == 0 && y == 0) {
             direction = 3;// left,top pixel
-            /*
-            uint8_t top = m_surf->get_pixel(m_level, sx, sy-1) & PIXEL_MASK;
-            uint8_t left = m_surf->get_pixel(m_level, sx-1, sy) & PIXEL_MASK;
-            
-            if (top >= PIXEL_FILLED && left >= PIXEL_FILLED) {
-                targ->put(beneath_level, bx, by, PIXEL_FILLED);
-                m_filled++;
-            }
-            */
         }
-        else if (x == corner && y == 0) {
+        else if (x == ridge && y == 0) {
             direction = 0;// top, right pixel
             bx++;
-            /*
-            uint8_t top = m_surf->get_pixel(m_level, sx, sy-1) & PIXEL_MASK;
-            uint8_t right = m_surf->get_pixel(m_level, sx+1, sy) & PIXEL_MASK;            
-            
-            if (top >= PIXEL_FILLED && right >= PIXEL_FILLED) {
-                targ->put(beneath_level, bx+1, by, PIXEL_FILLED);
-                m_filled++;
-            }
-            */
         }
-        else if (x == corner && y == corner) {
+        else if (x == ridge && y == ridge) {
             direction = 1; // right, bottom pixel
             bx++;
             by++;
-            /*
-            uint8_t bottom = m_surf->get_pixel(m_level, sx, sy+1) & PIXEL_MASK;            
-            uint8_t right = m_surf->get_pixel(m_level, sx+1, sy) & PIXEL_MASK;                 
-            
-            if (bottom >= PIXEL_FILLED && right >= PIXEL_FILLED) {
-                targ->put(beneath_level, bx+1, by+1, PIXEL_FILLED);
-                m_filled++;
-            } 
-            */           
         }
-        else if (x == 0 && y == corner) {
+        else if (x == 0 && y == ridge) {
             direction = 2; // bottom, left pixel
             by++;
-            /*
-            uint8_t bottom = m_surf->get_pixel(m_level, sx, sy+1) & PIXEL_MASK;           
-            uint8_t left = m_surf->get_pixel(m_level, sx-1, sy) & PIXEL_MASK;
-            
-            if (bottom >= PIXEL_FILLED && left >= PIXEL_FILLED) {
-                targ->put(beneath_level, bx, by+1, PIXEL_FILLED);
-                m_filled++;
-            } 
-            */           
         }
         else {
             return;
@@ -415,7 +379,7 @@ public:
                       const int sx, const int sy)
     {
         if (targ->get_stat() & Flagtile::FILLED_AREA) {
-            _step_corner(targ, x, y, sx, sy);
+            _progress_only_ridge(targ, x, y, sx, sy);
         }
         else {
             // `pixel is greater than PIXEL_FILLED` 
@@ -792,7 +756,6 @@ public:
 class FillHoleKernel: public WalkingKernel
 {
 protected:
-    uint8_t m_replacing_pixel;
     FillHoleWorker m_fillworker;
 
     inline int _get_left_dir(const int dir) { return (dir + 3) & 3; }
@@ -898,92 +861,6 @@ public:
     }
 };
 
-// Search entire Flagtilesurface and 
-// count perimeter of PIXEL_FILLED area.
-// If perimeter of that area is smaller than threshold,
-// mark that area to be removed, 
-// and that areas are removed later, with RemoveGarbageKernel.
-class CountPerimeterKernel: public FillHoleKernel
-{
-protected:
-    const int m_threshold;
-
-public:
-    /**
-    * @fn CountPerimeterKernel
-    * Constructor of CountPerimeterKernel.
-    *
-    * @param threshold: The threshold of perimeter. 
-    *                   If an area has smaller perimeter than this
-    *                   threshold, it would be removed.
-    *                   If this is 0, area removal is disabled.
-    * @param fill_all_holes: When this flag is true, and if there is a hole
-    *                        (i.e. counter-clockwize area), it will be filled
-    *                        with flood-fill algorithm.
-    * 
-    * This Kernel detects a PIXEL_FILLED pixel which is neibored with
-    * PIXEL_AREA or PIXEL_EMPTY (or PIXEL_CONTOUR, when finalizing flag is 
-    * true).
-    * If such pixel detected, kernel walks around that pixel area and
-    * counts its perimeter. When that area has smaller perimeter than
-    * threshold, it would be removed.
-    *
-    * Also, this kernel detects a hole inside filled pixel area.
-    * If fill_all_holes flag is true, this kernel fill up it by flood-fill.
-    *
-    * Note: fill_all_holes does not consider how large the perimeter of hole.
-    * It would be filled up even it is extreamly large one. 
-    * To avoid this, turn off the fill_all_holes option from OptionsPresenter.
-    */    
-    CountPerimeterKernel(FlagtileSurface *surf, 
-                         const int targ_level,
-                         const int threshold)
-        :   FillHoleKernel(surf, targ_level), 
-            m_threshold(threshold)
-    {}
-
-    virtual void step(Flagtile *targ, 
-                      const int x, const int y,
-                      const int sx, const int sy)
-    {
-        uint8_t pixel = targ->get(m_level, x, y) & PIXEL_MASK;
-        if (pixel == PIXEL_AREA 
-                || pixel == 0) {
-            for(int i=0; i<4; i++) {
-                uint8_t kpix = get_kernel_pixel(m_level, sx, sy, i);
-                
-                // When kpix is EXACTLY filled pixel... 
-                // (A ridge of already detected area would be a combination of
-                // PIXEL_FILLED | FLAG_DECIDED, so skip it.)
-                if (kpix == PIXEL_FILLED) {
-                    // Start from current kernel pixel.
-                    // We'll proceed to `right` of that pixel,
-                    // so _get_hand_dir(i) is the initial direction.
-                    m_replacing_pixel = PIXEL_FILLED | FLAG_DECIDED;
-                    _walk(sx, sy, _get_left_dir(i));
-                    if (m_step > 0) {
-                        // After walking, we might remove current pixel area.
-                        // But if it is counter-clockwise, it would be a hole
-                        // in large pixel area. so ignore it.
-                        if (is_clockwise()) {
-                            if (m_step < m_threshold) {
-                                // There might `diagonally connected areas`.
-                                // Such areas cannot be removed with our flood-fill.
-                                // Therefore,walk the current area again and 
-                                // replace PIXEL_REMOVE to rim pixels.
-                                // Actual removal of the area should be 
-                                // executed later by another worker(RemoveAreaWorker).
-                                _walk(sx, sy, _get_left_dir(i));
-                            }
-                        }
-                        return;
-                    }
-                }
-            }
-        }
-    }
-};
-
 // Removing Small filled area, which would be surrounded(or filled) with
 // PIXEL_REMOVE. 
 // This class is used in RemoveGarbageKernel.
@@ -1008,7 +885,8 @@ public:
 
     virtual bool match(const uint8_t pix)
     {
-        return (((pix & PIXEL_MASK)== PIXEL_FILLED) || ((pix & PIXEL_MASK) == PIXEL_REMOVE));
+        //return (((pix & PIXEL_MASK)== PIXEL_FILLED) || ((pix & PIXEL_MASK) == PIXEL_REMOVE));
+        return (pix & PIXEL_MASK) == PIXEL_FILLED;
     }
 
     virtual void step(Flagtile *tile,
@@ -1026,64 +904,73 @@ public:
     }
 };
 
-// For post processing of CountPerimeterKernel.
-// Some pixel areas would be connected `diagonally`, and flood-fill algorithm
-// cannot fill up such area (treat as another divided area), 
-// but walking algorithm detect such areas as connected one.
-//
-// To deal with this problem, CountPerimeterKernel marks areas to be removed
-// with PIXEL_REMOVE. and This kernel seaches that pixel 
-// and remove it (fill it with PIXEL_AREA) all.
-class RemoveGarbageKernel: public KernelWorker
+// Remove garbage(small and detached from main area) pixel areas.
+// Used in FlagtileSurface::remove_small_areas.
+// Very simular to FillHoleKernel,but slightly different.
+class RemoveGarbageKernel: public FillHoleKernel
 {
 protected:
     RemoveAreaWorker m_remove_worker;
+    int m_threshold;
 
 public:
-    RemoveGarbageKernel(FlagtileSurface *surf,
-                        const int targ_level)
-        : KernelWorker(surf, targ_level), 
-          m_remove_worker(surf, targ_level) 
+    /**
+    * @fn RemoveGarbageKernel
+    *
+    * @param threshold: The threshold of perimeter. 
+    *                   If an area has smaller perimeter than this
+    *                   threshold, it would be removed.
+    *                   If this is 0, area removal is disabled.
+    * 
+    * This Kernel detects a PIXEL_FILLED pixel which is neibored with
+    * PIXEL_AREA, PIXEL_CONTOUR, or PIXEL_EMPTY.
+    * If such pixel detected, kernel walks around that pixel area and
+    * counts its perimeter. When that area has smaller perimeter than
+    * threshold, it would be removed.
+    */    
+    RemoveGarbageKernel(FlagtileSurface *surf, 
+                        const int targ_level,
+                        const int threshold)
+        :   FillHoleKernel(surf, targ_level), 
+            m_remove_worker(surf, targ_level),
+            m_threshold(threshold) 
     {}
-
-    virtual bool start(Flagtile *targ) 
-    {
-        // We cannot use parent class method for DilateKernel.
-        // Because this kernel accepts NULL tile.
-        if (targ != NULL) {
-            return (targ->get_stat() & Flagtile::FILLED) == 0;
-                   // && (targ->get_stat() & Flagtile::HAS_PIXEL) != 0);
-                   // TODO HAS_PIXEL DOES NOT WORK.
-        }
-        return false; 
-    }
 
     virtual void step(Flagtile *targ, 
                       const int x, const int y,
                       const int sx, const int sy)
     {
-        uint8_t pix = targ->get(m_level, x, y);
-        if ((pix & PIXEL_MASK) == PIXEL_REMOVE) { 
-            // Processing kernel.
+        uint8_t pixel = targ->get(m_level, x, y) & PIXEL_MASK;
+        if (pixel == PIXEL_AREA 
+                || pixel == 0) {
             for(int i=0; i<4; i++) {
-                uint8_t kpix = get_kernel_pixel(m_level, sx, sy, i) & PIXEL_MASK;
-                if (kpix == PIXEL_FILLED || kpix == PIXEL_REMOVE){
-                    m_surf->flood_fill(
-                        sx, sy,
-                        (FillWorker*)&m_remove_worker
-                    );
-                    return;
+                uint8_t kpix = get_kernel_pixel(m_level, sx, sy, i);
+                
+                // When kpix is EXACTLY filled pixel... 
+                // (A ridge of already detected area would be a combination of
+                // PIXEL_FILLED | FLAG_DECIDED, so skip it.)
+                if (kpix == PIXEL_FILLED) {
+                    // Start from current kernel pixel.
+                    // We'll proceed to `right` of that pixel,
+                    // so _get_hand_dir(i) is the initial direction.
+                    _walk(sx, sy, _get_left_dir(i));
+                    if (m_step < m_threshold) {
+                        // After walking, we might remove current pixel area.
+                        // But if it is counter-clockwise, it would be a hole
+                        // in large pixel area. so ignore it.
+                        if (is_clockwise()) {
+                            m_surf->flood_fill(
+                                sx + xoffset[i], 
+                                sy + yoffset[i], 
+                                &m_remove_worker
+                            );
+                        }
+                        return;
+                    }
                 }
             }
-            // If code reaches here,
-            // It means the pixel is isolated 1x1 pixel.
-            targ->replace(m_level, x, y, PIXEL_AREA);
         }
     }
-    
-    // Disable these methods.
-    virtual void end(Flagtile *targ) {} 
-    virtual void finalize() {} 
 };
 
 // Simple drawing line worker
