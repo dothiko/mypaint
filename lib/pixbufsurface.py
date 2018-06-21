@@ -187,22 +187,6 @@ class Surface (TileAccessible, TileBlittable):
         pixbuf = Gdk.pixbuf_get_from_surface(surf, 0, 0, self.w, self.h)
         pixbuf.copy_area(0, 0, self.w, self.h, self.epixbuf, dx, dy)
 
-    # XXX for project-save
-    @property
-    def retain_transparent(self):
-        cls = self.__class__
-        if hasattr(cls, "_retain_transparent"):
-            return cls._retain_transparent
-        return False
-
-    @retain_transparent.setter
-    def retain_transparent(self, flag):
-        cls = self.__class__
-        cls._retain_transparent = flag
-
-    # XXX for project-save end
-
-
 def render_as_pixbuf(surface, x=None, y=None, w=None, h=None,
                      alpha=False, mipmap_level=0,
                      progress=None,

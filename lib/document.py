@@ -53,7 +53,6 @@ import lib.layervis
 import lib.autosave
 import lib.projectsave
 import lib.surface
-import lib.pixbufsurface as pixbufsurface # XXX for project-save
 
 logger = logging.getLogger(__name__)
 
@@ -2334,11 +2333,6 @@ class Document (object):
         self._autosave_dirty = False
 
         try:
-            # Workaround for unresolved bug: layer misplacement.
-            # To avoid such bug, force pixbufsurface.Surface to retain
-            # empty(transparent) tiles.
-            pixbufsurface.Surface.retain_transparent = True
-
             if not os.path.exists(os.path.join(dirname, 'stack.xml')):
                 raise ValueError
 
@@ -2378,9 +2372,6 @@ class Document (object):
             # On the other hand, NEW layers are always dirty initially.
             for pos, cl in self.layer_stack.walk():
                 cl.clear_project_dirty()
-        finally:
-            pixbufsurface.Surface.retain_transparent = False
-                
 
     def _project_write(self, dirname, 
             xres=None,yres=None,
