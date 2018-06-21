@@ -53,6 +53,7 @@ import lib.layervis
 import lib.autosave
 import lib.projectsave
 import lib.surface
+import lib.pixbufsurface as pixbufsurface # XXX for project-save
 
 logger = logging.getLogger(__name__)
 
@@ -2333,6 +2334,10 @@ class Document (object):
         self._autosave_dirty = False
 
         try:
+            # Workaround for unresolved bug: layer misplacement.
+            # To avoid such bug, force pixbufsurface.Surface to retain
+            # empty(transparent) tiles.
+            pixbufsurface.Surface.retain_transparent = True
 
             if not os.path.exists(os.path.join(dirname, 'stack.xml')):
                 raise ValueError
@@ -2368,10 +2373,13 @@ class Document (object):
                 investigate_dir = dirname,
             )
         else:         
+            # When no any exception raised...
             # All LOADED layers are clean(not dirty), as initial states.
             # On the other hand, NEW layers are always dirty initially.
             for pos, cl in self.layer_stack.walk():
                 cl.clear_project_dirty()
+        finally:
+            pixbufsurface.Surface.retain_transparent = False
                 
 
     def _project_write(self, dirname, 
@@ -2427,7 +2435,6 @@ class Document (object):
         # So, to avoid this, every dirty layer are removed its empty tiles
         # in this loop.
         
-        data_bbox = helpers.Rect()
         # Prior to all processing, end all pending tasks.
         self.sync_pending_changes(flush=True)
         # Also, execute all pending GTK events (including idle task)
@@ -2439,6 +2446,7 @@ class Document (object):
         root_stack.remove_empty_tiles()
         
         # Generating boundary box.
+        data_bbox = helpers.Rect()
         for s_path, s_layer in root_stack.walk():
             selected = (s_path == root_stack.current_path)
             s_layer.initially_selected = selected
