@@ -1125,7 +1125,7 @@ class OptionsPresenter(Gtk.Grid):
             return spinbtn
         
         label = generate_label(
-            _("Fill method:"),
+            _("Fill Method:"),
             _("The fill method to use"),
             0,
             self,
@@ -1200,7 +1200,7 @@ class OptionsPresenter(Gtk.Grid):
 
         row += 1
         label = generate_label(
-            _("Gap-closing level:"),
+            _("Gap-closing Level:"),
             _("Specifying the size of closing the gap of contour,in 6 level."),
             row
         )
@@ -1256,13 +1256,43 @@ class OptionsPresenter(Gtk.Grid):
               "This is turned off automatically after use.")
         )
         self.attach(checkbut, 1, row, 1, 1)
-        # Set default embedded value for `New layer (once)` always.
+
+        # For `New layer (once)` , always set default initial value.
         # There is no user configurable value for it.
         checkbut.set_active(_Prefs.DEFAULT_MAKE_NEW_LAYER)
         self._make_new_layer_toggle = checkbut
 
+        row += 1
+        label = generate_label(
+            _("Fill Options:"),
+            _("Other fill options."),
+            row
+        )
+        text = _("Fill all holes")
+        checkbut = Gtk.CheckButton.new_with_label(text)
+        checkbut.set_tooltip_text(
+            _("Fill all small holes and detached contour area\n"
+              "within large filled area.")
+        )
+        self.attach(checkbut, 1, row, 1, 1)
+        checkbut.set_active(_Prefs.DEFAULT_FILL_ALL_HOLES)
+        checkbut.connect("toggled", self._fill_all_holes_toggled_cb)
+        self._fill_all_holes_toggle = checkbut
+
+        row += 1
+        text = _("Fill immidiately")
+        checkbut = Gtk.CheckButton.new_with_label(text)
+        checkbut.set_tooltip_text(
+            _("Without any color pixel assignment, \n"
+              "fill closed transparent pixels immidiately.")
+        )
+        self.attach(checkbut, 1, row, 1, 1)
+        checkbut.set_active(_Prefs.DEFAULT_FILL_IMMIDIATELY)
+        checkbut.connect("toggled", self._fill_immidiately_toggled_cb)
+        self._fill_immidiately_toggle = checkbut
+
         
-        #### Advanced options
+        ## Advanced options
         
         row += 1
         exp = Gtk.Expander()
@@ -1272,50 +1302,9 @@ class OptionsPresenter(Gtk.Grid):
         exp.set_label(_("Advanced Options..."))
         exp.set_use_markup(False)
         self.attach(exp, 0, row, 2, 1)
-        
-        ## Common advanced options 
-        # "Fill all holes"
-        adv_row = 0
-        label = generate_label(
-            _("General options:"),
-            _("Option which is common between all fill methods."),
-            adv_row,
-            adv_grid
-        )
-        text = _("Fill all holes")
-        checkbut = Gtk.CheckButton.new_with_label(text)
-        checkbut.set_tooltip_text(
-            _("Fill all small holes and detached contour area\n"
-              "within large filled area.")
-        )
-        adv_grid.attach(checkbut, 1, adv_row, 1, 1)
-        checkbut.set_active(_Prefs.DEFAULT_FILL_ALL_HOLES)
-        checkbut.connect("toggled", self._fill_all_holes_toggled_cb)
-        self._fill_all_holes_toggle = checkbut
-
-        ## Dedicated advanced options
-        # "Fill immidiately area"
-        # This is only for close-and-fill. 
-        adv_row += 1
-        label = generate_label(
-            _("Closed area fill:"),
-            _("Dedicated options for `Closed area fill` method."),
-            adv_row,
-            adv_grid
-        )
-        text = _("Fill immidiately")
-        checkbut = Gtk.CheckButton.new_with_label(text)
-        checkbut.set_tooltip_text(
-            _("Without any color pixel assignment, \n"
-              "fill closed transparent pixels immidiately.")
-        )
-        adv_grid.attach(checkbut, 1, adv_row, 1, 1)
-        checkbut.set_active(_Prefs.DEFAULT_FILL_IMMIDIATELY)
-        checkbut.connect("toggled", self._fill_immidiately_toggled_cb)
-        self._fill_immidiately_toggle = checkbut
 
         # Factor of pixel rejecting perimeter.
-        adv_row += 1
+        adv_row = 0
         label = generate_label(
             _("Rejecting factor:"),
             _("Specifying the perimeter factor of to be removed pixels\n"
@@ -1324,9 +1313,9 @@ class OptionsPresenter(Gtk.Grid):
             adv_grid
         )
         adv_grid.attach(label, 0, adv_row, 1, 1)
-        # As a default, the rejecting perimeter is , 
-        # (1 << gap-closing-level) * 4 * 2.
-        # This `2` is the `factor`, and 2 is default value.
+        # The formula of rejecting perimeter is , 
+        # (1 << gap-closing-level) * 4 * factor.
+        # As a default, this factor is 2.
         # Pixel areas which have smaller perimeter than 
         # this threshold perimeter should be rejected.
         # This default value would be enough in most case practically.
@@ -1382,15 +1371,16 @@ class OptionsPresenter(Gtk.Grid):
         # Preferences related.
         adv_row += 1
         label = generate_label(
-            _("Preference:"),
-            _("About preference values."),
+            _("Preference Settings:"),
+            _("About preference settings."),
             adv_row,
             adv_grid
         )
         text = _("Share between methods")
         checkbut = Gtk.CheckButton.new_with_label(text)
         checkbut.set_tooltip_text(
-            _("Share same setting values between each filling methods.")
+            _("Share same setting values between each filling methods.\n"
+              "Some options might be disabled for a certain method.")
         )
         adv_grid.attach(checkbut, 1, adv_row, 1, 1)
         # This option access to app.preferences directly.
@@ -1449,6 +1439,9 @@ class OptionsPresenter(Gtk.Grid):
         )
         self._reject_factor_scale.set_sensitive(
             method!=_FillMethod.LASSO_FILL
+        )
+        self._fill_all_holes_toggle.set_sensitive(
+            method!=_FillMethod.FLOOD_FILL
         )
 
         if not self.share_setting or force:

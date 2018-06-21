@@ -2179,19 +2179,19 @@ class ClosedAreaFill (FloodFill):
         newimg.save('/tmp/closefill_check.jpg')
         newimg.show()
 
-    def _dbg_tile_output(self, ox, oy, tw, th, src, dir_suffix):
+    def _dbg_tile_output(self, ox, oy, tw, th, src):
         # XXX debug method
 
         print("# tile writing enabled")
         import os
         import numpy as np
         import json
-        outputdir = '/tmp/%s' % dir_suffix
-        if os.path.exists(outputdir):
-            import shutil
-            shutil.rmtree(outputdir)
-        if not os.path.exists(outputdir):
-            os.mkdir(outputdir)
+        import tempfile
+        import time
+        lt = time.localtime()
+        outputdir = tempfile.mkdtemp(
+            prefix="tiles_%02d-%02d_%02d,%02d,%02d_" % lt[1:6],
+        )
         info = {}
         if hasattr(self, 'bbox'):
             info['bbox'] = self.bbox
@@ -2316,7 +2316,7 @@ class ClosedAreaFill (FloodFill):
         # XXX Debug code
         show_flag = self.show_flag
         if self.tile_output:
-            self._dbg_tile_output(ox, oy, tw, th, src, 'tiles')
+            self._dbg_tile_output(ox, oy, tw, th, src)
         # XXX Debug code End
         
         # Get target color if needed
