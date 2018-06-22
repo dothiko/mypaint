@@ -235,7 +235,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
                 "Only %r are supported" % (suffixes,),
             )
         # Delegate the actual loading part
-                   
+
         self._load_surface_from_oradir_member(
             oradir,
             cache_dir,
@@ -244,14 +244,20 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             x, y,
         )
 
+        # XXX for project-save.
         # Postprocess for project loading
         if 'project' in kwargs:
+            # Store original position for this layer.
+            self._orig_x = x
+            self._orig_y = y
+
             # Ensure self._filename is relative path
             self._unique_id = attrs.get(self.ORA_LAYERID_ATTR, None)
 
             if os.path.isabs(src):
                 src = os.path.relpath(oradir, src)
             self._filename = src
+        # XXX for project-save
 
     def _load_surface_from_oradir_member(self, oradir, cache_dir,
                                          src, progress, x, y):
@@ -453,12 +459,17 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
                                       frame_bbox, rect, **kwargs)
 
     def save_to_project(self, projdir, path,
-                           canvas_bbox, frame_bbox, 
+                           canvas_bbox,
                            force_write, **kwargs):
         """Saves the layer's data into an project directory"""
+        if self.project_dirty or force_write:
+            # Remove empty tiles before calculate boundary box
+            # only when this layer is dirty.
+            assert hasattr(self, 'remove_empty_tiles')
+            self.remove_empty_tiles()
+
         rect = self.get_bbox()
-        return self._save_rect_to_project(projdir,  
-                                      frame_bbox, rect, force_write, **kwargs)
+        return self._save_rect_to_project(projdir, rect, force_write, **kwargs)
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
         """Queues the layer for auto-saving"""
@@ -475,12 +486,12 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         # mypaint-specific attribute name. If/when OpenRaster
         # standardizes looped layer data, that code should be moved
         # here.
-        
+
         png_basename = self.autosave_uuid + ".png"
         png_relpath = os.path.join("data", png_basename)
         png_path = os.path.join(oradir, png_relpath)
         png_bbox = self._surface.looped and bbox or tuple(self.get_bbox())
-        # Use new autosavable property "must_save" to check whether 
+        # Use new autosavable property "must_save" to check whether
         # save must done or not
         if self.autosave_dirty or not os.path.exists(png_path):
             task = tiledsurface.PNGFileUpdateTask(
@@ -492,7 +503,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             )
             taskproc.add_work(task)
             self.autosave_dirty = False
-            
+
         # Calculate appropriate offsets
         png_x, png_y = png_bbox[0:2]
         ref_x, ref_y = bbox[0:2]
@@ -504,7 +515,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         elem = self._get_stackxml_element("layer", x, y)
         elem.attrib["src"] = png_relpath
         return elem
-        
+
     @staticmethod
     def _make_refname(prefix, path, suffix, sep='-'):
         """Internal: standardized filename for something with a path"""
@@ -539,8 +550,8 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         elem.attrib["src"] = storepath
         return elem
 
-    def _save_rect_to_project(self, projdir, 
-                          frame_bbox, rect, force_write, 
+    def _save_rect_to_project(self, projdir,
+                          rect, force_write,
                           only_element = False,
                           **kwargs):
         """
@@ -551,11 +562,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         is_dirty = (self.project_dirty or force_write)
 
         # Return details
-        png_bbox = tuple(rect)
-        png_x, png_y = png_bbox[0:2]
-        ref_x, ref_y = frame_bbox[0:2]
-        x = png_x - ref_x
-        y = png_y - ref_y
+        x, y, w, h = tuple(rect)
         assert (x == y == 0) or not self._surface.looped
         elem = self._get_stackxml_element("layer", x, y)
         elem.attrib[self.ORA_LAYERID_ATTR] = self.unique_id
@@ -568,11 +575,45 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             png_relpath = os.path.join('data', pngname)
             png_path = os.path.join(projdir, png_relpath)
             elem.attrib["src"] = png_relpath
+            # Update original coordinates.
+            self._orig_x = x
+            self._orig_y = y
         else:
             # Otherwise, just use self.filename.
             # It might be older version backedup file,
             # placed below backup/, not data/.
             png_relpath = self.filename
+
+            # Restore original coodinates (if exists) to avoid layer misplace bug:
+            #
+            # A 16bit pixel tile which looks completely transparent but it contains
+            # some very low alpha value might be converted to completely transparent(empty)
+            # pixel in 8bit PNG file.
+            # But, numpy cannot treat it as completely transparent(empty) tile,
+            # so it is not empty in mypaint.
+            # This might cause layer misplacement bug in project-save.
+            #
+            # Such tile cannot be removed by remove_empty_tiles method,
+            # but when written into 8bit PNG file, it become completely transparent.
+            # That transparent area would be removed when that project is loaded again
+            # at pixbufsurface.Surface constructor.
+            # So, unmodified layer in project-save feature might be actually
+            # `modified`(removed) some tiles at loading procedure.
+            # (But, removed tiles are completely transparent, so layer content
+            # itself is still unmodified.)
+            # This is very rare case but surely happen.
+            #
+            # In the first load after that error occurs, no problem occurs.
+            # However, when you do project-save at that point,
+            # the position written in stack.xml might shift because the PNG file and
+            # the actual layer's bbox are different.
+            #
+            # To avoid this, replace x/y values of xml element with _orig_x/y attribute,
+            # which is the position written in stack.xml previously.
+            if hasattr(self, "_orig_x"):
+                assert hasattr(self, "_orig_y")
+                elem.attrib["x"] = str(self._orig_x)
+                elem.attrib["y"] = str(self._orig_y)
 
         elem.attrib["src"] = png_relpath
 
@@ -865,14 +906,13 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         return elem
 
     def save_to_project(self, projdir, path,
-                           canvas_bbox, frame_bbox, 
+                           canvas_bbox,
                            force_write, **kwargs):
         """Saves the working file to an project directory"""
         # No supercall in this override, but the base implementation's
         # attributes method is useful.
-        ref_x, ref_y = frame_bbox[0:2]
-        x = self._x - ref_x
-        y = self._y - ref_y
+        x = self._x
+        y = self._y
         elem = self._get_stackxml_element("layer", x, y)
         # Pick a suitable name to store under.
         src_path = self.workfilename
@@ -897,7 +937,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         final_basename = self.autosave_uuid + src_ext
         final_relpath = os.path.join("data", final_basename)
         final_path = os.path.join(oradir, final_relpath)
-        
+
         if self.autosave_dirty or not os.path.exists(final_path):
             final_dir = os.path.join(oradir, "data")
             tmp_fp = tempfile.NamedTemporaryFile(
@@ -922,13 +962,13 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
 
     @property
     def workfilename(self):
-        """ To get (valid) workfile name 
+        """ To get (valid) workfile name
         even from outside this module.
         """
         self._ensure_valid_working_file()
-        return unicode(self._workfile)      
+        return unicode(self._workfile)
 
-        
+
     def enum_filenames(self):
         """Enum filenames which consists this layer.
         This method used for project-save.
@@ -1214,7 +1254,7 @@ class BackgroundLayer (SurfaceBackedLayer):
         return elem
 
     def save_to_project(self, projdir, path,
-                           canvas_bbox, frame_bbox, 
+                           canvas_bbox,
                            force_write, progress=None,
                            **kwargs):
         if not progress:
@@ -1225,22 +1265,21 @@ class BackgroundLayer (SurfaceBackedLayer):
 
         is_dirty = self.project_dirty or force_write
 
-        # To generate element (but no file writing), 
-        # utilize _save_rect_to_project with only_element flag. 
+        # To generate element (but no file writing),
+        # utilize _save_rect_to_project with only_element flag.
         # And, dirty flag cleared in following _save_rect_to_project()
         # so that flag is reserved at above line.
         elem = self._save_rect_to_project(
-            projdir, 
-            frame_bbox, frame_bbox, False, 
-            only_element=True, 
+            projdir,
+            canvas_bbox, False,
+            only_element=True,
             progress=progress.open(),
             **kwargs
         )
 
         # Also save as single pattern (with corrected origin)
-        x0, y0 = frame_bbox[0:2]
         x, y, w, h = self.get_bbox()
-        rect = (x+x0, y+y0, w, h)
+        rect = (x, y, w, h)
 
         if is_dirty:
             pngname = "%s.png" % self.unique_id
@@ -1248,9 +1287,9 @@ class BackgroundLayer (SurfaceBackedLayer):
             storename = os.path.join(projdir, store_relpath)
             t0 = time.time()
             self._surface.save_as_png(
-                storename, 
-                x+x0, 
-                y+y0,
+                storename,
+                x,
+                y,
                 w, h,
                 progress=progress.open(),
                 **kwargs
@@ -1702,7 +1741,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
 
     ## Flood fill
 
-    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None, 
+    def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None,
                    **kwargs): # XXX for `progress-fill`
         """Fills a point on the surface with a color
 
@@ -1867,7 +1906,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         return elem
 
     def save_to_project(self, projdir, path,
-                           canvas_bbox, frame_bbox, force_write, **kwargs):
+                           canvas_bbox, force_write, **kwargs):
         """Save the strokemap too, in addition to the base implementation"""
         # Save the layer normally
 
@@ -1878,12 +1917,12 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
 
         elem = super(StrokemappedPaintingLayer, self).save_to_project(
             projdir, path,
-            canvas_bbox, frame_bbox, force_write, **kwargs
+            canvas_bbox, force_write, **kwargs
         )
 
-        # self.filename should be rewritten at 
+        # self.filename should be rewritten at
         # prior supercall of save_to_project(),
-        # so _get_strokemap_filename() returns 
+        # so _get_strokemap_filename() returns
         # the exact (relative)filepath everytime.
         dat_relpath = self._get_strokemap_filename()
 

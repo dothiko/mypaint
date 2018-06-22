@@ -93,7 +93,7 @@ _ORA_JSON_SETTINGS_ATTR \
 
 _ORA_JSON_SETTINGS_ZIP_PATH = "data/mypaint-settings.json"
 
-# XXX: For project-save 
+# XXX: For project-save
 _ORA_FRAME_BBOX_ATTR \
     = "{%s}frame-bbox" % (lib.xml.OPENRASTER_MYPAINT_NS,)
 # XXX: For project-save end
@@ -299,7 +299,7 @@ class Document (object):
         # Surpressing realtime update for additional widgets
         # especially PreviewTool.
         self._suppress_update = False
-        # XXX for `previewtool suppressor` end 
+        # XXX for `previewtool suppressor` end
 
         # Cache and auto-saving to the cache
         self._painting_only = painting_only
@@ -683,18 +683,18 @@ class Document (object):
         Getter method for autosave processor.
         We need this method to know and finish enqueued tasks
         from outside of this class, to ensure every file-saving tasks
-        are exactly finished. 
-        Currently, this is called from inside gui.drawwindow.quit_cb() 
-        
+        are exactly finished.
+        Currently, this is called from inside gui.drawwindow.quit_cb()
+
         Without this,when system is under very heavy processing load,
         mypaint quits before some project-save tasks are unfinished.
         In consequence of this, not only the drawing works are lost,
-        some layers dimension are differ from stack.xml, 
+        some layers dimension are differ from stack.xml,
         and their position (might) be misplaced.
         """
         return self._autosave_processor
     # XXX for `project-save` and `pending autosave fix` end
-    
+
     def _autosave_thumbnail_cb(self, rootstack, bbox, filename):
         """Autosaved backup task: write Thumbnails/thumbnail.png
 
@@ -1024,7 +1024,7 @@ class Document (object):
         :param make_new_layer: Write output to a new layer on top
         :type make_new_layer: bool
 
-        About other keyword arg, see flood_fill of lib/tiledsurface.py   
+        About other keyword arg, see flood_fill of lib/tiledsurface.py
 
         Filling an infinite canvas requires limits. If the frame is
         enabled, this limits the maximum size of the fill, and filling
@@ -1048,7 +1048,7 @@ class Document (object):
         elif not self.frame_enabled:
             bbox.expandToIncludePoint(x, y)
         cmd = command.FloodFill(self, x, y, color, bbox, tolerance,
-                                sample_merged, make_new_layer, 
+                                sample_merged, make_new_layer,
                                 **kwargs)
         self.do(cmd)
 
@@ -1080,7 +1080,7 @@ class Document (object):
     def invalidate_all(self):
         """Marks everything as invalid"""
         self.canvas_area_modified(0, 0, 0, 0)
-    
+
     # XXX `Previewtool suppressor`
     ## Providing facility to suppress realtime(freehand) events refresh
     #  for some classes such as PreviewTool.
@@ -1313,7 +1313,7 @@ class Document (object):
             logger.info("Merge Down is not possible here")
             return False
         # XXX for `merge-only-limited-area`
-        if only_opaque: 
+        if only_opaque:
             self.do(command.MergeLayerDownOpaque(self))
         else:
             self.do(command.MergeLayerDown(self)) # In this part, original code has only this line.
@@ -1362,25 +1362,25 @@ class Document (object):
 
     def clear_all_layers_mark(self):
         self.do(command.ClearLayersMark(self))
-        
+
     def align_current_layer_with_marked(self, wait_complete_cb, called_action):
         marked = self.get_marked_layers(usecurrent=False)
         if len(marked) == 0:
-            return 
+            return
         # Inner functions, to know the `real` border of a layer.
         def get_edge_position(layer):
             if hasattr(layer, "_surface"):
                 surf = layer._surface
             else:
                 surf = lib.surface.TileRequestWrapper(layer)
-                
+
             x, y, w, h = layer.get_bbox()
             # Get leftmost pixel position
             tx = x // N
             lpx = x
             for cy in range(y, y+h, N):
                 ty = cy // N
-                with surf.tile_request(tx, ty, True) as tile:
+                with surf.tile_request(tx, ty, readonly=True) as tile:
                     for px in range(N):
                         for py in range(N):
                             if tile[py, px, 3] != 0:
@@ -1395,7 +1395,7 @@ class Document (object):
             lpy = y
             for cx in range(x, x+w, N):
                 tx = cx // N
-                with surf.tile_request(tx, ty, True) as tile:
+                with surf.tile_request(tx, ty, readonly=True) as tile:
                     for py in range(N):
                         for px in range(N):
                             if tile[py, px, 3] != 0:
@@ -1406,21 +1406,21 @@ class Document (object):
                         break
             assert lpy is not None
             return (x+lpx, y+lpy)
-        
+
         # First of all, remove transparent tiles from all layers.
         rootstack = self.layer_stack
         rootstack.remove_empty_tiles()
-        
+
         current = rootstack.current
         x, y = get_edge_position(current)
         cmd = command.MoveLayer(
-            self, 
+            self,
             rootstack.current_path,
             x, y
-        )       
+        )
 
         left = None
-        top = None    
+        top = None
         for ml in marked:
             x, y = get_edge_position(ml)
             if left is None:
@@ -1428,8 +1428,8 @@ class Document (object):
                 top = y
             else:
                 left = min(left, x)
-                top = min(top, y)            
-        
+                top = min(top, y)
+
         cmd.move_to(left, top)
         GLib.idle_add(wait_complete_cb, cmd, called_action)
     # XXX for `marked` layer states end.
@@ -1526,12 +1526,12 @@ class Document (object):
         else:
             cmd = cmd_class(self, marked, layer)
             self.do(cmd)
-    
+
     def get_marked_layers(self, usecurrent=True):
         """Utility method, Returns a list of layers.
-        
+
         :param usecurrent: Whether include the current layer or not.
-        
+
         This is used to know how many layers marked now
         and set sensitive state of menu items.
         Also, some `Command` class use this method.
@@ -1567,18 +1567,18 @@ class Document (object):
         ``save_*()`` method is chosen to perform the save.
         """
         self.sync_pending_changes(flush=True)
-        
+
         # XXX for `project-save`
         if 'project' in kwargs and kwargs['project']:
             # Project-save should have 'project' kwarg.
             # And that valus should be True.
-            ext = 'project'  
+            ext = 'project'
         else:
             junk, ext = os.path.splitext(filename)
             ext = ext.lower().replace('.', '')
             assert ext != "" # To detect older project code bug
         # XXX for `project-save` end
-        
+
         save = getattr(self, 'save_' + ext, self._unsupported)
         result = None
         try:
@@ -1663,7 +1663,7 @@ class Document (object):
                     os.path.isfile(thumbpath) and
                     os.path.isdir(datapath) ):
                 # It must be something oradir type directory.
-                # But, currently oradir supported 
+                # But, currently oradir supported
                 # autosave and project-save only.
                 # And, autosaved contents should be loaded
                 # from resume_from_autosave(), not from load().
@@ -1674,7 +1674,7 @@ class Document (object):
             junk, ext = os.path.splitext(filename)
             ext = ext.lower().replace('.', '')
         # XXX for `project-save` end
-        
+
         if ext == None: # XXX for `permission problem`
             msg = C_(
                 "Document IO: loading errors",
@@ -2102,7 +2102,7 @@ class Document (object):
        #with open(os.path.join(oradir, "mimetype"), "r") as fp:
        #    logger.debug('mimetype: %r', fp.read().strip())
        #doc = ET.parse(os.path.join(oradir, "stack.xml"))
-        
+
         # XXX For project-save code end.
 
         image_elem = doc.getroot()
@@ -2201,18 +2201,18 @@ class Document (object):
         """ save current document as a project
 
         POSSIBLE OPTIONAL kwargs:
-        :keyword force_write: boolean. when this is true, 
+        :keyword force_write: boolean. when this is true,
             all files are forced to write.
             This keyword is used when 'save_as_project' action is executed.
         """
         t0 = time.time()
         logger.debug("projectsave started")
-        force_write = (not os.path.exists(dirname) or 
+        force_write = (not os.path.exists(dirname) or
                         ('init_project' in kwargs and kwargs['init_project'] == True))
 
         if force_write:
             logger.info('the entire project forced to write.')
-        
+
         if self._projectsave_processor.has_work():
             logger.info('project copy processor still have pending works. it is forced to finish.')
             self._projectsave_processor.finish_all()
@@ -2222,7 +2222,7 @@ class Document (object):
             os.mkdir(dirname)
             force_write = True
 
-        for subdir in ('Thumbnails', 'data', 'backup'): 
+        for subdir in ('Thumbnails', 'data', 'backup'):
             subpath = os.path.join(dirname, subdir)
             if not os.path.exists(subpath):
                 os.mkdir(subpath)
@@ -2233,10 +2233,10 @@ class Document (object):
             rootstack = self.layer_stack
 
             if 'source_dir' in kwargs:
-                # Current document is a project and now assigned to 'save as 
+                # Current document is a project and now assigned to 'save as
                 # another project' by user.
                 # This is same as "copy entire project into another directory"
-                
+
                 # So, simply copy all unchanged layer images here.
                 # With calling self._queue_autosave_writes() later,
                 # changed layer (and its stroke map) should be written
@@ -2253,23 +2253,23 @@ class Document (object):
                                 srcpath = os.path.join(dirname_src, cfname)
                                 dstpath = os.path.join(dirname, cfname)
                                 assert os.path.exists(srcpath)
-                                # This operation might do 'overwrite', 
+                                # This operation might do 'overwrite',
                                 # so there is no need to check dstpath.
                                 shutil.copy(srcpath, dstpath)
                         else:
-                            logger.info('%s has marked as dirty,so not copied', 
+                            logger.info('%s has marked as dirty,so not copied',
                                         cl.name)
                     else:
                         logger.info(
-                            '%s has no enum_filenames method,so not copied', 
+                            '%s has no enum_filenames method,so not copied',
                             cl.name
                         )
 
-                
+
                 # Background layer is not included walk generator.
                 # so copy it here.
                 copy_single_layer(rootstack.background_layer)
-                                
+
                 for path, cl in rootstack.walk():
                     copy_single_layer(cl)
 
@@ -2287,15 +2287,14 @@ class Document (object):
             if self.frame_enabled:
                 frame_bbox = tuple(self.get_frame())
 
-            self._project_write(dirname, 
+            self._project_write(dirname,
                     xres=self._xres if self._xres else None,
                     yres=self._yres if self._yres else None,
-                    bbox=frame_bbox,
-                    frame_active = self.frame_enabled,
+                    frame_bbox=frame_bbox,
                     force_write = force_write,
                     **kwargs)
 
-            self._version = 0 
+            self._version = 0
 
             if 'create_checkpoint' in kwargs:
                 # In this case,
@@ -2313,7 +2312,7 @@ class Document (object):
                         self._projectsave_processor,
                         self.layer_stack)
 
-                self._version = versave.version_num 
+                self._version = versave.version_num
 
         finally:
             t1 = time.time()
@@ -2366,23 +2365,23 @@ class Document (object):
                 ),
                 investigate_dir = dirname,
             )
-        else:         
+        else:
             # When no any exception raised...
             # All LOADED layers are clean(not dirty), as initial states.
             # On the other hand, NEW layers are always dirty initially.
             for pos, cl in self.layer_stack.walk():
                 cl.clear_project_dirty()
 
-    def _project_write(self, dirname, 
+    def _project_write(self, dirname,
             xres=None,yres=None,
-            bbox=None,
-            frame_active=False, force_write=False, 
+            frame_bbox=None,
+            force_write=False,
             **kwargs):
         """
         Write project.
         This method based on _save_layers_to_new_orazip().
         The difference from the original is,this method (basically)
-        process only 'dirty' layers. 
+        process only 'dirty' layers.
 
         Directory dirname and subdirectories MUST be created
         before call this method.
@@ -2390,94 +2389,41 @@ class Document (object):
 
         :param int xres: nominal X resolution for the doc
         :param int yres: nominal Y resolution for the doc
-        :param frame_active: True if the frame is enabled
-        :param bool force_write: if True, all layers processed 
+        :param frame_bbox: a tuple of frame bbox, if the frame is enabled.
+                           Otherwise, this is None.
+        :param bool force_write: if True, all layers processed
                                  even it is not dirty.
         """
         root_stack = self.layer_stack
 
-        # Different from other ordinary save methods,
-        # we need to remove empty tiles before layers saved into files
-        # to avoid misplacement of layer for projectsave.
-        # 
-        # Without this ... some problems happen.
-        # As a premise, mypaint remove transparent area at loading picture(layers). 
-        #
-        # The problem is, for example, when there is a layer 
-        # with a region of large transparent pixels on the left side.
-        #
-        # If we save layers without removing empty tiles, 
-        # the topleft position of png file of that layer is transparent area.
-        # But, that transparent area actually removed once after we load that
-        # project from the directory. 
-        # And it is done without setting dirty flag (This is important thing).
-        #
-        # So that layer would be treated as 'unchanged' one... actually it removed
-        # large part of its leftside (empty) space.
-        # But stack.xml position is updated as after transparent area removed.
-        # Therefore, after 2nd time project load, that layer is placed at
-        # wrong position.
-        #
-        # Even if the position of the layer in stack.xml is changed, 
-        # we cannot (or very difficult to) distinguish whether it is due to 
-        # the transparent portion being removed, or whether the relative
-        # position was changed because the dimensions of the other layer changed.
-        # 
-        # So, to avoid this, every dirty layer are removed its empty tiles
-        # in this loop.
-        
-        # Prior to all processing, end all pending tasks.
-        self.sync_pending_changes(flush=True)
-        # Also, execute all pending GTK events (including idle task)
-        # This is not only for complete transparent tiles operation,
-        # also to avoid conflict with checkpoint-creation(backup) task.
-        while Gtk.events_pending():
-            Gtk.main_iteration()
-        # After then, remove all empty tiles.
-        root_stack.remove_empty_tiles()
-        
-        # Generating boundary box.
-        data_bbox = helpers.Rect()
-        for s_path, s_layer in root_stack.walk():
-            selected = (s_path == root_stack.current_path)
-            s_layer.initially_selected = selected
-            data_bbox.expandToIncludeRect(s_layer.get_bbox())
-        data_bbox = tuple(data_bbox)
-
-        # Save the layer stack
         image = ET.Element('image')
 
-        # In project-save, frame does not have meaning except
-        # for exporting image.
-        # Furthermore, make matters worse, frame affects saving 
-        # dirty layers dimension but non dirty layers
-        # are remained as unchanged, so some layers might 
-        # be misplaced after next time of project loading.
-        # Therefore, frame must be ignored(i.e. always use data_bbox
-        # instead of frame bbox) in project save.
-        x0, y0, w0, h0 = data_bbox
-
-        image.attrib['w'] = str(w0)
-        image.attrib['h'] = str(h0)
+        # In project-save, frame dimension is used only
+        # for exporting image, so save_to_project does not have
+        # frame_bbox param.
+        # Because, using frame information (i.e. use relative coordinate
+        # for layer position), it might cause layer-misplacement problem.
         root_stack_path = ()
         root_stack_elem = root_stack.save_to_project(
             dirname, root_stack_path,
-           #data_bbox, bbox, force_write, 
-            data_bbox, data_bbox, force_write, 
+            (0, 0, 0, 0), # Initial bbox should be all 0.
+            force_write,
             **kwargs
         )
         image.append(root_stack_elem)
 
         # Frame-enabled state
-        frame_active_value = ("true" if frame_active else "false")
-        image.attrib[_ORA_FRAME_ACTIVE_ATTR] = frame_active_value
-
-        if frame_active and bbox is not None:
-            # Frame is completely ignored for project-save, 
+        if frame_bbox is not None:
+            frame_active_value = "true"
+            # Frame is almost completely ignored for project-save,
             # so we need to record frame bbox as xml custom attribute.
-            bx, by, bw, bh = bbox
+            bx, by, bw, bh = frame_bbox
             image.attrib[_ORA_FRAME_BBOX_ATTR] = \
-                "%d,%d,%d,%d" % (bx-x0, by-y0, bw, bh)
+                "%d,%d,%d,%d" % (bx, by, bw, bh)
+        else:
+            frame_active_value = "false"
+
+        image.attrib[_ORA_FRAME_ACTIVE_ATTR] = frame_active_value
 
         # Resolution info
         if xres and yres:
@@ -2487,23 +2433,37 @@ class Document (object):
         # OpenRaster version declaration
         image.attrib["version"] = lib.xml.OPENRASTER_VERSION
 
+        # Getting entire document area.
+        # This procedure must be placed after all layers are saved
+        # (and removed their empty tiles).
+        data_bbox = helpers.Rect()
+        for s_path, s_layer in root_stack.walk():
+            data_bbox.expandToIncludeRect(s_layer.get_bbox())
+
+        x0, y0, w0, h0 = tuple(data_bbox)
+        image.attrib['w'] = str(w0)
+        image.attrib['h'] = str(h0)
+
         # Thumbnail preview (256x256)
+        # This needs document area information(data_bbox)
         thumbnail = root_stack.render_thumbnail(data_bbox)
-        lib.pixbuf.save(thumbnail, 
-                os.path.join(dirname, 'Thumbnails' , 'thumbnail.png'),
-                'png')
+        lib.pixbuf.save(
+            thumbnail,
+            os.path.join(dirname, 'Thumbnails' , 'thumbnail.png'),
+            'png'
+        )
+
+        # Then, Finalize xml tree.
 
         # Prettification
         lib.xml.indent_etree(image)
         xml = ET.tostring(image, encoding='UTF-8')
 
-        # Finalize
         with open(os.path.join(dirname, 'stack.xml'), 'w') as fp:
             fp.write(xml)
 
         return thumbnail
     # XXX Project related end.
-
 
 def _save_layers_to_new_orazip(root_stack, filename, bbox=None,
                                xres=None, yres=None,

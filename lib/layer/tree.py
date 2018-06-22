@@ -2227,8 +2227,8 @@ class RootLayerStack (group.LayerStack):
         progress.close()
         return stack_elem
 
-    def save_to_project(self, projdir, path, canvas_bbox,
-                           frame_bbox, force_write, progress=None, **kwargs):
+    def save_to_project(self, projdir, path, canvas_bbox, force_write,
+                        progress=None, **kwargs):
         """Saves the stack's data into an project directory"""
 
         # Code duplication: from save_to_openraster
@@ -2242,7 +2242,7 @@ class RootLayerStack (group.LayerStack):
         bg_path = (len(self),)
         bg_elem = bg_layer.save_to_project(
             projdir, bg_path,
-            canvas_bbox, frame_bbox,
+            canvas_bbox,
             force_write,
             progress=progress.open(1),
             **kwargs
@@ -2250,7 +2250,7 @@ class RootLayerStack (group.LayerStack):
         # Then, save child layers.
         stack_elem = super(RootLayerStack, self).save_to_project(
             projdir, path, canvas_bbox,
-            frame_bbox, force_write,
+            force_write,
             progress=progress.open(9),
             **kwargs
         )

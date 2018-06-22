@@ -537,13 +537,13 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
         return stack_elem
 
     def save_to_project(self, projdir, path,
-                           canvas_bbox, frame_bbox, force_write, 
+                           canvas_bbox, force_write,
                            progress=None, **kwargs):
         """Saves the stack's data into an project directory"""
         if not progress:
             progress = lib.feedback.Progress()
         progress.items = 1 + len(self)
-        
+
         # MyPaint uses the same origin internally for all data layers,
         # meaning the internal stack objects don't impose any offsets on
         # their children. Any x or y attrs which were present when the
@@ -556,7 +556,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
             # the layer might not be written when it is not dirty,
             # anyway it returns element.
             layer_elem = layer.save_to_project(projdir, layer_path,
-                                               canvas_bbox, frame_bbox,
+                                               canvas_bbox,
                                                force_write,
                                                progress=progress.open(),
                                                **kwargs)
@@ -623,7 +623,7 @@ class LayerStack (core.LayerBase, lib.projectsave.Projectsaveable):
     ## Project-save
     @property
     def filename(self):
-        """Overriding filename property for project-save 
+        """Overriding filename property for project-save
         functionality.
 
         Layerstack cannot have filename, so always return None.

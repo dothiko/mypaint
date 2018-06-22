@@ -941,12 +941,12 @@ class LayerBase (TileBlittable, TileCompositable):
         raise NotImplementedError
 
     def save_to_project(self, projdir, path,
-                           canvas_bbox, frame_bbox, force_write, **kwargs):
+                           canvas_bbox, force_write, **kwargs):
 
         """Saves the layer's data into an project directory
 
         :param projdir: the project directory
-        :param force_write: force write flag, regardless how self.project_dirty is. 
+        :param force_write: force write flag, regardless how self.project_dirty is.
 
         Other parameters are same as save_to_openraster.
 
@@ -968,7 +968,7 @@ class LayerBase (TileBlittable, TileCompositable):
         if y is not None:
             attrs["y"] = str(y)
         attrs["opacity"] = str(self.opacity)
-        if self.initially_selected:
+        if self.root is not None and self.root.current is self:
             attrs["selected"] = "true"
         if self.locked:
             attrs["edit-locked"] = "true"
