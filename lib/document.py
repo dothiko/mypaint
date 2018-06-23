@@ -51,7 +51,7 @@ import lib.glib
 import lib.feedback
 import lib.layervis
 import lib.autosave
-import lib.projectsave
+import lib.projectsave as projectsave
 import lib.surface
 
 logger = logging.getLogger(__name__)
@@ -93,10 +93,6 @@ _ORA_JSON_SETTINGS_ATTR \
 
 _ORA_JSON_SETTINGS_ZIP_PATH = "data/mypaint-settings.json"
 
-# XXX: For project-save
-_ORA_FRAME_BBOX_ATTR \
-    = "{%s}frame-bbox" % (lib.xml.OPENRASTER_MYPAINT_NS,)
-# XXX: For project-save end
 
 ## Class defs
 
@@ -1651,25 +1647,14 @@ class Document (object):
 
         # XXX for `project-save`
         ext = None
-        if not os.path.isfile(filename):
-            # Filename is not file.
-            # But it might be oradir(project)...
-            dirname = filename
-            xmlname = os.path.join(dirname, 'stack.xml')
-            thumbpath = os.path.join(dirname, 'Thumbnails',
-                    'thumbnail.png')
-            datapath = os.path.join(dirname, 'data')
-            if (os.path.isfile(xmlname) and
-                    os.path.isfile(thumbpath) and
-                    os.path.isdir(datapath) ):
-                # It must be something oradir type directory.
-                # But, currently oradir supported
-                # autosave and project-save only.
-                # And, autosaved contents should be loaded
-                # from resume_from_autosave(), not from load().
-                # so, It must be 'project' directory.
-                ext = "project"
-
+        if self._is_project_dir(filename):
+            # It must be something oradir type directory.
+            # But, currently oradir supported
+            # autosave and project-save only.
+            # And, autosaved contents should be loaded
+            # from resume_from_autosave(), not from load().
+            # so, It must be 'project' directory.
+            ext = "project"
         elif os.path.exists(filename):
             junk, ext = os.path.splitext(filename)
             ext = ext.lower().replace('.', '')
@@ -2081,31 +2066,48 @@ class Document (object):
 
         """
         self.clear()
+
         # XXX For project-save code
         doc = None
         if 'project' in kwargs:
+            # Target document might be changed when
+            # specific checkpoint assigned.
             if 'target_version' in kwargs:
                 targ_ver = kwargs['target_version']
                 verinfo = kwargs['version_info']
                 doc = verinfo.convert_xml_as_version(targ_ver)
-
             # project directory has no mimetype file.
             # so no debug output.
         else:
+            # Otherwise, debug output of mimetype executed.
             with open(os.path.join(oradir, "mimetype"), "r") as fp:
                 logger.debug('mimetype: %r', fp.read().strip())
 
         if doc == None:
             doc = ET.parse(os.path.join(oradir, "stack.xml"))
 
+        # Target document(stack.xml) have been decided.
+        # It might vary for checkpoint version.
+        image_elem = doc.getroot()
+
+        if 'project' in kwargs:
+            # Getting current document based-version number.
+            self._version = int(
+                image_elem.attrib.get(
+                    projectsave.PRJ_VERSION_ATTR, 
+                    0
+                )
+            )
+
         # Original upstream/master codes are below.
+        # This Original codes conflict with project-save,
+        # so commented out.
        #with open(os.path.join(oradir, "mimetype"), "r") as fp:
        #    logger.debug('mimetype: %r', fp.read().strip())
        #doc = ET.parse(os.path.join(oradir, "stack.xml"))
 
         # XXX For project-save code end.
 
-        image_elem = doc.getroot()
         width = max(0, int(image_elem.attrib.get('w', 0)))
         height = max(0, int(image_elem.attrib.get('h', 0)))
         xres = max(0, int(image_elem.attrib.get('xres', 0)))
@@ -2144,7 +2146,9 @@ class Document (object):
 
         # XXX For project-load
         # Get frame bbox from xml custom attribute.
-        frame_bbox_src = image_elem.attrib.get(_ORA_FRAME_BBOX_ATTR, None)
+        frame_bbox_src = image_elem.attrib.get(
+            projectsave.PRJ_FRAME_BBOX_ATTR, None)
+
         if frame_bbox_src is not None:
             frame_bbox_src = [int(x) for x in frame_bbox_src.split(",")]
             assert len(frame_bbox_src) == 4
@@ -2178,13 +2182,20 @@ class Document (object):
     ## XXX Project Related
     def is_project(self, filename):
         try:
-            if os.path.isdir(filename):
-                xmlpath = os.path.join(filename, "stack.xml")
-                datadir = os.path.join(filename, "data")
-                if os.path.isfile(xmlpath) and os.path.isdir(datadir):
-                    return True
+            return self._is_project_dir(filename)
         except TypeError:
             pass
+        return False
+
+    def _is_project_dir(self, dirname):
+        if os.path.isdir(dirname):
+            xmlname = os.path.join(dirname, 'stack.xml')
+            thumbpath = os.path.join(dirname, 'Thumbnails',
+                    'thumbnail.png')
+            datapath = os.path.join(dirname, 'data')
+            return (os.path.isfile(xmlname) and
+                        os.path.isfile(thumbpath) and
+                        os.path.isdir(datapath) )
         return False
 
     @property
@@ -2192,10 +2203,6 @@ class Document (object):
         if hasattr(self, "_version"):
             return self._version
         return 0
-
-    @project_version.setter
-    def project_version(self, version_num):
-        self._version = version_num
 
     def save_project(self, dirname, **kwargs):
         """ save current document as a project
@@ -2211,10 +2218,10 @@ class Document (object):
                         ('init_project' in kwargs and kwargs['init_project'] == True))
 
         if force_write:
-            logger.info('the entire project forced to write.')
+            logger.info("the entire project forced to write.")
 
         if self._projectsave_processor.has_work():
-            logger.info('project copy processor still have pending works. it is forced to finish.')
+            logger.info("project copy processor still have pending works. it is forced to finish.")
             self._projectsave_processor.finish_all()
 
         # Create needed directories
@@ -2222,7 +2229,7 @@ class Document (object):
             os.mkdir(dirname)
             force_write = True
 
-        for subdir in ('Thumbnails', 'data', 'backup'):
+        for subdir in ('Thumbnails', 'data', 'checkpoints'):
             subpath = os.path.join(dirname, subdir)
             if not os.path.exists(subpath):
                 os.mkdir(subpath)
@@ -2257,11 +2264,11 @@ class Document (object):
                                 # so there is no need to check dstpath.
                                 shutil.copy(srcpath, dstpath)
                         else:
-                            logger.info('%s has marked as dirty,so not copied',
+                            logger.info("%s has marked as dirty,so not copied",
                                         cl.name)
                     else:
                         logger.info(
-                            '%s has no enum_filenames method,so not copied',
+                            "%s has no enum_filenames method,so not copied",
                             cl.name
                         )
 
@@ -2288,35 +2295,39 @@ class Document (object):
                 frame_bbox = tuple(self.get_frame())
 
             self._project_write(dirname,
-                    xres=self._xres if self._xres else None,
-                    yres=self._yres if self._yres else None,
-                    frame_bbox=frame_bbox,
-                    force_write = force_write,
-                    **kwargs)
-
-            self._version = 0
+                xres=self._xres if self._xres else None,
+                yres=self._yres if self._yres else None,
+                frame_bbox=frame_bbox,
+                force_write = force_write,
+                **kwargs
+            )
 
             if 'create_checkpoint' in kwargs:
                 # In this case,
                 # Writed project should be marked as new version
                 # right after writing is finished.
+                # In other words, `duplicate newest document 
+                # that is updated right now`
 
-                versave = lib.projectsave.Versionsave(dirname)
+                checkpt = projectsave.Checkpoint(dirname)
 
                 # Create new version == proceeding to next version
-                versave.proceed()
+                checkpt.proceed()
 
-                # Inside queue_backup_layers method,
+                # Inside queue_checkpoint_layers method,
                 # file-copying idle tasks would be added.
-                versave.queue_backup_layers(
-                        self._projectsave_processor,
-                        self.layer_stack)
+                checkpt.queue_checkpoint_layers(
+                    self._projectsave_processor,
+                    self.layer_stack
+                )
 
-                self._version = versave.version_num
+                # Assigning new version number.
+                # It might not be a increment of number.
+                self._version = checkpt.version_num
 
         finally:
             t1 = time.time()
-            logger.debug('projectsave ended in %.3fs', t1-t0)
+            logger.debug("projectsave ended in %.3fs", t1-t0)
             self._is_project = True
 
 
@@ -2347,6 +2358,8 @@ class Document (object):
                 **kwargs
             )
         except Exception as e:
+            import traceback
+            print(traceback.format_exc())
             # Assign a valid *new* cache dir before bailing out.
             assert self._cache_dir is None
             self.clear(new_cache=True)
@@ -2418,7 +2431,7 @@ class Document (object):
             # Frame is almost completely ignored for project-save,
             # so we need to record frame bbox as xml custom attribute.
             bx, by, bw, bh = frame_bbox
-            image.attrib[_ORA_FRAME_BBOX_ATTR] = \
+            image.attrib[projectsave.PRJ_FRAME_BBOX_ATTR] = \
                 "%d,%d,%d,%d" % (bx, by, bw, bh)
         else:
             frame_active_value = "false"
@@ -2432,6 +2445,9 @@ class Document (object):
 
         # OpenRaster version declaration
         image.attrib["version"] = lib.xml.OPENRASTER_VERSION
+
+        # Project version declaration
+        image.attrib[projectsave.PRJ_VERSION_ATTR] = str(self.version)
 
         # Getting entire document area.
         # This procedure must be placed after all layers are saved

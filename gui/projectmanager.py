@@ -48,14 +48,14 @@ _ICON_COLOR = (0.4, 0.4, 0.4, 1.0)
 _CURRENT_VERSION_NUM = 0
 
 class VersionStoreWrapper(object):
-    """Version Store wrapper, used from version listview"""
+    """Version Store wrapper for Gtk.ListStore, used from version listview"""
 
     # temporary flag file name.
     # if a file named as this in a version directory,
     # that version would be ignored.
     IGNORE_FILE_NAME = 'ignore-this'
 
-    def __init__(self, version_info, dirname):
+    def __init__(self, checkpt_info, dirname):
 
         basestore = Gtk.ListStore(object, str, bool, str, int)
         self._basestore = basestore
@@ -63,7 +63,7 @@ class VersionStoreWrapper(object):
         self._store = basestore.filter_new()
         self._store.set_visible_func(self.visible_func_cb)
         self._show_all = False
-        self.version_info = weakref.proxy(version_info)
+        self.checkpt_info = weakref.proxy(checkpt_info)
 
         self._load_from_directory(dirname)
 
@@ -104,7 +104,7 @@ class VersionStoreWrapper(object):
         
         :param actually_delete: if this is True, remove the version directory
             from filesystem.Otherwise, create 'ignore-this' empty file to
-            ignore when walking backup directory at initialize.
+            ignore when walking checkpoints directory at initialize.
         """
         store = self._store
         ver_num = store.get_value(iter, _Store_index.VER)
@@ -139,10 +139,10 @@ class VersionStoreWrapper(object):
                 True,
                 "", _CURRENT_VERSION_NUM) 
 
-        vinfo = self.version_info
-        backupdir = os.path.join(dirname, 'backup')
-        if os.path.exists(backupdir):
-            xmls = glob.glob(os.path.join(backupdir,"stack.xml.*"))
+        vinfo = self.checkpt_info
+        checkpointdir = os.path.join(dirname, 'checkpoints')
+        if os.path.exists(checkpointdir):
+            xmls = glob.glob(os.path.join(checkpointdir,"stack.xml.*"))
             xmls.sort(reverse=True)
             for cxml in xmls:
                 stinfo = os.stat(cxml)
@@ -157,14 +157,14 @@ class VersionStoreWrapper(object):
                     logger.error("%s is not version xml" % cxml)
                     continue
 
-
-                thumbnail_path = os.path.join(backupdir, 
-                        'thumbnail.png.%d' % ver_num)
+                thumbnail_path = os.path.join(
+                    checkpointdir, 
+                    'thumbnail.png.%d' % ver_num
+                )
 
                 desc = vinfo.get_description(ver_num)
                 status = vinfo.get_visible_status(ver_num)
                 append_store(thumbnail_path, datestr, status, desc, ver_num) 
-
 
 class ThumbnailRenderer(Gtk.CellRenderer):
     """renderer used from version thumbnail"""
@@ -453,7 +453,7 @@ class ProjectManagerWindow (SubWindow):
 
     def set_directory(self, projdir, filehandler):
         """ Set target directory, which should contain 
-        stack.xml and backuped versions directory.
+        stack.xml and checkpoints directory.
         This method is startup point of this dialog window.
         """
         if self._store_wrapper:
@@ -468,17 +468,17 @@ class ProjectManagerWindow (SubWindow):
         self.project_dir = projdir
 
         if projdir == None:
-            self.version_info = None
+            self.checkpt_info = None
             return
 
-        version_info = lib.projectsave.Versionsave(projdir)
-        wrapper = VersionStoreWrapper(version_info, projdir)
+        checkpt_info = lib.projectsave.Checkpoint(projdir)
+        wrapper = VersionStoreWrapper(checkpt_info, projdir)
         wrapper.liststore.connect("row-deleted", 
                                   self.version_store_deleted_cb)
         wrapper.liststore.connect("row-inserted", 
                                   self.version_store_inserted_cb)
         self._store_wrapper = wrapper
-        self.version_info = version_info
+        self.checkpt_info = checkpt_info
 
         self._modified = False
         self._version_list.set_model(wrapper.liststore)
@@ -515,7 +515,7 @@ class ProjectManagerWindow (SubWindow):
         if not iter:
             return
         
-        version_info = self.version_info
+        checkpt_info = self.checkpt_info
         target_version = store[iter][_Store_index.VER]
 
         filehandler = self.filehandler
@@ -526,66 +526,43 @@ class ProjectManagerWindow (SubWindow):
 
             save_before_revert = False
 
-            #   If model.project_version == 0, the last backup 
-            #   data might be same as current document, or further update 
-            #   might be done from last backup.That update written in storage
-            #   already.
-            #   This method is to check it.
-            #
-            # * If lib.document.Document.project_version > 0, it is reverted 
-            #   backup version itself, and unsaved yet. 
-            #   If reverted document saved, lib.document.version is reset to 0,
-            #   therefore,the above assumption (project_version > 0) does not hold.
-            #   So, it is enough to just check 'unsaved change' for this case.
-            #   This method nothing to do with it.
-
+            # Warn to user about unsaved painting work.
             if model.unsaved_painting_time > 0: 
                 save_before_revert = gui.dialogs.confirm(
-                        self,
-                        _("There is unsaved painting work.\n"
-                        "Backup current unsaved document as new version,"
-                        "before revert?"),
-                        )
-
-            elif (model.project_version == 0 and 
-                    not version_info.is_current_document_backedup()):
-                # If model.project_version == 0, the last backup 
-                # data might be same as current document, or further update 
-                # might be done (and saved to disk) from last backup.
+                    self,
+                    _("There is unsaved painting work.\n"
+                    "Do you create checkpoint of current unsaved document "
+                    "before revert?"),
+                )
+            elif (model.version > 0 and 
+                    checkpt_info.is_current_document_changed(model.version)):
+                # When right after document loaded,
+                # model.unsaved_painting_time does not work.
                 #
-                # Otherwise,if model.project_version > 0, 
-                # it is reverted backup version itself.
-                # If there are some unsaved change on document by painting,it would
-                # be detected above 'unsaved_painting_time' check. so no problem.
-                # 
-                # When document saved, model.project_version is reset to 0.
-                # 
-                # So passing unsaved_painting_time test and 
-                # model.project_version > 0 means 'This document is unmodified 
-                # and unsaved from when reverted to some older version'.
-                # If so, we have backedup image in disk same as current document,
-                # we have no need to backup current document as new version.
+                # So use dedicated function 
+                # `is_current_document_changed`
+                # to detect whether the document is modified or not.
 
                 save_before_revert = gui.dialogs.confirm(
-                        self,
-                        _("Current document is not backedup yet.\n"
-                        "If you overwrite document with reverted one,\n"
-                        "You will lost current document.\n"
-                        "Backup current document as new version,"
-                        "before revert?"),
-                        )
+                    self,
+                    _("Checkpoint for this modified work is not created yet.\n"
+                    "Do you create checkpoint of current unsaved document "
+                    "before revert?"),
+                )
 
             if save_before_revert:
                 filehandler.set_project_checkpoint_cb(None)
-                # Recreate version info, to update new version information
-                version_info = lib.projectsave.Versionsave(
-                        self.project_dir)
+                # Recreate checkpoint info, to update new version information
+                checkpt_info = lib.projectsave.Checkpoint(self.project_dir)
 
-                version_info.set_description(
-                        version_info.version_num,
-                        _("Automatically created revision,"
-                          "before revert to version %d." % target_version)
-                        )
+                checkpt_info.set_description(
+                    checkpt_info.max_version_num,
+                    _("Automatically created revision,"
+                      "before revert to version %d." % target_version)
+                )
+
+                # update checkpoint info attribute
+                self.checkpt_info = checkpt_info
 
             prefs = filehandler.app.preferences
             display_colorspace_setting = prefs["display.colorspace"]
@@ -595,7 +572,7 @@ class ProjectManagerWindow (SubWindow):
                     feedback_cb=filehandler.gtk_main_tick,
                     convert_to_srgb=(display_colorspace_setting == "srgb"),
                     target_version=target_version,
-                    version_info=self.version_info
+                    checkpt_info=self.checkpt_info
                 )
             else:
                 model.load(
@@ -603,15 +580,13 @@ class ProjectManagerWindow (SubWindow):
                     feedback_cb=filehandler.gtk_main_tick,
                     convert_to_srgb=(display_colorspace_setting == "srgb"),
                 )
-            model.project_version = target_version
-                
-            # Do not forget to record version information.
-            version_info.finalize()
 
-            # version_info is basically same as self.version_info
-            # but it might be changed inside this method.
-            # so update it.
-            self.version_info = version_info
+            # Version number of model(document) is set inside load
+            # (actually, it is load_project) method.
+                
+            # Finalize checkpoint information
+            # This updates json file of checkpoint information.
+            checkpt_info.finalize()
             
         self.hide()
 

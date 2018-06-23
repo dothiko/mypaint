@@ -25,28 +25,29 @@
 # such as load_from_openraster_dir() of some layer classes.
 
 
-# ABOUT VERSION BACKUP:
+# ABOUT CHECKPOINT:
 #
-# VERSION BACKUP functionality would work along this flow.
+# CHECKPOINT functionality would work along this flow.
 #
-# 1. 'Save Current Project as New Version' menu action has start.
-# 2. copy current stack.xml into backup directory with new version number, 
-#    such as 'stack.xml.2'.
-# 3. Walk all layers (Versioninfo.queue_backup_layers)
+# 1. `Save Current Project as New Version` menu action has start.
+# 2. copy current stack.xml into checkpoints directory with new version number, 
+#    such as `stack.xml.2` for the second checkpoint.
+#    The very first checkpoint is `stack.xml.1`
+# 3. Walk all layers (Versioninfo.queue_checkpoint_layers)
 # 4. if modified timestamp or filesize of png file is not same as
 #    recorded information at versioninfo.json (or record does not
 #    exist), queue copy task
-# 5. copy task runs when mypaint become idle,
+# 5. copy task runs when MyPaint become idle,
 #    it would copy the layer file with renaming,
-#    such as, from "data/uuid-of-that-layer.png" to 
-#    "backup/uuid-of-that-layer/2.png". 
+#    such as, from `data/uuid-of-that-layer.png` to 
+#    `checkpoints/uuid-of-that-layer/2.png`. 
 # 6. if another project-save action triggered before queued task end, 
 #    mypaint would flush all queued tasks before new project-save executed, 
 #    so no problem.
 #
 # ABOUT PROJECT LOADING:
 #
-# To load a project-saved document from dirctory, Mypaint just open the
+# To load a project-saved document from dirctory, MyPaint just open the
 # stack.xml file from that directory.
 
 from __future__ import absolute_import
@@ -71,12 +72,20 @@ import lib.autosave
 import lib.xml
 import lib.layer
 
+# Project-save dialect consts
+
+PRJ_FRAME_BBOX_ATTR \
+    = "{%s}frame-bbox" % (lib.xml.OPENRASTER_MYPAINT_NS,)
+PRJ_VERSION_ATTR \
+    = "{%s}project-version" % (lib.xml.OPENRASTER_MYPAINT_NS,)
+
 class Projectsaveable(lib.autosave.Autosaveable):
-    """Mixin and abstract base for projectsaveable structures"""
+    """Mixin and abstract base for projectsaveable structures.
+    Mainly for lib.layer.LayerStack and SurfaceBackedLayer class."""
 
     __metaclass__ = abc.ABCMeta
 
-    ORA_LAYERID_ATTR = "{%s}layer-id" % (lib.xml.OPENRASTER_MYPAINT_NS,)
+    PRJ_LAYERID_ATTR = "{%s}layer-id" % (lib.xml.OPENRASTER_MYPAINT_NS,)
 
     @property
     def autosave_dirty(self):
@@ -180,7 +189,7 @@ class Projectsaveable(lib.autosave.Autosaveable):
 
     @property
     def unique_id(self):
-        """This property is ORA_LAYERID_ATTR('mypaint:layer-id') 
+        """This property is PRJ_LAYERID_ATTR('mypaint:layer-id') 
         attribute of XML attr element.
 
         FYI, BackgroundLayer has special method(init_unique_id) 
@@ -194,7 +203,8 @@ class Projectsaveable(lib.autosave.Autosaveable):
         """ Get a list of filenames which consists this layer. 
         Some type of layer might have additional stroke data or
         working file for vector graphics, etc.
-        So we need enumlate all of them, to backup this layer.
+        So we need enumlate all of them, to backup(copy into checkpoint)
+        of layer.
 
         This is a generator function.
         """
@@ -211,26 +221,45 @@ class Projectsaveable(lib.autosave.Autosaveable):
         yield None # Dummy yield, to return generator function.
         
 
-class Versionsave(object):
-    """Version save class, manage project version infomation.
+class Checkpoint(object):
+    """Checkpoint class, manage project checkpoint version infomation.
     Very important class for version saving & reverting.
     """
 
     def __init__(self, path):
-        """Constructor of Versionsave class.
-        :param path: Project directory path. it should has 'backup'
+        """Constructor of Checkpoint class.
+        :param path: Project directory path. it should has 'checkpoints'
                      subdirectory.
         """
         assert os.path.exists(path)
         self.dirbase = path
-        self.backupdir = os.path.join(path, "backup")
+        self.checkptdir = os.path.join(path, 'checkpoints')
 
-        jsonpath = os.path.join(self.backupdir, 'versioninfo.json')
+        # XXX Workaround for older version.
+        # For older version, I use 'backup' as checkpoint directory.
+        # These lines should be removed in future.
+        bkupdir = os.path.join(path, 'backup')
+        if (os.path.exists(bkupdir) and 
+                os.path.isdir(bkupdir) and 
+                not os.path.exists(self.checkptdir):
+            shutil.move(
+                bkupdir,
+                self.checkptdir
+            )
+            logger.info("Moved old backup directory.")
+        
+        # XXX Workaround end.
+
+        jsonpath = os.path.join(self.checkptdir, 'versioninfo.json')
         if os.path.exists(jsonpath):
             with open(jsonpath, 'rt') as ifp:
                 self.info = json.load(ifp)
+            # XXX Workaround for older version.
+            if 'version_number' in self.info:
+                self.info['max_version_number'] = self.info['version_number']
+            # XXX Workaround end.
         else:
-            self.info = { 'version_number' : 0, }
+            self.info = { 'max_version_number' : 0, }
 
         # Dirty flag, to avoid unnecessary storage writing.
         self._dirty = False
@@ -241,7 +270,7 @@ class Versionsave(object):
         # latest version number for that layer.
 
     def _init_version(self):
-        """Init new backup version
+        """Init new checkpoint version
         """
         for cpath in ('stack.xml', 
                 os.path.join('Thumbnails', 'thumbnail.png')):
@@ -251,30 +280,31 @@ class Versionsave(object):
                 # We MUST use shutil.copy here, not copy2.
                 # to record the date of the version
                 # created as file timestamp.
-                shutil.copy(srcpath, 
-                            os.path.join(self.backupdir, 
-                            "%s.%d" % (cpath, self.version_num))
-                           )
+                shutil.copy(
+                    srcpath, 
+                    os.path.join(self.checkptdir, 
+                    "%s.%d" % (cpath, self.max_version_num))
+                )
             else:
-                logger.warning('Essential file %s does not exist.' % cpath)
+                logger.warning("Essential file %s does not exist." % cpath)
 
     def proceed(self):
-        self.info['version_number'] = self.version_num + 1
+        self.info['max_version_number'] = self.max_version_num + 1
         self._init_version()
 
     def finalize(self):
         if self._dirty:
-            jsonpath = os.path.join(self.backupdir, 'versioninfo.json')
+            jsonpath = os.path.join(self.checkptdir, 'versioninfo.json')
             with open(jsonpath, 'wt') as ofp:
                 json.dump(self.info, ofp)
             self._dirty = False
 
     # Version number related
     @property
-    def version_num(self):
-        return self.info['version_number']
+    def max_version_num(self):
+        return self.info.get('max_version_number', 0)
 
-    # File/Layer management,backup related
+    # File/Layer management,checkpoint related
     def _get_srcpath(self, src):
         """Generate layer sourcefile path from project base directory. 
         if src is absolute path (it means that layer should be filebacked one)
@@ -284,7 +314,16 @@ class Versionsave(object):
             return src
         return os.path.join(self.dirbase, src)
 
-    def _is_already_backedup(self, layer_filename, layer_unique_id):
+    def _is_same_file(self, file_a_path, file_b_path):
+        if fila_a_path is None or file_b_path is None:
+            return False
+
+        statinfo_a = os.stat(file_a_path)
+        statinfo_b = os.stat(file_b_path)
+        return (statinfo_a.st_mtime == statinfo_b.mtime and 
+                    statinfo_a.st_size == statinfo_b.size)
+
+    def _is_already_checked(self, layer_filename, layer_unique_id):
         """Tells whether the layer is already backed up or not.
         This method only look png file of layer.
         additional files(for example, stroke dat file) are ignored.
@@ -295,7 +334,7 @@ class Versionsave(object):
 
         :rtype tuple:
         :return : a tuple of (
-                boolean flag of 'backup file is same as original file',
+                boolean flag of `checkpoint file is same as original file`,
                 os.stat information of original file)
         """
 
@@ -304,59 +343,55 @@ class Versionsave(object):
 
         srcpath = self._get_srcpath(layer_filename)
 
-        # This method is called from _queue_backup_layers(),
+        # This method is called from _queue_checkpoint_layers(),
         # and that method should be called after 
         # all current project layers saved.
         # so, every srcpath MUST exist.
         assert os.path.exists(srcpath)
 
-        latest_bkup_info = self.info.get(layer_unique_id, None)
+        latest_ckpt_file = self.get_version_src(layer_unique_id, -1)
+        return self._is_same_file(srcpath, latest_ckpt_file)
+
+    def _register_layer_info(self, id, layer):
+        """Register current layer information(size and mtime)
+        into information dict, i.e. checkpoint json file.
+        """
+        srcpath = self._get_srcpath(layer.filename)
         statinfo = os.stat(srcpath)
-
-        if latest_bkup_info:
-            mtime, size, junk = latest_bkup_info
-            return (statinfo.st_mtime == mtime and 
-                    statinfo.st_size == size, statinfo)
-
-        return (False, statinfo)
-
-    def register_layer_info(self, id, statinfo):
         self.info[id] = (statinfo.st_mtime,
                 statinfo.st_size,
-                self.version_num)
+                self.max_version_num)
         self._dirty = True
 
-    def queue_backup_layers(self, processor, layer_stack):
+    def queue_checkpoint_layers(self, processor, layer_stack):
 
         for path, cl in layer_stack.walk():
-            self._queue_backup_single_layer(processor, cl)
+            self._queue_checkpoint_single_layer(processor, cl)
 
         # Background layer is not included layer_stack.walk()
         # So call method for it.
-        self._queue_backup_single_layer(
-                processor, 
-                layer_stack.background_layer
-                )
+        self._queue_checkpoint_single_layer(
+            processor, 
+            layer_stack.background_layer
+        )
 
         self.finalize()
 
-    def _queue_backup_single_layer(self, processor, layer):
+    def _queue_checkpoint_single_layer(self, processor, layer):
         id = layer.unique_id
 
         if layer.filename is not None:
             # This means 'layer has its own file instance to save'
             # (Not only FileBackedLayer, because BackgroundLayer 
             # has also backedup file in project-save)
-            backed_up, statinfo = self._is_already_backedup(
-                    layer.filename,
-                    layer.unique_id
-                    )
+            if not self._is_already_checked(layer.filename, id):
+                self._register_layer_info(id, layer)
 
-            if not backed_up:
-                self.register_layer_info(id, statinfo)
-
+                # layer.enum_filenames() enumerates the all files
+                # which is belong to that layer, i.e. not only .png,
+                # but .stroke file.
                 for sf in layer.enum_filenames():
-                    targdir = os.path.join(self.backupdir, id)
+                    targdir = os.path.join(self.checkptdir, id)
                     junk, ext = os.path.splitext(sf)
                     if not os.path.exists(targdir):
                         os.mkdir(targdir)
@@ -367,52 +402,20 @@ class Versionsave(object):
                     # That timestamp(modified date) used to detect whether 
                     # a layer file has changed or not.
                     processor.add_work(
-                            shutil.copy2,
-                            os.path.join(self.dirbase, sf),
-                            os.path.join(targdir, 
-                                         "%d%s" % (self.version_num, ext)
-                                        )
-                            )
+                        shutil.copy2,
+                        os.path.join(self.dirbase, sf),
+                        os.path.join(
+                            targdir, 
+                            "%d%s" % (self.max_version_num, ext)
+                        )
+                    )
 
-
-    def is_current_document_backedup(self):
+    def is_current_document_changed(self, version_num):
         """Tells whether current document(in data/) is 
-        same as last backup version or not.
-
-        We need not only test 'unsaved_painting_time' property
-        of model document, but also test whether current document
-        on disk storage is different from last backuped one or not.
-
-        Because, when we revert a document to some other version,
-        we might overwrite data/ directory with that reverted one.
-        If this happen, the document before revert would be lost
-        forever.
-        I think many people would not intend to lost pre-revert work.
-        And it can be done easily and mistakenly.
-
-        So we would need automatically save current document as 
-        new version before revert it, but there is a problem.
-        If create new version each time we revert without ask it 
-        to user,there would be excessive number of pre-revert version.
-        It would be annoying,confusing.
-        
-        At a glance, it seems to be good to ask the user every time, 
-        but there are apperent cases where it is not necessary to ask. 
-
-        It is, right after backup current document manually
-        or right after reverted.
-
-        but 'right after reverted' can be easily tested by
-        referring model.project_version > 0 or not.
-
-        Therefore, we need this method, to check whether the latest
-        backedup files are same as files of data/ directory.
-
-        see also revert_button_clicked_cb() of 
-        gui.projectmanager.Versionsave.
+        same as last checkpoint version or not.
+        If something changed, return True.
         """
-
-        xmlpath = os.path.join(self.dirbase, 'stack.xml')
+        xmlpath = os.path.join(self.basedir, 'stack.xml')
         if not os.path.exists(xmlpath):
             return False
 
@@ -421,24 +424,25 @@ class Versionsave(object):
         root_stack_elem = image_elem.find("stack")
 
         changed_layers = []
-        Versionsave.walk_stack_xml(
-                root_stack_elem,
-                self.__check_single_layer_backedup,
-                changed_layers
-                )
-        return len(changed_layers) == 0
+        Checkpoint.walk_stack_xml(
+            root_stack_elem,
+            self._check_single_layer,
+            data=(changed_layers, version_num)
+        )
+        return len(changed_layers) > 0
 
-    def __check_single_layer_backedup(self, elem, changed_layers):
+    def _check_single_layer(self, elem, datas):
+        """A callback used from is_current_document_changed method.
+        """
         attr = elem.attrib
-        backed_up, junk = self._is_already_backedup(
-                attr.get('src', None),
-                attr.get(Projectsaveable.ORA_LAYERID_ATTR, None)
-                )
-
-        if not backed_up:
+        changed_layers, version_num = datas
+        uuid = attr.get(Projectsaveable.PRJ_LAYERID_ATTR, None)
+        ver_srcname = get_version_src(uuid, version_num)
+        cur_srcname = os.path.join(self.basedir, "data", "%s.png" % uuid)
+        if not self._is_same_file(ver_srcname, cur_srcname):
             changed_layers.append(elem)
             return True # Exit the walk loop.Currently it is enough 
-                        # only one layer is not backedup.
+                        # just one layer which is modified found. 
 
     def get_description(self, ver_num):
         """Get version specific user document(description)
@@ -488,7 +492,7 @@ class Versionsave(object):
         self.info['visible'] = status
         self._dirty = True
 
-    ## Getting backedup source, stack.xml, etc from version number
+    ## Getting checkpoint source, stack.xml, etc from version number
 
     def get_version_src(self, unique_id, target_ver):
         """ Get the layer source path of assigned version
@@ -496,14 +500,15 @@ class Versionsave(object):
         
         :param unique_id: a string of unique uuid which is set
                           for a layer in project-save.
-        :param target_ver: a integer number of version, to be reverted.
+        :param target_ver: a integer number of version.
+                           if -1, newest(largest) version file returned.
         :return : the ABSOLUTE path to suitable version file.
                   if there is no suitable one, return None.
         """
         if unique_id == None:
             return None
 
-        basedir = os.path.join(self.backupdir, unique_id)
+        basedir = os.path.join(self.checkptdir, unique_id)
         if not os.path.exists(basedir):
             return None
 
@@ -522,6 +527,9 @@ class Versionsave(object):
         # So, the first versioned file which is lower than
         # target_ver is the file we searching.
 
+        if target_ver == -1:
+            return files[0]
+
         for cf in files:
             curbasename = os.path.basename(cf)
             try:
@@ -534,16 +542,16 @@ class Versionsave(object):
         return None
 
     def get_version_xml(self, target_ver):
-        targfile = os.path.join(self.backupdir, "stack.xml.%d" % target_ver)
+        targfile = os.path.join(self.checkptdir, 'stack.xml.%d' % target_ver)
         if os.path.exists(targfile):
             return targfile
 
         return None
 
     def convert_xml_as_version(self, target_ver):
-        """Load and modify backedup elementtree object,
+        """Load and modify checkpoint elementtree object,
         with backedup layer image.
-        With this, we can revert from backup directory
+        With this, we can revert from checkpoint directory
         with minimum modifying lib/layer/*.py modules.
 
         :rtype : ElementTree document object
@@ -564,20 +572,18 @@ class Versionsave(object):
         image_elem = doc.getroot()
         root_stack_elem = image_elem.find("stack")
 
-        Versionsave.walk_stack_xml(
-                root_stack_elem,
-                self.__convert_single_layer_element_cb,
-                (supported_strokemap_attrs, target_ver)
-                )
-
+        Checkpoint.walk_stack_xml(
+            root_stack_elem,
+            self.__convert_single_layer_element_cb,
+            data=(supported_strokemap_attrs, target_ver)
+        )
         return doc
 
     def __convert_single_layer_element_cb(self, elem, data):
         """Callback for converting xml 
         """
         attr = elem.attrib
-        cur_uuid = attr.get(Projectsaveable.ORA_LAYERID_ATTR,
-                            None)
+        cur_uuid = attr.get(Projectsaveable.PRJ_LAYERID_ATTR, None)
 
         supported_strokemap_attrs, target_ver = data
 
@@ -590,7 +596,7 @@ class Versionsave(object):
         else:
             logger.error("cannot find version %d file for layer %s" % 
                          (target_ver,
-                          attr.get('name', 'unknown layer'))
+                          attr.get('name', "unknown layer"))
                         )
             return 
 
@@ -614,7 +620,7 @@ class Versionsave(object):
         if elem.tag == 'stack':
             for child in elem:
                 assert child != elem
-                if Versionsave.walk_stack_xml(child, callback, data):
+                if Checkpoint.walk_stack_xml(child, callback, data):
                     return True
         elif elem.tag == 'layer':
             # Exit entire walk recursive loop

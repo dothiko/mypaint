@@ -2178,7 +2178,7 @@ class RootLayerStack (group.LayerStack):
                 if 'project' in kwargs:
                     self._background_layer.init_unique_id(
                         attrs.get(
-                            Projectsaveable.ORA_LAYERID_ATTR,
+                            Projectsaveable.PRJ_LAYERID_ATTR,
                             None
                         )
                     )

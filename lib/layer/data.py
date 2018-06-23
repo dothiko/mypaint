@@ -252,7 +252,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             self._orig_y = y
 
             # Ensure self._filename is relative path
-            self._unique_id = attrs.get(self.ORA_LAYERID_ATTR, None)
+            self._unique_id = attrs.get(self.PRJ_LAYERID_ATTR, None)
 
             if os.path.isabs(src):
                 src = os.path.relpath(oradir, src)
@@ -565,7 +565,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         x, y, w, h = tuple(rect)
         assert (x == y == 0) or not self._surface.looped
         elem = self._get_stackxml_element("layer", x, y)
-        elem.attrib[self.ORA_LAYERID_ATTR] = self.unique_id
+        elem.attrib[self.PRJ_LAYERID_ATTR] = self.unique_id
 
         if is_dirty:
             # When this layer is dirty, force to save it into data/ dir
@@ -920,7 +920,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         src_ext = src_ext.lower()
 
         elem.attrib["src"] = self.workfilename
-        elem.attrib[self.ORA_LAYERID_ATTR] = self.unique_id
+        elem.attrib[self.PRJ_LAYERID_ATTR] = self.unique_id
         return elem
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
@@ -1940,7 +1940,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         # See comment above for compatibility strategy.
         elem.attrib[self._ORA_STROKEMAP_ATTR] = dat_relpath
         elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = dat_relpath
-        elem.attrib[self.ORA_LAYERID_ATTR] = self.unique_id
+        elem.attrib[self.PRJ_LAYERID_ATTR] = self.unique_id
         return elem
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
