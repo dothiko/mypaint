@@ -258,6 +258,143 @@ def dashedline_wrapper(callable):
         cr.restore()
     return decorated
 
+def queue_circular_area(tdw, x, y, r, min_r=16, margin=2):
+    """Queue to draw circular area, to decrease redrawing area.
+    :param min_r: minimum radius to just queue rectangular area.
+    """
+    if r <= min_r:
+        r += margin
+        tdw.queue_draw_area(
+            x-r,
+            y-r,
+            x+r*2,
+            y+r*2
+        )
+        return
+
+    # We would use `Midpoint circle algorithm` for this.
+    # Currently I use very easy codes for this.
+    
+    # Deciding block size
+    b = r // 4
+    m = margin
+    if b < 4.0:
+        b = r // 3
+        # Queue around outer rim area, divide by 6.  
+        # top
+        xs, xe = (r, r-b)
+        w = (r + m) * 2
+        h = b + m * 2
+        h2 = (r - b + m) * 2
+        offsets = (
+            (-xs, -xs, w, h), 
+            (-xs, xe, w, h), 
+            (-xs, -xe, h, h2), 
+            (xe, -xe, h, h2)
+        )
+    else:
+        # Queue around outer rim area, divide by 8.  
+        xs, xe = (r, r-b)
+        w = (r + m) * 2
+        h = b + m * 2
+        offsets = (
+            (-xe, -xs, w, h), 
+            (-xe, xe, w, h), 
+            (-xs, -xe, h, w), 
+            (xe, -xe, h, w)
+        )
+
+        # Drawing additional corner areas.
+        xe2 = r - (b * 2)
+        for ox, oy in ((-xe, -xe), (xe2, -xe), (-xe, xe2), (xe2, xe2)):
+            tdw.queue_draw_area(x+ox-m, y+oy-m, h, h)
+
+    for ox, oy, w, h in offsets:
+        tdw.queue_draw_area(x+ox-m, y+oy-m, w, h)
+
+        
+
+def dbg_draw_circular_area(cr, x, y, r, min_r=16, margin=2):
+    """Queue to draw circular area.
+    :param min_r: minimum radius to just queue rectangular area.
+    """
+
+    cr.save()
+    cr.set_source_rgb(1, 0, 0)
+    if r <= min_r:
+        r += margin
+        cr.rectangle(
+            x-r,
+            y-r,
+            x+r*2,
+            y+r*2
+        )
+        cr.fill()
+        cr.restore()
+        return
+
+    # We would use `Midpoint circle algorithm` for this.
+    # Currently I use very easy codes for this.
+    r += margin
+    
+    # Deciding block size
+    b = r // 8
+    if b < 4.0:
+        b = r // 6
+        # Queue around outer rim area, divide by 6.  
+        # top
+        tx = x - r 
+        w = r * 2
+        ty = y - r 
+        h = b 
+        cr.rectangle(tx, ty, w, h)
+        # bottom
+        ty = y + r - b 
+        cr.rectangle(tx, ty, w, h)
+        # left
+        w = h
+        h = (r - b) * 2
+        ty = y - r + b
+        cr.rectangle(tx, ty, w, h)
+        # right
+        tx = x + r - b
+        cr.rectangle(tx, ty, w, h)
+    else:
+        # Queue around outer rim area, divide by 8.  
+
+        # top
+        tx = x - r + b
+        w = (r - b) * 2
+        ty = y - r
+        h = b 
+        cr.rectangle(tx, ty, w, h)
+        # bottom
+        ty = y + r - b 
+        cr.rectangle(tx, ty, w, h)
+        # left
+        w = h
+        h = (r - b) * 2
+        tx = x - r 
+        ty = y - r + b
+        cr.rectangle(tx, ty, w, h)
+        # right
+        tx = x + r - b
+        cr.rectangle(tx, ty, w, h)
+
+        # Queue additional inner areas.
+        w = b 
+        tx = x - r + b
+        ty = y - r + b
+        cr.rectangle(tx, ty, w, w)
+        tx = x + r - (b * 2)
+        cr.rectangle(tx, ty, w, w)
+        ty = y + r - (b * 2)
+        cr.rectangle(tx, ty, w, w)
+        tx = x - r + b
+        cr.rectangle(tx, ty, w, w)
+
+    cr.fill()
+    cr.restore()
 
 ## Class defs
 

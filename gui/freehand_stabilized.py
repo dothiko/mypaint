@@ -203,8 +203,8 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
     def motion_notify_cb(self, tdw, event, fakepressure=None):
         
         if self._current_range > 0 and not self.in_drag:
-            self.queue_draw_ui(tdw, True) # To Erase
             self._ensure_overlay_for_tdw(tdw)            
+            self.queue_draw_ui(tdw, True) # To Erase
             self._cx = event.x
             self._cy = event.y
             self.queue_draw_ui(tdw)
@@ -391,17 +391,34 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
             return
 
         if self._current_range > 0 or force_queue:
-            if force_queue:
-                r = int(self.stabilize_range + 2)
-            else:
-                r = int(self._current_range + 2)
+           #if force_queue:
+           #    r = int(self.stabilize_range + 2)
+           #else:
+           #r = int(self._current_range + 2)
+           #tdw.queue_draw_area(
+           #    self._cx - r, 
+           #    self._cy - r,
+           #    r * 2, 
+           #    r * 2
+           #)
+            
+            r = int(self._current_range)
+            gui.ui_utils.queue_circular_area(
+                tdw,
+                self._cx, self._cy,
+                r,
+                margin=4
+            )
+
+            # Queue center point
+            r = 4
             tdw.queue_draw_area(
                 self._cx - r, 
                 self._cy - r,
                 r * 2, 
                 r * 2
             )
-
+            
     ## Stabilizer configuration related
     @property
     def _ready(self):
@@ -563,6 +580,12 @@ class _Overlay_Stabilizer(gui.overlays.Overlay):
         if mode is not None and mode.current_range > 0:
             x, y = mode._cx, mode._cy
             self._draw_dashed_circle(cr, (x, y, mode._current_range))
+           #gui.ui_utils.dbg_draw_circular_area(
+           #    cr, 
+           #    x, y, mode._current_range,
+           #    margin=4
+           #)
+            
 
             # XXX Drawing actual stroke point.
             # This should be same size as current brush radius,

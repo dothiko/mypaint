@@ -192,45 +192,13 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         return _Overlay(self, tdw)
     
     def _queue_draw_brush(self):
-        space = 2 # I'm unsure why this number brought good result.
-                  # might be line width * 2?
-        margin = 3
         for tdw, overlay in self._overlays.items():
-            if self.base_x != None:
-                cur_radius = self.get_cursor_radius(tdw)
-                areasize = cur_radius*2 + space*2 +1
-                if areasize < 32:
-                    tdw.queue_draw_area(
-                            self.base_x - cur_radius - space,  
-                            self.base_y - cur_radius - space,
-                            areasize, areasize)
-                else:
-                    # To reduce redrawing area
-                    dx = cur_radius * math.sin(math.pi / 4.0)
-                    dw = dx * 2
-                    dh = cur_radius - dx
-                    dw += margin * 2
-                    dh += margin * 2
-                    # Top
-                    tdw.queue_draw_area(
-                            self.base_x - dx - margin,
-                            self.base_y - cur_radius - margin,
-                            dw, dh)
-                    # Left
-                    tdw.queue_draw_area(
-                            self.base_x - cur_radius - margin,
-                            self.base_y - dx - margin,
-                            dh, dw)
-                    # Right
-                    tdw.queue_draw_area(
-                            self.base_x + dx - margin,
-                            self.base_y - dx - margin,
-                            dh, dw)
-                    # Bottom
-                    tdw.queue_draw_area(
-                            self.base_x - dx - margin,
-                            self.base_y + dx - margin,
-                            dw, dh)
+            cur_radius = self.get_cursor_radius(tdw)
+            gui.ui_utils.queue_circular_area(
+                tdw,
+                self.base_x, self.base_y,
+                cur_radius
+            )
 
     def _draw_dashed(self, cr):        
         """Drawing (preserved) stroke as dashed one."""
