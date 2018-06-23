@@ -241,7 +241,7 @@ class Checkpoint(object):
         bkupdir = os.path.join(path, 'backup')
         if (os.path.exists(bkupdir) and 
                 os.path.isdir(bkupdir) and 
-                not os.path.exists(self.checkptdir):
+                not os.path.exists(self.checkptdir)):
             shutil.move(
                 bkupdir,
                 self.checkptdir
