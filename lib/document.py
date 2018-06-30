@@ -2073,9 +2073,10 @@ class Document (object):
             # Target document might be changed when
             # specific checkpoint assigned.
             if 'target_version' in kwargs:
+                assert 'checkpt_info' in kwargs
                 targ_ver = kwargs['target_version']
-                verinfo = kwargs['version_info']
-                doc = verinfo.convert_xml_as_version(targ_ver)
+                checkpt = kwargs['checkpt_info']
+                doc = checkpt.convert_xml_as_version(targ_ver)
             # project directory has no mimetype file.
             # so no debug output.
         else:
@@ -2323,7 +2324,7 @@ class Document (object):
 
                 # Assigning new version number.
                 # It might not be a increment of number.
-                self._version = checkpt.version_num
+                self._version = checkpt.max_version
 
         finally:
             t1 = time.time()
@@ -2447,7 +2448,7 @@ class Document (object):
         image.attrib["version"] = lib.xml.OPENRASTER_VERSION
 
         # Project version declaration
-        image.attrib[projectsave.PRJ_VERSION_ATTR] = str(self.version)
+        image.attrib[projectsave.PRJ_VERSION_ATTR] = str(self.project_version)
 
         # Getting entire document area.
         # This procedure must be placed after all layers are saved

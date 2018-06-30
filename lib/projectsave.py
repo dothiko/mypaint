@@ -283,13 +283,13 @@ class Checkpoint(object):
                 shutil.copy(
                     srcpath, 
                     os.path.join(self.checkptdir, 
-                    "%s.%d" % (cpath, self.max_version_num))
+                    "%s.%d" % (cpath, self.max_version))
                 )
             else:
                 logger.warning("Essential file %s does not exist." % cpath)
 
     def proceed(self):
-        self.info['max_version_number'] = self.max_version_num + 1
+        self.info['max_version_number'] = self.max_version + 1
         self._init_version()
 
     def finalize(self):
@@ -301,7 +301,7 @@ class Checkpoint(object):
 
     # Version number related
     @property
-    def max_version_num(self):
+    def max_version(self):
         return self.info.get('max_version_number', 0)
 
     # File/Layer management,checkpoint related
@@ -315,13 +315,13 @@ class Checkpoint(object):
         return os.path.join(self.dirbase, src)
 
     def _is_same_file(self, file_a_path, file_b_path):
-        if fila_a_path is None or file_b_path is None:
+        if file_a_path is None or file_b_path is None:
             return False
 
         statinfo_a = os.stat(file_a_path)
         statinfo_b = os.stat(file_b_path)
-        return (statinfo_a.st_mtime == statinfo_b.mtime and 
-                    statinfo_a.st_size == statinfo_b.size)
+        return (statinfo_a.st_mtime == statinfo_b.st_mtime and 
+                    statinfo_a.st_size == statinfo_b.st_size)
 
     def _is_already_checked(self, layer_filename, layer_unique_id):
         """Tells whether the layer is already backed up or not.
@@ -360,7 +360,7 @@ class Checkpoint(object):
         statinfo = os.stat(srcpath)
         self.info[id] = (statinfo.st_mtime,
                 statinfo.st_size,
-                self.max_version_num)
+                self.max_version)
         self._dirty = True
 
     def queue_checkpoint_layers(self, processor, layer_stack):
@@ -406,7 +406,7 @@ class Checkpoint(object):
                         os.path.join(self.dirbase, sf),
                         os.path.join(
                             targdir, 
-                            "%d%s" % (self.max_version_num, ext)
+                            "%d%s" % (self.max_version, ext)
                         )
                     )
 
@@ -415,7 +415,7 @@ class Checkpoint(object):
         same as last checkpoint version or not.
         If something changed, return True.
         """
-        xmlpath = os.path.join(self.basedir, 'stack.xml')
+        xmlpath = os.path.join(self.dirbase, 'stack.xml')
         if not os.path.exists(xmlpath):
             return False
 
@@ -437,8 +437,8 @@ class Checkpoint(object):
         attr = elem.attrib
         changed_layers, version_num = datas
         uuid = attr.get(Projectsaveable.PRJ_LAYERID_ATTR, None)
-        ver_srcname = get_version_src(uuid, version_num)
-        cur_srcname = os.path.join(self.basedir, "data", "%s.png" % uuid)
+        ver_srcname = self.get_version_src(uuid, version_num)
+        cur_srcname = os.path.join(self.dirbase, "data", "%s.png" % uuid)
         if not self._is_same_file(ver_srcname, cur_srcname):
             changed_layers.append(elem)
             return True # Exit the walk loop.Currently it is enough 

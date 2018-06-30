@@ -534,8 +534,8 @@ class ProjectManagerWindow (SubWindow):
                     "Do you create checkpoint of current unsaved document "
                     "before revert?"),
                 )
-            elif (model.version > 0 and 
-                    checkpt_info.is_current_document_changed(model.version)):
+            elif (model.project_version > 0 and 
+                    checkpt_info.is_current_document_changed(model.project_version)):
                 # When right after document loaded,
                 # model.unsaved_painting_time does not work.
                 #
