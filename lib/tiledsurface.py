@@ -1377,9 +1377,11 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     # Finalize pixels.
     # The processing sequence MUST be : 
     # removing needless areas -> dilation -> finally, draw anti-aliasing pixels.
-    ft.remove_small_areas(MN * 4 * 2, fill_all_holes)
-    ft.dilate(dilation_size)
-    if (anti_alias):
+    ft.remove_small_areas(MN * 4 * 2)
+    ft.dilate(int(dilation_size))
+    if fill_all_holes:
+        ft.fill_holes()
+    if anti_alias:
         ft.draw_antialias()
             
     # XXX DEBUG START
