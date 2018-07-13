@@ -72,17 +72,6 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         ['RotateViewMode', 'ZoomViewMode', 'PanViewMode']
         + gui.mode.BUTTON_BINDING_ACTIONS)
 
-    ## Mode related
-    @property
-    def setting_mode(self):
-        return self._mode
-        
-    @setting_mode.setter
-    def setting_mode(self, modenum):
-        if self._mode != modenum:
-            self._queue_draw_brush()
-            self._mode = modenum
-                                       
     ## Initialization
 
     def __init__(self, **kwds):
@@ -135,13 +124,9 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         
         return super(SizechangeMode, self).button_press_cb(tdw, event)
 
-   #def button_release_cb(self, tdw, event):
-   #    # Some button(such as Bamboo pad) might not this report release event!
-   #    return super(SizechangeMode, self).button_release_cb(tdw, event)
-
     def drag_start_cb(self, tdw, event):
         self._ensure_overlay_for_tdw(tdw)
-        self._queue_draw_brush()
+        self._queue_draw_brush(self.base_x, self.base_y) 
 
         # Storing original cursor position(in screen coodinate)
         # and some needed objects.
@@ -156,19 +141,19 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
     def drag_update_cb(self, tdw, event, dx, dy):
         self._ensure_overlay_for_tdw(tdw)
 
-        self._queue_draw_brush()
+        self._queue_draw_brush(self.base_x, self.base_y) # To erase old circle
         adj = self.app.brush_adjustment['radius_logarithmic']
         diff_val = (dx / self._PIXEL_PRECISION)
         # Faster change along with y direction move.
         diff_val += ((dy / self._PIXEL_PRECISION) * 2)
         adj.set_value(adj.get_value() + diff_val)
 
-        self._queue_draw_brush()
+        self._queue_draw_brush(self.base_x, self.base_y)
         super(SizechangeMode, self).drag_update_cb(tdw, event, dx, dy)
 
     def drag_stop_cb(self, tdw):
         self._ensure_overlay_for_tdw(tdw)
-        self._queue_draw_brush()
+        self._queue_draw_brush(self.base_x, self.base_y)
         self.start_drag = False
          
         self.base_x = None
@@ -189,14 +174,12 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
     def _generate_overlay(self, tdw):
         return _Overlay(self, tdw)
     
-    def _queue_draw_brush(self):
-        assert self.base_x is not None
-        assert self.base_y is not None
+    def _queue_draw_brush(self, x, y):
         for tdw, overlay in self._overlays.items():
             cur_radius = self.get_cursor_radius(tdw)
             gui.ui_utils.queue_circular_area(
                 tdw,
-                self.base_x, self.base_y,
+                x, y,
                 cur_radius
             )
 
@@ -278,7 +261,7 @@ class TiltchangeMode(SizechangeMode):
             adj = self.app.brush_adjustment['tilt_offset_y']
             adj.set_value(val)
             
-    def _queue_draw_brush(self):
+    def _queue_draw_brush(self, x, y):
         space = 2 # I'm unsure why this number brought good result.
                   # might be line width * 2?
         margin = 3
@@ -286,22 +269,22 @@ class TiltchangeMode(SizechangeMode):
             if self.base_x != None:
                 t_rad = self._TILT_RADIUS + margin
                 tdw.queue_draw_area(
-                        self.base_x - t_rad,
-                        self.base_y - t_rad,
+                        x - t_rad,
+                        y - t_rad,
                         t_rad * 2,
                         t_rad * 2)
                         
     def drag_update_cb(self, tdw, event, dx, dy):
         self._ensure_overlay_for_tdw(tdw)
  
-        self._queue_draw_brush()
+        self._queue_draw_brush(self.base_x, self.base_y)
 
         p = self._PIXEL_PRECISION
         cur_value = self.tilt_x_value + (dx / p)
         self.tilt_x_value = cur_value
         cur_value = self.tilt_y_value + (dy / p)
         self.tilt_y_value = cur_value
-        self._queue_draw_brush()
+        self._queue_draw_brush(self.base_x, self.base_y)
         
         # Call parent of `SizechangeMode`(parent class) method.
         # Not parent class method, we need to bypass that callback.
