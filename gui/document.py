@@ -451,6 +451,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             ],
             # XXX for `marked` layer state
             self._update_mark_layer_action : [
+                layerstack.current_path_updated,
                 layerstack.layer_properties_changed,
                 layerstack.layer_inserted,
                 layerstack.layer_deleted,
@@ -1452,7 +1453,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         markedcnt = len(layers)
         targ = rootstack.current
         targ_paintable = (
-            isinstance(targ, lib.layer.StrokemappedPaintingLayer)
+            isinstance(targ, lib.layer.PaintingLayer)
                 and not targ.locked
         )
         can_group = markedcnt > 0
