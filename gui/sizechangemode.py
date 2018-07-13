@@ -127,8 +127,6 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         
     def button_press_cb(self, tdw, event):
         # getting returning point of cursor,in screen coordinate
-        self._queue_draw_brush() # erase previous brush circle (if exists)
-        
         if self.base_x is None:
             self._cursor = self._BLANK_CURSOR
             self._initial_radius = self.get_cursor_radius(tdw)
@@ -192,6 +190,8 @@ class SizechangeMode(gui.mode.ScrollableModeMixin,
         return _Overlay(self, tdw)
     
     def _queue_draw_brush(self):
+        assert self.base_x is not None
+        assert self.base_y is not None
         for tdw, overlay in self._overlays.items():
             cur_radius = self.get_cursor_radius(tdw)
             gui.ui_utils.queue_circular_area(
