@@ -273,7 +273,7 @@ def queue_circular_area(tdw, x, y, r, min_r=16, margin=2):
         return
 
     # We would use `Midpoint circle algorithm` for this.
-    # Currently I use very easy codes for this.
+    # Currently I use very easy codes for this, not using that algorithm.
     
     # Deciding block size
     b = r // 4
@@ -281,7 +281,6 @@ def queue_circular_area(tdw, x, y, r, min_r=16, margin=2):
     if b < 4.0:
         b = r // 3
         # Queue around outer rim area, divide by 6.  
-        # top
         xs, xe = (r, r-b)
         w = (r + m) * 2
         h = b + m * 2
@@ -311,8 +310,6 @@ def queue_circular_area(tdw, x, y, r, min_r=16, margin=2):
 
     for ox, oy, w, h in offsets:
         tdw.queue_draw_area(x+ox-m, y+oy-m, w, h)
-
-        
 
 def dbg_draw_circular_area(cr, x, y, r, min_r=16, margin=2):
     """Queue to draw circular area.
