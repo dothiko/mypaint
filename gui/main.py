@@ -138,6 +138,17 @@ def main(datapath, iconspath, oldstyle_confpath=None, version=MYPAINT_VERSION):
         action="store_true",
         help='print version information and exit'
     )
+    # XXX for custom pressure mapping
+    # This is for custom pressure mapping of specific LCD-tablet
+    # devices.
+    parser.add_option(
+        '-p',
+        '--pressure',
+        metavar='FILE',
+        default=None,
+        help='use custom pressure mapping file(rel. to config location)'
+    )
+    # XXX for custom pressure mapping end
     options, args = parser.parse_args(sys.argv_unicode[1:])
 
     # XDG support for new users on POSIX platforms
@@ -186,6 +197,15 @@ def main(datapath, iconspath, oldstyle_confpath=None, version=MYPAINT_VERSION):
         print("MyPaint version %s" % (version, ))
         sys.exit(0)
 
+    # XXX for custom pressure mapping
+    if options.pressure is not None:
+        pressurepath = os.path.join(userconfpath, options.pressure)
+        # If this custom-pressure config (json) file does not exist,
+        # it is created.
+    else:
+        pressurepath = None
+    # XXX for custom pressure mappinge end
+
     def run():
         logger.debug('user_datapath: %r', userdatapath)
         logger.debug('user_confpath: %r', userconfpath)
@@ -201,6 +221,7 @@ def main(datapath, iconspath, oldstyle_confpath=None, version=MYPAINT_VERSION):
             state_dirs = app_state_dirs,
             version = version,
             fullscreen = options.fullscreen,
+            custom_pressure = pressurepath # XXX for custom pressure mapping
         )
 
         settings = Gtk.Settings.get_default()

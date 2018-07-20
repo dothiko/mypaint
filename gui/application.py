@@ -214,13 +214,16 @@ class Application (object):
     #: Singleton instance
     _INSTANCE = None
 
-    def __init__(self, filenames, state_dirs, version, fullscreen=False):
+    def __init__(self, filenames, state_dirs, version, fullscreen=False, 
+            custom_pressure=None): # XXX for custom pressure mapping
         """Construct, but do not run.
 
         :param list filenames: The list of files to load (unicode required)
         :param StateDirs state_dirs: static special paths.
         :param unicode version: Version string for the about dialog.
         :param bool fullscreen: Go fullscreen after starting.
+        XXX for custom pressure mapping
+        :param string custom_pressure: Custom pressure mapping file path.
 
         Only the first filename listed will be loaded. If no files are
         listed, the autosave recovery dialog may be shown when the
@@ -291,6 +294,9 @@ class Application (object):
 
         # Global pressure mapping function, ignored unless set
         self.pressure_mapping = None
+        # XXX for custom pressure mapping
+        self.custom_pressure_mapping = custom_pressure
+        # XXX for custom pressure mapping end
 
         # App-level settings
         self._preferences = lib.observable.ObservableDict()
@@ -482,6 +488,30 @@ class Application (object):
 
     def save_settings(self):
         """Saves the current settings to persistent storage."""
+
+        # XXX for custom pressure mapping
+        # Need to place before original codes
+        # to override original global pressure setting.
+        cpm = self.custom_pressure_mapping
+        if cpm is not None:
+            assert hasattr(self, "_original_pressure")
+            cpm_pref = self.preferences['input.global_pressure_mapping']
+            jsonstr = helpers.json_dumps(cpm_pref)
+            with open(cpm, 'w') as f:
+                f.write(jsonstr)
+            # Swap original setting, to store original config file. 
+            self.preferences['input.global_pressure_mapping'] = \
+                    self._original_pressure
+
+            # Disable custom pressure setting.
+            # I don't know the reason but this method and 
+            # _apply_pressure_mapping_settings called again
+            # after exit this method.
+            # And if this attribute still remained at the second call, 
+            # it overwrites custom setting with default setting.
+            self.custom_pressure_mapping = None
+        # XXX for custom pressure mapping end
+
         self.brushmanager.save_brushes_for_devices()
         self.brushmanager.save_brush_history()
         self.filehandler.save_scratchpad(self.scratchpad_filename)
@@ -490,7 +520,6 @@ class Application (object):
         jsonstr = helpers.json_dumps(self.preferences)
         with open(settingspath, 'w') as f:
             f.write(jsonstr)
-
 
     def apply_settings(self):
         """Applies the current settings.
@@ -674,6 +703,27 @@ class Application (object):
 
     def _apply_pressure_mapping_settings(self):
         p = self.preferences['input.global_pressure_mapping']
+
+        # XXX for custom pressure mapping
+        cpm = self.custom_pressure_mapping
+        if cpm is not None:
+            self._original_pressure = p
+            print(p)
+            if os.path.exists(cpm):
+                with open(cpm) as fp:
+                    jsonstr = fp.read()
+                try:
+                    p = helpers.json_loads(jsonstr)
+                    self.preferences['input.global_pressure_mapping'] = p
+                except Exception as e:
+                    logger.warning("%s: %s", (cpm, str(e)))
+                    logger.warning("Failed to load settings: using defaults")
+            # If there is no such pressure setting,
+            # original global mapping used, and it is saved as
+            # new custom setting file when exitting mypaint.
+                
+        # XXX for custom pressure mapping end
+
         if len(p) == 2 and abs(p[0][1]-1.0)+abs(p[1][1]-0.0) < 0.0001:
             # 1:1 mapping (mapping disabled)
             self.pressure_mapping = None
