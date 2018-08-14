@@ -53,7 +53,10 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
     _initial_cursor = None
     _center_radius = 3
 
-    ## Parallel ruler constants.
+    # Centerpoint.
+    _cx = None
+    _cy = None
+
 
     ## Initialization
 
@@ -61,6 +64,10 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
         # Ignore the additional arg that flip actions feed us
         super(CenterFreehandMode, self).__init__(**args)
         self._sx = None
+        if self.is_ready():
+            self._phase = _Phase.INIT
+        else:
+            self._phase = _Phase.INVALID
 
     ## Metadata
 
@@ -260,8 +267,7 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
 
         # _cx, _cy is center point.
         # all drawing stroke heads to/from this point.
-        self._cx = None
-        self._cy = None
+        self._set_center_point(None, None)
 
         # _vx, _vy stores the identity vector of ruler, which is
         # from (_bx, _by) to (_dx, _dy) 
@@ -300,9 +306,12 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
             self._rx, self._ry = tdw.display_to_model(x, y)
 
     def _update_positions(self, tdw, dx, dy):
-        self._cx, self._cy = tdw.display_to_model(dx, dy)
-       #self._update_center_vector()
-
+        self._set_center_point(*tdw.display_to_model(dx, dy))
+    
+    def _set_center_point(self, cx, cy):
+        cls = self.__class__
+        cls._cx = cx
+        cls._cy = cy
 
     ## Overlay related
 

@@ -67,7 +67,6 @@ class AssistedFreehandMode (freehand.FreehandMode,
         self._override_assist = False
         self._last_button = None
         self._prev_button = None
-        self.reset_assist()
 
     ## Properties
     

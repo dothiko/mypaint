@@ -64,15 +64,27 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
     # 'level indicator' would be shown.
     _level_vector = (0.0, 1.0)
 
+    # Common ruler object for each ParallelFreehandMode instance.
+    _ruler = None
+
     ## Initialization
 
     def __init__(self, ignore_modifiers=True, **args):
         # Ignore the additional arg that flip actions feed us
 
-        # Initialize ruler before calling super-constructor.
-        # because it would call reset_assist.
-        # that method refer self._ruler.
-        self._ruler = RulerController(self.app)
+        cls = self.__class__
+        if cls._ruler is None:
+            cls._ruler = RulerController(self.app)
+
+        # We need to set initial phase here.
+        # Otherwise, self.motion_notify_cb and 
+        # reset_assist() would raise exception.
+        if self._ruler.is_ready():
+            self._phase = _Phase.INIT
+            self._update_ruler_vector()
+        else:
+            self._phase = _Phase.INVALID 
+        self._overrided_cursor = None
         
         super(ParallelFreehandMode, self).__init__(**args)
 
