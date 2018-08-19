@@ -760,13 +760,13 @@ protected:
 
     inline int _get_left_dir(const int dir) { return (dir + 3) & 3; }
 
-    // Utilize _is_match_pixel for another purpose.
+    // Utilize _is_wall_pixel for another purpose.
     // At 1st pass, this kernel would set FLAG_DECIDED flag to current wall pixel.
     // With this, we can distinguish the filled pixel is already 
     // examined or not.
     // And 2nd pass(small area removal), this kernel replace wall pixel
     // as PIXEL_REMOVE, to mark that area should be removed.
-    virtual bool _is_match_pixel(const uint8_t pixel) 
+    virtual bool _is_wall_pixel(const uint8_t pixel) 
     {
         switch(pixel & PIXEL_MASK) {
             case PIXEL_FILLED:
@@ -912,6 +912,57 @@ class RemoveGarbageKernel: public FillHoleKernel
 protected:
     RemoveAreaWorker m_remove_worker;
     int m_threshold;
+    
+    // Encount numbers of `vacant` pixels. 
+    // If this is zero at the time walking end,
+    // that area should be remained even if smaller than threshold. 
+    int m_encount;
+
+    void _mark_decide_pixel(const int x, const int y) {
+        m_surf->replace_pixel(
+            m_level,
+            x, y, 
+            PIXEL_FILLED | FLAG_DECIDED
+        );
+    }
+    
+    // tells whether the pixel value is wall pixel or not.
+    virtual bool _is_wall_pixel(const uint8_t pixel) 
+    {
+        switch(pixel & PIXEL_MASK) {
+            case PIXEL_FILLED:
+                return false;
+
+            case PIXEL_AREA:
+            case 0:
+                m_encount++;
+                // Fall through.
+
+            default:
+                return true;
+        }
+    }
+
+    virtual void _on_rotate_cb(const bool right) 
+    {
+        // If rotating right, it is `vacant pixel` of perimeter.
+        // so decliment perimeter(i.e. m_step).
+        if (right)
+            m_step--;
+    }
+
+    virtual void _on_new_pixel() {
+        _mark_decide_pixel(m_x, m_y);
+    }
+    
+    // RemoveGarbageKernel would target(walk through) 
+    // PIXEL_FILLED pixel without any flags, 
+    // and neighboring(or surrounded by) PIXEL_AREA 
+    // ,vacant or PIXEL_CONTOUR pixel. 
+    virtual bool _is_target_pixel(const uint8_t pixel) {
+        return  pixel == PIXEL_FILLED;
+    }
+
 
 public:
     /**
@@ -940,6 +991,7 @@ public:
                       const int x, const int y,
                       const int sx, const int sy)
     {
+        /*
         uint8_t pixel = targ->get(m_level, x, y) & PIXEL_MASK;
         if (pixel == PIXEL_AREA 
                 || pixel == 0) {
@@ -967,6 +1019,42 @@ public:
                         }
                         return;
                     }
+                }
+            }
+        }*/
+        // Use raw pixel, DO not remove FLAG_DECIDED.
+        uint8_t pixel = targ->get(m_level, x, y); 
+
+        if (pixel == PIXEL_FILLED) {
+            for(int i=0; i<4; i++) {
+                uint8_t kpix = get_kernel_pixel(m_level, sx, sy, i);
+                
+                // When kpix is EXACTLY filled pixel... 
+                // (A ridge of already detected area would be a combination of
+                // PIXEL_FILLED | FLAG_DECIDED, so skip it.)
+
+                m_encount = 0;// IMPORTANT: initialize this here. 
+                              // This might be increased in _is_wall_pixel.
+
+                if (_is_wall_pixel(kpix)){
+                    // Start from current kernel pixel.
+                    // We'll proceed to `right` of that pixel,
+                    // so _get_hand_dir(i) is the initial direction.
+                    _mark_decide_pixel(sx, sy);
+                    _walk(sx, sy, _get_left_dir(i));
+                    if (m_step < m_threshold && m_encount > 0) {
+                        // After walking, we might remove current pixel area.
+                        // But if it is clockwise, it would be a hole
+                        // in large pixel area. so ignore it.
+                        if (!is_clockwise()) {
+                            m_surf->flood_fill(
+                                sx,
+                                sy,
+                                &m_remove_worker
+                            );
+                        }
+                    }
+                    return;
                 }
             }
         }

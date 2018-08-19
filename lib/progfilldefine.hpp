@@ -362,9 +362,14 @@ protected:
     // if `right` is true, kernel turns right. otherwise turns left.
     virtual void _on_rotate_cb(const bool right) = 0;
 
+    // `Entering new pixel` callback.
+    // This called when _forward() method go (forward) into new pixel.
+    // Current pixel is ensured as `forwardable` target pixel.
+    virtual void _on_new_pixel(){}
+
     // Check whether the right side pixel of current position / direction
     // is match to forward.
-    virtual bool _is_match_pixel(const uint8_t pixel);
+    virtual bool _is_wall_pixel(const uint8_t pixel);
 
     // Rotate to right.
     // This is used when we missed wall at right-hand. 

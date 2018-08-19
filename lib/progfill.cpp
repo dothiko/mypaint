@@ -228,7 +228,7 @@ WalkingKernel::_get_pixel_with_direction(const int x, const int y,
 // Check whether the right side pixel of current position / direction
 // is match to forward.
 bool 
-WalkingKernel::_is_match_pixel(const uint8_t pixel) 
+WalkingKernel::_is_wall_pixel(const uint8_t pixel) 
 {
     return ((pixel & PIXEL_MASK) == PIXEL_FILLED);
 }
@@ -264,7 +264,7 @@ WalkingKernel::_forward()
     // see front.
     pix = _get_front_pixel(); 
 
-    if (_is_match_pixel(pix)) {
+    if (_is_wall_pixel(pix)) {
         // Face to wall.
         // Now, we must turn left.
         // With this turn, this kernel draws antialias line or
@@ -292,6 +292,8 @@ WalkingKernel::_forward()
         if (m_x == m_ox && m_y == m_oy) {
             return false; // Walking end!!
         }
+
+        _on_new_pixel();
     }
     return true;
 }
@@ -301,7 +303,7 @@ WalkingKernel::_forward()
 bool 
 WalkingKernel::_proceed() 
 {
-    if (!_is_match_pixel(_get_hand_pixel())) {
+    if (!_is_wall_pixel(_get_hand_pixel())) {
         // Right hand of kernel misses the wall.
         // Couldn't forward.
         _rotate_right();
