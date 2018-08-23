@@ -201,7 +201,7 @@ protected:
     int m_width;
     int m_height;
     
-    // Start progress level
+    // Starting progress level
     const int m_level;
 
     // Initial tile values
@@ -355,8 +355,7 @@ assert(ct != NULL);
     // Progress methods.
     void build_progress_seed();
     // Actually progress pixels based on progress seeds.
-    void progress_tiles(const int reject_targ_level,
-                        const int perimeter);
+    void progress_tiles();
 
     // flood_fill method. 
     // This should not be called from Python codes.
@@ -370,12 +369,16 @@ assert(ct != NULL);
     // Also, filter method would be called from some worker classes.
     // Make it public.
     void filter_tiles(KernelWorker *k);
-    
+
+    // Convert vacant(PIXEL_AREA) pixels into PIXEL_FILLED.
+    // This method is also used from python, so we need to expose this.
+    int convert_vacant_area(const int level);
+
     // Finalize related methods.
-    void remove_small_areas(const int threshold);
     void dilate(const int dilation_size);
     void fill_holes();
     void draw_antialias();
+    void finalize_filled_area();
     
     // XXX for Debug (might be used even not in HEAVY_DEBUG)
     PyObject*

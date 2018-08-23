@@ -2082,23 +2082,22 @@ class ClosedAreaFill (FloodFill):
         assert(len(nodes) > 2)
         self.nodes = nodes
         self.dilation_size = int(dilation_size)
-        
+
+        # Keywords parameters
         self.targ_color_pos = kwds.get('targ_color_pos', None)
         self.progress_level = int(kwds.get('progress_level', 3))
         assert self.progress_level >= 0
         assert self.progress_level <= 6
-        self.reject_perimeter = int(kwds.get('reject_perimeter', 
-                (1 << self.progress_level) * 4 * 2))
         self.alpha_threshold = float(kwds.get('alpha_threshold', 0.2))
         self.fill_all_holes = bool(kwds.get('fill_all_holes', False))
         self.erase_pixel = kwds.get('erase_pixel', False)
+        self.remove_disconnected = kwds.get('remove_disconnected', True)
                 
         self._restore_bg = False
 
         # XXX DEBUG options
         self.tile_output = kwds.get('tile_output', False)
         self.show_flag = kwds.get('show_flag', False)
-        print("rejecting perimeter %d" %  self.reject_perimeter)
 
     def _dbg_show_flag(self, ft, method, level=0, title=None):
         # XXX debug method
@@ -2158,6 +2157,8 @@ class ClosedAreaFill (FloodFill):
                 npbuf = create_npbuf(npbuf, level, PIXEL_CONTOUR)
                 npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED | FLAG_DECIDED)
             elif m == 'result':
+                npbuf = create_npbuf(npbuf, 0, PIXEL_OUTSIDE)
+                npbuf = create_npbuf(npbuf, 0, PIXEL_AREA)
                 npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED)
                 npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED | FLAG_DECIDED)
             elif m == 'walking':
@@ -2200,7 +2201,6 @@ class ClosedAreaFill (FloodFill):
         info['tolerance'] = self.tolerance
         info['level'] = self.progress_level
         info['erase_pixel'] = self.erase_pixel
-        info['reject_perimeter'] = self.reject_perimeter
         info['tilesurf_dimension'] = (ox, oy, tw, th)
         info['fill_all_holes'] = self.fill_all_holes
 
@@ -2356,27 +2356,20 @@ class ClosedAreaFill (FloodFill):
         ft.decide_area()
           
         # Then, start progressing tiles.
-        e_level = level - 1
-        MAX_PROGRESS_LEVEL = 6
-        rev_level = MAX_PROGRESS_LEVEL - e_level
-        ft.progress_tiles(
-            e_level,  
-            int((1<<rev_level) * 4 * 2)
-        )
+        ft.progress_tiles()
 
         # XXX Debug/profiling code
         if show_flag:
             self._dbg_show_flag(
                 ft, 
-                'contour,filled', 
+                'contour,filled,outside,area', 
                 title='post-progress'
             )
         #XXX debug code end
 
         # Finalize progressive fill.
-        # The processing sequence MUST be : 
-        # removing needless areas -> dilation -> draw anti-aliasing pixels.        
-        ft.remove_small_areas(self.reject_perimeter)
+        ft.finalize_filled_area()
+
         ft.dilate(self.dilation_size)
         if self.fill_all_holes:
             ft.fill_holes()
@@ -2501,9 +2494,6 @@ class LassoFill(ClosedAreaFill):
                         )
         
         # Finalize lasso fill
-        # For lasso fill, there is no rejecting perimeter.
-        # But (might) use fill_all_holes option.
-        lt.remove_small_areas(0)
         lt.dilate(self.dilation_size)
         lt.convert_result_area()
         if self.fill_all_holes:

@@ -114,17 +114,6 @@ assert_tile(PyArrayObject* array) {
 //--------------------------------------
 /// KernelWorker 
 
-KernelWorker::KernelWorker(FlagtileSurface *surf, const int level)
-    : TileWorker(surf, level)
-{
-    // C++ virtual function call cannot work properly
-    //
-    // in constructor.It just call its own method,
-    // not virtual(derived) one.
-    // Therefore, we need call `set_target_level` of
-    // this class here.
-    set_target_level(level);
-} 
 
 // We can enumerate kernel window(surrounding) 4 pixels with for-loop
 // by these offset, in the order of 
@@ -136,18 +125,6 @@ KernelWorker::KernelWorker(FlagtileSurface *surf, const int level)
 // DO NOT CHANGE THIS ORDER.
 const int KernelWorker::xoffset[] = { 0, 1, 0, -1};
 const int KernelWorker::yoffset[] = {-1, 0, 1,  0};
-
-void 
-KernelWorker::set_target_level(const int level) 
-{
-#ifdef HEAVY_DEBUG
-    assert(level >= 0); 
-    assert(level <= MAX_PROGRESS); 
-#endif
-    m_level = level; 
-    m_max_x = m_surf->get_pixel_max_x(level);
-    m_max_y = m_surf->get_pixel_max_y(level);
-}
 
 /**
 * @start
@@ -162,9 +139,9 @@ KernelWorker::set_target_level(const int level)
 * forward next tile.
 */
 bool 
-KernelWorker::start(Flagtile* targ) 
+KernelWorker::start(Flagtile *tile, const int tx, const int ty) 
 {
-    if(targ != NULL) {
+    if(tile != NULL) {
         m_processed = 0;
         return true;
     }
@@ -182,20 +159,6 @@ KernelWorker::end(Flagtile* targ)
     }
 }
 
-uint8_t 
-KernelWorker::get_kernel_pixel(const int level,
-                               const int sx, const int sy,
-                               const int idx) 
-{
-    m_px = sx + xoffset[idx];
-    m_py = sy + yoffset[idx];
-    if (m_px > 0 && m_px < m_max_x
-            && m_py > 0 && m_py < m_max_y) {
-        return m_surf->get_pixel(level, m_px, m_py);
-    }
-    return 0;
-}
-
 void
 KernelWorker::finalize() 
 {
@@ -210,20 +173,19 @@ KernelWorker::finalize()
     }
 }
 
-//--------------------------------------
-//// WalkingKernel class
-
-// Wrapper method to get pixel with direction.
-uint8_t 
-WalkingKernel::_get_pixel_with_direction(const int x, const int y, 
-                                          const int direction) 
+uint8_t
+KernelWorker::_get_neighbor_pixel(const int direction, 
+                                  const int sx, const int sy) 
 {
     return m_surf->get_pixel(
-        m_level,
-        x + xoffset[direction],
-        y + yoffset[direction]
+        m_level, 
+        sx+xoffset[direction], 
+        sy+yoffset[direction]
     );
 }
+
+//--------------------------------------
+//// WalkingKernel class
 
 // Check whether the right side pixel of current position / direction
 // is match to forward.
@@ -340,14 +302,14 @@ WalkingKernel::_walk(const int sx, const int sy, const int direction)
 // Caution: Child class of this kernel should accepts
 // NULL tile.
 bool 
-WalkingKernel::start(Flagtile* targ) 
+WalkingKernel::start(Flagtile *tile, const int tx, const int ty) 
 {
     // `step` method of this class accepts
     // NULL tile. so we cannot use `start`
     // method of KernelWorker base class.
     m_processed = 0; 
-    if ( targ != NULL 
-        && (targ->get_stat() & Flagtile::FILLED) != 0) {
+    if (tile != NULL 
+        && (tile->get_stat() & Flagtile::FILLED) != 0) {
             return false;
     }
     return true;
@@ -1017,7 +979,7 @@ FlagtileSurface::filter_tiles(KernelWorker *w)
     for(int ty=0; ty<m_height; ty++) {
         for(int tx=0; tx<m_width; tx++) {
             t = get_tile(tx, ty, false);
-            if (w->start(t)) {
+            if (w->start(t, tx, ty)) {
                 int bx = tx * tile_size;
                 int by = ty * tile_size;
 
@@ -1097,44 +1059,14 @@ FlagtileSurface::build_progress_seed()
 * ProgressWorker class.
 */
 void 
-FlagtileSurface::progress_tiles(const int reject_targ_level,
-                                const int threshold) 
+FlagtileSurface::progress_tiles() 
 {
     if (m_level > 0) {
         ProgressKernel k(this); 
         for (int i=m_level; i>0; i--) {
-            if (i == reject_targ_level) {
-                RemoveGarbageKernel rk(this, i, threshold);
-                filter_tiles((KernelWorker*)&rk);    
-            }
-            k.set_target_level(i);            
+            k.setup(i);            
             filter_tiles((KernelWorker*)&k);
         }
-    }
-}
-
-/**
-* @remove_small_areas
-* Remove small areas, and fill all small holes if needed.
-*
-* @param threshold: The threshold value of filled area perimeter.
-*                   If an area which perimeter is less than this value,
-*                   that area is removed(filled with PIXEL_AREA)
-* 
-* @detail 
-* This method is to reject small needless areas by counting its perimeter. 
-*/
-void
-FlagtileSurface::remove_small_areas(const int threshold)
-{
-    // Remove annoying small glich-like pixel area.
-    // `Progressive fill` would mistakenly fill some
-    // concaved areas around jagged contour edges as gap.
-    // Theorically, such area cannot be produced when
-    // gap-closing-level is less or equal to 1.
-    if (threshold > 0 && m_level > 1) {
-        RemoveGarbageKernel rk(this, 0, threshold);
-        filter_tiles((KernelWorker*)&rk);
     }
 }
 
@@ -1149,7 +1081,7 @@ FlagtileSurface::remove_small_areas(const int threshold)
 void
 FlagtileSurface::fill_holes()
 {
-    FillHoleKernel fk(this, 0);
+    FillHoleKernel fk(this);
     filter_tiles((KernelWorker*)&fk);
 }
 
@@ -1177,6 +1109,55 @@ FlagtileSurface::draw_antialias()
 {
     AntialiasKernel ak(this);
     filter_tiles((KernelWorker*)&ak);
+}
+
+/**
+* @convert_vacant_area
+* Convert vacant(PIXEL_AREA) pixels into PIXEL_FILLED.
+*
+* @detail 
+* This method is used not only initial top-level pixel decision,
+* but also used for result pixel decision.
+*/
+int 
+FlagtileSurface::convert_vacant_area(const int level) 
+{
+    // Then, convert remained vacant PIXEL_AREA into PIXEL_FILLED.
+    // With this, we fill the inside of contour with PIXEL_FILLED.
+    ConvertKernel k(this); 
+    k.setup(level, PIXEL_AREA, PIXEL_FILLED);
+    filter_tiles((KernelWorker*)&k);
+    return k.get_total_filled_count();
+}
+
+/**
+* @finalize_filled_area
+* Fill all FILL_AREA pixels which is neigbor of PIXEL_FILLED pixel.
+*
+* @detail 
+* This method is used to finalize progressed and undecided pixels.
+* With this, we can get `minimal closed & filled area`
+*/
+void 
+FlagtileSurface::finalize_filled_area()
+{
+    SearchAndFillKernel k(this);
+    k.setup(0);
+    filter_tiles((KernelWorker*)&k);
+
+    if(k.get_total_filled_count() == 0) {
+        // Fallback:
+        // No any pixels found.
+        // Too Large level for too small area mi
+        // produce this result.
+        // For such case, just use convert_vacant_area.
+        // (Or, We can ignore this fail and leave
+        // areas as vacant, because such small
+        // area would be drawn single brush stroke)
+        PostProgressKernel p(this);
+        filter_tiles((KernelWorker*)&p);
+        convert_vacant_area(0); 
+    } 
 }
 
 //--------------------------------------
@@ -1696,13 +1677,25 @@ ClosefillSurface::decide_area()
     // when vacant area pixel found.
     // With this, we fill progress pixel of outside contours with
     // PIXEL_OUTSIDE.
-    DecideTriggerWorker w(this, m_level);   // Worker for trigger flood-fill
+    DecideTriggerWorker w(this);   // Worker for trigger flood-fill
     _walk_polygon(&w);
 
     // Then, convert remained vacant PIXEL_AREA into PIXEL_FILLED.
     // With this, we fill the inside of contour with PIXEL_FILLED.
-    ConvertKernel k(this, m_level, PIXEL_AREA, PIXEL_FILLED);
-    filter_tiles((KernelWorker*)&k);
+    // That pixel become a seed of last flood-fill.
+    if (convert_vacant_area(m_level) == 0 && m_level >= 1) {
+        // Converting (generating seed pixel) failed.
+        // The target area might be too small for current progress level.
+        // In this case, we can not get `seed PIXEL_FILLED pixel`
+        // and almost entire area would be not filled.
+        // So call dedicated worker for fallback of such case.
+        // (But for level 0 fill, we have no way to stop leaking from
+        // gap. so ignore such case.)
+
+        DetectSeedPixelKernel k(this);
+        filter_tiles((KernelWorker*)&k);
+    }
+
 }
 
 //--------------------------------------
@@ -1732,7 +1725,8 @@ LassofillSurface::~LassofillSurface()
 void
 LassofillSurface::convert_result_area()
 {
-    ConvertKernel ck(this, 0, PIXEL_CONTOUR, PIXEL_OUTSIDE);
+    ConvertKernel ck(this);
+    ck.setup(0, PIXEL_CONTOUR, PIXEL_OUTSIDE);
     filter_tiles((KernelWorker*)&ck);
     ck.setup(0, PIXEL_AREA, PIXEL_FILLED);
     filter_tiles((KernelWorker*)&ck);

@@ -98,27 +98,21 @@ protected:
     int m_level;
 
 public:
-    PixelWorker(FlagtileSurface* surf, const int level) 
-        : m_surf(surf), m_level(level) 
+    PixelWorker(FlagtileSurface* surf)
+        : m_surf(surf),
+          m_level(0)
     {
-        // Calling virtual method `set_target_level` 
-        // at here (i.e. constructor) is meaningless.
-        // It cannot call derived virtual one by C++
-        // design.
-        // So I use initialization list.
+        // target level should set on constructor of derived class 
+        // or add setup(int level) method or something like that.
+        //
+        // Most of worker class just uses surface starting 
+        // progress level, or final result level(i.e. level 0).
+        // But some class might need a capability to change 
+        // target level in loop.
     }
     virtual ~PixelWorker(){}
 
     inline int get_target_level() { return m_level;}
-
-    virtual void set_target_level(const int level) {
-#ifdef HEAVY_DEBUG
-        assert(level >= 0); 
-        assert(level <= MAX_PROGRESS); 
-#endif
-        m_level = level; 
-    }
-    
 };
 
 /**
@@ -131,8 +125,8 @@ public:
 class DrawWorker : public PixelWorker {
 protected:
 public:
-    DrawWorker(FlagtileSurface* surf, const int level) 
-        : PixelWorker(surf, level) 
+    DrawWorker(FlagtileSurface* surf)
+        : PixelWorker(surf)
     {
         // Calling virtual method `set_target_level` 
         // at here (i.e. constructor) is meaningless.
@@ -161,11 +155,16 @@ public:
 */
 class TileWorker : public PixelWorker {
 protected:
-    int m_processed; // Processed pixel count. update this in child class.
+    int m_processed; // Processed pixel count. 
+                     // This is mainly for detect tile finalizing
+                     // (i.e. remove FLAG_* constant from
+                     // edited pixels). 
+                     // Therefore, this member is only valid 
+                     // from start() to end() cycle.
     
 public:
-    TileWorker(FlagtileSurface* surf, const int level) 
-        : PixelWorker(surf, level) ,
+    TileWorker(FlagtileSurface* surf)
+        : PixelWorker(surf),
           m_processed(0)
     {
     }
@@ -176,6 +175,8 @@ public:
                
     // `start` called at the starting point of tile processing.
     // All processing cancelled when this return false.
+    //
+    // This start method is different from kernel worker.
     virtual bool start(Flagtile *tile) {
         return true; // As a default, always return true.
     }
@@ -208,8 +209,8 @@ public:
 class FillWorker : public TileWorker{
 protected:
 public:
-    FillWorker(FlagtileSurface* surf, const int level) 
-        : TileWorker(surf, level) 
+    FillWorker(FlagtileSurface* surf)
+        : TileWorker(surf)
     {
         // Calling virtual method `set_target_level` 
         // at here (i.e. constructor) is meaningless.
@@ -242,27 +243,44 @@ public:
 */
 class KernelWorker : public TileWorker {
 protected:
-    // Cache of m_surf information
-    int m_max_x;
-    int m_max_y;
 
     static const int xoffset[];
     static const int yoffset[];
 
-    // Current filter-kernel pixel position.
-    // These can be refreshed with
-    // get_kernel_pixel method.
-    int m_px;
-    int m_py;
+    // Get neighbor pixel from screen coordinate.
+    // direction is of x_offset/y_offset.
+    inline uint8_t _get_neighbor_pixel(const int direction, 
+                                       const int sx, const int sy); 
+
+    // Utility method, for completely filled tile.
+    // This method execute around the ridge of the tile.
+    // So reduce processing time.
+    void _process_only_ridge(Flagtile *targ, 
+                             const int tx, const int ty)
+    {
+        int tile_size = PROGRESS_TILE_SIZE(m_level);
+        int sx = tx * tile_size;
+        int sy = ty * tile_size;
+
+        for(int y=0;y < tile_size; y+=tile_size-1) {
+            for(int x=0;x < tile_size; x++) {
+                step(targ, x, y, sx+x, sy+y);
+            }
+        }
+        for(int x=0;x < tile_size; x+=tile_size-1) {
+            for(int y=1;y < tile_size-1; y++) {
+                step(targ, x, y, sx+x, sy+y);
+            }
+        }
+    }
 
 public:
     // Defined at lib/progfill.cpp
-    KernelWorker(FlagtileSurface *surf, const int level);
+    KernelWorker(FlagtileSurface *surf)
+        : TileWorker(surf)
+    {}
 
-
-    virtual void set_target_level(const int level);
-
-    virtual bool start(Flagtile *tile);
+    virtual bool start(Flagtile *tile, const int tx, const int ty);
     virtual void end(Flagtile *tile);
     
     /**
@@ -277,32 +295,6 @@ public:
     */ 
     virtual void finalize();
 
-    /**
-    * @get_kernel_pixel
-    * refresh internal members of kernel pixel position.
-    *
-    * @param sx, sy: The center pixel position, in surface coodinate.
-    *                Most importantly, this position unit is in current ongoing
-    *                `progress-level`.
-    *                You can get that level with
-    *                KernelWorker::get_target_level method. or just accessing
-    *                m_level member.
-    * @param idx: The index value of kernel pixel.
-    *             0=left, 1=right, 2=top, 3=bottom.
-    * @return: pixel value of current kernel.
-    *          If that kernel position exceeds surface border,
-    *          return 0.
-    * @detail 
-    * Utility method to update valid filter-kernel(4 surrounding pixel)
-    * coordinates within for-loop.
-    * That pixel position is stored in member variables, m_px and m_py.
-    * If that position is off the FlagtileSurface (invalid position),
-    * this method returns false.
-    * So continue processing only when this method return true.
-    */
-    uint8_t get_kernel_pixel(const int level,
-                             const int sx, const int sy,
-                             const int idx);
 };
 
 // Walking kernel base class.
@@ -344,16 +336,12 @@ protected:
 
     inline int _get_hand_dir(const int dir) { return (dir + 1) & 3; }
 
-    // Wrapper method to get pixel with direction.
-    virtual uint8_t _get_pixel_with_direction(const int x, const int y, 
-                                              const int direction);
-
     inline uint8_t _get_front_pixel() {
-        return _get_pixel_with_direction(m_x, m_y, m_cur_dir);
+        return _get_neighbor_pixel(m_cur_dir, m_x, m_y);
     }
 
     inline uint8_t _get_hand_pixel() {
-        return _get_pixel_with_direction(m_x, m_y, _get_hand_dir(m_cur_dir));
+        return _get_neighbor_pixel(_get_hand_dir(m_cur_dir), m_x, m_y);
     }
 
     //// Walking related.
@@ -390,13 +378,13 @@ protected:
     void _walk(const int sx, const int sy, const int direction);
     
 public:
-    WalkingKernel(FlagtileSurface *surf, const int level) 
-        : KernelWorker(surf, level)
+    WalkingKernel(FlagtileSurface *surf)
+        : KernelWorker(surf)
     {} 
 
     // Caution: Child class of this kernel should accepts
     // NULL tile.
-    virtual bool start(Flagtile* targ);
+    virtual bool start(Flagtile *targ, const int tx, const int ty);
 
     // To disable default end method.
     virtual void end(Flagtile* targ) {}
@@ -423,6 +411,5 @@ typedef struct {
     int tx; // Tile location
     int ty;
 } _progfill_tilepoint;
-
 
 #endif

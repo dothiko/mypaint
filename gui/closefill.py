@@ -95,7 +95,6 @@ class _Prefs:
     DILATION_SIZE_PREF = 'dilate_size'
     SAMPLE_MERGED_PREF = 'sample_merged'
     FILL_IMMIDIATELY_PREF = 'fill_immidiately'
-    REJECT_FACTOR_PREF = 'reject_factor'
     FILL_METHOD_PREF = 'fill_method'
     SHARE_SETTING_PREF = 'share_setting'
     ALPHA_THRESHOLD_PREF = 'alpha_threshold'
@@ -107,7 +106,6 @@ class _Prefs:
     DEFAULT_SAMPLE_MERGED = True
     DEFAULT_MAKE_NEW_LAYER = False
     DEFAULT_FILL_IMMIDIATELY = False
-    DEFAULT_REJECT_FACTOR = 2.0
     DEFAULT_FILL_METHOD = _FillMethod.FLOOD_FILL
     DEFAULT_SHARE_SETTING = True
     DEFAULT_ALPHA_THRESHOLD = 0.0156
@@ -857,7 +855,6 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                 targ_color_pos=targ_color_pos,
                 progress_level=opts.gap_level,
                 erase_pixel=erase_pixel,
-                reject_perimeter=opts.reject_perimeter,
                 fill_all_holes=opts.fill_all_holes,
                 # debug options
                 show_flag = opts.show_flag,
@@ -1303,40 +1300,8 @@ class OptionsPresenter(Gtk.Grid):
         exp.set_use_markup(False)
         self.attach(exp, 0, row, 2, 1)
 
-        # Factor of pixel rejecting perimeter.
         adv_row = 0
-        label = generate_label(
-            _("Rejecting factor:"),
-            _("Specifying the perimeter factor of to be removed pixels\n"
-              "which is unintentionally filled around contour."),
-            adv_row,
-            adv_grid
-        )
-        adv_grid.attach(label, 0, adv_row, 1, 1)
-        # The formula of rejecting perimeter is , 
-        # (1 << gap-closing-level) * 4 * factor.
-        # As a default, this factor is 2.
-        # Pixel areas which have smaller perimeter than 
-        # this threshold perimeter should be rejected.
-        # This default value would be enough in most case practically.
-        # So, assigning too large factor would ruin filled result.
-        adj = Gtk.Adjustment(
-            value=_Prefs.DEFAULT_REJECT_FACTOR, lower=0,
-            upper=4.0, 
-            step_increment=1, page_increment=1,
-            page_size=0
-        )
-        adj.connect("value-changed", self._reject_factor_changed_cb)
-        self._reject_factor_adj = adj
-        scale = Gtk.Scale()
-        scale.set_hexpand(True)
-        scale.set_adjustment(adj)
-        scale.set_draw_value(False)
-        adv_grid.attach(scale, 1, adv_row, 1, 1)
-        self._reject_factor_scale = scale
-
         # Alpha transparency threshold.
-        adv_row += 1
         label = generate_label(
             _("Alpha threshold:"),
             _("Specifying pixel transparency threshold.\n"
@@ -1346,13 +1311,6 @@ class OptionsPresenter(Gtk.Grid):
             adv_grid
         )
         adv_grid.attach(label, 0, adv_row, 1, 1)
-        # As a default, the rejecting perimeter is , 
-        # (1 << gap-closing-level) * 4 * 2.
-        # This `2` is the `factor`, and 2 is default value.
-        # Pixel areas which have smaller perimeter than 
-        # this threshold perimeter should be rejected.
-        # This default value would be enough in most case practically.
-        # So, assigning too large factor would ruin filled result.
         adj = Gtk.Adjustment(
             value=_Prefs.DEFAULT_ALPHA_THRESHOLD, lower=0,
             upper=1.0, 
@@ -1437,9 +1395,6 @@ class OptionsPresenter(Gtk.Grid):
         self._fill_immidiately_toggle.set_sensitive(
             method==_FillMethod.CLOSED_AREA_FILL
         )
-        self._reject_factor_scale.set_sensitive(
-            method!=_FillMethod.LASSO_FILL
-        )
         self._fill_all_holes_toggle.set_sensitive(
             method!=_FillMethod.FLOOD_FILL
         )
@@ -1475,12 +1430,6 @@ class OptionsPresenter(Gtk.Grid):
             )
             self._fill_immidiately_toggle.set_active(bool(active))
 
-            value = self.get_pref_value(
-                _Prefs.REJECT_FACTOR_PREF,
-                _Prefs.DEFAULT_REJECT_FACTOR
-            )
-            self._reject_factor_adj.set_value(float(value))
-            
             value = self.get_pref_value(
                 _Prefs.ALPHA_THRESHOLD_PREF,
                 _Prefs.DEFAULT_ALPHA_THRESHOLD
@@ -1587,15 +1536,6 @@ class OptionsPresenter(Gtk.Grid):
         return int(math.floor(self._gap_level_adj.get_value()))
 
     @property
-    def reject_perimeter(self):
-        f = self._reject_factor_adj.get_value()
-        g = self.gap_level
-        # 1 << gap_level == ridge length of progress level pixel.
-        # ridge-length * 4 == maximum perimeter of progress level pixel
-        # perimeter * factor(as a default, 2.0) == reject_perimeter
-        return (1 << g) * 4 * f
-
-    @property
     def share_setting(self):
         return self._share_setting_toggle.get_active()
         
@@ -1631,12 +1571,6 @@ class OptionsPresenter(Gtk.Grid):
     def _gap_level_changed_cb(self, adj):
         self.set_pref_value(
             _Prefs.GAP_LEVEL_PREF,
-            adj.get_value()
-        )
-
-    def _reject_factor_changed_cb(self, adj):
-        self.set_pref_value(
-            _Prefs.REJECT_FACTOR_PREF,
             adj.get_value()
         )
 
@@ -1698,12 +1632,6 @@ class OptionsPresenter(Gtk.Grid):
                 _Prefs.DILATION_SIZE_PREF,
                 _Prefs.DEFAULT_DILATION_SIZE)
         )
-        self._reject_factor_adj.set_value(
-            self.get_pref_value(
-                _Prefs.REJECT_FACTOR_PREF,
-                _Prefs.DEFAULT_REJECT_FACTOR)
-        )
-
         self._sample_merged_toggle.set_active(
             self.get_pref_value(
                 _Prefs.SAMPLE_MERGED_PREF,
