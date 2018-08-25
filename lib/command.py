@@ -687,6 +687,70 @@ class Nodework (Brushwork):
         assert self._sshot_after is None
         self._recording_started = True
 
+    # XXX for `node pick`
+    def update(self, brushinfo):
+        """Retrace the last stroke with a new brush.
+
+        Almost same as Brushwork.update, but just one line is different.
+        We cannot deal it with overriding.
+        """
+        layer = self._target_layer
+        assert self._recording_finished, "Call stop_recording() first"
+        assert self._sshot_after_applied, \
+            "command.Brushwork must be applied before being updated"
+        layer.load_snapshot(self._sshot_before)
+        stroke = self._stroke_seq.copy_using_different_brush(brushinfo)
+        layer.render_stroke(stroke)
+        self._stroke_seq = stroke
+        # XXX The difference against Brushwork is below 1 line.
+        layer.add_stroke_node(stroke, self._sshot_before, self.nodes)
+        self._sshot_after = layer.save_snapshot()
+
+    def stop_recording(self, revert=False):
+        """Ends the recording phase
+
+        :param bool revert: revert any changes to the model
+        :rtype: bool
+        :returns: whether any changes were made
+
+        Almost same as Brushwork.stop_recording, but just one line is different.
+        We cannot deal it with overriding.
+        """
+        self._check_recording_started()
+        layer = self._stroke_target_layer
+        self._stroke_target_layer = None  # prevent potential leak
+        self._recording_finished = True
+        if self._stroke_seq is None:
+            # Unclear circumstances, but I've seen it happen
+            # (unpaintable layers and visibility state toggling).
+            # Perhaps _recording_started should be made synonymous with this?
+            logger.warning(
+                "No recorded stroke, but recording was started? "
+                "Please report this glitch if you can reliably reproduce it."
+            )
+            return False  # nothing recorded, so nothing changed
+        self._stroke_seq.stop_recording()
+        if layer is None:
+            return False  # wasn't suitable for painting, thus nothing changed
+        if revert:
+            assert self._sshot_before is not None
+            layer.load_snapshot(self._sshot_before)
+            logger.debug("Reverted %r: tiles_changed=%r", self, False)
+            return False  # nothing changed
+        t0 = self._time_before
+        self._time_after = t0 + self._stroke_seq.total_painting_time
+        # XXX The difference against Brushwork is below 1 line.
+        layer.add_stroke_node(self._stroke_seq, self._sshot_before, self.nodes)
+        self._sshot_after = layer.save_snapshot()
+        self._sshot_after_applied = True  # changes happened before redo()
+        tiles_changed = (not self._stroke_seq.empty)
+        logger.debug(
+            "Stopped recording %r: tiles_changed=%r",
+            self, tiles_changed,
+        )
+        return tiles_changed
+    # XXX for `node pick` end
+
 
 class FloodFill (Command):
     """Flood-fill on the current layer"""

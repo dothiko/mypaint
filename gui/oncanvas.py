@@ -40,6 +40,7 @@ import gui.curve
 import gui.widgets
 from gui.linemode import *
 import gui.ui_utils
+import lib.strokemap # XXX for `node pick`
 
 ## Module constants
 
@@ -1829,6 +1830,20 @@ class RecallableNodeMixin(object):
     def _init_recall(self):
         self._stroke_from_history = False
 
+    def inject_nodes(self, nodes):
+        """Inject nodes list from outside
+        """
+        self._queue_draw_buttons()
+        self._queue_redraw_all_nodes()
+        self._queue_redraw_item()
+
+        self.nodes = nodes
+
+        self._queue_redraw_item()
+        self._queue_redraw_all_nodes()
+        self._queue_draw_buttons()
+        self.phase = PhaseMixin.ADJUST
+
     def recall_nodes(self, idx):
         """ Recall editing nodes from history
 
@@ -1838,25 +1853,47 @@ class RecallableNodeMixin(object):
         :param idx: The index of liststore item.
         """
         if 0 < idx < len(self.stroke_history.liststore):
-            self._queue_draw_buttons()
-            self._queue_redraw_all_nodes()
-            self._queue_redraw_item()
-
-            self._stroke_from_history = True
-
             x = y = None
             if len(self.nodes) > 0:
                 x = self.nodes[0].x
                 y = self.nodes[0].y
 
-            self.nodes = self.stroke_history.get_and_place_nodes(
-                    idx, x, y)
+            nodes = self.stroke_history.get_and_place_nodes(
+                idx, x, y
+            )
+            self.inject_nodes(nodes)
 
-            self._queue_redraw_item()
-            self._queue_redraw_all_nodes()
-            self._queue_draw_buttons()
-            self.phase = PhaseMixin.ADJUST
-    
+    # XXX for `node pick`
+    def _restore_nodes_from_stroke_info(self, si, node_type_id): 
+        """Restore nodes from stroke info(StrokeNode class).
+        Almost same as ExperimentInktool, but Node class is different.
+
+        :return : unpacked raw nodes data string.
+
+        CAUTION: Returned object is raw string node datas.
+                 You must de-serialize them into node objects and
+                 call inject_nodes method of this mixin.
+        """
+        assert isinstance(si, lib.strokemap.StrokeNode) 
+
+        raw_nodes = si.unpack_nodes(node_type_id)
+
+        # raw nodes might be None if the type_id does not match.
+        if raw_nodes is None:
+            return None
+
+        # Erase old stroke forcefully!
+        model = self.doc.model
+        cl = model.layer_stack.current
+        si.remove_from_surface(cl._surface)
+        assert hasattr(cl, "remove_stroke_node")
+
+        # Also, Remove stroke-node information from layer. 
+        # Without this, re-edited stroke still exist as older shape.
+        cl.remove_stroke_node(si) 
+
+        return raw_nodes
+    # XXX for `node pick` end
 
 class RecallableNodePresnterMixin(object):
     """Options presenter mixin for node recallable mixin

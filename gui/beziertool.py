@@ -18,6 +18,7 @@ from logging import getLogger
 logger = getLogger(__name__)
 import array
 import time
+import struct # XXX for `node pick` 
 
 from gettext import gettext as _
 import gi
@@ -115,11 +116,80 @@ def detect_on_stroke(nodes, x, y, allow_distance = 4.0):
 ## Class defs
 
 class _Control_Handle(object):
-    def __init__(self, x, y):
-        self._array = array.array('f',(x,y))
+    """To store Control handle positon. 
+    Also this works as `memory view` of array object in _Node_Bezier.
+    """
+    def __init__(self, source_info):
+        self._array, self._offset = source_info
 
     def __getitem__(self, idx):
-        return self._array[idx]
+        return self._array[idx+self._offset]
+
+    @property
+    def x(self):
+        return self._array[0+self._offset]
+    @x.setter
+    def x(self,x):
+        self._array[0+self._offset]=x
+
+    @property
+    def y(self):
+        return self._array[1+self._offset]
+    @y.setter
+    def y(self,y):
+        self._array[1+self._offset]=y
+    
+class _Node_Bezier (object):
+    """Node (Control point) class,with handle.
+
+    In bezier curve,nodes would be frequently rewritten.
+    So this class is object, not a namedtuple.
+
+    _Node_Bezier have the following 6 fields as array object, in order
+
+    * x, y: model coords, float
+    * pressure: float in [0.0, 1.0]
+    * xtilt, ytilt: float in [-1.0, 1.0]
+    * time : time for brushstroke. We cannot use actual bezier node edted time,
+             so this is psuedo value.
+    
+    In addition to these datas, there are control node handle datas. 
+    """
+
+    # XXX for `node pick`
+    # Node type id. This is used for node pickable strokemap. 
+    # This MUST be unique, 32bit unsigned value.
+    # And type_id 0 means `generic namedtuple node`,
+    # which is used in inktool.
+    type_id = 0x00000001
+    # XXX for `node pick` end
+            
+    def __init__(self, 
+                 x=0.0, y=0.0, pressure=1.0, 
+                 xtilt=0.0, ytilt=0.0, dtime=0.5,
+                 curve=True, source=None):
+        """
+        :param source: A sequence of 10 double values, used as initial value.
+        :param source_arrays: Not initial values, that arrays used internal 
+                              buffer of this object.
+                              This param is tuple of three array objects.
+        """
+
+        # No supercall, create this class own array.
+        if source is not None:
+            _array = array.array('d', source)
+        else:
+            _array = array.array(
+                'd', 
+                (x, y, pressure, xtilt, ytilt, dtime, x, y, x, y)
+            )
+
+        self._array = _array
+        self._control_handles = (
+            _Control_Handle(source_info=(_array, 6)),
+            _Control_Handle(source_info=(_array, 8))
+        )
+        self._curve = curve
 
     @property
     def x(self):
@@ -134,40 +204,31 @@ class _Control_Handle(object):
     @y.setter
     def y(self,y):
         self._array[1]=y
-    
-class _Node_Bezier (_Control_Handle):
-    """Node (Control point) class,with handle.
 
-    In bezier curve,nodes would be frequently rewritten.
-    Evenmore, each nodes have its own control handle.
-    This control handle should be adjusted automatically,
-    in certain situation.
-    So this class is object, not a namedtuple.
+    @property
+    def pressure(self):
+        return self._array[2]
+    @pressure.setter
+    def pressure(self, v):
+        self._array[2] = v
 
-    _Node_Bezier thave the following 6 fields, in order
+    @property
+    def xtilt(self):
+        return self._array[3]
+    @xtilt.setter
+    def xtilt(self, v):
+        self._array[3] = v
 
-    * x, y: model coords, float
-    * pressure: float in [0.0, 1.0]
-    * xtilt, ytilt: float in [-1.0, 1.0]
-    * control_handle: two _Control_Handle objects.
-    """
-    
-            
-            
-    def __init__(self,x,y,pressure=1.0,xtilt=0.0,ytilt=0.0,dtime=0.5,
-            control_handles=None,curve=True):
-        self.pressure = pressure
-        self.xtilt = xtilt
-        self.ytilt = ytilt
-        self.time = dtime
-        super(_Node_Bezier, self).__init__(x, y)
+    @property
+    def ytilt(self):
+        return self._array[4]
+    @ytilt.setter
+    def ytilt(self, v):
+        self._array[4] = v
 
-        if control_handles:
-            self._control_handles = control_handles
-        else:
-            self._control_handles = (_Control_Handle(x, y), _Control_Handle(x, y))
-
-        self._curve = curve
+    @property
+    def time(self):
+        return self._array[5]
 
     @property
     def curve(self):
@@ -219,8 +280,6 @@ class _Node_Bezier (_Control_Handle):
 
         if curve:
             tidx = (idx + 1) % 2
-           #self._control_handles[tidx].x = self.x - dx
-           #self._control_handles[tidx].y = self.y - dy
             self._control_handles[tidx].x -= dx
             self._control_handles[tidx].y -= dy
 
@@ -248,16 +307,23 @@ class _Node_Bezier (_Control_Handle):
             self._control_handles[i].x = nx + (self._control_handles[i].x - ox)
             self._control_handles[i].y = ny + (self._control_handles[i].y - oy)
 
-    def move(self,x, y):
+    def move(self,x, y, relative=False):
         """Move this node to (x,y).
         :param x: destination x position,in model
         :param y: destination y position,in model
 
         Use this method to move control points simultaneously.
         """
-        self._refresh_control_handles(self.x, self.y, x, y)
-        self.x = x
-        self.y = y
+        if relative:
+            self.x += x
+            self.y += y
+            for i in (0,1):
+                self._control_handles[i].x += x
+                self._control_handles[i].y += y
+        else:
+            self._refresh_control_handles(self.x, self.y, x, y)
+            self.x = x
+            self.y = y
 
     def copy(self, dx=0, dy=0, node=None):
         """Copy all information to node,with (dx,dy) offset.
@@ -266,13 +332,9 @@ class _Node_Bezier (_Control_Handle):
         :param node: the _Node_Bezier object copy to
         """
         if node is None:
-            node = _Node_Bezier(0, 0)
-        node.x = self.x + dx
-        node.y = self.y + dy
-        node.pressure = self.pressure
-        node.xtilt = self.xtilt
-        node.ytilt = self.ytilt
-        node.time = self.time
+            node = _Node_Bezier(0, 0, source_array=self._array)
+        node.x += dx
+        node.y += dy
         node._curve = self._curve
         for i in (0,1):
             node._control_handles[i].x = self._control_handles[i].x + dx
@@ -281,11 +343,33 @@ class _Node_Bezier (_Control_Handle):
 
     def __getitem__(self, idx):
         return self._array[idx]
-    
-#class _EditZone(EditZoneMixin):
-#    """Enumeration of what the pointer is on in the ADJUST phase"""
-#    CONTROL_HANDLE = 104 #: Control handle of bezier
-_EditZone = EditZoneMixin
+
+    def serialize(self):
+        """Serialize node datas as byte string.
+        Used for saving strokenode into a file.
+        Compression should be done against entire stroke node datas
+        for better compression rate,
+        therefore just make bytestring here.
+        """
+
+        # We need to use struct.pack, instead of array.tostring.
+        # Because this data would be used by not only picking nodes
+        # also saving into file.
+        # We must ensure endian to save them into file.
+        data = struct.pack(">10d", *self._array.tolist())
+        data += struct.pack(">b", 1 if self._curve else 0)
+        return data
+
+    @classmethod
+    def fromstring(cls, raw_node_bytes, idx):
+        data_length = 10 * 8
+        a = struct.unpack(">10d", raw_node_bytes[idx: idx+data_length])
+        curve = struct.unpack(">b", raw_node_bytes[idx+data_length]) != 0
+        node = _Node_Bezier(curve=curve, source=a)
+        return (data_length+1, node)
+
+
+_EditZone = EditZoneMixin # Same as basic EditZoneMixin at gui/oncanvas.py
 
 class _Phase(PressPhase):
     """Enumeration of the states that an BezierCurveMode can be in"""
@@ -1179,6 +1263,37 @@ class BezierMode (PressureEditableMixin,
 
     def reject_button_cb(self, tdw):
         self._start_new_capture_phase(rollback=True)
+
+    # XXX for `node pick`
+    ## Node pick
+    def restore_nodes_from_stroke_info(self, si): 
+        """Restore nodes from stroke info(StrokeNode class).
+        Almost same as ExperimentInktool, but Node class is different.
+        """
+        raw_nodes = self._restore_nodes_from_stroke_info(si, _Node_Bezier.type_id) 
+        if raw_nodes is None:
+            self.app.show_transient_message(
+                _("This stroke is not created by %s") % self.get_name()
+            )
+            return
+        idx = 4
+        count = struct.unpack('>I', raw_nodes[:idx])[0]
+        nodes = []
+        for i in range(count):
+            data_length, node = _Node_Bezier.fromstring(raw_nodes, idx)
+            nodes.append(node)
+            idx += data_length
+
+        with si.get_offset() as offset: 
+            # Note: This clears offset data in StrokeNode.
+            if offset != (0, 0):
+                dx, dy = offset
+                for n in nodes:
+                    n.move(dx, dy, relative=True)
+
+        self.inject_nodes(nodes)
+
+    # XXX for `node pick` end
 
 
 class OverlayBezier (OverlayOncanvasMixin):

@@ -16,6 +16,7 @@ import zlib
 import math
 from logging import getLogger
 logger = getLogger(__name__)
+import contextlib
 
 import numpy as np
 
@@ -100,7 +101,7 @@ class StrokeShape (object):
     def save_to_string(self, translate_x, translate_y):
         """Return a compressed string representing the stroke shape.
 
-        This can be used with init_from_sting on subsequent file loads.
+        This can be used with init_from_string on subsequent file loads.
 
         See lib.layer.data.PaintingLayer.save_to_openraster().
         Format: "v2" strokemap format.
@@ -219,6 +220,168 @@ class StrokeShape (object):
                 self.strokemap.pop((tx, ty))
         return bool(self.strokemap)
 
+# XXX for `node-pick`
+class StrokeNode(StrokeShape): 
+    """The nodes of a single inkingstroke/bezier curve.
+
+    This class stores the nodes of a stroke in as a 1-bit bitmap,
+    Like a StrokeShape.
+
+    """
+    def __init__(self):
+        """Construct a new, blank StrokeNode."""
+        super(StrokeNode, self).__init__()
+        # _nodedata is compressed bytestring of node data.
+        # Actually node objects are constructed in owner
+        # drawing mode object, so this class works without
+        # node object metaclass.
+        self._nodedata = None
+
+        # We need to distinguish node object class.
+        # If this is 0, it means `it is generic namedtuple nodes`
+        self._nodetype = 0
+
+        # Offset value for load time tile shift.
+        # When picture file loaded, transparent tile would be removed.
+        # It may changes all tile location.
+        self._offset_x = 0
+        self._offset_y = 0
+
+    @contextlib.contextmanager
+    def get_offset(self):
+        """Get tile offsets to adjust node positions.
+        This is a contextlib.contextmanager method,
+        You should call this by `with` statement.
+
+        NOTE: After this method is called, offset data is cleared.
+        """
+        yield (self._offset_x, self._offset_y)
+
+        self._offset_x = 0
+        self._offset_y = 0
+
+    def set_nodes(self, nodetype, nodes):
+        """Set nodes information, with converting bytestream
+        and compressing it.
+        """
+        self._nodetype = nodetype
+         
+        datas = struct.pack(">I", len(nodes))
+        if nodetype == 0:
+            fmt=">%dd" % len(nodes[0]) # Assume all nodes have same size.
+            for n in nodes:
+                datas += struct.pack(fmt, *n)
+        else:
+            # Other dedicated node object should have `serialize` method.
+            for n in nodes:
+                datas += n.serialize()
+        self._nodedata = zlib.compress(datas)
+
+    def remove_from_surface(self, surf, center=None):
+        """Remove all or part of the shape to a tile-accessible surface.
+        Almost copied from StrokeShape.render_to_surface.
+
+        This is needed for node re-editing operation, we need to
+        erase before edit stroke at same position. 
+        """
+        pred = _TileIndexPredicate(
+            bbox = None, # bbox is everytime None for this method.
+            #center = center,
+            #radius = 20*N,   # pixels
+            #maxhits = 2000,   # tiles
+        )
+        self._complete_tile_tasks(pred)
+        tile_idxs = list(pred.hits) + [
+            ti
+            for ti in self.strokemap
+            if ti not in pred.hits
+        ]
+        for tx, ty in tile_idxs:
+            if not pred((tx, ty)):
+                continue
+            diff_tile = self.strokemap[(tx, ty)]
+            diff_arr = diff_tile.to_array()
+            with surf.tile_request(tx, ty, readonly=False) as surf_arr:
+                diff_tile.erase_from_surface_tile_array(surf_arr)
+
+    def save_nodes_to_string(self, translate_x, translate_y):
+        """Return a compressed string representing the stroke shape.
+
+        This can be used with init_from_sting on subsequent file loads.
+
+        See lib.layer.data.PaintingLayer.save_to_openraster().
+        Format: "v2" strokemap format.
+
+        """
+        nodedata = self._nodedata
+        nodetype = self._nodetype
+
+        data = struct.pack(
+            '>IIii', 
+            nodetype, len(nodedata),
+            int(translate_x), int(translate_y)
+        )
+        data += nodedata
+        return data
+
+    def unpack_nodes(self, requested_nodetype):
+        """Unpack nodes data from compressed bytestring.
+
+        NOTE: Unpacked nodes is still raw bytestring.
+              Caller(Drawing mode object) must convert 
+              that raw string into node objects.
+        """
+        if requested_nodetype == self._nodetype:
+            return zlib.decompress(self._nodedata)
+        return None
+
+    def init_from_string(self, data, translate_x, translate_y):
+        """To override StrokeShape.init_from_string.
+
+        We need to override this method to initialize offset attributes.
+        """
+        # Initialize offset attributes first, before init_from_string supercall.
+        # They might be added some unaligned offset values from 
+        # StrokemappedPaintingLayer._load_strokemap_from_file() ->
+        # StrokeNode.translate() call, which is prior to init_node_from_string() 
+        # call.
+        # Before that addition, we need to initialize them.
+        super(StrokeNode, self).init_from_string(data, translate_x, translate_y)
+
+        self._offset_x = translate_x
+        self._offset_y = translate_y
+
+        # We have no need to refrect actual node position in this time.
+        # Different from stroke bitmap tile, it is enough for node to change position 
+        # when actually user picked the nodes of stroke.
+        # So just remember offset here.
+
+    def init_nodes_from_string(self, data, nodetype, translate_x, translate_y):
+        """Initialize node datas from a saved compressed string.
+
+        translate_ parameters of this method are actually assigned at save-time,
+        completely different from init_from_string one.
+        They are applied into tile dictionary already at StrokeShape.save_to_string(), 
+        but not yet for node list - because, offsets for nodes are applied 
+        when they are picked.
+
+        NOTE:Call this method after base bitmap information is loaded
+        by StrokeShape.init_from_string. These two methods are simular
+        but different.
+        """
+        assert self._nodedata is None
+
+        self._nodetype = nodetype
+        self._nodedata = data
+        self._offset_x += translate_x
+        self._offset_y += translate_y
+
+    def translate(self, dx, dy):
+        super(StrokeNode, self).translate(dx, dy)
+        self._offset_x += dx
+        self._offset_y += dy
+# XXX for `node-pick` end
+        
 
 class _TileDiffUpdateTask:
     """Idle task: update strokemap with tile & pixel diffs of snapshots.
@@ -466,6 +629,16 @@ class _Tile:
             rgba[:, :, 0] = rgba[:, :, 3] // 2
             rgba[:, :, 1] = rgba[:, :, 3] // 2
             rgba[:, :, 2] = rgba[:, :, 3] // 2
+
+    # XXX for `node pick`
+    def erase_from_surface_tile_array(self, rgba): 
+        """Erase a surface's RGBA tile with bitmap tile shape"""
+        if self._all:
+            rgba[:] = (0, 0, 0, 0)
+        else:
+            array = self.to_array()
+            rgba[array!=0] = 0
+    # XXX for `node pick` end
 
     def __str__(self):
         return self.to_string()

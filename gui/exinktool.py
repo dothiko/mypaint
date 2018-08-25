@@ -25,6 +25,7 @@ import weakref
 import os.path
 from logging import getLogger
 logger = getLogger(__name__)
+import struct
 
 from gettext import gettext as _
 import gi
@@ -45,7 +46,7 @@ import gui.widgets
 from gui.linemode import *
 import gui.ui_utils
 from gui.oncanvas import *
-from gui.inktool import _Node
+from gui.inktool import _Node, _NODE_FIELDS
 
 ## Module constants
 
@@ -91,25 +92,15 @@ def _nodes_deletion_decorator(method):
 # _Phase is currently same as base PressPhase
 _Phase = PressPhase
 
-_NODE_FIELDS = ("x", "y", "pressure", "xtilt", "ytilt", "time")
-
-# Copied from 
-#class _Node (collections.namedtuple("_Node", _NODE_FIELDS)):
-#    """Recorded control point, as a namedtuple.
-#
-#    Node tuples have the following 6 fields, in order
-#
-#    * x, y: model coords, float
-#    * pressure: float in [0.0, 1.0]
-#    * xtilt, ytilt: float in [-1.0, 1.0]
-#    * time: absolute seconds, float
-#    """
 # _EditZone is currently same as base EditZoneMixin
 _EditZone = EditZoneMixin
 _ActionButton = ActionButtonMixin
 
+# _Node object is imported from original inktool.
+
 class ExInkingMode (PressureEditableMixin, 
-        NodeUserMixin):
+                    NodeUserMixin,
+                    RecallableNodeMixin):
 
     ## Metadata properties
 
@@ -121,7 +112,7 @@ class ExInkingMode (PressureEditableMixin,
 
     @classmethod
     def get_name(cls):
-        return _(u"Inking")
+        return _(u"ExpInk")
 
     def get_usage(self):
         return _(u"Draw, and then adjust smooth lines")
@@ -405,7 +396,7 @@ class ExInkingMode (PressureEditableMixin,
         for i in xrange(int(steps) + 1):
             t = i / steps
             point = gui.drawutils.spline_4p(t, p_1, p0, p1, p2)
-            x, y, pressure, xtilt, ytilt, t_abs = point
+            x, y, pressure, xtilt, ytilt, t_abs, viewzoom, viewrotation = point
             pressure = lib.helpers.clamp(pressure, 0.0, 1.0)
             xtilt = lib.helpers.clamp(xtilt, -1.0, 1.0)
             ytilt = lib.helpers.clamp(ytilt, -1.0, 1.0)
@@ -424,7 +415,6 @@ class ExInkingMode (PressureEditableMixin,
 
             last_t_abs = t_abs
         state["t_abs"] = last_t_abs
-
 
     def _queue_range_radius(self):
         """ Queue an area to draw affecting-range indicator,
@@ -485,14 +475,17 @@ class ExInkingMode (PressureEditableMixin,
                     new_time *= 0.5
 
 
-                self.nodes.insert(idx + 1, # insert method requires the inserted position. 
-                                  _Node(
-                                      x=x, y=y,
-                                      pressure=new_pressure,
-                                      xtilt=new_xtilt, ytilt=new_ytilt,
-                                      time=new_time)
-                                  )
-
+                self.nodes.insert(
+                    idx + 1, # insert method requires the inserted position. 
+                    _Node(
+                        x=x, y=y,
+                        pressure=new_pressure,
+                        xtilt=new_xtilt, ytilt=new_ytilt,
+                        time=new_time,
+                        viewzoom = self.doc.tdw.scale,
+                        viewrotation = self.doc.tdw.rotation,
+                    )
+                )
 
                 # queue new node here.
                 
@@ -510,7 +503,6 @@ class ExInkingMode (PressureEditableMixin,
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
 
-
     def mode_button_release_cb(self, tdw, event):
 
         super(ExInkingMode, self).mode_button_release_cb(tdw, event)
@@ -520,7 +512,6 @@ class ExInkingMode (PressureEditableMixin,
         self._last_good_raw_pressure = 0.0
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
-
 
     ## Drag handling (both capture and adjust phases)
 
@@ -734,6 +725,8 @@ class ExInkingMode (PressureEditableMixin,
             pressure=self._get_event_pressure(event),
             xtilt=xtilt, ytilt=ytilt,
             time=(event.time / 1000.0),
+            viewzoom = self.doc.tdw.scale,
+            viewrotation = self.doc.tdw.rotation,
         )
 
     def update_node(self, i, **kwargs):
@@ -830,7 +823,9 @@ class ExInkingMode (PressureEditableMixin,
             pressure=(cn.pressure + nn.pressure) / 2.0,
             xtilt=(cn.xtilt + nn.xtilt) / 2.0,
             ytilt=(cn.ytilt + nn.ytilt) / 2.0,
-            time=(cn.time + nn.time) / 2.0
+            time=(cn.time + nn.time) / 2.0,
+            viewzoom=(cn.viewzoom + nn.viewzoom) / 2.0,
+            viewrotation=(cn.viewrotation + nn.viewrotation) / 2.0,
         )
         self.nodes.insert(i+1,newnode)
 
@@ -1241,7 +1236,41 @@ class ExInkingMode (PressureEditableMixin,
 
                 yield (i, node, x, y)
 
+    # XXX for `node pick`
+    ## Node pick
+    def restore_nodes_from_stroke_info(self, si): 
+        """Restore nodes from stroke info(StrokeNode class).
+        """
+        # node-type-id 0 means `generic namedtuple nodes` 
+        raw_node_bytes = self._restore_nodes_from_stroke_info(si, 0) 
 
+        if raw_node_bytes is None:
+            self.app.show_transient_message(
+                _("This stroke is not created by %s") % self.get_name()
+            )
+            return
+
+        idx = 4
+        count = struct.unpack('>I', raw_node_bytes[:idx])[0]
+        nodes = []
+        field_cnt = len(_NODE_FIELDS)
+        fmt = ">%dd" % field_cnt
+        data_length = field_cnt * 8
+        for i in range(count):
+            a = struct.unpack(fmt, raw_node_bytes[idx: idx+data_length])
+            node = _Node(*a)
+            nodes.append(node)
+            idx += data_length
+
+        with si.get_offset() as offset: 
+            # Note: This clears offset data in StrokeNode.
+            if offset != (0, 0):
+                dx, dy = offset
+                for i,n in enumerate(nodes):
+                    nodes[i] = n._replace(x=n.x+dx, y=n.y+dy)
+
+        self.inject_nodes(nodes)
+    # XXX for `node pick` end
 
 
 class Overlay (OverlayOncanvasMixin):
