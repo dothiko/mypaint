@@ -12,6 +12,8 @@
 from __future__ import division, print_function
 
 from gettext import gettext as _
+import weakref
+import numpy as np
 
 from gi.repository import Gdk
 from gi.repository import GLib
@@ -21,13 +23,24 @@ import gui.mode
 import lib.command
 import gui.cursor
 import gui.tileddrawwidget # XXX for `relative move`
-
+import gui.overlays
 
 ## Class defs
+# XXX for 'overlay move'
+class _MoveType:
+    SURFACE = 0 # Ordinary move
+    OVERLAY = 1 # Using mimmap image of layer.
 
+class _Prefs:
+    MOVE_TYPE_PREF = 'LayerMoveMode.move_type'
+
+    DEFAULT_MOVE_TYPE = _MoveType.SURFACE
+
+# XXX for 'overlay move' end
 
 class LayerMoveMode (gui.mode.ScrollableModeMixin,
-                     gui.mode.DragMode):
+                     gui.mode.DragMode,
+                     gui.mode.OverlayMixin): # for `overlay move`
     """Moving a layer interactively
 
     MyPaint is tile-based, and tiles must align between layers.
@@ -96,6 +109,16 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
         self._move_possible = False
         self._drag_active_tdw = None
         self._drag_active_model = None
+        # XXX for `overlay move`
+       #self.move_type = _MoveType.SURFACE 
+        self.move_type = _MoveType.OVERLAY
+        self.pixbuf = None
+        self.cur_x = 0
+        self.cur_y = 0
+        self.cur_bbox = None
+        self._overlays = {}  # keyed by tdw
+        self.npbuf = np.zeros((2, 4), 'float')
+        # XXX for `overlay move` end
 
     ## Layer stacking API
 
@@ -105,7 +128,13 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
         rootstack = self.doc.model.layer_stack
         rootstack.current_path_updated += self._update_ui
         rootstack.layer_properties_changed += self._update_ui
+        if not self._is_active():
+            self._discard_overlays()
         self._update_ui()
+
+        opt = self.get_options_widget()
+        assert opt is not None
+        opt.target = self
 
     def leave(self, **kwds):
         if self._cmd is not None:
@@ -114,7 +143,20 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
         rootstack = self.doc.model.layer_stack
         rootstack.current_path_updated -= self._update_ui
         rootstack.layer_properties_changed -= self._update_ui
+        if not self._is_active():
+            self._discard_overlays()
+
+        opt = self.get_options_widget()
+        assert opt is not None
+        opt.target = None
+
         return super(LayerMoveMode, self).leave(**kwds)
+
+    def _is_active(self):
+        for mode in self.doc.modes:
+            if mode is self:
+                return True
+        return False
 
     def checkpoint(self, **kwds):
         """Commits any pending work to the command stack"""
@@ -131,8 +173,23 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
             model = tdw.doc
             layer_path = model.layer_stack.current_path
             x0, y0 = tdw.display_to_model(self.start_x, self.start_y)
-            cmd = lib.command.MoveLayer(model, layer_path, x0, y0)
-            self._cmd = cmd
+            if self.move_type == _MoveType.SURFACE: # XXX for 'overlay move'
+                cmd = lib.command.MoveLayer(model, layer_path, x0, y0)
+                self._cmd = cmd
+            # XXX for 'overlay move'
+            elif self.move_type == _MoveType.OVERLAY:
+                self._ensure_overlay_for_tdw(tdw)
+                layer = model.layer_stack.current
+                self.start_x = x0
+                self.start_y = y0
+                self.cur_x = 0
+                self.cur_y = 0
+                self.cur_bbox = layer.get_bbox()
+                self.queue_redraw()
+            else:
+                assert False, "Should not here"
+            # XXX for 'overlay move' end
+
             self._drag_active_tdw = tdw
             self._drag_active_model = model
         return super(LayerMoveMode, self).drag_start_cb(tdw, event)
@@ -140,12 +197,23 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
     def drag_update_cb(self, tdw, event, dx, dy):
         """UI and model updates during a drag"""
         if self._cmd:
-            assert tdw is self._drag_active_tdw
+            if self.move_type == _MoveType.SURFACE: # XXX for 'overlay move'
+                assert tdw is self._drag_active_tdw
+                x, y = tdw.display_to_model(event.x, event.y)
+                self._cmd.move_to(x, y)
+                if self._drag_update_idler_srcid is None:
+                    idler = self._drag_update_idler
+                    self._drag_update_idler_srcid = GLib.idle_add(idler)
+        # XXX for 'overlay move'
+        elif self.move_type == _MoveType.OVERLAY:
+            self._ensure_overlay_for_tdw(tdw)
             x, y = tdw.display_to_model(event.x, event.y)
-            self._cmd.move_to(x, y)
-            if self._drag_update_idler_srcid is None:
-                idler = self._drag_update_idler
-                self._drag_update_idler_srcid = GLib.idle_add(idler)
+            self.queue_redraw()
+            self.cur_x = x - self.start_x
+            self.cur_y = y - self.start_y
+            self.queue_redraw()
+        # XXX for 'overlay move' end
+
         return super(LayerMoveMode, self).drag_update_cb(tdw, event, dx, dy)
 
     def _drag_update_idler(self):
@@ -165,25 +233,38 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
 
     def drag_stop_cb(self, tdw):
         """UI and model updates at the end of a drag"""
-        # Stop the update idler running on its next scheduling
-        self._drag_update_idler_srcid = None
-        # This will leave a non-cleaned-up move if one is still active,
-        # so finalize it in its own idle routine.
-        if self._cmd is not None:
-            assert tdw is self._drag_active_tdw
-            # Arrange for the background work to be done, and look busy
-            tdw.set_sensitive(False)
+        if self.move_type == _MoveType.SURFACE:
+            # Stop the update idler running on its next scheduling
+            self._drag_update_idler_srcid = None
+            # This will leave a non-cleaned-up move if one is still active,
+            # so finalize it in its own idle routine.
+            if self._cmd is not None:
+                assert tdw is self._drag_active_tdw
+                # Arrange for the background work to be done, and look busy
+                tdw.set_sensitive(False)
 
-            window = tdw.get_window()
-            cursor = Gdk.Cursor.new_for_display(
-                window.get_display(), Gdk.CursorType.WATCH)
-            tdw.set_override_cursor(cursor)
+                window = tdw.get_window()
+                cursor = Gdk.Cursor.new_for_display(
+                    window.get_display(), Gdk.CursorType.WATCH)
+                tdw.set_override_cursor(cursor)
 
-            self.final_modifiers = self.current_modifiers()
+                self.final_modifiers = self.current_modifiers()
+                GLib.idle_add(self._finalize_move_idler)
+            else:
+                # Still need cleanup for tracking state, cursors etc.
+                self._drag_cleanup()
+        # XXX for 'overlay move'
+        elif self.move_type == _MoveType.OVERLAY:
+            self._ensure_overlay_for_tdw(tdw)
+            self.queue_redraw() # This mignt no effect...?
+            model = tdw.doc
+            layer_path = model.layer_stack.current_path
+            cmd = lib.command.MoveLayer(model, layer_path, self.start_x, self.start_y)
+            self._cmd = cmd
+            self._cmd.move_to(self.start_x+self.cur_x, self.start_y+self.cur_y)
             GLib.idle_add(self._finalize_move_idler)
-        else:
-            # Still need cleanup for tracking state, cursors etc.
-            self._drag_cleanup()
+        # XXX for 'overlay move' end
+
         return super(LayerMoveMode, self).drag_stop_cb(tdw)
         
     def _finalize_move_idler(self):
@@ -224,12 +305,104 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
         self._drag_active_tdw = None
         self._drag_active_model = None
         self._cmd = None
+        # XXX for 'overlay move'
+        # IMPORTANT: place queue_draw here to erase the last overlay drawing.
+        if self.move_type == _MoveType.OVERLAY:
+            self.queue_redraw()
+            self.cur_bbox = None
+        # XXX for 'overlay move' end
+
         if not self.doc:
             return
         if self is self.doc.modes.top:
             if self.initial_modifiers:
                 if (self.final_modifiers & self.initial_modifiers) == 0:
                     self.doc.modes.pop()
+
+    # XXX for 'overlay move'
+    def _ensure_overlay_for_tdw(self, tdw):
+        overlay = self._overlays.get(tdw)
+        if not overlay:
+            overlay = _Overlay_Move(self, tdw)
+            tdw.display_overlays.append(overlay)
+            self._overlays[tdw] = overlay
+        return overlay
+
+    def _discard_overlays(self):
+        for tdw, overlay in self._overlays.items():
+            tdw.display_overlays.remove(overlay)
+            tdw.queue_draw()
+        self._overlays.clear()
+
+    def _calc_translated_min_max(self, tdw, dx, dy):
+        nb = self.npbuf
+        x, y, w, h = self.cur_bbox
+        x += dx
+        y += dy
+        nb[0,0],nb[1,0] = tdw.model_to_display(x, y)
+        nb[0,1],nb[1,1] = tdw.model_to_display(x+w, y)
+        nb[0,2],nb[1,2] = tdw.model_to_display(x+w, y+h)
+        nb[0,3],nb[1,3] = tdw.model_to_display(x, y+h)
+
+    def queue_redraw(self):
+        if self.cur_bbox is not None:
+            nb = self.npbuf
+            m = 3 # margin
+            offsets = ((0,0), (self.cur_x, self.cur_y))
+            for tdw, overlay in self._overlays.items():
+                for x, y in offsets:
+                    self._calc_translated_min_max(tdw, x, y)
+                    a = nb.min(axis=1)
+                    b = nb.max(axis=1)
+                    tdw.queue_draw_area(a[0]-m, a[1]-m, b[0]-a[0]+m*2, b[1]-a[1]+m*2)
+    # XXX for 'overlay move' end
+
+# XXX for 'overlay move'
+class _Overlay_Move(gui.overlays.Overlay):
+
+    def __init__(self, movemode, tdw):
+        super(_Overlay_Move, self).__init__()
+        self._mode = weakref.proxy(movemode)
+        self._tdw = weakref.proxy(tdw)
+
+    def draw_target_rectangle(self, cr, tdw, x, y):
+        bx, by, bw, bh = self._mode.cur_bbox
+        bx += x
+        by += y
+        bx1, by1 = tdw.model_to_display(bx, by)
+        bx2, by2 = tdw.model_to_display(bx+bw, by)
+        bx3, by3 = tdw.model_to_display(bx+bw, by+bh)
+        bx4, by4 = tdw.model_to_display(bx, by+bh)
+
+        cr.move_to(bx1, by1)
+        cr.line_to(bx2, by2)
+        cr.line_to(bx3, by3)
+        cr.line_to(bx4, by4)
+        cr.close_path()
+        cr.stroke()
+
+        cr.move_to(bx1, by1)
+        cr.line_to(bx3, by3)
+        cr.stroke()
+
+        cr.move_to(bx2, by2)
+        cr.line_to(bx4, by4)
+        cr.stroke()
+
+    def paint(self, cr):
+        """Draw brush size to the screen"""
+        mode = self._mode
+        tdw = self._tdw
+        if mode:
+            cr.save()
+            if mode.cur_bbox is not None:
+                cr.set_source_rgba(0.0, 1.0, 0.0, 1.0)
+                self.draw_target_rectangle(cr, tdw, 0, 0)
+
+                cr.set_source_rgba(1.0, 0.0, 0.0, 1.0)
+                self.draw_target_rectangle(cr, tdw, mode.cur_x, mode.cur_y)
+            cr.restore()
+# XXX for 'overlay move' end
 
 # XXX for `relative move`
 class _OptionsPresenter(Gtk.Grid):
@@ -332,7 +505,31 @@ class _OptionsPresenter(Gtk.Grid):
         btn.connect("clicked", self._move_button_clicked_cb)
         subgrid.attach(btn, 0, subrow, 2, 1)    
 
+        # XXX for 'overlay move'
+        # Move preview method
+        subrow += 1
+        text = _("Show only target rect")
+        checkbut = Gtk.CheckButton.new_with_label(text)
+        checkbut.set_tooltip_text(
+            _("Show only target rectangle when dragging, to improve response.")
+        )
+        t = prefs.get(_Prefs.MOVE_TYPE_PREF, _Prefs.DEFAULT_MOVE_TYPE)
+        if t == _MoveType.OVERLAY:
+            checkbut.set_active(True)
+        checkbut.connect("toggled", self._show_only_rect_toggled_cb)
+        self.attach(checkbut, 0, subrow, 2, 1)
+        # XXX for 'overlay move' end
+
         self._update_ui = False
+
+    @property
+    def target(self):
+        assert self._mode_ref is not None
+        return self._mode_ref()
+
+    @target.setter
+    def target(self, mode):
+        self._mode_ref = weakref.ref(mode)
         
     def _spin_focus_in_cb(self, widget, event):
         if self._update_ui:
@@ -362,6 +559,17 @@ class _OptionsPresenter(Gtk.Grid):
         for tdw in gui.tileddrawwidget.TiledDrawWidget.get_visible_tdws():
             tdw.set_sensitive(False)
         GLib.idle_add(self._wait_move_complete)
+
+    # XXX for 'overlay move'
+    def _show_only_rect_toggled_cb(self, btn):
+        mode = self.target
+        if mode is not None:
+            if btn.get_active():
+                mode.move_type = _MoveType.OVERLAY
+            else:
+                mode.move_type = _MoveType.SURFACE
+            self.app.preferences[_Prefs.MOVE_TYPE_PREF] = mode.move_type
+    # XXX for 'overlay move' end
         
     def _wait_move_complete(self):
         """Nearly same as LayerMoveMode._finalize_move_idler 
