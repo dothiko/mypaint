@@ -25,7 +25,7 @@ I create/test this in Linux mainly, also I tested in windows, at least run but n
 
 Customized features : カスタム機能について
 ----
-#### On-Canvas Size Change Mode : オンキャンバスのブラシサイズ変更
+### On-Canvas Size Change Mode : オンキャンバスのブラシサイズ変更
 
 You can bind to modifier-key + mouse/stylus button to brush size change now.
 
@@ -37,7 +37,7 @@ With This feature,you can use Krita-like oncanvas brush size change on MyPaint!!
 
 Kritaライクなキャンバス上でのブラシサイズ変更を可能にします。
 
-#### incremental version save : バージョンセーブ機能
+### incremental version save : バージョンセーブ機能
 This menu action will add version number to filename automatically and save it.
 If filename has a version number already, such as 'foobar_002.ora',
 this increment it and save as 'foobar_003.ora'
@@ -47,7 +47,7 @@ this increment it and save as 'foobar_003.ora'
 既にバージョン番号が付いている場合には、それに従います。
 たとえばfoobar_002.oraだったら、foobar_003.oraとなります。
 
-#### project save (experimantal) : プロジェクトセーブ機能
+### project save (experimantal) : プロジェクトセーブ機能
 This feature utilize autosave functionality,extreamly faster save your work as 'Project *Directory*',not an 
 OpenRaster file.
 
@@ -59,14 +59,14 @@ and if you want to revert your picture project into old version, you can select 
 
 you can use this from 'Files' -> 'Projects' submenu,
 
- * Open Project - open project directory previously saved (or extracted Openraster file directory)
+ * Open Project - Open project directory previously saved (or extracted Openraster file directory)
  * Open Recent Project - Quick access to recently opened/saved projects
- * Save current project - overwrite current this is almost same as 'Save' menu
- * Save As Project - save current opened work as new project directory 
- * Save Project as New version - save current document project as new version. 
+ * Save current project - Overwrite current this is almost same as 'Save' menu
+ * Save As Project - Save current opened work as new project directory 
+ * Set Project Checkpoint - Save current document as new checkpoint. You can revert current project to one of checkpoint.
  * Revert Project - Popup selection dialog to revert current project into old one.
 
-**This code is extreamly experimental**,so you *might lost your work* when using this feature.
+**This code is experimental**,so you *might lost your work* when using this feature.but I use project-save very often.
 
 プロジェクトディレクトリに展開して保存し、なおかつそれを使い続ける機能です。
 OpenRasterファイルをパッケージする手間がないため高速に保存できます。autosave機能を流用して作られています。
@@ -77,15 +77,15 @@ OpenRasterファイルをパッケージする手間がないため高速に保�
  * Open Recent Project - 最近使ったプロジェクトを開きます
  * Save current project - 現在のプロジェクトを上書き保存
  * Save As Project - 新規プロジェクトとして保存
- * Save Project as New version - プロジェクトを上書き保存し、その際、上書きが発生するレイヤの画像をすべて退避します。
+ * Set Project Checkpoint  - 現在の内容でプロジェクトを上書き保存し、チェックポイントとします。その後、チェックポイントの状態に戻すことができます。
  * Revert Project - ダイアログを使って選択することで、プロジェクトを過去の状態に戻します。
 
-#### stabilizer : 強い手ブレ補正
+### stabilizer : 強い手ブレ補正
 This is Krita-like stabilizer function. The movement inside the range circle placed at the center of the freehand tool is ignored and only the outward movement is drawn as a stroke from the center. Thus, this stabilizes the angle of the stroke.
 
 Kritaのスタビライザー風の手ブレ補正機能です。フリーハンドツールの中心に置かれた範囲円の内部の動きは無視され、外側への動きだけが中心からのストロークとして描かれます。これにより、ストロークの角度が安定化されます。
 
-#### inktool - oncanvas node pressure editing : インクツールの制御点の筆圧をキャンバス上で修正可能
+### Experimental Inktool - oncanvas node pressure editing : インクツールの制御点の筆圧をキャンバス上で修正可能
 With holding down and drag the selected node, you can change it's pressure.
 
  * dragging up or left, pressure value is decreased.
@@ -95,23 +95,8 @@ this feature will affect to multiple selected nodes.
 
 選択されたノード（複数可）をシフトキーを押しながらドラッグすると、それらのノードの筆圧を変更できます。
 
-#### inktool - now supports Button-binded actions at CAPTURE phase.
 
-At only CAPTURE phase,inktool supports Button-binded actions now.
-this is mainly for Oncanvas-size-change mode.
-
-オンキャンバスでのブラシサイズ変更を念頭に、インクツールがキャプチャフェーズのみはボタンにバインドされたアクションを適用できるようになりました。
-
-#### inktool - node capture sampling period factor setting : インクツールのノードキャプチャサンプリング期間の倍率設定
-with 'Capturing period' scale,you can customize node capturing(sampling) period.
-it is multiple factor to sampling time/length.
-
-I got inspiration for this feature,so obsolute auto-culling.
-
-インクツールのノードのサンプリング期間を倍率指定で広げることが出来ます。倍率を大きくすることで間隔が広がり、形は大まかになりますが、制御点の数が減って編集はしやすくなります。
-場合に応じて使い分けてください。
-
-#### inktool - Average points feature : インクツールの制御点を平均化してなだらかにする機能
+#### Average points feature : インクツールの制御点を平均化してなだらかにする機能
 
  * 'Average Angle' make stroke points less bumped,smooth curve.this feature is multiple-selected-nodes aware.
  * 'Average Distance' make stroke points spaces even.this feature always affects to entire nodes.
@@ -121,7 +106,7 @@ I got inspiration for this feature,so obsolute auto-culling.
  * 'Average Distance'は、制御点間の距離を均等にします。これは常にノード全体に影響します。
  * 'Average Pressure'は、制御点の筆圧を加重平均化します。
 
-#### inktool - Select multiple nodes : インクツールの制御点を複数選択可能に
+#### Select multiple nodes : インクツールの制御点を複数選択可能に
 you can select multiple nodes with holding CONTROL key and click nodes.
 With this feature, you can move multiple nodes at once,simultaneously.
 
@@ -130,14 +115,18 @@ also 'Average points' / 'Delete points' / oncanvas node pressure editing , now w
 コントロールキーを押しながらノードをクリックすることで、制御点を複数選択できます。
 平均化・削除・キャンバス状での筆圧修正の機能が、この複数選択状態に対応しています。
 
-#### inktool - multiple node editing within defined range:
+#### multiple node editing within defined range:
 You can move multiple nodes within defined range ('Editing range' scale of options presenter), without selecting them.
 
 Also, you can change how the editing affects against far nodes.('Editing factor' scale)
 When 'affected factor' come near to 1.0, editing affects much more directly to far nodes.
 When the factor come near to -1.0, editing affects almost near nodes, much less to far nodes.
 
-#### Beziertool - Draw Cubic Bezier-sprine curve like inktool : 三次ベジェ曲線を描くためのベジェツール
+#### Pickable stroke:
+You can pick expinktool stroke nodes after that stroke is accepted, with 'Pick context' action.
+
+
+### Beziertool - Draw Cubic Bezier-sprine curve like inktool : 三次ベジェ曲線を描くためのベジェツール
 The Cubic bezier-sprine tool,like 'inkscape' tool.
 
 HOW TO OPERATION:(mostly same as inkscape)
@@ -169,14 +158,18 @@ CTRLキーを押しながらストロークをクリックすることで、そ�
 
 さらに、オプションプレゼンターのPressure Variationウィジェットと、Apply Variationボタン（もしくは ApplyPressureVariationNodes アクションをキーボードから発動）で、現在のストロークの筆圧を一度に設定できます！
 
-#### Polygon fill tool - fill a region surrounded with a (curved) path. : ポリゴンフィルツール
+#### Pickable stroke:
+You can pick beziertool stroke nodes after that stroke is accepted, with 'Pick context' action.
+
+
+### Polygon fill tool - fill a region surrounded with a (curved) path. : ポリゴンフィルツール
 Polygon fill tool, which enable to fill/erase/only fill current opaque pixel with curved polygon.
 
 with holding shift+ctrl and click empty canvas, we can popup "round button palette" around cursor.
 and with clicking that button , do fill(check icon)/erase(eraser icon)/erase outside(cut icon)/fill atop(plus icon) operation immidiately.
 
 
-#### Per device mode change : デバイスごとのモード変更
+### Per device mode change : デバイスごとのモード変更
 A 'Device' referred to here is, for example, Pen tablet styls,or Pen tablet tail eraser,etc.
 
 This feature record the painting 'mode' (not only brush) which used with a device.
@@ -206,8 +199,8 @@ This feature may less useful who changes mode with keyboard toggle action,but at
 
 キーボードでトグルしている人にはあまり使わない機能かもですが、私には便利です。
 
-#### New-experimental 'Close-and-fill' & 'Lasso fill' tool
-'Close and fill' tool added, to fill up closed area inside closing polygon.
+### New-experimental 'Close-and-fill' & 'Lasso fill' tool
+'Close and fill' tool added, to fill up closed area inside closing polygon, with gap-closing fill for linearts.
 
 Also, it provides simular 'Lasso fill' tool, it fills most appeared color in 
 closing polygon ridge(except for transparent one) and fill area of that color
@@ -215,17 +208,25 @@ inside polygon.
 
 Furthermore, this tool provides 'Flood-fill' with gap closing feature.
 
-#### Plugin feature
+### Tool Palette
+You can popup New Tool Palette feature with the action 'Tool Palette Popup'
 
-##### HOW TO USE PLUGIN:
-###### WHERE TO PLACE:
+With this, you can popup circular tool icons at anywhere of canvas, and quickly select drawing tool.
+
+For many of so-called 'Left-hand devices' has limited number of buttons, and with this feature you can dramatically decrease buttons for tool select.
+
+
+### Plugin feature
+
+#### HOW TO USE PLUGIN:
+##### WHERE TO PLACE:
 make a 'plugins' directory at app.state_dirs.app_data,
 or app.state_dirs.user_data (i.e. $XDG_DATA_HOME/mypaint)
 or app.state_dirs.user_config(i.e. $XDG_CONFIG_HOME/mypaint)
 
 and, place a plugin(python file) into that directory.
 
-###### WHAT SHOULD BE WRITTEN:
+#### WHAT SHOULD BE WRITTEN:
 We need a 'register' function to register plugin,
 and the plugin instance class, which is singleton
 and generated at register method.
