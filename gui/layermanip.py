@@ -341,6 +341,7 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
             tdw.queue_draw()
         self._overlays.clear()
 
+    # Redraw-queuing utility methods
     def _generate_border(self, tdw, dx, dy):
         x, y, w, h = self.cur_bbox
         x += dx
@@ -350,22 +351,26 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
                 tdw.model_to_display(x+w, y+h),
                 tdw.model_to_display(x, y+h))
 
-    def _queue_box(self, tdw, x, y, w, m=2):
+    def _queue_box(self, tdw, ox, oy, x, y, m=2):
         """Queue redraw with square box centered at x,y
         """
-        w += m
-        tdw.queue_draw_area(x-w, y-w, w*2, w*2)
+        w = abs(ox - x) + m
+        h = abs(oy - y) + m
+        tdw.queue_draw_area(x-w, y-h, w*2, h*2)
 
     def _queue_line(self, tdw, start, end, step=6):
         xs, ys = start
         xe, ye = end
         length, nx, ny = linemode.length_and_normal(xs, ys, xe, ye)
         segment = length / step
-        half_seg = segment / 2.0
+        ox, oy = xs, ys
         for i in range(step):
-            cl = (segment * i) + half_seg
+            cl = segment * (i + 0.5)
             cx, cy = linemode.multiply(nx, ny, cl)
-            self._queue_box(tdw, cx+xs, cy+ys, segment)
+            cx += xs
+            cy += ys
+            self._queue_box(tdw, ox, oy, cx, cy)
+            ox, oy = cx, cy
 
     def queue_redraw(self):
         if self.cur_bbox is not None:
@@ -414,7 +419,8 @@ class _Overlay_Move(gui.overlays.Overlay):
 
         # We cannot see target rect when the canvas is filled by (nearly)same color 
         # with target rect. so `dash` with distinguishable color.
-        cr.set_source_rgba(0, 0, 0, 0.7)
+        cr.save()
+        cr.set_source_rgba(0, 0, 0, 1.0)
         cr.set_line_width(1)
         for i in (None, 1):
             if i is not None:
@@ -425,8 +431,6 @@ class _Overlay_Move(gui.overlays.Overlay):
             cr.line_to(bx3, by3)
             cr.line_to(bx4, by4)
             cr.close_path()
-           #if i > 1:
-           #    gui.drawutils.render_drop_shadow(cr) # not good looking...
             cr.stroke()
 
             cr.move_to(bx1, by1)
@@ -437,28 +441,25 @@ class _Overlay_Move(gui.overlays.Overlay):
             cr.line_to(bx4, by4)
             cr.stroke()
             cr.set_source_rgba(*rgba)
-
+        cr.restore()
 
     def paint(self, cr):
         """Draw brush size to the screen"""
         mode = self._mode
         tdw = self._tdw
         if mode and mode.cur_bbox is not None:
-            cr.save()
-            a = 1.0
-
             # Drawing current bbox of layer.
             self.draw_target_rectangle(
                 cr, tdw, 0, 0, 
-                (0.0, 1.0, 0.0, a)
+                (0.0, 1.0, 0.0, 1.0)
             )
 
             # Drawing `moved` bbox of layer.
             self.draw_target_rectangle(
                 cr, tdw, mode.cur_x, mode.cur_y,
-                (1.0, 0.0, 0.0, a)
+                (1.0, 0.0, 0.0, 1.0)
             )
-            cr.restore()
+
 # XXX for 'overlay move' end
 
 # XXX for `relative move`
