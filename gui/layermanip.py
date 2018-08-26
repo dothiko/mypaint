@@ -374,7 +374,7 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
 
     def queue_redraw(self):
         if self.cur_bbox is not None:
-            # To minimize redrawing area. 
+            # To reduce redrawing area. 
             # If just redraw maximum rectangle,
             # when moving large layer, almost entire canvas would be redrawn.
             # 
