@@ -24,6 +24,7 @@ import lib.command
 import gui.cursor
 import gui.tileddrawwidget # XXX for `relative move`
 import gui.overlays
+import gui.linemode as linemode
 
 ## Class defs
 # XXX for 'overlay move'
@@ -54,6 +55,7 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
 
     ACTION_NAME = 'LayerMoveMode'
     _OPTIONS_PRESENTER = None
+    _OVERLAY = None
 
     pointer_behavior = gui.mode.Behavior.CHANGE_VIEW
     scroll_behavior = gui.mode.Behavior.CHANGE_VIEW
@@ -117,7 +119,6 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
         self.cur_y = 0
         self.cur_bbox = None
         self._overlays = {}  # keyed by tdw
-        self.npbuf = np.zeros((2, 4), 'float')
         # XXX for `overlay move` end
 
     ## Layer stacking API
@@ -128,8 +129,7 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
         rootstack = self.doc.model.layer_stack
         rootstack.current_path_updated += self._update_ui
         rootstack.layer_properties_changed += self._update_ui
-        if not self._is_active():
-            self._discard_overlays()
+
         self._update_ui()
 
         opt = self.get_options_widget()
@@ -143,6 +143,7 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
         rootstack = self.doc.model.layer_stack
         rootstack.current_path_updated -= self._update_ui
         rootstack.layer_properties_changed -= self._update_ui
+
         if not self._is_active():
             self._discard_overlays()
 
@@ -286,7 +287,6 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
         return False
 
     ## Helpers
-
     def _update_ui(self, *_ignored):
         """Updates the cursor, and the internal move-possible flag"""
         layer = self.doc.model.layer_stack.current
@@ -320,10 +320,17 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
                     self.doc.modes.pop()
 
     # XXX for 'overlay move'
+    def get_overlay_for_mode(self, tdw):
+        cls = self.__class__
+        if cls._OVERLAY is None:
+            cls._OVERLAY = _Overlay_Move()
+        cls._OVERLAY.set_target(self, tdw)
+        return cls._OVERLAY
+
     def _ensure_overlay_for_tdw(self, tdw):
         overlay = self._overlays.get(tdw)
         if not overlay:
-            overlay = _Overlay_Move(self, tdw)
+            overlay = self.get_overlay_for_mode(tdw)
             tdw.display_overlays.append(overlay)
             self._overlays[tdw] = overlay
         return overlay
@@ -334,38 +341,69 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
             tdw.queue_draw()
         self._overlays.clear()
 
-    def _calc_translated_min_max(self, tdw, dx, dy):
-        nb = self.npbuf
+    def _generate_border(self, tdw, dx, dy):
         x, y, w, h = self.cur_bbox
         x += dx
         y += dy
-        nb[0,0],nb[1,0] = tdw.model_to_display(x, y)
-        nb[0,1],nb[1,1] = tdw.model_to_display(x+w, y)
-        nb[0,2],nb[1,2] = tdw.model_to_display(x+w, y+h)
-        nb[0,3],nb[1,3] = tdw.model_to_display(x, y+h)
+        return (tdw.model_to_display(x, y),
+                tdw.model_to_display(x+w, y),
+                tdw.model_to_display(x+w, y+h),
+                tdw.model_to_display(x, y+h))
+
+    def _queue_box(self, tdw, x, y, w, m=2):
+        """Queue redraw with square box centered at x,y
+        """
+        w += m
+        tdw.queue_draw_area(x-w, y-w, w*2, w*2)
+
+    def _queue_line(self, tdw, start, end, step=6):
+        xs, ys = start
+        xe, ye = end
+        length, nx, ny = linemode.length_and_normal(xs, ys, xe, ye)
+        segment = length / step
+        half_seg = segment / 2.0
+        for i in range(step):
+            cl = (segment * i) + half_seg
+            cx, cy = linemode.multiply(nx, ny, cl)
+            self._queue_box(tdw, cx+xs, cy+ys, segment)
 
     def queue_redraw(self):
         if self.cur_bbox is not None:
-            nb = self.npbuf
-            m = 3 # margin
+            # To minimize redrawing area. 
+            # If just redraw maximum rectangle,
+            # when moving large layer, almost entire canvas would be redrawn.
+            # 
+            # Target rect is consisted from box and diagonal crossing lines
+            # so only update around them.
             offsets = ((0,0), (self.cur_x, self.cur_y))
             for tdw, overlay in self._overlays.items():
                 for x, y in offsets:
-                    self._calc_translated_min_max(tdw, x, y)
-                    a = nb.min(axis=1)
-                    b = nb.max(axis=1)
-                    tdw.queue_draw_area(a[0]-m, a[1]-m, b[0]-a[0]+m*2, b[1]-a[1]+m*2)
+                    tl, tr, br, bl = self._generate_border(tdw, x, y)
+                    self._queue_line(tdw, tl, tr)
+                    self._queue_line(tdw, tr, br)
+                    self._queue_line(tdw, br, bl)
+                    self._queue_line(tdw, bl, tl)
+
+                    self._queue_line(tdw, tl, br)
+                    self._queue_line(tdw, tr, bl)
     # XXX for 'overlay move' end
 
 # XXX for 'overlay move'
 class _Overlay_Move(gui.overlays.Overlay):
 
-    def __init__(self, movemode, tdw):
+   #def __init__(self, movemode, tdw):
+   #    super(_Overlay_Move, self).__init__()
+   #    self._mode = weakref.proxy(movemode)
+   #    self._tdw = weakref.proxy(tdw)
+
+    def __init__(self):
         super(_Overlay_Move, self).__init__()
-        self._mode = weakref.proxy(movemode)
+
+    def set_target(self, mode, tdw):
+        self._mode = weakref.proxy(mode)
         self._tdw = weakref.proxy(tdw)
 
-    def draw_target_rectangle(self, cr, tdw, x, y):
+    def draw_target_rectangle(self, cr, tdw, x, y, rgba):
         bx, by, bw, bh = self._mode.cur_bbox
         bx += x
         by += y
@@ -374,33 +412,52 @@ class _Overlay_Move(gui.overlays.Overlay):
         bx3, by3 = tdw.model_to_display(bx+bw, by+bh)
         bx4, by4 = tdw.model_to_display(bx, by+bh)
 
-        cr.move_to(bx1, by1)
-        cr.line_to(bx2, by2)
-        cr.line_to(bx3, by3)
-        cr.line_to(bx4, by4)
-        cr.close_path()
-        cr.stroke()
+        # We cannot see target rect when the canvas is filled by (nearly)same color 
+        # with target rect. so `dash` with distinguishable color.
+        cr.set_source_rgba(0, 0, 0, 0.7)
+        cr.set_line_width(1)
+        for i in (None, 1):
+            if i is not None:
+                cr.set_dash((4.0,),)
+            cr.new_path()
+            cr.move_to(bx1, by1)
+            cr.line_to(bx2, by2)
+            cr.line_to(bx3, by3)
+            cr.line_to(bx4, by4)
+            cr.close_path()
+           #if i > 1:
+           #    gui.drawutils.render_drop_shadow(cr) # not good looking...
+            cr.stroke()
 
-        cr.move_to(bx1, by1)
-        cr.line_to(bx3, by3)
-        cr.stroke()
+            cr.move_to(bx1, by1)
+            cr.line_to(bx3, by3)
+            cr.stroke()
 
-        cr.move_to(bx2, by2)
-        cr.line_to(bx4, by4)
-        cr.stroke()
+            cr.move_to(bx2, by2)
+            cr.line_to(bx4, by4)
+            cr.stroke()
+            cr.set_source_rgba(*rgba)
+
 
     def paint(self, cr):
         """Draw brush size to the screen"""
         mode = self._mode
         tdw = self._tdw
-        if mode:
+        if mode and mode.cur_bbox is not None:
             cr.save()
-            if mode.cur_bbox is not None:
-                cr.set_source_rgba(0.0, 1.0, 0.0, 1.0)
-                self.draw_target_rectangle(cr, tdw, 0, 0)
+            a = 1.0
 
-                cr.set_source_rgba(1.0, 0.0, 0.0, 1.0)
-                self.draw_target_rectangle(cr, tdw, mode.cur_x, mode.cur_y)
+            # Drawing current bbox of layer.
+            self.draw_target_rectangle(
+                cr, tdw, 0, 0, 
+                (0.0, 1.0, 0.0, a)
+            )
+
+            # Drawing `moved` bbox of layer.
+            self.draw_target_rectangle(
+                cr, tdw, mode.cur_x, mode.cur_y,
+                (1.0, 0.0, 0.0, a)
+            )
             cr.restore()
 # XXX for 'overlay move' end
 
@@ -449,8 +506,12 @@ class _OptionsPresenter(Gtk.Grid):
             spinbtn = Gtk.SpinButton()
             spinbtn.set_hexpand(True)
             spinbtn.set_adjustment(adj)
+
             # We need spinbutton focus event callback, to disable/re-enable
             # Keyboard manager for them.
+            # Without this, we lose keyboard input focus right after 
+            # input only one digit(key). 
+            # It is very annoying behavior.
             spinbtn.connect("focus-in-event", self._spin_focus_in_cb)
             spinbtn.connect("focus-out-event", self._spin_focus_out_cb)
             grid.attach(spinbtn, 1, row, 1, 1)
@@ -524,12 +585,17 @@ class _OptionsPresenter(Gtk.Grid):
 
     @property
     def target(self):
-        assert self._mode_ref is not None
-        return self._mode_ref()
+        if mode is not None:
+            return self._mode_ref()
+        else:
+            return None
 
     @target.setter
     def target(self, mode):
-        self._mode_ref = weakref.ref(mode)
+        if mode is not None:
+            self._mode_ref = weakref.ref(mode)
+        else:
+            self._mode_ref = None
         
     def _spin_focus_in_cb(self, widget, event):
         if self._update_ui:
