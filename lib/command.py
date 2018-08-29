@@ -2432,7 +2432,7 @@ class ClosedAreaFill (FloodFill):
         #XXX debug code end
 
         # Finalize progressive fill.
-        ft.finalize_filled_area()
+        ft.remove_small_areas((1<<level)*4*2)
 
         ft.dilate(self.dilation_size)
         if self.fill_all_holes:

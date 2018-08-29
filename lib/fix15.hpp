@@ -15,6 +15,7 @@
 #define __HAVE_FIX15
 
 #include <stdint.h>
+#include <assert.h> // XXX I met compile error from 2018.8.27. what happen?
 
 /* Scaled integer types */
 
