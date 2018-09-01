@@ -28,6 +28,11 @@ class Flagtile
 protected:
     uint8_t *m_buf;
 
+    // Pixel counts.
+    int m_filledcnt;
+    int m_areacnt;
+    int m_contourcnt;
+
     // The total buffer size,
     static const int BUF_SIZE = PROGRESS_BUF_SIZE(0) + 
                                 PROGRESS_BUF_SIZE(1) + 
@@ -63,41 +68,44 @@ public:
     // For completely seqencial access.
     inline uint8_t *get_ptr() { return m_buf;}
 
-    inline void combine(const int level, int x, int y, uint8_t val) 
-    {
-        *_BUF_PTR(level, x, y) |= val;
-    }
-
-    inline void remove(const int level, int x, int y, uint8_t val) 
-    {
-        *_BUF_PTR(level, x, y) &= (~val);
-    }
-
     inline uint8_t get(const int level, const int x, const int y) 
     {
         return *_BUF_PTR(level, x, y);
     }
 
-    // Different from `combine`, `put` method changes only pixel value. 
-    inline void put(const int level, int x, int y, uint8_t val) 
-    {
-        uint8_t *ptr = _BUF_PTR(level, x, y);
-        *ptr &= FLAG_MASK;
-        *ptr |= (PIXEL_MASK & val);
-    }
-
     inline void replace(const int level, int x, int y, uint8_t val) 
     {
-        *_BUF_PTR(level, x, y) = val;
-    }
+        uint8_t oldpix = *_BUF_PTR(level, x, y) & PIXEL_MASK;
+        if (level == 0 
+                && (val & PIXEL_MASK) != oldpix) {
+            switch (val & PIXEL_MASK) {
+                case PIXEL_FILLED:
+                    m_filledcnt++;
+                    break;
+                case PIXEL_AREA:
+                    m_areacnt++;
+                    break;
+                case PIXEL_CONTOUR:
+                    m_contourcnt++;
+                    break;
+            }
 
-    void clear_bitwise_flag(const uint8_t flag) 
-    {
-        uint8_t *cp = m_buf;
-        for(int i=0; i < BUF_SIZE; i++) {
-            *cp &= (~flag);
-            cp++;
+            switch (oldpix & PIXEL_MASK) {
+                case PIXEL_FILLED:
+                    m_filledcnt--;
+                    break;
+                case PIXEL_AREA:
+                    m_areacnt--;
+                    break;
+                case PIXEL_CONTOUR:
+                    m_contourcnt--;
+                    break;
+            }
+
+            if((val & FLAG_MASK) != 0)
+                set_dirty();
         }
+        *_BUF_PTR(level, x, y) = val;
     }
 
     void clear_bitwise_flag(const int level, const uint8_t flag) 
@@ -105,16 +113,6 @@ public:
         uint8_t *cp = _BUF_PTR(level, 0, 0);
         for(int i=0; i < PROGRESS_BUF_SIZE(level); i++) {
             *cp &= (~flag);
-            cp++;
-        }
-    }
-
-    void convert_flag(const uint8_t targ_flag, const uint8_t new_flag) 
-    {
-        uint8_t *cp = m_buf;
-        for(int i=0; i < BUF_SIZE; i++) {
-            if (*cp == targ_flag)
-                *cp = new_flag;
             cp++;
         }
     }
@@ -137,13 +135,56 @@ public:
 
     void convert_to_transparent(PyObject *py_targ_tile);
 
-    inline int get_stat(){ return (int)m_statflag; }
-    // set/unset stat flag with automatically removing conflicting flag/
-    // adding conpanion flag.
-    void set_stat(const int new_stat);
-    void unset_stat(const int new_stat);
+    inline int get_stat(){
+        if (m_filledcnt == TILE_SIZE*TILE_SIZE)
+            return (m_statflag | FILLED | HAS_PIXEL);
+        else if (m_areacnt == TILE_SIZE*TILE_SIZE)
+            return (m_statflag | FILLED_AREA | HAS_AREA);
+        else if (m_contourcnt == TILE_SIZE*TILE_SIZE)
+            return (m_statflag | FILLED_CONTOUR | HAS_CONTOUR);
+        else if (m_filledcnt == 0 && m_areacnt == 0 && m_contourcnt == 0)
+            return (m_statflag | EMPTY);
+        
+        int32_t retflag = m_statflag;
 
-    static inline int get_length(){return TILE_SIZE * TILE_SIZE;}
+        if (m_filledcnt > 0)
+            retflag |= HAS_PIXEL;
+        
+        if (m_contourcnt > 0)
+            retflag |= HAS_CONTOUR;
+
+        if (m_areacnt > 0)
+            retflag |= HAS_AREA;
+
+        return retflag;
+
+    }
+
+    inline bool is_filled_with(const uint8_t pix) { 
+        switch(pix) {
+            case PIXEL_AREA:
+                return (m_statflag & FILLED_AREA);
+            case PIXEL_FILLED:
+                return (m_statflag & FILLED);
+            case PIXEL_CONTOUR:
+                return (m_statflag & FILLED_CONTOUR);
+            case PIXEL_EMPTY:
+            case PIXEL_OUTSIDE:
+                return (m_statflag & EMPTY);
+            default:
+                return false;
+        }
+    }
+
+    inline void set_dirty() {
+        m_statflag |= DIRTY;
+    }
+    inline void clear_dirty() {
+        m_statflag &= (~DIRTY);
+    }
+    inline void set_borrowed() {
+        m_statflag |= BORROWED;
+    }
 
     // Progress methods
     void build_progress_seed(const int start_level);
@@ -163,22 +204,30 @@ public:
     /// Status flags of below are exclusive.
     /// We can set only each one of them for status flag.
     
+    // This tile is not filled entirely but has some valid pixel.
+    static const int HAS_PIXEL = 0x00000100;
+    //
     // This tile has completely filled with PIXEL_FILLED,
     // without any contour.
-    static const int FILLED = 0x00000100;
+    // When this flag is set, statflag should also have HAS_PIXEL.
+    static const int FILLED = 0x00000200;
     
     // This tile has some contour pixel.
-    // This flag must not coexist with FILLED flag.
-    static const int HAS_CONTOUR = 0x00000200;
+    static const int HAS_CONTOUR = 0x00000400;
+    // Rarely but possible, a tile has only contour pixel.
+    // When this flag is set, statflag should also have HAS_CONTOUR.
+    static const int FILLED_CONTOUR = 0x00000800;
 
-    // This tile is not filled entirely but has some valid pixel.
-    static const int HAS_PIXEL = 0x00000400;
+    // This tile has some vacant pixel.
+    static const int HAS_AREA = 0x00001000;
 
     // This tile has completely filled with PIXEL_AREA.
-    static const int FILLED_AREA = 0x00000800;
+    // When this flag is set, statflag should also have HAS_AREA.
+    static const int FILLED_AREA = 0x00002000;
     
     // This tile is empty(i.e. filled with 0)
-    static const int EMPTY = 0x00001000;
+    static const int EMPTY = 0x00004000;
+    
 };
 
 /* Flagtile psuedo surface object.
@@ -256,9 +305,9 @@ public:
         return get_tile(_get_tile_index(tx, ty), request);
     }
 
-    inline Flagtile* get_tile_from_pixel(const int sx, const int sy, 
-                                         const bool request, 
-                                         const int level) {
+    inline Flagtile* get_tile_from_pixel(const int level, 
+                                         const int sx, const int sy, 
+                                         const bool request) { 
         int tile_size = PROGRESS_TILE_SIZE(level);
         int raw_tx = sx / tile_size;
         int raw_ty = sy / tile_size;
@@ -296,37 +345,9 @@ assert(idx < (m_width * m_height));
         return get_tile(_get_tile_index(tx, ty), false) != NULL;
     }
 
-    inline void combine_pixel(const int level, 
-                              const int sx, const int sy, 
-                              const uint8_t val) {
-        Flagtile *ct = get_tile_from_pixel(sx, sy, true, level);
-        
-#ifdef HEAVY_DEBUG
-assert(ct != NULL);
-#endif
-        const int tile_size = PROGRESS_TILE_SIZE(level);
-        ct->combine(level, positive_mod(sx, tile_size), positive_mod(sy, tile_size), 
-                    val);
-    }
-
-    inline void put_pixel(const int level, 
-                          const int sx, const int sy, 
-                          const uint8_t val) {
-        Flagtile *ct = get_tile_from_pixel(sx, sy, true, level);
-        
-#ifdef HEAVY_DEBUG
-assert(ct != NULL);
-#endif
-        const int tile_size = PROGRESS_TILE_SIZE(level);
-        ct->put(level,
-                positive_mod(sx, tile_size), 
-                positive_mod(sy, tile_size), 
-                val);
-    }
-
     inline uint8_t get_pixel(const int level, 
                              const int sx, const int sy) {
-        Flagtile *ct = get_tile_from_pixel(sx, sy, false, level);
+        Flagtile *ct = get_tile_from_pixel(level, sx, sy, false);
         if (ct == NULL)
             return 0; 
 
@@ -339,7 +360,7 @@ assert(ct != NULL);
     inline void replace_pixel(const int level, 
                               const int sx, const int sy, 
                               const uint8_t val) {
-        Flagtile *ct = get_tile_from_pixel(sx, sy, true, level);
+        Flagtile *ct = get_tile_from_pixel(level, sx, sy, true);
         
 #ifdef HEAVY_DEBUG
 assert(ct != NULL);
@@ -363,7 +384,7 @@ assert(ct != NULL);
     // So this must be public method.
     // From python, use progfloodfill function of tiledsurface.py.
     // XXX We might use C++ friend keyword for this...
-    void flood_fill(int sx, int sy, 
+    void flood_fill(const int sx, const int sy, 
                     FillWorker *w);
     
     // Also, filter method would be called from some worker classes.
@@ -371,7 +392,7 @@ assert(ct != NULL);
     void filter_tiles(KernelWorker *k);
     
     // Finalize related methods.
-    void remove_small_areas(const int threshold);
+    void remove_small_areas();
     void dilate(const int dilation_size);
     void fill_holes();
     void draw_antialias();

@@ -2167,13 +2167,12 @@ class ClosedAreaFill (FloodFill):
         # XXX debug method
         
         # From lib/progfilldefine.hpp
-        PIXEL_AREA = 0x02
-        PIXEL_OUTSIDE = 0x03 
-        PIXEL_REMOVE = 0x04
+        PIXEL_EMPTY= 0x00 
+        PIXEL_OUTSIDE = 0x02 
+        PIXEL_AREA = 0x03
         PIXEL_FILLED = 0x05        
         PIXEL_CONTOUR = 0x06
         FLAG_WORK = 0x10
-        FLAG_DECIDED = 0x20
         FLAG_AA = 0x80
         npbuf = None
         if title is None:
@@ -2432,11 +2431,12 @@ class ClosedAreaFill (FloodFill):
         #XXX debug code end
 
         # Finalize progressive fill.
-        ft.remove_small_areas((1<<level)*4*2)
+        ft.remove_small_areas()
 
-        ft.dilate(self.dilation_size)
         if self.fill_all_holes:
             ft.fill_holes()
+
+        ft.dilate(self.dilation_size)
         ft.draw_antialias()
         
         # Convert flagtiles into that new layer.

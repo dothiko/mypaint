@@ -111,6 +111,33 @@ assert_tile(PyArrayObject* array) {
 // FYC, Base worker classes are defined at lib/profilldefine.hpp
 // And most of derived worker classes are defined at lib/progfillworkers.hpp
 
+
+//--------------------------------------
+/// TileWorker 
+
+// We can enumerate kernel window(surrounding) 4 pixels with for-loop
+// by these offset, in the order of 
+//
+// TOP, RIGHT, BOTTOM, LEFT (i.e. clockwise).
+//
+// Derived from WalkingKernel(especially AntialiasKernel) depends 
+// the order of this offsets.
+// DO NOT CHANGE THIS ORDER.
+const int TileWorker::xoffset[] = { 0, 1, 0, -1};
+const int TileWorker::yoffset[] = {-1, 0, 1,  0};
+
+uint8_t 
+TileWorker::_get_neighbor_pixel(const int level,
+                    const int direction, 
+                    const int sx, const int sy) 
+{
+    return m_surf->get_pixel(
+        level, 
+        sx+xoffset[direction], 
+        sy+yoffset[direction]
+    ); 
+}
+
 //--------------------------------------
 /// KernelWorker 
 
@@ -126,16 +153,6 @@ KernelWorker::KernelWorker(FlagtileSurface *surf, const int level)
     set_target_level(level);
 } 
 
-// We can enumerate kernel window(surrounding) 4 pixels with for-loop
-// by these offset, in the order of 
-//
-// TOP, RIGHT, BOTTOM, LEFT (i.e. clockwise).
-//
-// Derived from WalkingKernel(especially AntialiasKernel) depends 
-// the order of this offsets.
-// DO NOT CHANGE THIS ORDER.
-const int KernelWorker::xoffset[] = { 0, 1, 0, -1};
-const int KernelWorker::yoffset[] = {-1, 0, 1,  0};
 
 void 
 KernelWorker::set_target_level(const int level) 
@@ -162,10 +179,9 @@ KernelWorker::set_target_level(const int level)
 * forward next tile.
 */
 bool 
-KernelWorker::start(Flagtile* targ) 
+KernelWorker::start(Flagtile* targ, const int sx, const int sy) 
 {
     if(targ != NULL) {
-        m_processed = 0;
         return true;
     }
     return false;
@@ -175,25 +191,6 @@ KernelWorker::start(Flagtile* targ)
 void 
 KernelWorker::end(Flagtile* targ) 
 {
-    if (m_processed > 0)
-    {
-        targ->set_stat(Flagtile::DIRTY);
-        m_processed = 0;
-    }
-}
-
-uint8_t 
-KernelWorker::get_kernel_pixel(const int level,
-                               const int sx, const int sy,
-                               const int idx) 
-{
-    m_px = sx + xoffset[idx];
-    m_py = sy + yoffset[idx];
-    if (m_px > 0 && m_px < m_max_x
-            && m_py > 0 && m_py < m_max_y) {
-        return m_surf->get_pixel(level, m_px, m_py);
-    }
-    return 0;
 }
 
 void
@@ -204,8 +201,8 @@ KernelWorker::finalize()
     for(int i=0; i<m_surf->get_width() * m_surf->get_height(); i++) {
         Flagtile *t = m_surf->get_tile(i, false);
         if (t != NULL && (t->get_stat() & Flagtile::DIRTY)) {
-            t->clear_bitwise_flag(FLAG_WORK);
-            t->unset_stat(Flagtile::DIRTY);
+            t->clear_bitwise_flag(m_level, FLAG_WORK);
+            t->clear_dirty();
         }
     }
 }
@@ -327,6 +324,9 @@ WalkingKernel::_walk(const int sx, const int sy, const int direction)
     
     m_cur_dir = direction;
 
+    // At first, walk into initial pixel 
+    _on_new_pixel();
+
     while (_proceed()) {
 #ifdef HEAVY_DEBUG
         cnt++;
@@ -335,22 +335,6 @@ WalkingKernel::_walk(const int sx, const int sy, const int direction)
         assert(cnt < 100000000);
 #endif
     }
-}
-
-// Caution: Child class of this kernel should accepts
-// NULL tile.
-bool 
-WalkingKernel::start(Flagtile* targ) 
-{
-    // `step` method of this class accepts
-    // NULL tile. so we cannot use `start`
-    // method of KernelWorker base class.
-    m_processed = 0; 
-    if ( targ != NULL 
-        && (targ->get_stat() & Flagtile::FILLED) != 0) {
-            return false;
-    }
-    return true;
 }
     
 //--------------------------------------
@@ -372,6 +356,9 @@ Flagtile::Flagtile(const int initial_value)
     : m_statflag(0) 
 {
     m_buf = new uint8_t[BUF_SIZE];
+    m_areacnt = 0;
+    m_filledcnt = 0;
+    m_contourcnt = 0;
     fill(initial_value);
 }
 
@@ -403,7 +390,7 @@ Flagtile::_build_progress_level(const int targ_level)
             for (int by=0; by < 2; by++) {
                 for (int bx=0; bx < 2; bx++) {
                     uint8_t pix = get(b_level, bbx+bx, bby+by);
-                    switch(pix & PIXEL_MASK) {
+                    switch(pix) {
                         case PIXEL_CONTOUR:
                             contour_cnt++;
                             break;
@@ -505,16 +492,15 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
 
     fix15_t f15_tolerance = (fix15_t)(tolerance * (double)fix15_one);
     fix15_t f15_threshold = (fix15_t)(alpha_threshold * (double)fix15_one);
-    int contour_cnt = 0;
 
     // Converting color tile into progress level 0 pixel.
+    //
+    // In this stage, pixel value in tile is either 0 or PIXEL_AREA.
     for(int y=0; y<TILE_SIZE; y++) {
         for(int x=0; x<TILE_SIZE; x++) {
             uint8_t pix = *tptr & PIXEL_MASK;
             fix15_t alpha = (fix15_t)cptr[3];
             if (!limit_within_opaque || alpha > 0) {
-                // Under certain circumstance,
-                // the pixel area would be 
                 if (pix == PIXEL_AREA && alpha >= f15_threshold) {
                     fix15_t match = _closefill_color_match(
                         targ, cptr,
@@ -523,7 +509,8 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
                     
                     if (match == 0) { 
                         *tptr = PIXEL_CONTOUR;
-                        contour_cnt++;
+                        m_areacnt--;
+                        m_contourcnt++;
                     }
                 }
             }
@@ -531,16 +518,14 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
                 // Code reaches here when
                 // limit_within_opaque is true and current pixel
                 // is completely transparent.
+                if (*tptr == PIXEL_AREA)
+                    m_areacnt--;
                 *tptr = 0;
             }
             cptr += xstride;
             tptr++;
         }
         cptr += yoffset;
-    }
-
-    if(contour_cnt > 0) {
-        set_stat(HAS_CONTOUR);
     }
 }
 
@@ -703,50 +688,19 @@ void
 Flagtile::fill(const uint8_t val) 
 {
     memset(m_buf, val, BUF_SIZE);
-    switch(val) {
+    m_filledcnt = 0;
+    m_areacnt = 0;
+    m_contourcnt = 0;
+    switch(val & PIXEL_MASK) {
         case PIXEL_FILLED:
-            set_stat(FILLED);
+            m_filledcnt = TILE_SIZE * TILE_SIZE;
             break;
         case PIXEL_AREA:
-            set_stat(FILLED_AREA);
+            m_areacnt = TILE_SIZE * TILE_SIZE;
             break;
-        case 0:
-            set_stat(EMPTY);
+        case PIXEL_CONTOUR:
+            m_contourcnt = TILE_SIZE * TILE_SIZE;
             break;
-    }
-}
-
-// Caution: You MUST call set_stat with only one stat flag.
-// Do not comibine it as parameter.
-void 
-Flagtile::set_stat(const int new_stat) 
-{ 
-    m_statflag |= new_stat; 
-
-    // These flags are exclusive.
-    if((new_stat & HAS_PIXEL) || (new_stat & HAS_CONTOUR)) {
-        m_statflag &= ~(FILLED_AREA | EMPTY);    
-    }
-    else if(new_stat & FILLED) {
-        m_statflag |= HAS_PIXEL; 
-        m_statflag &= ~(FILLED_AREA | HAS_CONTOUR | EMPTY);
-    }
-    else if(new_stat & FILLED_AREA) {
-        m_statflag &= ~(FILLED | HAS_PIXEL | HAS_CONTOUR | EMPTY); 
-    }
-    else if(new_stat & EMPTY) {
-        m_statflag &= ~(FILLED | HAS_PIXEL | HAS_CONTOUR | FILLED_AREA); 
-    }
-
-}
-
-void 
-Flagtile::unset_stat(const int new_stat) 
-{
-    m_statflag &= ~new_stat; 
-
-    if(new_stat & HAS_PIXEL) {
-        m_statflag &= ~FILLED; 
     }
 }
 
@@ -805,39 +759,6 @@ FlagtileSurface::_generate_tileptr_buf(const int ox, const int oy,
     );
 }
 
-
-void 
-FlagtileSurface::_convert_flag(const uint8_t targ_flag, 
-                               const uint8_t flag,
-                               const bool look_dirty)
-{
-    Flagtile *t;
-
-    for(int ty=0; ty<m_height; ty++) {
-        for(int tx=0; tx<m_width; tx++) {
-
-            t = get_tile(tx, ty, false);
-            if (t == NULL 
-                    || (look_dirty 
-                        && !(t->get_stat() & Flagtile::DIRTY))) {
-                continue;
-            }
-
-            uint8_t *ptr = t->get_ptr();
-            for (int i=0; 
-                     i < TILE_SIZE*TILE_SIZE; 
-                     i++) {
-                if (*ptr == targ_flag)
-                    *ptr = flag;
-                ptr++;
-            }
-
-            if(look_dirty)
-                t->unset_stat(Flagtile::DIRTY);
-        }
-    }
-}
-
 /**
 * @flood_fill
 * Do `Flood fill` from
@@ -877,7 +798,7 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
     uint8_t pix = ot->get(level, px, py);
     
     // Initial seed pixel check.
-    if (!w->start(ot) || !w->match(pix))
+    if (!w->start(ot, sx, sy) || !w->match(pix))
         return;
 
     // Populate a working queue with seeds
@@ -913,7 +834,7 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
                 if (x < 0|| y < 0 || x >= max_x || y >= max_y) {
                     break;
                 }
-                
+
                 int tx = x / tile_size;
                 int ty = y / tile_size;                    
                 int px = x % tile_size;
@@ -1017,9 +938,9 @@ FlagtileSurface::filter_tiles(KernelWorker *w)
     for(int ty=0; ty<m_height; ty++) {
         for(int tx=0; tx<m_width; tx++) {
             t = get_tile(tx, ty, false);
-            if (w->start(t)) {
-                int bx = tx * tile_size;
-                int by = ty * tile_size;
+            int bx = tx * tile_size;
+            int by = ty * tile_size;
+            if (w->start(t, bx, by)) {
 
                 // iterate tile pixel.
                 for (int y=0; y<tile_size; y++) {
@@ -1100,6 +1021,22 @@ FlagtileSurface::progress_tiles()
             filter_tiles((KernelWorker*)&k);
         }
     }
+
+    // Then, finalize the result.
+    ConvertKernel ck(this);
+    ck.setup(0, PIXEL_AREA, PIXEL_FILLED);
+    filter_tiles((KernelWorker*)&ck);
+}
+
+// A callback used in FlagtileSurface::remove_small_areas
+void __foreach_perimeter_cb(gpointer data, gpointer user_data)
+{
+    _perimeter_info *info = (_perimeter_info*)data;
+    int *max_length = (int*)user_data;
+
+    if (info->length > *max_length) {
+        *max_length = info->length;
+    }
 }
 
 /**
@@ -1114,16 +1051,76 @@ FlagtileSurface::progress_tiles()
 * This method is to reject small needless areas by counting its perimeter. 
 */
 void
-FlagtileSurface::remove_small_areas(const int threshold)
+FlagtileSurface::remove_small_areas()
 {
     // Remove annoying small glich-like pixel area.
     // `Progressive fill` would mistakenly fill some
     // concaved areas around jagged contour edges as gap.
     // Theorically, such area cannot be produced when
-    // gap-closing-level is less or equal to 1.
-    if (threshold > 0 && m_level > 1) {
-        RemoveGarbageKernel rk(this, 0, threshold);
-        filter_tiles((KernelWorker*)&rk);
+    // targeting gap-closing-level(m_level) is less than or equal to 1.
+    if (m_level > 1) {
+        GQueue *queue = g_queue_new();
+        CountPerimeterKernel pk(this, 0, queue);
+        filter_tiles((KernelWorker*)&pk);
+
+        int max_length=0;
+        g_queue_foreach(queue, __foreach_perimeter_cb, &max_length);
+#ifdef HEAVY_DEBUG
+        assert(max_length > 0);
+#endif
+
+        RemoveAreaWorker ra(this, 0);
+        ClearflagWalker cf(this, PIXEL_FILLED);
+        // Now, use max_length as threshold.
+        // Allow half of max_length, when it is enough large.
+        if (max_length > (1<<m_level) * 4 * 4)
+            max_length /= 2;
+        
+        while(g_queue_get_length(queue) > 0) {
+            _perimeter_info *info = (_perimeter_info*)g_queue_pop_head(queue);
+            // NOTE: We cannot reject `hole` area at here because
+            // That area might be multiple areas which has a composition 
+            // of diagonally connected. Such areas are needed to be detected
+            // separately - i.e. we need new search for `hole` pixels.
+            
+            // info->clockwise == true : i.e. it is not area, it's hole.
+            // info->encount > 0 : i.e. 
+
+            if (info->clockwise) {
+                // It is hole. It would be filled later,
+                // Just erase walking flags for now.
+                cf.walk_from(info->sx, info->sy, info->direction, false);
+            }
+            else {
+                if (info->length < max_length 
+                        && (info->encount > 0 || info->length < (1<<m_level))) {
+                    // When the area 
+                    // * Smaller than threshold 
+                    // * Encount some empty pixels - it is `open`
+                    // * Or, really too small... 
+                    // It should be removed!
+
+                    if (info->length == 0) {
+                        // Just a dot. Erase it.
+                        cf.walk_from(info->sx, info->sy, info->direction, false);
+                        replace_pixel(0, info->sx, info->sy, PIXEL_AREA); 
+                    }
+                    else {
+                        // With this flood-fill, erase all surrounding `flaged` pixel.
+                        // So no need to use ClearflagWalker.
+                        flood_fill(
+                            info->sx, info->sy,
+                            (FillWorker*)&ra
+                        );
+                    }
+                }
+                else {
+                    cf.walk_from(info->sx, info->sy, info->direction, false);
+                }
+            }
+            delete info;
+        }
+        g_queue_free(queue);
     }
 }
 
@@ -1143,8 +1140,30 @@ FlagtileSurface::fill_holes()
     filter_tiles((KernelWorker*)&ck);
 
     // That makes hole. so fill it.
-    FillHoleKernel fk(this, 0);
+    GQueue *queue = g_queue_new();
+    FillHoleKernel fk(this, queue);
     filter_tiles((KernelWorker*)&fk);
+
+    ClearflagWalker cf(this, PIXEL_AREA);
+    FillHoleWorker fh(this);
+    while(g_queue_get_length(queue) > 0) {
+        _perimeter_info *info = (_perimeter_info*)g_queue_pop_head(queue);
+
+        cf.walk_from(info->sx, info->sy, info->direction, false);
+        if (!info->clockwise && info->encount == 0) {
+            if (info->length == 0) {
+                replace_pixel(0, info->sx, info->sy, PIXEL_AREA);
+            }
+            else {
+                flood_fill(
+                    info->sx, info->sy,
+                    (FillWorker*)&fh
+                );
+            }
+        }
+        delete info;
+    }
+    g_queue_free(queue);
 }
 
 void
@@ -1259,7 +1278,7 @@ FloodfillSurface::borrow_tile(const int tx, const int ty, Flagtile* tile)
 {
     int idx = _get_tile_index(tx, ty);
     m_tiles[idx] = tile;
-    tile->set_stat(Flagtile::BORROWED);
+    tile->set_borrowed();
 }
 
 //--------------------------------------
@@ -1643,7 +1662,6 @@ ClosefillSurface::_scanline_fill()
 #ifdef HEAVY_DEBUG
                                     assert(tile != NULL);
 #endif
-                                    tile->unset_stat(Flagtile::EMPTY);
                                     ptx = tx;
                                     pty = ty;
                                 }                                
@@ -1855,9 +1873,6 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
     }
     else {
         // Ordinary flood-fill
-        int filled_cnt = 0;
-        int contour_cnt = 0;
-                
         while (! g_queue_is_empty(queue)) {
             _progfill_point *pos = (_progfill_point*) g_queue_pop_head(queue);
             int x0 = pos->x;
@@ -1879,8 +1894,6 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
                     if (x != x0) { // Test was already done for queued pixels
                         if (pix != PIXEL_AREA)
                         {
-                            if(pix == PIXEL_CONTOUR)
-                                contour_cnt++;
                             break;
                         }
                     }
@@ -1890,7 +1903,6 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
                     }
                     // Fill this pixel, and continue iterating in this direction
                     tile->replace(level, x, y, PIXEL_FILLED);
-                    filled_cnt++;
                     // In addition, enqueue the pixels above and below.
                     // Scanline algorithm here to avoid some pointless queue faff.
                     if (y > 0) {
@@ -1970,13 +1982,6 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
                 }
             }
         }
-        
-            // Refresh filled status.
-            // If there is at least one filled pixel or contour,
-            // It should be set HAS_PIXEL stat flag.
-            if(filled_cnt > 0
-                    || contour_cnt > 0)
-                tile->set_stat(Flagtile::HAS_PIXEL);
     }
     // Clean up working state, and return where the fill has overflowed
     // into neighbouring tiles.
@@ -2050,10 +2055,10 @@ FlagtileSurface::render_to_numpy(PyObject *npbuf,
                         for (int x=0; x < TILE_SIZE; x+=step) {
                             int mx = x >> level;
                             int my = y >> level;
+                            uint8_t *byptr = tptr;
 
                             if (t->get(level, mx, my) == tflag) {
                                 // Fill a progress chunk.
-                                uint8_t *byptr = tptr;
                                 for(int cy=0; cy < step; cy ++) {
                                     uint8_t *bxptr = byptr;
                                     for(int cx=0; cx < step; cx ++) {

@@ -48,11 +48,8 @@ enum PixelFlags {
     // PIXEL_AREA means 'The pixel is fillable, but not filled(yet)'
     PIXEL_MASK = 0x0F,
     PIXEL_EMPTY = 0x00,
-    PIXEL_INVALID = 0x01, // Invalid pixel, to notify the FillWorker would
-                          // generate multiple type of pixel.
-    PIXEL_AREA = 0x02,
-    PIXEL_OUTSIDE = 0x03,  
-    PIXEL_REMOVE = 0x04, // The ridge of an area to be removed.
+    PIXEL_OUTSIDE = 0x02,  
+    PIXEL_AREA = 0x03,
     PIXEL_FILLED = 0x05,
     PIXEL_CONTOUR, // PIXEL_CONTOUR is one of a filled pixel.
                    // This should be larger than PIXEL_FILLED
@@ -67,9 +64,6 @@ enum PixelFlags {
     // This flag should be most significant bit, for final antialiasing.
     FLAG_WORK = 0x10, 
     
-    // FLAG_DECIDED means `This pixel is decided to convert to final color pixel`
-    FLAG_DECIDED = 0x20,
-
     // FLAG_AA used for final anti-aliasing.
     // CAUTION: With this flag set, the pixel contains 128 Level of antialias
     // alpha seed value. 
@@ -162,7 +156,32 @@ public:
 class TileWorker : public PixelWorker {
 protected:
     int m_processed; // Processed pixel count. update this in child class.
+
     
+    // process only outerrim ridges of a tile.
+    // use for a tile which is filled some specific value.
+    void _process_only_ridge(Flagtile *targ, const int sx, const int sy)
+    {
+        int ridge = PROGRESS_TILE_SIZE(m_level) - 1;
+
+        for(int y=0;y < ridge;y+=ridge-1){
+            for(int x=0;x < ridge;x++){
+                step(targ, x, y, sx+x, sy+y);
+            }
+        }
+
+        // Corner pixels are already processed at above loop.
+        for(int x=1;x < ridge-1;x+=ridge-2){
+            for(int y=0;y < ridge;y++){
+                step(targ, x, y, sx+x, sy+y);
+            }
+        }
+    }
+
+    inline uint8_t _get_neighbor_pixel(const int level,
+                                       const int direction, 
+                                       const int sx, const int sy); 
+
 public:
     TileWorker(FlagtileSurface* surf, const int level) 
         : PixelWorker(surf, level) ,
@@ -176,7 +195,7 @@ public:
                
     // `start` called at the starting point of tile processing.
     // All processing cancelled when this return false.
-    virtual bool start(Flagtile *tile) {
+    virtual bool start(Flagtile *tile, const int sx, const int sy) {
         return true; // As a default, always return true.
     }
    
@@ -191,13 +210,18 @@ public:
     */    
     virtual void step(Flagtile* tile, 
                       const int x, const int y,
-                      const int sx, const int sy) = 0;
+                      const int sx, const int sy) {}
     
     // Called when a tile processing end.
     virtual void end( Flagtile* tile){}
     
     // Called when entire tiles processing end.
     virtual void finalize(){}
+    
+    // Offsets to refer neighboring pixels. 
+    // This is public. Some class might refer them.
+    static const int xoffset[];
+    static const int yoffset[];
 };
 
 /**
@@ -210,13 +234,7 @@ protected:
 public:
     FillWorker(FlagtileSurface* surf, const int level) 
         : TileWorker(surf, level) 
-    {
-        // Calling virtual method `set_target_level` 
-        // at here (i.e. constructor) is meaningless.
-        // It cannot call derived virtual one by C++
-        // design.
-        // So I use initialization list.
-    }
+    {}
     
     // To check whether a pixel to be processed or not. 
     // `match` and `step` methods are almost same, it seems to be done
@@ -225,13 +243,6 @@ public:
     // to only look(check) the pixel, without process it,
     // so they are separated.
     virtual bool match(const uint8_t pix) = 0;
-    
-    // To tell which pixel this worker would draw.
-    // If it is not sure,(i.e. Fill different pixel depending on some situation) 
-    // return PIXEL_INVALID.
-    virtual uint8_t get_fill_pixel() {
-        return PIXEL_INVALID;
-    } 
 };
 
 /**
@@ -246,14 +257,6 @@ protected:
     int m_max_x;
     int m_max_y;
 
-    static const int xoffset[];
-    static const int yoffset[];
-
-    // Current filter-kernel pixel position.
-    // These can be refreshed with
-    // get_kernel_pixel method.
-    int m_px;
-    int m_py;
 
 public:
     // Defined at lib/progfill.cpp
@@ -262,7 +265,7 @@ public:
 
     virtual void set_target_level(const int level);
 
-    virtual bool start(Flagtile *tile);
+    virtual bool start(Flagtile *tile, const int sx, const int sy);
     virtual void end(Flagtile *tile);
     
     /**
@@ -277,32 +280,6 @@ public:
     */ 
     virtual void finalize();
 
-    /**
-    * @get_kernel_pixel
-    * refresh internal members of kernel pixel position.
-    *
-    * @param sx, sy: The center pixel position, in surface coodinate.
-    *                Most importantly, this position unit is in current ongoing
-    *                `progress-level`.
-    *                You can get that level with
-    *                KernelWorker::get_target_level method. or just accessing
-    *                m_level member.
-    * @param idx: The index value of kernel pixel.
-    *             0=left, 1=right, 2=top, 3=bottom.
-    * @return: pixel value of current kernel.
-    *          If that kernel position exceeds surface border,
-    *          return 0.
-    * @detail 
-    * Utility method to update valid filter-kernel(4 surrounding pixel)
-    * coordinates within for-loop.
-    * That pixel position is stored in member variables, m_px and m_py.
-    * If that position is off the FlagtileSurface (invalid position),
-    * this method returns false.
-    * So continue processing only when this method return true.
-    */
-    uint8_t get_kernel_pixel(const int level,
-                             const int sx, const int sy,
-                             const int idx);
 };
 
 // Walking kernel base class.
@@ -343,6 +320,7 @@ protected:
     long m_clockwise_cnt;
 
     inline int _get_hand_dir(const int dir) { return (dir + 1) & 3; }
+    inline int _get_reversed_hand_dir(const int dir) { return (dir + 3) & 3; }
 
     // Wrapper method to get pixel with direction.
     virtual uint8_t _get_pixel_with_direction(const int x, const int y, 
@@ -358,19 +336,6 @@ protected:
 
     //// Walking related.
     
-    // Rotation callback. 
-    // if `right` is true, kernel turns right. otherwise turns left.
-    virtual void _on_rotate_cb(const bool right) = 0;
-
-    // `Entering new pixel` callback.
-    // This called when _forward() method go (forward) into new pixel.
-    // Current pixel is ensured as `forwardable` target pixel.
-    virtual void _on_new_pixel(){}
-
-    // Check whether the right side pixel of current position / direction
-    // is match to forward.
-    virtual bool _is_wall_pixel(const uint8_t pixel);
-
     // Rotate to right.
     // This is used when we missed wall at right-hand. 
     void _rotate_right();
@@ -389,16 +354,32 @@ protected:
 
     void _walk(const int sx, const int sy, const int direction);
     
+    //// Walking callbacks / virtual methods
+    
+    // Rotation callback. 
+    // If parameter `right` is true, kernel turns right. 
+    // otherwise turns left.
+    virtual void _on_rotate_cb(const bool right){}
+
+    // `Entering new pixel` callback.
+    // This called when _forward() method go (forward) into new pixel.
+    // Current pixel is ensured as `forwardable` target pixel.
+    virtual void _on_new_pixel(){}
+
+    // Check whether the right side pixel of current position / direction
+    // is match to forward.
+    virtual bool _is_wall_pixel(const uint8_t pixel);
+
+    
 public:
     WalkingKernel(FlagtileSurface *surf, const int level) 
         : KernelWorker(surf, level)
     {} 
 
-    // Caution: Child class of this kernel should accepts
-    // NULL tile.
-    virtual bool start(Flagtile* targ);
-
-    // To disable default end method.
+    // start/end should be implemented in child class.
+    virtual bool start(Flagtile* targ, const int sx, const int sy) {
+        return false;
+    }
     virtual void end(Flagtile* targ) {}
 
     // Tell whether the walking is clockwise or not.
