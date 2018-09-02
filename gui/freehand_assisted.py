@@ -330,9 +330,9 @@ class AssistedFreehandMode (freehand.FreehandMode,
                 return super(freehand.FreehandMode, self).motion_notify_cb(
                         tdw, event)
 
-            # Assitant event position fetch and queue motion
-            self.fetch(x, y, pressure, time)
-            for x, y, p in self.enum_samples():
+            # Override motion event with `assisted` position 
+            self.fetch(tdw, x, y, pressure, time)
+            for x, y, p in self.enum_samples(tdw):
                 x, y = tdw.display_to_model(x, y)
                 event_data = (
                     time, 
@@ -342,9 +342,6 @@ class AssistedFreehandMode (freehand.FreehandMode,
                 )
                 drawstate.queue_motion(event_data)
 
-            # New positioned assistant overlay should be drawn here.
-            if fakepressure is None:
-                self.queue_draw_ui(tdw)
         else:
             # Ordinary event queuing
 
@@ -419,13 +416,23 @@ class AssistedFreehandMode (freehand.FreehandMode,
         """
         pass
     
-    def fetch(self, x, y, pressure, time):
+    def fetch(self, tdw, x, y, pressure, time):
         """Fetch samples(i.e. current stylus input datas) into instance. 
         That samples are used for generating new modified point datas 
-        in enum_samples."""
+        in enum_samples.
+
+        :param tdw: Tiledrawwidget of current event.
+        :param x: Current location of stylus, in DISPLAY.
+        :param y: Current location of stylus, in DISPLAY.
+        :param pressure: Current pressure value.
+        :param time: The time currently ongoing event has occured.
+        
+        Some derived assist-tool might need model coodination.
+        For such tool, tdw parameter added.
+        """
         pass
 
-    def enum_samples(self):
+    def enum_samples(self, tdw):
         """Iterate a tuple of (x, y, pressure) to pass modified datas
         into stroke engine, when assitant is enabled.
 

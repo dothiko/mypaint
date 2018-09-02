@@ -108,7 +108,6 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
     
     ## Input handlers
     def drag_start_cb(self, tdw, event, pressure):
-        self._tdw = tdw
         self._latest_pressure = pressure
         self.start_x = event.x
         self.start_y = event.y
@@ -181,8 +180,6 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
             self._phase = _Phase.INIT
             self._update_positions(tdw, event.x, event.y)
 
-        self._tdw = None
-
     ## Mode options
 
     def get_options_widget(self):
@@ -196,12 +193,9 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
         return cls._OPTIONS_WIDGET
 
                 
-    def enum_samples(self):
+    def enum_samples(self, tdw):
         if not self.is_ready():
             raise StopIteration
-
-        tdw = self._tdw
-        assert tdw is not None
 
         if self._phase == _Phase.DRAW:
             if self.is_ready():
@@ -287,13 +281,11 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
         self._rx = None
         self._ry = None
 
-        self._tdw = None
-
         self._phase = _Phase.INVALID
 
         self._overrided_cursor = None
 
-    def fetch(self, x, y, pressure, time):
+    def fetch(self, tdw, x, y, pressure, time):
         """ Fetch samples(i.e. current stylus input datas) 
         into attributes.
         This method would be called each time motion_notify_cb is called.
@@ -301,8 +293,6 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
         if self.last_button is not None:
             self._last_time = time
             self._latest_pressure = pressure
-            tdw = self._tdw
-            assert tdw != None
             self._rx, self._ry = tdw.display_to_model(x, y)
 
     def _update_positions(self, tdw, dx, dy):

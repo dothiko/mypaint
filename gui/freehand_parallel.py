@@ -34,6 +34,8 @@ from gui.ui_utils import *
 from gui.rulercontroller import *
 from gui.linemode import *
 
+N = mypaintlib.TILE_SIZE
+
 ## Module settings
 class _Phase:
     INVALID = -1
@@ -130,7 +132,6 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
     
     ## Input handlers
     def drag_start_cb(self, tdw, event, pressure):
-        self._tdw = tdw
         self._latest_pressure = pressure
         self.start_x = event.x
         self.start_y = event.y
@@ -147,7 +148,7 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
                 self._ruler.drag_start_cb(self, tdw, event)
             else:
                 # For drawing.
-                self._update_positions(event.x, event.y, True)
+                self._update_positions(tdw, event.x, event.y, True)
                 # To eliminate heading stroke glitch.
                 self.queue_motion(tdw, event.time, self._cx, self._cy)
 
@@ -232,7 +233,6 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
             self._update_ruler_vector()
             self.queue_draw_ui(tdw)
 
-        self._tdw = None
 
     ## Mode options
 
@@ -247,12 +247,16 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
         return cls._OPTIONS_WIDGET
 
                 
-    def enum_samples(self):
+    def enum_samples(self, tdw):
         if not self.is_ready():
             raise StopIteration
 
-        tdw = self._tdw
-        assert tdw is not None
+        # Calculate and reflect current stroking 
+        # length and direction.
+        length, nx, ny = length_and_normal(self._cx , self._cy, 
+                self._px, self._py)
+        direction = cross_product(self._vy, -self._vx,
+                nx, ny)
 
         if self._phase == _Phase.DRAW:
             if self.is_ready():
@@ -262,17 +266,8 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
                 # _px, _py : previous position of stylus.
                 # _sx, _sy : current position of 'stroke'. not stylus.
                 # _vx, _vy : Identity vector of ruler direction.
-
-
-                # Calculate and reflect current stroking 
-                # length and direction.
-                length, nx, ny = length_and_normal(self._cx , self._cy, 
-                        self._px, self._py)
-                direction = cross_product(self._vy, -self._vx,
-                        nx, ny)
                 
                 if length > 0:
-                
                     if direction > 0.0:
                         length *= -1.0
                 
@@ -290,12 +285,6 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
                 # slightly visible stroke.
                 # To do it, we need a point which is along ruler
                 # but oppsite direction point.
-
-
-                length, nx, ny = length_and_normal(self._cx , self._cy, 
-                        self._px, self._py)
-                direction = cross_product(self._vy, -self._vx,
-                        nx, ny)
 
                 tmp_length = 4.0 # practically enough length
 
@@ -330,8 +319,6 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
         self._px = None
         self._py = None
 
-        self._tdw = None
-
         self._ruler.reset()
         if self._ruler.is_ready():
             self._phase = _Phase.INIT
@@ -340,7 +327,7 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
 
         self._overrided_cursor = None
 
-    def fetch(self, x, y, pressure, time):
+    def fetch(self, tdw, x, y, pressure, time):
         """ Fetch samples(i.e. current stylus input datas) 
         into attributes.
         This method would be called each time motion_notify_cb is called.
@@ -348,7 +335,7 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
         if self.last_button is not None:
             self._last_time = time
             self._latest_pressure = pressure
-            self._update_positions(x, y, False)
+            self._update_positions(tdw, x, y, False)
 
     ## Overlay related
 
@@ -365,12 +352,11 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
 
     ## Ruler related
 
-    def _update_positions(self, dx, dy, starting):
+    def _update_positions(self, tdw, dx, dy, starting):
         """ update current positions from pointer position 
         of display coordinate.
         """
-        assert self._tdw is not None
-        mpos = self._tdw.display_to_model(dx, dy)
+        mpos = tdw.display_to_model(dx, dy)
 
         if starting:
             if self._phase == _Phase.INIT:

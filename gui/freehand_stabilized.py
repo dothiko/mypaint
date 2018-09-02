@@ -244,7 +244,7 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
 
     ## Stabilizer/Assistant related
                 
-    def enum_samples(self):
+    def enum_samples(self, tdw):
 
         if self._phase == _Phase.INIT:
             # Drawing with initial pressure, to avoid heading glitch.
@@ -333,7 +333,7 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
         # self._current_range is set at constructor or other methods.
         # Do not modify it at here.
 
-    def fetch(self, x, y, pressure, time):
+    def fetch(self, tdw, x, y, pressure, time):
         """ Fetch samples(i.e. current stylus input datas) 
         into attributes.
         This method would be called each time motion_notify_cb is called.
