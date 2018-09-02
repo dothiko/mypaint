@@ -41,6 +41,19 @@ class _Phase:
     INIT = 4
     FINALIZE = 5
 
+class _Prefs:
+    """Preference key constants"""
+    LASTING_PREF_KEY = "assisted.centerpoint.context_lasting"
+    DISTANCE_PREF_KEY = "assisted.centerpoint.context_distance"
+    
+    # Stroke context lasts when within 1 seconds 
+    # from pen stylus detached previously.
+    DEFAULT_LASTING_PREF = 1 
+
+    # Stroke context lastes when the distance 
+    # between previously released position is in this range.
+    DEFAULT_DISTANCE_PREF = 32 
+
 ## Class defs
 class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
     """Freehand drawing mode with centerpoint ruler.
@@ -349,6 +362,26 @@ class CenterOptionsWidget (freehand_assisted.AssistantOptionsWidget):
         self._updating_ui = True
         row = super(CenterOptionsWidget, self).init_specialized_widgets(row)
 
+        self._create_slider(
+            row,
+            _("Context lasting:"), 
+            self._lasting_changed_cb,
+            pref.get(_Prefs.LASTING_PREF_KEY, _Prefs.DEFAULT_LASTING_PREF),
+            0, 
+            3.0 # Maximum 3 seconds
+        )
+        row += 1
+
+        self._create_slider(
+            row,
+            _("Allowed distance:"), 
+            self._context_distance_changed_cb,
+            pref.get(_Prefs.DISTANCE_PREF_KEY, _Prefs.DEFAULT_DISTANCE_PREF),
+            16.0, 
+            64.0 # Maximum 64 pixels
+        )
+        row += 1
+
         button = Gtk.Button(label = _("Clear ruler")) 
         button.connect('clicked', self._reset_clicked_cb)
         self.attach(button, 0, row, 2, 1)
@@ -364,6 +397,22 @@ class CenterOptionsWidget (freehand_assisted.AssistantOptionsWidget):
             if mode:
                 mode.queue_draw_ui(None) # To erase.
                 mode.reset_assist()
+
+    def _lasting_changed_cb(self, adj, data=None):
+        if not self._updating_ui:
+            mode = self.mode
+            if mode:
+                value = adj.get_value()
+                self.mode.context_lasting = value
+                self.app.preferences[_Prefs.LASTING_PREF_KEY] = value
+
+    def _context_distance_changed_cb(self, adj, data=None):
+        if not self._updating_ui:
+            mode = self.mode
+            if mode:
+                value = adj.get_value()
+                self.mode.context_distance = value
+                self.app.preferences[_Prefs.DISTANCE_PREF_KEY] = value
 
 class _Overlay_Center(gui.overlays.Overlay):
     """Overlay for stabilized freehand mode """

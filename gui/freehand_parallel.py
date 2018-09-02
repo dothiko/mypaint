@@ -46,6 +46,8 @@ class _Phase:
     RULER = 5
     JUMP = 6 # For context-lasting feature.
 
+## Class defs
+
 class _Prefs:
     """Preference key constants"""
     LASTING_PREF_KEY = "assisted.parallelruler.context_lasting"
@@ -59,8 +61,26 @@ class _Prefs:
     # between previously released position is in this range.
     DEFAULT_DISTANCE_PREF = 32 
 
-## Class defs
-class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
+class StrokeContextLastableMixin(object):
+    """A mixin to share `context-lasting` feature.
+    """
+
+    def _is_context_lasting(self, tdw, event):
+        x, y = tdw.display_to_model(event.x, event.y)
+        lasting_time = self.context_lasting * 1000
+        dist = 65 # Greater than maximum allowed distance
+        rpos = self._previous_release_pos
+        if rpos is None:
+            return False
+
+        rx, ry = rpos
+        dist = math.hypot(rx-event.x, ry-event.y)
+        return (event.time - self._previous_release_time < lasting_time
+                    and dist < self.context_distance)
+
+
+class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
+                            StrokeContextLastableMixin):
     """Freehand drawing mode with parallel ruler.
 
     """
@@ -502,37 +522,25 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
             self._ruler.snap(lx, ly)
             self.queue_draw_ui(None)
 
-    ## `context-lasting` related
-    def _is_context_lasting(self, tdw, event):
-        x, y = tdw.display_to_model(event.x, event.y)
-        lasting_time = self.context_lasting * 1000
-        dist = 65 # Greater than maximum allowed distance
-        rpos = self._previous_release_pos
-        if rpos is None:
-            return False
+class ContextLastableOptionsMixin(object):
+    """A mixin to share codes of Optionspresnter
+    around `context-lasting` features.
+    
+    CAUTION: You need to declare two class constant attributes
+             * LASTING_PREF_KEY - app.preferences keyname of `context-lasting`
+             * DEFAULT_LASTING_PREF - how many seconds context lasts.
+             * DISTANCE_PREF_KEY - keyname of `context-lastable distance`
+             * DEFAULT_DISTANCE_PREF - how far strokes within same context,in display.
+    It can be just use _Prefs constant class as a Mixin.
+    """
 
-        rx, ry = rpos
-        dist = math.hypot(rx-event.x, ry-event.y)
-        return (event.time - self._previous_release_time < lasting_time
-                    and dist < self.context_distance)
-
-class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget):
-    """Configuration widget for freehand mode"""
-
-    def __init__(self, mode):
-        super(ParallelOptionsWidget, self).__init__(mode)
-
-    def init_specialized_widgets(self, row):
-        self._updating_ui = True
-        app = self.app
+    def init_sliders(self, app, row):
         pref = app.preferences
-        row = super(ParallelOptionsWidget, self).init_specialized_widgets(row)
-
         self._create_slider(
             row,
             _("Context lasting:"), 
             self._lasting_changed_cb,
-            pref.get(_Prefs.LASTING_PREF_KEY, _Prefs.DEFAULT_LASTING_PREF),
+            pref.get(self.LASTING_PREF_KEY, self.DEFAULT_LASTING_PREF),
             0, 
             3.0 # Maximum 3 seconds
         )
@@ -542,11 +550,49 @@ class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget):
             row,
             _("Allowed distance:"), 
             self._context_distance_changed_cb,
-            pref.get(_Prefs.DISTANCE_PREF_KEY, _Prefs.DEFAULT_DISTANCE_PREF),
+            pref.get(self.DISTANCE_PREF_KEY, self.DEFAULT_DISTANCE_PREF),
             16.0, 
             64.0 # Maximum 64 pixels
         )
         row += 1
+
+        return row
+
+    def _lasting_changed_cb(self, adj, data=None):
+        if not self._updating_ui:
+            mode = self.mode
+            if mode:
+                value = adj.get_value()
+                self.mode.context_lasting = value
+                self.app.preferences[self.LASTING_PREF_KEY] = value
+
+    def _context_distance_changed_cb(self, adj, data=None):
+        if not self._updating_ui:
+            mode = self.mode
+            if mode:
+                value = adj.get_value()
+                self.mode.context_distance = value
+                self.app.preferences[self.DISTANCE_PREF_KEY] = value
+
+
+class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget,
+                             ContextLastableOptionsMixin,
+                             _Prefs):
+    """Configuration widget for freehand mode"""
+
+
+    def __init__(self, mode):
+        super(ParallelOptionsWidget, self).__init__(mode)
+
+    def init_specialized_widgets(self, row):
+        self._updating_ui = True
+        app = self.app
+        pref = app.preferences
+        row = super(ParallelOptionsWidget, self).init_specialized_widgets(row)
+    
+        # Use mixin method to init `context-lasting` sliders
+        # Event callbacks are also used from that mixin.
+        row = self.init_sliders(app, row)
 
         button = Gtk.Button(label = _("Snap to level")) 
         button.connect('clicked', self._snap_level_clicked_cb)
@@ -590,21 +636,6 @@ class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget):
             if mode:
                 mode.set_ruler_as_level()
 
-    def _lasting_changed_cb(self, adj, data=None):
-        if not self._updating_ui:
-            mode = self.mode
-            if mode:
-                value = adj.get_value()
-                self.mode.context_lasting = value
-                self.app.preferences[_Prefs.LASTING_PREF_KEY] = value
-
-    def _context_distance_changed_cb(self, adj, data=None):
-        if not self._updating_ui:
-            mode = self.mode
-            if mode:
-                value = adj.get_value()
-                self.mode.context_distance = value
-                self.app.preferences[_Prefs.DISTANCE_PREF_KEY] = value
 
 class _Overlay_Parallel(gui.overlays.Overlay):
     """Overlay for stabilized freehand mode """
