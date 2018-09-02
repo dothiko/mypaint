@@ -57,13 +57,28 @@ class _Prefs:
     # from pen stylus detached previously.
     DEFAULT_LASTING_PREF = 1 
 
-    # Stroke context lastes when the distance 
-    # between previously released position is in this range.
+    # Stroke context lasts when the distance from
+    # previously released position to currently pressed
+    # is within this range.
     DEFAULT_DISTANCE_PREF = 32 
 
-class StrokeContextLastableMixin(object):
+class StrokeLastableMixin(object):
     """A mixin to share `context-lasting` feature.
+    
+    CAUTION: don't forget call some mixin methods
+    from specific user-class methods.
     """
+
+    def _init_lastable_mixin(self, app, _pref_class):
+        """Call this method from enter method
+        """
+        prefs = app.preferences
+        self.context_lasting = prefs.get(_pref_class.LASTING_PREF_KEY,
+                                         _pref_class.DEFAULT_LASTING_PREF)
+        self.context_distance = prefs.get(_pref_class.DISTANCE_PREF_KEY,
+                                          _pref_class.DEFAULT_DISTANCE_PREF)
+        self._previous_release_time = -1
+        self._previous_release_pos = None
 
     def _is_context_lasting(self, tdw, event):
         x, y = tdw.display_to_model(event.x, event.y)
@@ -78,9 +93,14 @@ class StrokeContextLastableMixin(object):
         return (event.time - self._previous_release_time < lasting_time
                     and dist < self.context_distance)
 
+    def _update_lastable_mixin_info(self, event):
+        """Call this method from drag_end_cb
+        """
+        self._previous_release_time = event.time
+        self._previous_release_pos = (event.x, event.y)
 
 class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
-                            StrokeContextLastableMixin):
+                            StrokeLastableMixin):
     """Freehand drawing mode with parallel ruler.
 
     """
@@ -121,11 +141,6 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
         else:
             self._phase = _Phase.INVALID 
         self._overrided_cursor = None
-
-        self.context_lasting = 0
-        self.context_distance = 0
-        self._previous_release_time = -1
-        self._previous_release_pos = None
         
         super(ParallelFreehandMode, self).__init__(**args)
 
@@ -163,15 +178,7 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
             self._ensure_overlay_for_tdw(doc.tdw)
             self.queue_draw_ui(doc.tdw)
 
-        app = doc.app
-        self.context_lasting = app.preferences.get(
-            _Prefs.LASTING_PREF_KEY,
-            _Prefs.DEFAULT_LASTING_PREF
-        )
-        self.context_distance = app.preferences.get(
-            _Prefs.DISTANCE_PREF_KEY,
-            _Prefs.DEFAULT_DISTANCE_PREF
-        )
+        self._init_lastable_mixin(doc.app, _Prefs)
 
    #def leave(self, **kwds):
    #    """Leave freehand mode"""
@@ -278,8 +285,8 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
             self.queue_motion(tdw, event.time, 
                               self._sx, self._sy,
                               pressure=0.0)
-            self._previous_release_time = event.time
-            self._previous_release_pos = (event.x, event.y)
+
+            self._update_lastable_mixin_info(event)
             self._phase = _Phase.INIT
         elif self._phase == _Phase.SET_BASE:
             self._phase = _Phase.SET_DEST
@@ -315,6 +322,8 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
         if not self.is_ready():
             raise StopIteration
 
+        assert self.last_button is not None
+
         # Calculate and reflect current stroking 
         # length and direction.
         length, nx, ny = length_and_normal(self._cx , self._cy, 
@@ -344,36 +353,33 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
                 self._px, self._py = self._cx, self._cy
 
         elif self._phase == _Phase.INIT:
-            if self.last_button is not None:
-                # At here, we need to eliminate heading (a bit curved)
-                # slightly visible stroke.
-                # To do it, we need a point which is along ruler
-                # but oppsite direction point.
+            # At here, we need to eliminate heading (a bit curved)
+            # slightly visible stroke.
+            # To do it, we need a point which is along ruler
+            # but oppsite direction point.
 
-                # Make fake `pre-previous` position and yield it.
-                # 4.0 is practically enough length for fake position.
-                tmp_length = 4.0 
+            # Make fake `pre-previous` position and yield it.
+            # 4.0 is practically enough length for fake position.
+            tmp_length = 4.0 
 
-                if length != 0 and direction < 0.0:
-                    tmp_length *= -1.0
+            if length != 0 and direction < 0.0:
+                tmp_length *= -1.0
 
-                px = (tmp_length * self._vx) + self._px
-                py = (tmp_length * self._vy) + self._py
+            px = (tmp_length * self._vx) + self._px
+            py = (tmp_length * self._vy) + self._py
 
-                yield (px ,py , 0.0)
+            yield (px ,py , 0.0)
 
-                # And then yield `previous` position (but actually 
-                # current position at this stage) of stylus.
-                yield (self._px , self._py , 0.0)
+            # And then yield `previous` position (but actually 
+            # current position at this stage) of stylus.
+            yield (self._px , self._py , 0.0)
 
-                self._sx = self._px
-                self._sy = self._py
+            self._sx = self._px
+            self._sy = self._py
 
-                self._phase = _Phase.DRAW
+            self._phase = _Phase.DRAW
 
         elif self._phase == _Phase.JUMP:
-            assert self.last_button is not None
-
             yield (self._sx , self._sy , 0.0)
             self._px = self._cx
             self._py = self._cy
@@ -522,7 +528,7 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
             self._ruler.snap(lx, ly)
             self.queue_draw_ui(None)
 
-class ContextLastableOptionsMixin(object):
+class LastableOptionsMixin(object):
     """A mixin to share codes of Optionspresnter
     around `context-lasting` features.
     
@@ -576,7 +582,7 @@ class ContextLastableOptionsMixin(object):
 
 
 class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget,
-                             ContextLastableOptionsMixin,
+                             LastableOptionsMixin,
                              _Prefs):
     """Configuration widget for freehand mode"""
 
@@ -586,13 +592,11 @@ class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget,
 
     def init_specialized_widgets(self, row):
         self._updating_ui = True
-        app = self.app
-        pref = app.preferences
         row = super(ParallelOptionsWidget, self).init_specialized_widgets(row)
     
         # Use mixin method to init `context-lasting` sliders
         # Event callbacks are also used from that mixin.
-        row = self.init_sliders(app, row)
+        row = self.init_sliders(self.app, row)
 
         button = Gtk.Button(label = _("Snap to level")) 
         button.connect('clicked', self._snap_level_clicked_cb)

@@ -32,6 +32,7 @@ import lib.helpers
 import freehand_assisted
 from gui.ui_utils import *
 from gui.linemode import *
+from freehand_parallel import StrokeLastableMixin, LastableOptionsMixin 
 
 ## Module settings
 class _Phase:
@@ -40,6 +41,7 @@ class _Phase:
     SET_POINT = 1
     INIT = 4
     FINALIZE = 5
+    JUMP = 6
 
 class _Prefs:
     """Preference key constants"""
@@ -55,10 +57,13 @@ class _Prefs:
     DEFAULT_DISTANCE_PREF = 32 
 
 ## Class defs
-class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
+class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
+                          StrokeLastableMixin):
     """Freehand drawing mode with centerpoint ruler.
 
     """
+    # TODO This class can share much more codes with
+    # freehand_assisted.ParallelFreehandMode
 
     ## Class constants & instance defaults
     ACTION_NAME = 'CenterFreehandMode'
@@ -115,6 +120,8 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
             self._ensure_overlay_for_tdw(doc.tdw)
             self.queue_draw_ui(doc.tdw)
 
+        self._init_lastable_mixin(doc.app, _Prefs)
+
     def leave(self, **kwds):
         super(CenterFreehandMode, self).leave(**kwds)
     
@@ -136,11 +143,16 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
             else:
                 # For drawing.
                 self._rx, self._ry = tdw.display_to_model(event.x, event.y)
-                self._sx, self._sy = self._rx, self._ry
-                # To eliminate heading stroke glitch.
-                self.queue_motion(tdw, event.time, self._rx, self._ry)
-                self._update_center_vector()
-                self._phase = _Phase.INIT
+                if self._is_context_lasting(tdw, event):
+                    self._phase = _Phase.JUMP
+                else:
+                    self._phase = _Phase.INIT
+                    self._sx, self._sy = self._rx, self._ry
+                    self._update_center_vector()
+                    # Queue empty stroke, to eliminate heading stroke glitch.
+                    self.queue_motion(tdw, event.time, 
+                                      self._rx, self._ry,
+                                      pressure=0.0)
 
         elif self._phase == _Phase.INVALID:
             self._start_center_pt(tdw, event.x, event.y)
@@ -176,8 +188,9 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
                 self._overrided_cursor = cursor
 
             # XXX This also needed to eliminate stroke glitches.
-            x, y = tdw.display_to_model(event.x, event.y)
-            self.queue_motion(tdw, event.time, x, y)
+            if not self._is_context_lasting(tdw, event):
+                x, y = tdw.display_to_model(event.x, event.y)
+                self.queue_motion(tdw, event.time, x, y, pressure=0.0)
             return True
         return super(CenterFreehandMode, self).motion_notify_cb(
                 tdw, event, fakepressure)
@@ -187,7 +200,9 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
             # To eliminate trailing stroke glitch.
             self.queue_motion(tdw, 
                               event.time,
-                              self._sx, self._sy) 
+                              self._sx, self._sy,
+                              pressure=0.0) 
+            self._update_lastable_mixin_info(event)
             self._phase = _Phase.INIT
         elif self._phase == _Phase.SET_POINT:
             self._phase = _Phase.INIT
@@ -210,60 +225,70 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
         if not self.is_ready():
             raise StopIteration
 
+        # Calculate and reflect current stroking 
+        # length and direction.
+        length, nx, ny = length_and_normal(self._rx , self._ry, 
+                self._px, self._py)
+        direction = cross_product(self._vy, -self._vx,
+                nx, ny)
+
         if self._phase == _Phase.DRAW:
-            if self.is_ready():
-                # All position attributes are in model coordinate.
+            # All position attributes are in model coordinate.
 
-                # _cx, _cy : center position 
-                # _px, _py : previous position of stylus.
-                # _sx, _sy : current position of 'stroke'. not stylus.
-                # _vx, _vy : Identity vector of ruler direction.
-                # _rx, _ry : raw point of stylus. This is display coord.
-
-                # Calculate and reflect current stroking 
-                # length and direction.
-                length, nx, ny = length_and_normal(self._rx , self._ry, 
-                        self._px, self._py)
-                direction = cross_product(self._vy, -self._vx,
-                        nx, ny)
-                
-                if length > 0:
-                
-                    if direction > 0.0:
-                        length *= -1.0
-                
-                    tx = (length * self._vx) + self._sx
-                    ty = (length * self._vy) + self._sy
-                    self._sx = tx
-                    self._sy = ty
-                    yield (tx , ty , self._latest_pressure)
-                    self._px, self._py = self._rx, self._ry
+            # _cx, _cy : center position 
+            # _px, _py : previous position of stylus.
+            # _sx, _sy : current position of 'stroke'. not stylus.
+            # _vx, _vy : Identity vector of ruler direction.
+            # _rx, _ry : raw point of stylus. 
+            
+            if length > 0:
+            
+                if direction > 0.0:
+                    length *= -1.0
+            
+                cx = (length * self._vx) + self._sx
+                cy = (length * self._vy) + self._sy
+                self._sx = cx
+                self._sy = cy
+                yield (cx , cy , self._latest_pressure)
+                self._px, self._py = self._rx, self._ry
 
         elif self._phase == _Phase.INIT:
-            if self.is_ready() and self.last_button is not None:
+            if self.last_button is not None:
                 # At here, we need to eliminate heading (a bit curved)
                 # slightly visible stroke.
                 # To do it, we need a point which is along ruler
                 # but oppsite direction point.
-
-                length, nx, ny = length_and_normal(self._rx , self._ry, 
-                        self._cx, self._cy)
-                direction = cross_product(self._vy, -self._vx,
-                        nx, ny)
-
                 tmp_length = 4.0 # practically enough length
 
                 if length != 0 and direction < 0.0:
                     tmp_length *= -1.0
 
-                tx = (tmp_length * self._vx) + self._rx
-                ty = (tmp_length * self._vy) + self._ry
+                px = (tmp_length * self._vx) + self._rx
+                py = (tmp_length * self._vy) + self._ry
 
-                yield (tx ,ty ,0.0)
+                yield (px ,py ,0.0)
 
                 self._sx, self._sy = self._rx, self._ry
                 self._px, self._py = self._rx, self._ry
                 self._phase = _Phase.DRAW
+
+        elif self._phase == _Phase.JUMP:
+            yield (self._sx , self._sy , 0.0)
+            self._px = self._rx
+            self._py = self._ry
+
+            if length > 0:
+                if direction > 0.0:
+                    length *= -1.0
+            
+                cx = (length * self._vx) + self._sx
+                cy = (length * self._vy) + self._sy
+                self._sx = cx
+                self._sy = cy
+                yield (cx , cy , 0.0)
+
+            self._phase = _Phase.DRAW
 
         raise StopIteration
 
@@ -352,7 +377,9 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
         return (diff <= self._center_radius)
 
 
-class CenterOptionsWidget (freehand_assisted.AssistantOptionsWidget):
+class CenterOptionsWidget (freehand_assisted.AssistantOptionsWidget,
+                           LastableOptionsMixin,
+                           _Prefs):
     """Configuration widget for freehand mode"""
 
     def __init__(self, mode):
@@ -362,25 +389,9 @@ class CenterOptionsWidget (freehand_assisted.AssistantOptionsWidget):
         self._updating_ui = True
         row = super(CenterOptionsWidget, self).init_specialized_widgets(row)
 
-        self._create_slider(
-            row,
-            _("Context lasting:"), 
-            self._lasting_changed_cb,
-            pref.get(_Prefs.LASTING_PREF_KEY, _Prefs.DEFAULT_LASTING_PREF),
-            0, 
-            3.0 # Maximum 3 seconds
-        )
-        row += 1
-
-        self._create_slider(
-            row,
-            _("Allowed distance:"), 
-            self._context_distance_changed_cb,
-            pref.get(_Prefs.DISTANCE_PREF_KEY, _Prefs.DEFAULT_DISTANCE_PREF),
-            16.0, 
-            64.0 # Maximum 64 pixels
-        )
-        row += 1
+        # Use mixin method to init `context-lasting` sliders
+        # Event callbacks are also used from that mixin.
+        row = self.init_sliders(self.app, row)
 
         button = Gtk.Button(label = _("Clear ruler")) 
         button.connect('clicked', self._reset_clicked_cb)
@@ -398,21 +409,6 @@ class CenterOptionsWidget (freehand_assisted.AssistantOptionsWidget):
                 mode.queue_draw_ui(None) # To erase.
                 mode.reset_assist()
 
-    def _lasting_changed_cb(self, adj, data=None):
-        if not self._updating_ui:
-            mode = self.mode
-            if mode:
-                value = adj.get_value()
-                self.mode.context_lasting = value
-                self.app.preferences[_Prefs.LASTING_PREF_KEY] = value
-
-    def _context_distance_changed_cb(self, adj, data=None):
-        if not self._updating_ui:
-            mode = self.mode
-            if mode:
-                value = adj.get_value()
-                self.mode.context_distance = value
-                self.app.preferences[_Prefs.DISTANCE_PREF_KEY] = value
 
 class _Overlay_Center(gui.overlays.Overlay):
     """Overlay for stabilized freehand mode """
