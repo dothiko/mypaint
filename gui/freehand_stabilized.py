@@ -488,26 +488,10 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
         app = self.app
         pref = app.preferences
         row = super(StabilizerOptionsWidget, self).init_specialized_widgets(row)
-
-        def create_slider(label, handler, 
-                          value, min_adj, max_adj, step_incr=1,
-                          digits=1 , real_adj=None):
-            labelobj = Gtk.Label(halign=Gtk.Align.START)
-            labelobj.set_text(label)
-            self.attach(labelobj, 0, row, 1, 1)
-
-            adj = Gtk.Adjustment(value, min_adj, max_adj, 
-                                 step_incr=step_incr)
-            adj.connect('value-changed', handler, real_adj)
-
-            scale = Gtk.HScale(hexpand_set=True, hexpand=True, 
-                    halign=Gtk.Align.FILL, adjustment=adj, digits=digits)
-            scale.set_value_pos(Gtk.PositionType.RIGHT)
-            self.attach(scale, 1, row, 1, 1)
-            return scale
             
         # Scale slider for range circle setting.
-        create_slider(
+        self._create_slider(
+            row,
             _("Range:"), 
             self._range_changed_cb,
             pref.get(_Prefs.STABILIZE_RANGE_KEY, _Prefs.DEFAULT_STABILIZE_RANGE),
@@ -556,7 +540,7 @@ class StabilizerOptionsWidget (freehand_assisted.AssistantOptionsWidget):
             self.mode.average_previous = flag
             self.app.preferences[_Prefs.AVERAGE_PREF_KEY] = flag
             
-    def _range_changed_cb(self, adj):
+    def _range_changed_cb(self, adj, data=None):
         if not self._updating_ui:
             value = adj.get_value()
             self.mode.stabilize_range = value

@@ -44,6 +44,20 @@ class _Phase:
     SET_DEST = 2
     INIT = 4
     RULER = 5
+    JUMP = 6 # For context-lasting feature.
+
+class _Prefs:
+    """Preference key constants"""
+    LASTING_PREF_KEY = "assisted.parallelruler.context_lasting"
+    DISTANCE_PREF_KEY = "assisted.parallelruler.context_distance"
+    
+    # Stroke context lasts when within 1 seconds 
+    # from pen stylus detached previously.
+    DEFAULT_LASTING_PREF = 1 
+
+    # Stroke context lastes when the distance 
+    # between previously released position is in this range.
+    DEFAULT_DISTANCE_PREF = 32 
 
 ## Class defs
 class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
@@ -87,6 +101,11 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
         else:
             self._phase = _Phase.INVALID 
         self._overrided_cursor = None
+
+        self.context_lasting = 0
+        self.context_distance = 0
+        self._previous_release_time = -1
+        self._previous_release_pos = None
         
         super(ParallelFreehandMode, self).__init__(**args)
 
@@ -124,6 +143,16 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
             self._ensure_overlay_for_tdw(doc.tdw)
             self.queue_draw_ui(doc.tdw)
 
+        app = doc.app
+        self.context_lasting = app.preferences.get(
+            _Prefs.LASTING_PREF_KEY,
+            _Prefs.DEFAULT_LASTING_PREF
+        )
+        self.context_distance = app.preferences.get(
+            _Prefs.DISTANCE_PREF_KEY,
+            _Prefs.DEFAULT_DISTANCE_PREF
+        )
+
    #def leave(self, **kwds):
    #    """Leave freehand mode"""
    #    self.queue_draw_ui(None)
@@ -146,12 +175,18 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
                 self._phase = _Phase.RULER
                 self._ruler.button_press_cb(self, tdw, event)
                 self._ruler.drag_start_cb(self, tdw, event)
-            else:
+            elif self._phase == _Phase.INIT:
                 # For drawing.
                 x, y = tdw.display_to_model(event.x, event.y)
-                self._update_positions(x, y, True)
-                # To eliminate heading stroke glitch.
-                self.queue_motion(tdw, event.time, self._cx, self._cy)
+                if self._is_context_lasting(tdw, event):
+                    self._phase = _Phase.JUMP
+                    self._update_positions(x, y, False)
+                else:
+                    self._update_positions(x, y, True)
+                    # Queue empty stroke, to eliminate heading stroke glitch.
+                    self.queue_motion(tdw, event.time, 
+                                      self._px, self._py,
+                                      pressure=0.0)
 
         elif self._phase == _Phase.INVALID:
             self._phase = _Phase.SET_BASE
@@ -203,9 +238,16 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
                     tdw.set_override_cursor(cursor)
                     self._overrided_cursor = cursor
 
-            # XXX This also needed to eliminate stroke glitches.
-            x, y = tdw.display_to_model(event.x, event.y)
-            self.queue_motion(tdw, event.time, x, y)
+            # XXX To eliminate heading stroke glitches,
+            # we need empty `queue_motion`.
+            # Without this, You'll see that one when you start drawing
+            # stroke.
+            # But, if queue motion even in context still lasting,
+            # it cause another glitches around `touched` stroke.
+            # Therefore, check `context-lasting` and do empty queueing.
+            if not self._is_context_lasting(tdw, event):
+                x, y = tdw.display_to_model(event.x, event.y)
+                self.queue_motion(tdw, event.time, x, y, pressure=0.0)
             return True
         return super(ParallelFreehandMode, self).motion_notify_cb(
                 tdw, event, fakepressure)
@@ -213,9 +255,11 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
     def drag_stop_cb(self, tdw, event):
         if self._phase == _Phase.DRAW:
             # To eliminate trailing stroke glitch.
-            self.queue_motion(tdw, 
-                              event.time, 
-                              self._sx, self._sy)
+            self.queue_motion(tdw, event.time, 
+                              self._sx, self._sy,
+                              pressure=0.0)
+            self._previous_release_time = event.time
+            self._previous_release_pos = (event.x, event.y)
             self._phase = _Phase.INIT
         elif self._phase == _Phase.SET_BASE:
             self._phase = _Phase.SET_DEST
@@ -233,7 +277,6 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
             self._phase = _Phase.INIT
             self._update_ruler_vector()
             self.queue_draw_ui(tdw)
-
 
     ## Mode options
 
@@ -259,30 +302,29 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
         direction = cross_product(self._vy, -self._vx, nx, ny)
 
         if self._phase == _Phase.DRAW:
-            if self.is_ready():
-                # All position attributes are in model coordinate.
+            # All position attributes are in model coordinate.
 
-                # _cx, _cy : current position of stylus
-                # _px, _py : previous position of stylus.
-                # These Positions are actulally only used for getting
-                # length and direction.
+            # _cx, _cy : current position of stylus
+            # _px, _py : previous position of stylus.
+            # These Positions are actulally only used for getting
+            # length and direction.
 
-                # _sx, _sy : current position of 'stroke'. not stylus.
-                # _vx, _vy : Identity vector of ruler direction.
-                
-                if length > 0:
-                    if direction > 0.0:
-                        length *= -1.0
-                
-                    cx = (length * self._vx) + self._sx
-                    cy = (length * self._vy) + self._sy
-                    self._sx = cx
-                    self._sy = cy
-                    yield (cx , cy , self._latest_pressure)
-                    self._px, self._py = self._cx, self._cy
+            # _sx, _sy : current position of 'stroke'. not stylus.
+            # _vx, _vy : Identity vector of ruler direction.
+            
+            if length > 0:
+                if direction > 0.0:
+                    length *= -1.0
+            
+                cx = (length * self._vx) + self._sx
+                cy = (length * self._vy) + self._sy
+                self._sx = cx
+                self._sy = cy
+                yield (cx , cy , self._latest_pressure)
+                self._px, self._py = self._cx, self._cy
 
         elif self._phase == _Phase.INIT:
-            if self._ruler.is_ready() and self.last_button is not None:
+            if self.last_button is not None:
                 # At here, we need to eliminate heading (a bit curved)
                 # slightly visible stroke.
                 # To do it, we need a point which is along ruler
@@ -308,6 +350,25 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
                 self._sy = self._py
 
                 self._phase = _Phase.DRAW
+
+        elif self._phase == _Phase.JUMP:
+            assert self.last_button is not None
+
+            yield (self._sx , self._sy , 0.0)
+            self._px = self._cx
+            self._py = self._cy
+
+            if length > 0:
+                if direction > 0.0:
+                    length *= -1.0
+            
+                cx = (length * self._vx) + self._sx
+                cy = (length * self._vy) + self._sy
+                self._sx = cx
+                self._sy = cy
+                yield (cx , cy , 0.0)
+
+            self._phase = _Phase.DRAW
 
         raise StopIteration
 
@@ -365,8 +426,8 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
         of model coordinate.
         """
         if starting:
-            if self._phase == _Phase.INIT:
-                self._sx, self._sy = x, y
+           #if self._phase == _Phase.INIT:
+           #    self._sx, self._sy = x, y
             self._px, self._py = x, y
 
         self._cx, self._cy = x, y
@@ -441,6 +502,20 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
             self._ruler.snap(lx, ly)
             self.queue_draw_ui(None)
 
+    ## `context-lasting` related
+    def _is_context_lasting(self, tdw, event):
+        x, y = tdw.display_to_model(event.x, event.y)
+        lasting_time = self.context_lasting * 1000
+        dist = 65 # Greater than maximum allowed distance
+        rpos = self._previous_release_pos
+        if rpos is None:
+            return False
+
+        rx, ry = rpos
+        dist = math.hypot(rx-event.x, ry-event.y)
+        return (event.time - self._previous_release_time < lasting_time
+                    and dist < self.context_distance)
+
 class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget):
     """Configuration widget for freehand mode"""
 
@@ -449,7 +524,29 @@ class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget):
 
     def init_specialized_widgets(self, row):
         self._updating_ui = True
+        app = self.app
+        pref = app.preferences
         row = super(ParallelOptionsWidget, self).init_specialized_widgets(row)
+
+        self._create_slider(
+            row,
+            _("Context lasting:"), 
+            self._lasting_changed_cb,
+            pref.get(_Prefs.LASTING_PREF_KEY, _Prefs.DEFAULT_LASTING_PREF),
+            0, 
+            3.0 # Maximum 3 seconds
+        )
+        row += 1
+
+        self._create_slider(
+            row,
+            _("Allowed distance:"), 
+            self._context_distance_changed_cb,
+            pref.get(_Prefs.DISTANCE_PREF_KEY, _Prefs.DEFAULT_DISTANCE_PREF),
+            16.0, 
+            64.0 # Maximum 64 pixels
+        )
+        row += 1
 
         button = Gtk.Button(label = _("Snap to level")) 
         button.connect('clicked', self._snap_level_clicked_cb)
@@ -492,6 +589,22 @@ class ParallelOptionsWidget (freehand_assisted.AssistantOptionsWidget):
             mode = self.mode
             if mode:
                 mode.set_ruler_as_level()
+
+    def _lasting_changed_cb(self, adj, data=None):
+        if not self._updating_ui:
+            mode = self.mode
+            if mode:
+                value = adj.get_value()
+                self.mode.context_lasting = value
+                self.app.preferences[_Prefs.LASTING_PREF_KEY] = value
+
+    def _context_distance_changed_cb(self, adj, data=None):
+        if not self._updating_ui:
+            mode = self.mode
+            if mode:
+                value = adj.get_value()
+                self.mode.context_distance = value
+                self.app.preferences[_Prefs.DISTANCE_PREF_KEY] = value
 
 class _Overlay_Parallel(gui.overlays.Overlay):
     """Overlay for stabilized freehand mode """

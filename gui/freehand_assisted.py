@@ -457,7 +457,8 @@ class AssistedFreehandMode (freehand.FreehandMode,
     ## Utility method
     def queue_motion(self, tdw, time, x, y, 
                      pressure=0.0, xtilt=0.0, ytilt=0.0):
-        """
+        """Queue motion into drawing state, from everywhere we need.
+
         :param x,y: stroke position, in MODEL coodinate.
         """
         drawstate = self._get_drawing_state(tdw)
@@ -496,6 +497,25 @@ class AssistantOptionsWidget (freehand.FreehandOptionsWidget):
         mode = self.mode_ref()
         assert mode is not None
         return mode
+
+    ## Utility Methods
+
+    def _create_slider(self, row, label, handler, 
+                      value, min_adj, max_adj, 
+                      step_incr=1, digits=1 , real_adj=None):
+        labelobj = Gtk.Label(halign=Gtk.Align.START)
+        labelobj.set_text(label)
+        self.attach(labelobj, 0, row, 1, 1)
+
+        adj = Gtk.Adjustment(value, min_adj, max_adj, 
+                             step_incr=step_incr)
+        adj.connect('value-changed', handler, real_adj)
+
+        scale = Gtk.HScale(hexpand_set=True, hexpand=True, 
+                halign=Gtk.Align.FILL, adjustment=adj, digits=digits)
+        scale.set_value_pos(Gtk.PositionType.RIGHT)
+        self.attach(scale, 1, row, 1, 1)
+        return scale
 
    #def init_specialized_widgets(self, row):
    #    self._updating_ui = True
