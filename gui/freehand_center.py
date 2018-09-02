@@ -178,7 +178,7 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
             self._phase = _Phase.INIT
         elif self._phase == _Phase.SET_POINT:
             self._phase = _Phase.INIT
-            self._update_positions(tdw, event.x, event.y)
+            self._update_positions(event.x, event.y)
 
     ## Mode options
 
@@ -223,7 +223,6 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
                     ty = (length * self._vy) + self._sy
                     self._sx = tx
                     self._sy = ty
-                    tx, ty = tdw.model_to_display(tx, ty)
                     yield (tx , ty , self._latest_pressure)
                     self._px, self._py = self._rx, self._ry
 
@@ -247,7 +246,6 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
                 tx = (tmp_length * self._vx) + self._rx
                 ty = (tmp_length * self._vy) + self._ry
 
-                tx, ty = tdw.model_to_display(tx, ty)
                 yield (tx ,ty ,0.0)
 
                 self._sx, self._sy = self._rx, self._ry
@@ -293,10 +291,10 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode):
         if self.last_button is not None:
             self._last_time = time
             self._latest_pressure = pressure
-            self._rx, self._ry = tdw.display_to_model(x, y)
+            self._rx, self._ry = x, y
 
-    def _update_positions(self, tdw, dx, dy):
-        self._set_center_point(*tdw.display_to_model(dx, dy))
+    def _update_positions(self, x, y):
+        self._set_center_point(x, y)
     
     def _set_center_point(self, cx, cy):
         cls = self.__class__

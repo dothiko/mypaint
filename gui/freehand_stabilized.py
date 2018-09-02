@@ -245,6 +245,11 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
     ## Stabilizer/Assistant related
                 
     def enum_samples(self, tdw):
+        """
+        CAUTION: This tool uses DISPLAY coordinate.because stabilizer radius
+        is always in DISPLAY coordinate.
+        Calc stabilized result in display, and yield it after converting MODEL coordinate.
+        """
 
         if self._phase == _Phase.INIT:
             # Drawing with initial pressure, to avoid heading glitch.
@@ -255,7 +260,8 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
             # not 0.0. Therefore, not use constant(0.0) for initial pressure.
             # And,after this cycle, proceed normal stabilized stage.
             self._phase = _Phase.DRAW       
-            yield (self._cx , self._cy , self._initial_pressure)        
+            cx, cy = tdw.display_to_model(self._cx, self._cy)
+            yield (cx , cy , self._initial_pressure)        
         elif self._phase == _Phase.DRAW:
             # Normal stabilize stage.
 
@@ -285,21 +291,26 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
 
             self._actual_drawn_length += move_length
             
-            self._cx = cx + mx
-            self._cy = cy + my
+            cx += mx
+            cy += my
 
             pressure = (self._latest_pressure + self._initial_pressure) * 0.5
             self._initial_pressure = self._latest_pressure
+
+            self._cx = cx
+            self._cy = cy
+            cx, cy = tdw.display_to_model(cx, cy)
              
             if (self._force_tapering and 
                     self._actual_drawn_length < self._TAPERING_LENGTH):
                 adj = min(1.0, self._actual_drawn_length / self._TAPERING_LENGTH)
-                yield (self._cx , self._cy , pressure * adj)
+                yield (cx , cy , pressure * adj)
             else:
-                yield (self._cx , self._cy , pressure)
+                yield (cx , cy , pressure)
         else:
             # Set empty stroke, as usual.
-            yield (self._rx, self._ry, 0.0)
+            rx, ry = tdw.display_to_model(self._rx, self._ry)
+            yield (rx, ry, 0.0)
 
         raise StopIteration
         
@@ -338,13 +349,11 @@ class StabilizedFreehandMode (freehand_assisted.AssistedFreehandMode):
         into attributes.
         This method would be called each time motion_notify_cb is called.
 
-        Explanation of attributes which are used at here:
-        
+        CAUTION: This tool uses display coordinate.
         """
 
         self._latest_pressure = pressure
-        self._rx = x
-        self._ry = y
+        self._rx, self._ry = tdw.model_to_display(x, y)
 
     def _activate_stabilizer(self, tdw, state):
         """Activate stabilizer if needed.

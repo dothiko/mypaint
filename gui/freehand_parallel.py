@@ -148,7 +148,8 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
                 self._ruler.drag_start_cb(self, tdw, event)
             else:
                 # For drawing.
-                self._update_positions(tdw, event.x, event.y, True)
+                x, y = tdw.display_to_model(event.x, event.y)
+                self._update_positions(x, y, True)
                 # To eliminate heading stroke glitch.
                 self.queue_motion(tdw, event.time, self._cx, self._cy)
 
@@ -255,8 +256,7 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
         # length and direction.
         length, nx, ny = length_and_normal(self._cx , self._cy, 
                 self._px, self._py)
-        direction = cross_product(self._vy, -self._vx,
-                nx, ny)
+        direction = cross_product(self._vy, -self._vx, nx, ny)
 
         if self._phase == _Phase.DRAW:
             if self.is_ready():
@@ -264,6 +264,9 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
 
                 # _cx, _cy : current position of stylus
                 # _px, _py : previous position of stylus.
+                # These Positions are actulally only used for getting
+                # length and direction.
+
                 # _sx, _sy : current position of 'stroke'. not stylus.
                 # _vx, _vy : Identity vector of ruler direction.
                 
@@ -275,7 +278,6 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
                     cy = (length * self._vy) + self._sy
                     self._sx = cx
                     self._sy = cy
-                    cx, cy = tdw.model_to_display(cx, cy)
                     yield (cx , cy , self._latest_pressure)
                     self._px, self._py = self._cx, self._cy
 
@@ -286,18 +288,24 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
                 # To do it, we need a point which is along ruler
                 # but oppsite direction point.
 
-                tmp_length = 4.0 # practically enough length
+                # Make fake `pre-previous` position and yield it.
+                # 4.0 is practically enough length for fake position.
+                tmp_length = 4.0 
 
                 if length != 0 and direction < 0.0:
                     tmp_length *= -1.0
 
-                cx = (tmp_length * self._vx) + self._px
-                cy = (tmp_length * self._vy) + self._py
+                px = (tmp_length * self._vx) + self._px
+                py = (tmp_length * self._vy) + self._py
 
-                cx, cy = tdw.model_to_display(cx, cy)
-                yield (cx ,cy ,0.0)
-                cx, cy = tdw.model_to_display(self._px, self._py)
-                yield (cx ,cy ,0.0)
+                yield (px ,py , 0.0)
+
+                # And then yield `previous` position (but actually 
+                # current position at this stage) of stylus.
+                yield (self._px , self._py , 0.0)
+
+                self._sx = self._px
+                self._sy = self._py
 
                 self._phase = _Phase.DRAW
 
@@ -335,7 +343,7 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
         if self.last_button is not None:
             self._last_time = time
             self._latest_pressure = pressure
-            self._update_positions(tdw, x, y, False)
+            self._update_positions(x, y, False)
 
     ## Overlay related
 
@@ -352,18 +360,16 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode):
 
     ## Ruler related
 
-    def _update_positions(self, tdw, dx, dy, starting):
+    def _update_positions(self, x, y, starting):
         """ update current positions from pointer position 
-        of display coordinate.
+        of model coordinate.
         """
-        mpos = tdw.display_to_model(dx, dy)
-
         if starting:
             if self._phase == _Phase.INIT:
-                self._sx, self._sy = mpos
-            self._px, self._py = mpos
+                self._sx, self._sy = x, y
+            self._px, self._py = x, y
 
-        self._cx, self._cy = mpos
+        self._cx, self._cy = x, y
 
     def _update_ruler_vector(self):
         self._vx, self._vy = self._ruler.identity_vector

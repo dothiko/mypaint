@@ -331,9 +331,9 @@ class AssistedFreehandMode (freehand.FreehandMode,
                         tdw, event)
 
             # Override motion event with `assisted` position 
+            x, y = tdw.display_to_model(x, y)
             self.fetch(tdw, x, y, pressure, time)
             for x, y, p in self.enum_samples(tdw):
-                x, y = tdw.display_to_model(x, y)
                 event_data = (
                     time, 
                     x, y, p, 
@@ -422,12 +422,12 @@ class AssistedFreehandMode (freehand.FreehandMode,
         in enum_samples.
 
         :param tdw: Tiledrawwidget of current event.
-        :param x: Current location of stylus, in DISPLAY.
-        :param y: Current location of stylus, in DISPLAY.
+        :param x: Current location of stylus, in model.
+        :param y: Current location of stylus, in model.
         :param pressure: Current pressure value.
         :param time: The time currently ongoing event has occured.
         
-        Some derived assist-tool might need model coodination.
+        Some derived assist-tool might need display coodination.
         For such tool, tdw parameter added.
         """
         pass
@@ -438,7 +438,7 @@ class AssistedFreehandMode (freehand.FreehandMode,
 
         Iteration is done by yield statement.
 
-        x and y are display coordinate.
+        x and y are model coordinate.
         """
         raise StopIteration
 
