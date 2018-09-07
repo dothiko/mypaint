@@ -425,6 +425,10 @@ class DragOffset(object):
     def get_model_offset(self):
         return (self._ex - self._sx, self._ey - self._sy)
 
+    def get_model_length(self, divider):
+        l = gui.linemode.vector_length(self._ex-self._sx, self._ey-self._sy)
+        return l / divider
+
     def reset(self):
         self._sx = 0 
         self._ex = 0 

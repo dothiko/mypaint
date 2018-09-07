@@ -94,19 +94,47 @@ _Phase = PressPhase
 
 # _EditZone is currently same as base EditZoneMixin
 _EditZone = EditZoneMixin
-_ActionButton = ActionButtonMixin
+
+class _Prefs:
+    """Constants for app.preferences and its default values.
+    """
+    AUTOAPPLY_PREF = 'exinktool.autoapply'
+    THRESHOLD_PREF = 'exinktool.autoapply_threshold'
+
+    DEFAULT_AUTOAPPLY = None
+    DEFAULT_THRESHOLD = 5
+
+
+class _ActionButton(ActionButtonMixin):
+    """Enumeration for the action button of ExInkingMode
+    """
+    EDIT=2 # To toggle editing node-pressure phase.
+
 
 # _Node object is imported from original inktool.
 
 class ExInkingMode (PressureEditableMixin, 
                     NodeUserMixin,
                     RecallableNodeMixin):
+    """Experimental Inking mode
+    to test new feature.
+    """
 
     ## Metadata properties
 
     ACTION_NAME = "ExInkingMode"
     pointer_behavior = gui.mode.Behavior.PAINT_FREEHAND
     scroll_behavior = gui.mode.Behavior.CHANGE_VIEW
+
+    # Redefined buttons
+    buttons = {
+        _ActionButton.ACCEPT : ('mypaint-ok-symbolic', 
+            'accept_button_cb'), 
+        _ActionButton.REJECT : ('mypaint-trash-symbolic', 
+            'reject_button_cb'),
+        _ActionButton.EDIT : ('mypaint-edit-symbolic', 
+            'edit_button_cb') 
+    }
 
     ## Metadata methods
 
@@ -130,7 +158,6 @@ class ExInkingMode (PressureEditableMixin,
                 return self._cursor_move_nw_se
 
         return None
-
 
     ## Class config vars
     
@@ -160,14 +187,17 @@ class ExInkingMode (PressureEditableMixin,
         self._last_good_raw_xtilt = 0.0
         self._last_good_raw_ytilt = 0.0
 
-        # range based editing related.
-        self._range_radius = None # Invalid values, set later inside property.
-        self._range_factor = None
-
         # We need to copy the original __active_brushwork
        #self.__active_brushwork = self._BrushworkModeMixin__active_brushwork 
         self._sshot_before = None
         self._entered_cmd = None
+
+        # For autoapply
+        prefs = self.app.preferences
+        self._autoapply = prefs.get(_Prefs.AUTOAPPLY_PREF, 
+                                    _Prefs.DEFAULT_AUTOAPPLY)
+        self._autoapply_threshold = prefs.get(_Prefs.THRESHOLD_PREF, 
+                                              _Prefs.DEFAULT_THRESHOLD)
 
     def _reset_capture_data(self):
         super(ExInkingMode,self)._reset_capture_data()
@@ -182,7 +212,13 @@ class ExInkingMode (PressureEditableMixin,
         return self.phase in (_Phase.ADJUST,
                               _Phase.ADJUST_POS,
                               _Phase.ADJUST_PRESSURE,
-                              _Phase.ADJUST_PRESSURE_ONESHOT)
+                              _Phase.ADJUST_PRESSURE_ONESHOT,
+                              _Phase.ADJUST_ITEM)
+
+    def is_pressure_modifying(self):
+        return self.phase in (_Phase.ADJUST_PRESSURE,
+                              _Phase.ADJUST_PRESSURE_ONESHOT,
+                              _Phase.ADJUST_ITEM)
 
     def _start_new_capture_phase(self, rollback=False):
         super(ExInkingMode, self)._start_new_capture_phase(rollback)
@@ -193,7 +229,6 @@ class ExInkingMode (PressureEditableMixin,
 
     def _generate_presenter(self):
         return OptionsPresenter_ExInking()
-
 
     def update_cursor_cb(self, tdw):
         """ Called from _update_zone_and_target()
@@ -233,14 +268,23 @@ class ExInkingMode (PressureEditableMixin,
             gui.cursor.Name.ADD,
         )
 
+    ## Offset vector
+    def _generate_offset_vector(self):
+        """Returns offset vector(dragging vector, tuple of x, y)
+        depend on current phase.
+        """
+        if self.phase == _Phase.ADJUST_POS:
+            return self.drag_offset.get_model_offset()
+        return None
+
     ## Redraws
 
-    def _queue_draw_ink_node(self, tdw, i, base_node, model_radius, offset_vec):
+    def _queue_draw_ink_node(self, tdw, i, base_node, offset_vec):
         """Redraws a specific control node on all known view TDWs
         :param node_ctx: node queuing context information.
         """
 
-        pos = self._get_node_position(i, base_node, model_radius, offset_vec)
+        pos = self._get_node_position(i, base_node, offset_vec)
 
         x, y = tdw.model_to_display(*pos)
         x = math.floor(x)
@@ -260,10 +304,7 @@ class ExInkingMode (PressureEditableMixin,
         else:
             basept = None
 
-        model_radius = gui.ui_utils.display_to_model_distance(tdw, 
-                self.range_radius)
         self._queue_draw_ink_node(tdw, idx, basept,
-            model_radius,
             self._generate_offset_vector())
 
     def _queue_draw_selected_nodes(self, tdw):
@@ -278,12 +319,11 @@ class ExInkingMode (PressureEditableMixin,
                 basept = self.nodes[self.current_node_index]
             else:
                 basept = None
+
             offset_vec = self._generate_offset_vector()
 
-            model_radius = gui.ui_utils.display_to_model_distance(tdw, 
-                    self.range_radius)
             for i in self.selected_nodes:
-                self._queue_draw_ink_node(tdw, i, basept, model_radius, offset_vec)
+                self._queue_draw_ink_node(tdw, i, basept, offset_vec)
 
     def _queue_redraw_all_nodes(self):
         """ Override mixin :
@@ -296,54 +336,22 @@ class ExInkingMode (PressureEditableMixin,
             offset_vec = self._generate_offset_vector()
 
             for tdw in self._overlays:
-                model_radius = gui.ui_utils.display_to_model_distance(tdw, 
-                        self.range_radius)
-                for i in xrange(len(self.nodes)):
-                    self._queue_draw_ink_node(tdw, i, basept, model_radius, offset_vec)
+                for i in range(len(self.nodes)):
+                    self._queue_draw_ink_node(tdw, i, basept, offset_vec)
 
-    def _generate_offset_vector(self):
-        """ Utility method, Generates node-moving offset vector.
-        """ 
-        dx,dy = self.drag_offset.get_model_offset()
-        if self.range_radius == 0:
-            return (None, dx, dy)
-        else:
-            offset_len = math.hypot(dx, dy)
-            if offset_len > 0.0:
-                return (offset_len,
-                        dx / offset_len,
-                        dy / offset_len)
-
-    def _get_node_position(self, idx, base_node, model_radius, offset_vec):
+    def _get_node_position(self, idx, base_node, offset_vec):
         """ Utility method, For unifying all node-editing codes. 
         """
         node = self.nodes[idx]
-        if len(self.selected_nodes) > 1:
-            if idx in self.selected_nodes:
-                if offset_vec == None:
-                    pos = (node.x, node.y)
-                elif offset_vec[0] == None:
-                    # This is the case of 'range radius is disabled'
-                    pos = (node.x + offset_vec[1], node.y + offset_vec[2])
-                else:
-                    pos = gui.drawutils.calc_ranged_offset(base_node, node,
-                            model_radius, self.range_factor,
-                            offset_vec)
-            else:
-                pos = (node.x, node.y)
+        if offset_vec is None or len(self.selected_nodes)==0:
+            return (node.x, node.y)
         else:
-            if offset_vec == None:
-                pos = (node.x, node.y)
-            elif offset_vec[0] == None:
-                pos = (node.x + offset_vec[1], node.y + offset_vec[2])
+            if idx in self.selected_nodes:
+                ox , oy = offset_vec
+                pos = (node.x + ox, node.y + oy)
             else:
-                pos = gui.drawutils.calc_ranged_offset(base_node, node,
-                        model_radius, self.range_factor,
-                        offset_vec)
+                pos = (node.x, node.y)
         return pos
-
-
-
 
     def _queue_redraw_item(self):
         """Redraws the entire curve on all known view TDWs"""
@@ -352,9 +360,9 @@ class ExInkingMode (PressureEditableMixin,
             base_node = self.nodes[self.current_node_index]
         else:
             base_node = None
+
         offset_vec = self._generate_offset_vector()
-        model_radius = None # Initial value, to be rewritten at first loop.
-        
+
         for tdw in self._overlays:
             model = tdw.doc
             if len(self.nodes) < 2:
@@ -367,15 +375,11 @@ class ExInkingMode (PressureEditableMixin,
             )
             interp_state = {"t_abs": self.nodes[0].time}
             
-            model_radius = gui.ui_utils.display_to_model_distance(tdw, self.range_radius)
-            
             for p_1, p0, p1, p2 in gui.drawutils.spline_iter_3(
                                     self.nodes,
                                     base_node,
                                     self.selected_nodes,
-                                    model_radius,
-                                    self.range_factor,
-                                    offset_vec):
+                                    offset_vec=offset_vec):
                 self._queue_task(
                     self._draw_curve_segment,
                     model,
@@ -384,7 +388,7 @@ class ExInkingMode (PressureEditableMixin,
                 )
         self._start_task_queue_runner()
 
-    def _draw_curve_segment(self, model, p_1, p0, p1, p2, state):
+    def _draw_curve_segment(self, model, p_1, p0, p1, p2, state): 
         """Draw the curve segment between the middle two points"""
         last_t_abs = state["t_abs"]
         dtime_p0_p1_real = p1[-1] - p0[-1]
@@ -393,7 +397,7 @@ class ExInkingMode (PressureEditableMixin,
         steps_d = dist_p1_p2 / self.INTERPOLATION_MAX_SLICE_DISTANCE
         steps_max = float(self.INTERPOLATION_MAX_SLICES)
         steps = math.ceil(min(steps_max, max([2, steps_t, steps_d])))
-        for i in xrange(int(steps) + 1):
+        for i in range(int(steps) + 1):
             t = i / steps
             point = gui.drawutils.spline_4p(t, p_1, p0, p1, p2)
             x, y, pressure, xtilt, ytilt, t_abs, viewzoom, viewrotation = point
@@ -416,22 +420,12 @@ class ExInkingMode (PressureEditableMixin,
             last_t_abs = t_abs
         state["t_abs"] = last_t_abs
 
-    def _queue_range_radius(self):
-        """ Queue an area to draw affecting-range indicator,
-        when range-editing activated.
-        """
-        size = self.range_radius + 1
-        for tdw in self._overlays:
-            tdw.queue_draw_area(self.last_x - size, self.last_y - size, 
-                    size*2+2, size*2+2)
-
-
     ## Raw event handling (prelight & zone selection in adjust phase)
     def mode_button_press_cb(self, tdw, event):
         mod_state = event.state & self.ONCANVAS_MODIFIER_MASK
         detected_stroke = None
 
-        if self.phase == _Phase.ADJUST:
+        if self.phase in (_Phase.ADJUST, _Phase.ADJUST_ITEM):
             if event.button == 1:
                 if self.zone == EditZoneMixin.EMPTY_CANVAS:
                     if not mod_state:
@@ -445,6 +439,7 @@ class ExInkingMode (PressureEditableMixin,
 
                     # Fallthrough
 
+        # Not `elif`. In above codes, `detected_stroke` might become True.
         if self.phase == _Phase.INSERT_NODE or detected_stroke:
             if detected_stroke is None:
                 mx, my = tdw.display_to_model(event.x, event.y)
@@ -504,7 +499,6 @@ class ExInkingMode (PressureEditableMixin,
         self._last_good_raw_ytilt = 0.0
 
     def mode_button_release_cb(self, tdw, event):
-
         super(ExInkingMode, self).mode_button_release_cb(tdw, event)
 
         # Update workaround state for evdev dropouts
@@ -518,7 +512,6 @@ class ExInkingMode (PressureEditableMixin,
     ## Capture handling
 
     def node_drag_start_cb(self, tdw, event):
-
         self._node_dragged = False
         if self.phase == _Phase.CAPTURE:
             assert len(self.nodes) == 0
@@ -532,10 +525,10 @@ class ExInkingMode (PressureEditableMixin,
                 self._queue_draw_node(tdw, 0)
                 self._last_node_evdata = (event.x, event.y, event.time)
                 self._last_event_node = node
+        elif self.phase == _Phase.ADJUST_ITEM:
+            self._queue_draw_selected_nodes(tdw)
         else:
             super(ExInkingMode, self).node_drag_start_cb(tdw, event)
-
-
 
     def node_drag_update_cb(self, tdw, event, dx, dy):
         """ User dragging within capturing phase.
@@ -579,21 +572,16 @@ class ExInkingMode (PressureEditableMixin,
         elif self.phase == _Phase.ADJUST_POS:
             if self._dragged_node_start_pos:
                 self._node_dragged = True
+                doff = self.drag_offset
 
                 # To erase old-positioned nodes.
                 self._queue_draw_selected_nodes(tdw)
-
                 x, y = tdw.display_to_model(event.x, event.y)
-                self.drag_offset.end(x, y)
+                doff.end(x, y)
                 self._queue_draw_selected_nodes(tdw)
-
-                if self.range_radius > 0:
-                    self._queue_range_radius()
-
                 self._queue_redraw_item()
         else:
             super(ExInkingMode, self).node_drag_update_cb(tdw, event, dx, dy)
-
  
     def node_drag_stop_cb(self, tdw):
         """ User ends capturing the selected node(s).
@@ -618,6 +606,14 @@ class ExInkingMode (PressureEditableMixin,
             
                 self.nodes.append(node)
 
+
+            if (self._autoapply is not None 
+                    and len(self.nodes) > self._autoapply_threshold):
+                if self._autoapply == 'cull':
+                    self._cull_nodes()
+                elif self._autoapply == 'simple':
+                    self._simplify_nodes()
+
             if len(self.nodes) > 1:
                 self.phase = _Phase.ADJUST
                 self._queue_redraw_all_nodes()
@@ -641,17 +637,29 @@ class ExInkingMode (PressureEditableMixin,
  
                 self.drag_offset.reset()
  
-            if self.range_radius > 0:
-                self._queue_range_radius()
- 
             self._dragged_node_start_pos = None
 
             self.phase = _Phase.ADJUST
+
+        elif self.phase == _Phase.ADJUST_ITEM:
+            # Finalize dragging motion as pressure changing.
+            if self._node_dragged:
+                self.drag_offset.reset()
+            self._dragged_node_start_pos = None
+            self._queue_draw_buttons()
         else:
             super(ExInkingMode, self).node_drag_stop_cb(tdw)
 
-
     ## Node editing
+
+    def set_node_pressure(self, idx, pressure):
+        cn = self.nodes[idx]
+        self.nodes[idx] = cn._replace(pressure=pressure)
+
+    def set_node_pos(self, idx, x, y):
+        cn = self.nodes[idx]
+        self.nodes[idx] = cn._replace(x=x, y=y)
+
     def _detect_on_stroke(self, x, y, allow_distance = 4.0):
         """Detecting pressed point is on the stroke currently editing.
         
@@ -685,7 +693,7 @@ class ExInkingMode (PressureEditableMixin,
 
             return x # try any x
 
-        for idx in xrange(len(self.nodes)-1):
+        for idx in range(len(self.nodes)-1):
             pt0 = self.nodes[idx]
             pt1 = self.nodes[idx+1]
             if gui.drawutils.is_inside_segment(pt0, pt1, x, y):
@@ -716,7 +724,6 @@ class ExInkingMode (PressureEditableMixin,
                         t = 0.0
                         c+=1
 
-
     def _get_event_data(self, tdw, event):
         x, y = tdw.display_to_model(event.x, event.y)
         xtilt, ytilt = self._get_event_tilt(tdw, event)
@@ -728,6 +735,22 @@ class ExInkingMode (PressureEditableMixin,
             viewzoom = self.doc.tdw.scale,
             viewrotation = self.doc.tdw.rotation,
         )
+
+    def nodes_position_iter(self, tdw, convert_to_display=True):
+        """ Enumerate nodes and its screen coordinate 
+        with considering pointer dragging offsets and range.
+        """
+        mx, my = self.drag_offset.get_model_offset()
+        for i, node in enumerate(self.nodes):
+            if i in self.selected_nodes:
+                x, y = node.x + mx, node.y + my
+            else:
+                x, y = node.x, node.y
+
+            if convert_to_display:
+                x, y = tdw.model_to_display(x, y)
+
+            yield (i, node, x, y)
 
     def update_node(self, i, **kwargs):
         """Updates properties of a node, and redraws it"""
@@ -768,19 +791,12 @@ class ExInkingMode (PressureEditableMixin,
         self._queue_draw_node(None, i)
 
         self._pop_node(i)
-
-        # Limit the current node.
-        # this processing may vary in inherited classes,
-        # so wrap this.
-       #self._adjust_current_node_index()
-
         self.options_presenter.target = (self, self.current_node_index)
+
         # Issue redraws for the changed on-canvas elements
         self._queue_redraw_item()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
-
-
 
     def delete_selected_nodes(self):
 
@@ -913,7 +929,6 @@ class ExInkingMode (PressureEditableMixin,
             idx+=1
         return curcnt-len(self.nodes)
 
-
     def _queue_all_visual_redraw(self):
         """Redraw all overlay objects"""
         self._queue_redraw_item()
@@ -959,42 +974,7 @@ class ExInkingMode (PressureEditableMixin,
             # Redraw to erase old nodes
             self._queue_all_visual_redraw()
 
-           #new_nodes = [self.nodes[0]]
             idx = 1
-           #pn = self.nodes[0]
-           #cn = self.nodes[idx]
-           #while idx < len(self.nodes) - 1:
-           #    nn = self.nodes[idx+1]
-           #    # Limit affected nodes with selection list.
-           #    # if only one node is selected,
-           #    # entire nodes are averaged.
-           #    if (len(self.selected_nodes) == 0 or
-           #            idx in self.selected_nodes):
-           #        try:
-           #            # avx, avy is identity vector of current-prev node
-           #            # bvx, bvy is identity vector of next-prev node
-           #            avx, avy = normal(pn.x, pn.y, cn.x, cn.y)
-           #            bvx, bvy = normal(pn.x, pn.y, nn.x, nn.y)
-           #            avx=(avx + bvx) / 2.0
-           #            avy=(avy + bvy) / 2.0
-           #            s = math.hypot(cn.x - pn.x, cn.y - pn.y)
-           #            avx*=s
-           #            avy*=s
-           #            new_nodes.append(cn._replace(x=avx+pn.x, y=avy+pn.y))
-           #        except ZeroDivisionError:
-           #            # This means 'two nodes at same place'.
-           #            # abort averaging for this node.
-           #            new_nodes.append(cn)
-           #    else:
-           #        new_nodes.append(cn)
-           #
-           #    pn = cn
-           #    cn = nn
-           #    idx += 1
-           #
-           #new_nodes.append(self.nodes[-1])
-           #self.nodes = new_nodes
-
             nodes = self.nodes
 
             def _do_average_nodes(idx):
@@ -1032,8 +1012,6 @@ class ExInkingMode (PressureEditableMixin,
 
             # then next time, it targets the even index nodes.
             _do_average_nodes(2)
-
-
 
             # redraw new nodes
             self._queue_all_visual_redraw()
@@ -1133,7 +1111,6 @@ class ExInkingMode (PressureEditableMixin,
             self._queue_redraw_item()
 
 
-
     ## Node selection
     def select_all(self):
         self.selected_nodes = range(0, len(self.nodes))
@@ -1169,72 +1146,14 @@ class ExInkingMode (PressureEditableMixin,
     def reject_button_cb(self, tdw):
         self._start_new_capture_phase(rollback=True)
         assert self.phase == _Phase.CAPTURE
-            
-    ## Editing range related
-    def set_range_factor(self, factor):
-        self._range_factor_source = factor
-        if factor < 0.0:
-            self._range_factor = (1.0 / math.gamma(factor+1.000001))
+
+    def edit_button_cb(self, tdw):
+        if self.phase != _Phase.ADJUST_ITEM:
+            self.phase = _Phase.ADJUST_ITEM
         else:
-            self._range_factor = math.gamma(factor+0.000001)
-        
-    @property
-    def range_radius(self):
-        if self._range_radius == None:
-            self._range_radius = self.doc.app.preferences.get(
-                                    "inktool.adjust_range_radius", 0)
-        return self._range_radius
-
-    @range_radius.setter
-    def range_radius(self, radius):
-        self._range_radius = math.floor(radius)
-        self.doc.app.preferences["inktool.adjust_range_radius"] = radius
-
-    
-    @property
-    def range_factor(self):
-        if self._range_factor == None:
-            self.set_range_factor(self.doc.app.preferences.get(
-                                    "inktool.adjust_range_factor", 0))
-        return self._range_factor
-
-    def nodes_position_iter(self, tdw, convert_to_display=True):
-        """ Enumerate nodes and its screen coordinate 
-        with considering pointer dragging offsets and range.
-        """
-        if self.range_radius == 0:
-            mx, my = self.drag_offset.get_model_offset()
-            for i, node in enumerate(self.nodes):
-                if i in self.selected_nodes:
-                    x, y = node.x + mx, node.y + my
-                else:
-                    x, y = node.x, node.y
-
-                if convert_to_display:
-                    x, y = tdw.model_to_display(x, y)
-
-                yield (i, node, x, y)
-        else:
-            if self.current_node_index != None:
-                base_node = self.nodes[self.current_node_index]
-                model_radius = gui.ui_utils.display_to_model_distance(tdw, 
-                        self.range_radius)
-            else:
-                base_node = None
-                model_radius = 0
-
-            offset_vec = self._generate_offset_vector()
-
-            for i, node  in enumerate(self.nodes):
-                pos = self._get_node_position(i, base_node, 
-                        model_radius, offset_vec)
-                                                            
-                if convert_to_display:
-                    x, y = tdw.model_to_display(*pos)
-                else:
-                    x, y = pos
-
-                yield (i, node, x, y)
+            self.phase = _Phase.ADJUST
+        self._queue_redraw_all_nodes()
+        self._queue_draw_buttons()
 
     # XXX for `node pick`
     ## Node pick
@@ -1272,17 +1191,28 @@ class ExInkingMode (PressureEditableMixin,
         self.inject_nodes(nodes)
     # XXX for `node pick` end
 
+    ## Autoapply 
+    def set_autoapply(self, method):
+        """Set autoapply method.
+
+        That method is executed when right after the new nodes stroke
+        is created.
+
+        :param method: None or 'cull' or 'simple'
+        """
+        self._autoapply = method
+
+    def set_autoapply_threshold(self, count):
+        """Set autoapply threshould node count.
+
+        If generated nodes count is lower than this count,
+        `autoapply` is not executed.
+        """
+        self._autoapply_threshold = count
+
 
 class Overlay (OverlayOncanvasMixin):
     """Overlay for an ExInkingMode's adjustable points"""
-
-#   def __init__(self, inkmode, tdw):
-#       super(Overlay, self).__init__()
-#       self._mode = weakref.proxy(inkmode)
-#       self._tdw = weakref.proxy(tdw)
-#       self._button_pixbuf_cache = {}
-#       self.get_button_pos(_EditZone.ACCEPT) = None
-#       self.get_button_pos(_EditZone.REJECT) = None
 
     def update_button_positions(self):
         """Recalculates the positions of the mode's buttons."""
@@ -1316,6 +1246,7 @@ class Overlay (OverlayOncanvasMixin):
         assert stroke_last_quarter_i < stroke_end_i
         reject_anchor_i = stroke_start_i
         accept_anchor_i = stroke_end_i
+        mode_anchor_i = ((stroke_end_i - stroke_start_i) / 2) + stroke_start_i
 
         # Classify the stroke direction as a unit vector
         stroke_tail = (
@@ -1337,17 +1268,27 @@ class Overlay (OverlayOncanvasMixin):
             fixed[reject_anchor_i].x - stroke_tail[0]*margin,
             fixed[reject_anchor_i].y - stroke_tail[1]*margin,
         )
+        edit_button = _LayoutNode(
+            fixed[mode_anchor_i].x - stroke_tail[0]*margin,
+            fixed[mode_anchor_i].y - stroke_tail[1]*margin,
+        )
 
         # Constraint boxes. They mustn't share corners.
         # Natural hand strokes are often downwards,
         # so let the reject button to go above the accept button.
+        t_margin = 2.666 * margin
         reject_button_bbox = (
             view_x0+margin, view_x1-margin,
-            view_y0+margin, view_y1-2.666*margin,
+            view_y0+margin, view_y1-t_margin,
         )
         accept_button_bbox = (
             view_x0+margin, view_x1-margin,
-            view_y0+2.666*margin, view_y1-margin,
+            view_y0+t_margin, view_y1-margin,
+        )
+
+        edit_button_bbox = (
+            view_x0+t_margin, view_x1-t_margin,
+            view_y0+t_margin, view_y1-t_margin,
         )
 
         # Force-update constants
@@ -1355,7 +1296,7 @@ class Overlay (OverlayOncanvasMixin):
         k_attract = 0.05
 
         # Let the buttons bounce around until they've settled.
-        for iter_i in xrange(100):
+        for iter_i in range(100):
             accept_button \
                 .add_forces_inverse_square(fixed, k=k_repel) \
                 .add_forces_inverse_square([reject_button], k=k_repel) \
@@ -1373,21 +1314,40 @@ class Overlay (OverlayOncanvasMixin):
             settled = [(p.speed<0.5) for p in [accept_button, reject_button]]
             if all(settled):
                 break
+
         self._button_pos[_ActionButton.ACCEPT] = accept_button.x, accept_button.y
         self._button_pos[_ActionButton.REJECT] = reject_button.x, reject_button.y
 
-#   def _get_button_pixbuf(self, name):
-#       """Loads the pixbuf corresponding to a button name (cached)"""
-#       cache = self._button_pixbuf_cache
-#       pixbuf = cache.get(name)
-#       if not pixbuf:
-#           pixbuf = gui.drawutils.load_symbolic_icon(
-#               icon_name=name,
-#               size=gui.style.FLOATING_BUTTON_ICON_SIZE,
-#               fg=(0, 0, 0, 1),
-#           )
-#           cache[name] = pixbuf
-#       return pixbuf
+        # `Edit button` placed at the center of the line between accept_button 
+        # to reject_button
+        l, nx, ny = length_and_normal(accept_button.x, accept_button.y,
+                                      reject_button.x, reject_button.y)
+        ml = l / 2.0
+        bx = nx * ml 
+        by = ny * ml 
+        mx, my = bx, by
+        ml = 0
+        # Check edit_button distance against every nodes.
+        for iter_i in range(100):
+            modified = False
+            for cn in nodes:
+                dist = math.hypot(cn.x-(mx+accept_button.x), 
+                                  cn.y-(my+accept_button.y))
+                if dist < t_margin:
+                    ml += t_margin
+                    # Get a bit far, right-angled vector
+                    # From accept-button to reject-button
+                    mx = -ny * ml + bx 
+                    my = nx * ml + by
+                    modified = True
+                    break
+            if not modified:
+                break
+
+        edit_button.x = mx + accept_button.x
+        edit_button.y = my + accept_button.y
+        edit_button.constrain_position(*edit_button_bbox)
+        self._button_pos[_ActionButton.EDIT] = edit_button.x, edit_button.y
 
     def _get_onscreen_nodes(self):
         """ Override mixin method.
@@ -1407,14 +1367,6 @@ class Overlay (OverlayOncanvasMixin):
             if node_on_screen:
                 yield (i, node, x, y)
 
-    @gui.ui_utils.dashedline_wrapper
-    def _draw_range_circle(self, cr, info):
-        x, y, radius = info
-        cr.arc( x, y,
-                int(radius),
-                0.0,
-                2*math.pi)
-
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""
         # Control nodes
@@ -1422,7 +1374,7 @@ class Overlay (OverlayOncanvasMixin):
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
         dx,dy = mode.drag_offset.get_display_offset(self._tdw)
-        fill_flag = not mode.is_pressure_modifying
+        fill_flag = not mode.is_pressure_modifying()
         for i, node, x, y in self._get_onscreen_nodes():
             color = gui.style.EDITABLE_ITEM_COLOR
             show_node = not mode.hide_nodes
@@ -1430,7 +1382,8 @@ class Overlay (OverlayOncanvasMixin):
                     _Phase.ADJUST_POS,
                     _Phase.ADJUST_PRESSURE,
                     _Phase.ADJUST_PRESSURE_ONESHOT,
-                    _Phase.CHANGE_PHASE):
+                    _Phase.CHANGE_PHASE,
+                    _Phase.ADJUST_ITEM):
                 if show_node:
                     if i == mode.current_node_index:
                         color = gui.style.ACTIVE_ITEM_COLOR
@@ -1455,10 +1408,6 @@ class Overlay (OverlayOncanvasMixin):
             # Drawing Buttons when not in drag.
             if not mode.in_drag:
                 self._draw_mode_buttons(cr)
-            elif (mode.phase == _Phase.ADJUST_POS and 
-                    mode.range_radius > 0):
-                self._draw_range_circle(cr, (mode.last_x, mode.last_y,
-                                            mode.range_radius))
                 
 
 
@@ -1679,7 +1628,6 @@ class StrokePressureSettings (object):
         return False
 
 
-
 class StrokeCurveWidget (gui.curve.CurveWidget):
     """Graph of pressure by distance, tied to the central LineModeSettings"""
 
@@ -1829,6 +1777,8 @@ class OptionsPresenter_ExInking (object):
     def _ensure_ui_populated(self):
         if self._options_grid is not None:
             return
+        app = self._app
+        prefs = app.preferences
         builder_xml = os.path.splitext(__file__)[0] + ".glade"
         builder = Gtk.Builder()
         builder.set_translation_domain("mypaint")
@@ -1847,29 +1797,37 @@ class OptionsPresenter_ExInking (object):
         self._insert_button.set_sensitive(False)
         self._delete_button = builder.get_object("delete_point_button")
         self._delete_button.set_sensitive(False)
-        #self._period_adj = builder.get_object("period_adj")
-        #self._period_scale = builder.get_object("period_scale")
-        #self._period_adj.set_value(self._app.preferences.get(
-            #"inktool.capture_period_factor", 1))
-        self._range_radius_adj = builder.get_object("range_radius_adj")
-        self._range_radius_scale = builder.get_object("range_radius_scale")
-        self._range_radius_adj.set_value(self._app.preferences.get(
-            "inktool.adjust_range_radius", 0))
-            
-        self._range_factor_adj = builder.get_object("range_factor_adj")
-        self._range_factor_scale = builder.get_object("range_factor_scale")
-        self._range_factor_adj.set_value(self._app.preferences.get(
-            "inktool.adjust_range_factor", 0))
-            
         self._hide_nodes_check = builder.get_object("hide_nodes_checkbutton")
-
+        # Radiobuttons for auto-apply.
+        n_radio = builder.get_object("autoapply_none_radio")
+        c_radio = builder.get_object("autoapply_cull_radio")
+        s_radio = builder.get_object("autoapply_simple_radio")
+        radios = {
+            n_radio : None,
+            c_radio : "cull",
+            s_radio : "simple"
+        }
+        r_label = prefs.get(_Prefs.AUTOAPPLY_PREF, _Prefs.DEFAULT_AUTOAPPLY)
+        for cr, cl in radios.items():
+            if cl == r_label:
+                cr.set_active(True)
+                break
+        self._autoapply_radios = radios
+        # Thershold slider for auto-apply.
+        t_scale = builder.get_object("autoapply_threshold_scale")
+        t_scale.set_digits(0) # Cant we set this from glade??
+        t_adj = builder.get_object("autoapply_threshold_adj")
+        t_adj.set_value(
+            prefs.get(_Prefs.THRESHOLD_PREF, _Prefs.DEFAULT_THRESHOLD)
+        )
+        self._autoapply_threshold_adj = t_adj
+        # Pressure variation.
         apply_btn = builder.get_object("apply_variation_button")
         apply_btn.set_sensitive(False)
         self._apply_variation_button = apply_btn
-
         base_grid = builder.get_object("points_editing_grid")
         toolbar = gui.widgets.inline_toolbar(
-            self._app,
+            app,
             [
                 ("SimplifyNodes", "mypaint-layer-group-new-symbolic"),
                 ("CullNodes", "mypaint-add-symbolic"),
@@ -1885,7 +1843,6 @@ class OptionsPresenter_ExInking (object):
         self.init_linecurve_widget(1, base_grid)
         self.init_variation_preset_combo(2, base_grid,
                 self._apply_variation_button)
-
 
     def init_linecurve_widget(self, row, box):
 
@@ -1985,10 +1942,6 @@ class OptionsPresenter_ExInking (object):
             self._delete_button.set_sensitive(inkmode.can_delete_node(cn_idx))
             #self._period_adj.set_value(self._app.preferences.get(
                 #"inktool.capture_period_factor", 1))
-            self._range_radius_adj.set_value(self._app.preferences.get(
-                "inktool.adjust_range_radius", 0))
-            self._range_factor_adj.set_value(self._app.preferences.get(
-                "inktool.adjust_range_factor", 0))            
             self._apply_variation_button.set_sensitive(len(inkmode.nodes) > 2)
         finally:
             self._updating_ui = False
@@ -2045,31 +1998,6 @@ class OptionsPresenter_ExInking (object):
         if len(inkmode.nodes) > 2:
             inkmode.cull_nodes()
 
-    def _range_radius_value_changed_cb(self, adj):
-        if self._updating_ui:
-            return
-        inkmode, node_idx = self.target
-        if inkmode:
-            inkmode.range_radius = adj.get_value()
-        
-    def _range_factor_value_changed_cb(self, adj):
-        if self._updating_ui:
-            return
-        self._app.preferences['inktool.adjust_range_factor'] = adj.get_value()
-        inkmode, node_idx = self.target
-        if inkmode:
-            inkmode.set_range_factor(adj.get_value())
-
-    def _range_radius_scale_format_value_cb(self, scale, value):
-        value = math.floor(value)
-        if value == 0:
-            return "off"
-        else:
-            return "%dpx" % value
-
-    def _range_factor_scale_format_value_cb(self, scale, value):
-        return "%.1fx" % value
-        
     def _average_angle_clicked_cb(self,button):
         inkmode, node_idx = self.target
         if inkmode:
@@ -2092,4 +2020,26 @@ class OptionsPresenter_ExInking (object):
                 # To LineModeCurveWidget,
                 # we can access control points as "points" attribute.
                 inkmode.apply_pressure_from_curve_widget()
+
+    def _autoapply_radio_toggled_cb(self, button):
+        inkmode, node_idx = self.target
+        if inkmode:
+            radios = self._autoapply_radios
+            assert button in radios
+            print(button)
+            if button.get_active():
+                value = radios[button]
+                inkmode.set_autoapply(value)
+                prefs = self._app.preferences
+                prefs[_Prefs.AUTOAPPLY_PREF] = value
+
+    def _autoapply_threshold_adj_value_changed_cb(self, adj):
+        inkmode, node_idx = self.target
+        if inkmode:
+            inkmode.set_autoapply_threshold(adj.get_value())
+            prefs[_Prefs.THRESHOLD_PREF] = adj.get_value()
+
+
+
+
 

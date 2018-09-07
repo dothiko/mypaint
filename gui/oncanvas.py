@@ -78,6 +78,9 @@ class PhaseMixin:
     ADJUST_POS = 2  # The phase of adjusting node position.
                     # this is common for all oncanvas class.
     ACTION = 3  # Action button or something.
+    ADJUST_ITEM = 4 # Adjusting item attributes, such as pressure.
+
+    MAX_PHASE = 4 # For derived enumeration class.
 
     CHANGE_PHASE = -1 # Changing phase - bypassing other phases
 
@@ -113,6 +116,7 @@ class ActionButtonMixin:
     ACCEPT=0
     REJECT=1
 
+
 class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                         gui.mode.DragMode):
     """ Mixin for modes which have on-canvas node editing ability.
@@ -129,18 +133,15 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     And `cancel()` discards current editing.
     """
 
-
     ## Metadata properties
     pointer_behavior = gui.mode.Behavior.PAINT_FREEHAND
     scroll_behavior = gui.mode.Behavior.CHANGE_VIEW
-
 
     ## Metadata methods
 
     @property
     def inactive_cursor(self):
         return None
-
  
     ## Override action
     #
@@ -164,7 +165,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             cls.permitted_switch_actions = cls._enable_switch_actions
         else:
             cls.permitted_switch_actions = cls._disable_switch_actions
- 
 
     ## Class config vars
 
@@ -237,7 +237,9 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         self.target_node_index = None  #: Node that's prelit
         self._overlays = {}  # keyed by tdw
         self.nodes = []
+        self._node_dragged = False
         self._reset_adjust_data()
+
         self._task_queue = collections.deque()  # (cb, args, kwargs)
         self._task_queue_runner_id = None
         self._current_override_cursor = None
@@ -264,7 +266,9 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 
         #+ Current button information
         self.current_button_id = None # id of focused button
-        self._clicked_buttn_id = None  # id of clicked button
+        self._clicked_button_id = None  # id of clicked button
+
+
  
     def _reset_capture_data(self):
         # XXX To be obsoluted, almost same as _reset_nodes()
@@ -291,28 +295,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 
         self.subphase = None
  
- 
-   #def _reset_selected_nodes(self, initial_idx=None):
-   #    """ Resets selected_nodes list and assign
-   #    initial index,if needed.
-   #
-   #    :param initial_idx: initial node index.in most case,
-   #                        node will manipurate by solo.
-   #                        it might be inefficient to
-   #                        generate list each time s solo node
-   #                        is moved,so use this parameter in such case.
-   #    """
-   #
-   #    if initial_idx == None:
-   #        if len(self.selected_nodes) > 0:
-   #            self.selected_nodes=[]
-   #    elif len(self.selected_nodes) == 0:
-   #        self.selected_nodes.append(initial_idx)
-   #    elif len(self.selected_nodes) == 1:
-   #        self.selected_nodes[0] = initial_idx
-   #    else:
-   #        self.selected_nodes = [initial_idx, ]
- 
     def _is_active(self):
         """ To know whether this mode is active or not. 
         """
@@ -329,15 +311,15 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         return self.phase in (PhaseMixin.ADJUST,
                               PhaseMixin.ADJUST_POS)
 
-    ## Buttons property 
+    ## Action buttons property 
     
-    buttons = {
-        ActionButtonMixin.ACCEPT : ('mypaint-ok-symbolic', 
-            'accept_button_cb'), 
-        ActionButtonMixin.REJECT : ('mypaint-trash-symbolic', 
-            'reject_button_cb') 
-    }
-
+    # You should write below class attribute in derived class.
+   #buttons = {
+   #    ActionButtonMixin.ACCEPT : ('mypaint-ok-symbolic', 
+   #        'accept_button_cb'), 
+   #    ActionButtonMixin.REJECT : ('mypaint-trash-symbolic', 
+   #        'reject_button_cb') 
+   #}
  
     ## Overlay related
 
@@ -361,7 +343,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         in child class.
         """
         pass
- 
 
     ##  Option presenter related
     @property
@@ -696,10 +677,11 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 # current_button_id is the 'focused' button,
                 # not pressed.
                 self._clicked_button_id = self.current_button_id
+                self._returning_phase = self.phase
                 self.phase = PhaseMixin.ACTION
-
                 return False
-        elif self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
+
+        elif self.is_adjusting_phase():
 
             if (self.phase == PhaseMixin.CAPTURE
                 and self.zone == EditZoneMixin.EMPTY_CANVAS):
@@ -709,7 +691,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 # clicked a node.
                 mx, my = tdw.display_to_model(event.x, event.y)
                 self.drag_offset.start(mx, my)
-                self.phase = PhaseMixin.ADJUST_POS
                 
                 targidx = self.target_node_index
                 if ctrl_state:
@@ -723,7 +704,11 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                     # should be cleared.
                     self.select_node(targidx ,targidx)
 
-
+                # You can bypass default behavior when
+                # node_press_cb returns True
+                if not self.node_press_cb(tdw, event):
+                    if self.phase == PhaseMixin.ADJUST:
+                        self.phase = PhaseMixin.ADJUST_POS
             else:
                 pass
 
@@ -753,26 +738,32 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             if self.phase == PhaseMixin.ACTION:
                 assert self._button_down >= 1
                 assert self._clicked_button_id != None
+                self.phase = self._returning_phase
                 self._call_action_button(self._clicked_button_id, tdw)
                 # Inside action button handler, self.phase would be set as 
                 # PhaseMixin.CAPTURE in many case
                 # (by calling _start_new_capture_phase).
                 # But, it is not mandatory.Some action button might
                 # do something without changing phase.
+                # Anyway, you must set 
                 self._clicked_button_id = None
                 self._update_zone_and_target(tdw, event.x, event.y)
-                self.phase = PhaseMixin.CAPTURE
                 return False  # NO `drag_stop_cb` activated.
 
             elif self.phase == PhaseMixin.CHANGE_PHASE:
                 self.phase = self._returning_phase
 
-            elif self.mode_button_release_cb(tdw, event):
-                # mode_button_release_cb returned True
-                # so bypass supercall
-                # CAUTION: bypassing supercalling button_release_cb
-                # is NOT RECOMMENDED, annoying subeffect might happen.
-                return False  
+            else:
+
+                if self.target_node_index >= 0:
+                    self.node_release_cb(tdw, event)
+
+                if self.mode_button_release_cb(tdw, event):
+                    # mode_button_release_cb returned True
+                    # so bypass supercall
+                    # CAUTION: bypassing supercalling button_release_cb
+                    # is NOT RECOMMENDED, annoying subeffect might happen.
+                    return False  
 
             # Supercall: stop current drag
             return super(OncanvasEditMixin, self).button_release_cb(tdw, event)
@@ -783,7 +774,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 
     def mode_button_release_cb(self, tdw, event):
         pass
-
  
     ## Drag handling (both capture and adjust phases)
     # 
@@ -832,6 +822,20 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         You MUST reset cursor if change it.
         """
         pass
+    
+    def node_press_cb(self, tdw, event):
+        """A node is pressed with pointing device.
+        You can access that node by self.target_node_index
+        This callback is called prior to node_drag_start_cb.
+        """
+        pass
+
+    def node_release_cb(self, tdw, event):
+        """A node is released from pointing device.
+        You can access that node by self.target_node_index
+        This callback is called prior to node_drag_end_cb.
+        """
+        pass
  
     def node_drag_start_cb(self, tdw, event):
         """ User starts dragging the selected node(s) right now.
@@ -861,7 +865,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 
                 self._queue_redraw_item()
 
- 
     def node_drag_stop_cb(self, tdw):
         """ User ends dragging the selected node(s).
         The deriving class should add(or manipulate)
@@ -881,7 +884,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 if dx != 0 or dy != 0:
                     for i in self.selected_nodes:
                         cn = self.nodes[i]
-                        self.nodes[i] = cn._replace(x=cn.x+dx, y=cn.y+dy)
+                        self.set_node_pos(cn.x+dx, cn.y+dy)
  
                 self.drag_offset.reset()
 
@@ -901,10 +904,18 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         :param dy: y delta value of scroll wheel.
         """
         pass
- 
+
+    def set_node_pressure(self, idx, pressure):
+        """Proxy method for setting node pressure.
+        """
+        pass
+
+    def set_node_pos(self, idx, x, y):
+        """Proxy method for setting node position.
+        """
+        pass
  
     ## Interrogating events
- 
  
     def _get_event_pressure(self, event):
         # FIXME: CODE DUPLICATION: copied from freehand.py
@@ -1024,7 +1035,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         else:
             self.current_node_index = idx
 
-
     def _update_current_node_index(self):
         """Updates current_node_index from target_node_index & redraw"""
         new_index = self.target_node_index
@@ -1049,7 +1059,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     @lib.observable.event
     def current_node_changed(self, index):
         """Event: current_node_index was changed"""
- 
 
     def get_node_dtime(self, i):
         if not (0 < i < len(self.nodes)):
@@ -1070,7 +1079,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             n = nodes[j]
             new_time = n.time + dtime - old_dtime
             self.update_node(j, time=new_time)
-
  
     def can_insert_node(self, i):
         return 0 <= i < len(self.nodes)-1
@@ -1092,7 +1100,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 
             if not self._hide_nodes:
                 self._queue_redraw_all_nodes()
-
 
     def update_node(self, i, **kwargs):
         """Updates properties of a node, and redraws it.
@@ -1125,7 +1132,9 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         to change phase detection behavior.
         """
         return (len(self.nodes) > 0 and 
-                self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST))
+                self.phase in (PhaseMixin.CAPTURE, 
+                               PhaseMixin.ADJUST, 
+                               PhaseMixin.ADJUST_ITEM))
 
     def _call_action_button(self, id, tdw):
         """ Call action button, from id (i.e. _ActionButton constants)
@@ -1145,16 +1154,15 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
             print(str(e))
 
 
-
-
-
 class PressPhase(PhaseMixin):
-    ADJUST_PRESSURE = 4
-    ADJUST_PRESSURE_ONESHOT = 5
-    INSERT_NODE = 6         #: Inserting node phase, with clicking on stroke,
-                            #  a node inserted at the point of stroke.
-                            #  this phase is one-shot, immidiately return to 
-                            #  _Phase.ADJUST.
+    ADJUST_PRESSURE = PhaseMixin.MAX_PHASE + 1
+    ADJUST_PRESSURE_ONESHOT = PhaseMixin.MAX_PHASE + 2
+
+    #: Inserting node phase, with clicking on stroke,
+    #  a node inserted at the point of stroke.
+    #  this phase is one-shot, immidiately return to 
+    #  _Phase.ADJUST.
+    INSERT_NODE = PhaseMixin.MAX_PHASE + 3
 
 class PressureEditableMixin(OncanvasEditMixin,
                             gui.mode.BrushworkModeMixin):
@@ -1206,7 +1214,7 @@ class PressureEditableMixin(OncanvasEditMixin,
     def mode_button_press_cb(self, tdw, event):
         if self.is_adjusting_phase():
             button = event.button
-            if self.phase != PressPhase.ADJUST_PRESSURE:
+            if not self.is_pressure_modifying(): #self.phase != PressPhase.ADJUST_PRESSURE:
 
                 cls = self.__class__
 
@@ -1218,9 +1226,6 @@ class PressureEditableMixin(OncanvasEditMixin,
                         
                             self.phase = PressPhase.ADJUST_PRESSURE_ONESHOT
                             # Fallthrough
-                        else:
-                            assert self.phase == PressPhase.ADJUST_POS 
-
             
                 # FALLTHRU: *do* start a drag
         else:
@@ -1242,12 +1247,13 @@ class PressureEditableMixin(OncanvasEditMixin,
         else:
             super(PressureEditableMixin, self).mode_button_press_cb(tdw, event)
 
-
     def node_drag_start_cb(self, tdw, event):
-        if self.phase == PressPhase.ADJUST_PRESSURE_ONESHOT:
-                self._queue_draw_selected_nodes(tdw)
-        elif self.phase == PressPhase.ADJUST_PRESSURE:
-                self._queue_redraw_all_nodes()
+        if self.is_pressure_modifying():
+            self._node_dragged = True
+            if self.phase == PressPhase.ADJUST_PRESSURE_ONESHOT:
+                    self._queue_draw_selected_nodes(tdw)
+            elif self.phase == PressPhase.ADJUST_PRESSURE:
+                    self._queue_redraw_all_nodes()
         elif self.phase == PressPhase.CAPTURE:
             # Update options_presenter when capture phase end
             self.options_presenter.target = (self, None)
@@ -1255,14 +1261,11 @@ class PressureEditableMixin(OncanvasEditMixin,
             super(PressureEditableMixin, self).node_drag_start_cb(tdw, event)
 
     def node_drag_update_cb(self, tdw, event, dx, dy):
-        if self.phase in (PressPhase.ADJUST_PRESSURE_ONESHOT,
-                PressPhase.ADJUST_PRESSURE):
-            self._node_dragged = True
+        if self.is_pressure_modifying():
             self._adjust_pressure_with_motion(dx, dy)
         else:
             super(PressureEditableMixin, self).node_drag_update_cb(tdw, 
                     event, dx, dy)
-
                 
     def node_drag_stop_cb(self, tdw):
         if self.is_pressure_modifying():
@@ -1279,7 +1282,6 @@ class PressureEditableMixin(OncanvasEditMixin,
                 self._queue_draw_buttons()
         else:
             super(PressureEditableMixin, self).node_drag_stop_cb(tdw)
-
 
     def node_scroll_cb(self, tdw, dx, dy):
         """Handles scroll-wheel events, to adjust pressure.
@@ -1300,7 +1302,7 @@ class PressureEditableMixin(OncanvasEditMixin,
                 new_pressure += dy
 
                 if new_pressure != node.pressure:
-                    self.nodes[idx]=node._replace(pressure=new_pressure)
+                    self.set_node_pressure(idx, new_pressure)
 
                 if idx == self.target_node_index:
                     self.options_presenter.target = (self, self.target_node_index)
@@ -1334,16 +1336,18 @@ class PressureEditableMixin(OncanvasEditMixin,
                 diff *= -1
 
             if len(self.selected_nodes) == 0:
+                if self.target_node_index is None:
+                    return
                 targets = (self.target_node_index, )
             else:
                 targets = self.selected_nodes
 
             for i in targets:
-                if i != None:
-                    cn = self.nodes[i]
-                    self.nodes[i] = \
-                            cn._replace(pressure = lib.helpers.clamp(
-                                cn.pressure + diff,0.0, 1.0))
+                cn = self.nodes[i]
+                self.set_node_pressure(
+                    i,
+                    lib.helpers.clamp(cn.pressure+diff, 0.0, 1.0)
+                )
 
         self._queue_redraw_item()
 
@@ -1381,20 +1385,14 @@ class PressureEditableMixin(OncanvasEditMixin,
 
         node_length.append(total_length) # this is sentinel
 
-
-
         # use control handle class temporary to get smooth pressures.
         cur_length = 0.0
-        new_nodes=[]
         for idx,cn in enumerate(self.nodes):
             val = curve.get_pressure_value(cur_length / total_length)
-            new_nodes.append(cn._replace(pressure=val)) 
+            self.set_node_pressure(idx, val)
             cur_length += node_length[idx]
 
-        self.nodes = new_nodes
-
         self._queue_redraw_item()
-
 
     def enter_pressure_phase(self):
         """ To enter/force pressure editing phase
@@ -1483,7 +1481,6 @@ class PressureEditableMixin(OncanvasEditMixin,
                 model.command_stack.remove_command(self._pending_cmd)
                 self._pending_cmd = None
             model.do(cmd)
-
 
     def undo_nodes_cb(self, cmd, nodes, sshot_before):
         """ called from lib.command.Nodework.undo().
@@ -1598,7 +1595,10 @@ class HandleNodeUserMixin(NodeUserMixin):
         Python Multiple inheritance cannot override methods of OncanvasEditMixin
         with this mixin.
         """
-        if tdw==None:
+        if i is None:
+            return # Nothing to be drawn
+
+        if tdw is None:
             for tdw in self._overlays:
                 self._queue_draw_handle_node(tdw, i, offsets)
             return
@@ -1625,11 +1625,6 @@ class HandleNodeUserMixin(NodeUserMixin):
         radius = self.NODE_SIZE / 2 + 1
         dx = dy = 0
 
-       #if i in self.selected_nodes:
-       #    if offsets == None:
-       #        dx, dy = self.drag_offset.get_model_offset()
-       #    else:
-       #        dx, dy = offsets
         if offsets is not None:
             dx, dy = offsets
 
@@ -1649,13 +1644,9 @@ class HandleNodeUserMixin(NodeUserMixin):
                         gui.style.DRAGGABLE_POINT_HANDLE_SIZE+1,
                         area)
 
-       #print("queue area")
-       #print("%d:%.4f, %.4f" % (i, area[0], area[1]))
-
         tdw.queue_draw_area(area[0], area[1], 
                 area[2] - area[0] + 1, 
                 area[3] - area[1] + 1)
-
 
     def is_drawn_handle(self, node_idx, hndl_idx):
         return ((hndl_idx == 0 and node_idx > 0) or 
@@ -1758,110 +1749,12 @@ class OverlayOncanvasMixin(gui.overlays.Overlay):
         pass
 
 ## Recallable on-canvas nodes mixin
-#  And related classes.
-
-class StrokeHistory(object):
-    """ Stroke History class.this is singleton,stored as 
-    class attribute of RecallableNodeMixin.
-
-    This class HAS a Gtk.ListStore.This class itself is not
-    derived class of Gtk.ListStore.
-    """
-    def __init__(self, maxcount):
-        self._max = maxcount
-        self._node_store = Gtk.ListStore(str,object)
-        self._node_store.append( ('------', None) )
-        
-    def register(self, nodes):
-        lt = time.localtime()
-        timestr = '%02d:%02d:%02d-%d' % (lt.tm_hour, lt.tm_min,
-                lt.tm_sec, len(nodes))
-        self._node_store.insert(1, (timestr, nodes))
-        if len(self._node_store) > self._max:
-            del self._node_store[self._max - 1]
-
-    @property
-    def liststore(self):
-        return self._node_store
-
-    def get_and_place_nodes(self, idx, x, y):
-        """ Generate a copy of stroke from internal list 
-        And place/move it to assigned location(x,y),if needed.
-        This method would be called from RecallableNodeMixin.
-
-        :param idx: the REVERSED index(most recent one is 0) of nodes.
-        :param x,y: replacing location.this might be None.
-        """
-        assert 1 <= idx < len(self._node_store)
-        src = self._node_store[idx][1]
-        assert len(src) > 0
-
-        fn = src[0] 
-        if x is not None and y is not None:
-            x = -fn.x + x
-            y = -fn.y + y
-        else:
-            x = 0
-            y = 0
-
-        ret = []
-        for cn in src:
-
-            if hasattr(cn, 'copy'):
-                # It would be a dedicated node class.
-                new_node = cn.copy(x, y)
-            elif hasattr(cn, '_replace'):
-                # This should be collection.namedtuple node
-                new_node = cn._replace(x=cn.x+dx, y=cn.y+dy) 
-
-            ret.append(new_node)
-
-        return ret
         
 class RecallableNodeMixin(object):
     """Node recall feature, which is to record nodes position
     when final rendering a oncanvas-editing item, and later, 
     we can recall node and re-edit it from that records.
     """
-
-    stroke_history = StrokeHistory(6) # Stroke history.
-                                      # This is class attribute, 
-                                      # to save memory.
-    def _init_recall(self):
-        self._stroke_from_history = False
-
-    def inject_nodes(self, nodes):
-        """Inject nodes list from outside
-        """
-        self._queue_draw_buttons()
-        self._queue_redraw_all_nodes()
-        self._queue_redraw_item()
-
-        self.nodes = nodes
-
-        self._queue_redraw_item()
-        self._queue_redraw_all_nodes()
-        self._queue_draw_buttons()
-        self.phase = PhaseMixin.ADJUST
-
-    def recall_nodes(self, idx):
-        """ Recall editing nodes from history
-
-        CAUTION: This method reset the user class phase
-        into PhaseMixin.ADJUST.
-
-        :param idx: The index of liststore item.
-        """
-        if 0 < idx < len(self.stroke_history.liststore):
-            x = y = None
-            if len(self.nodes) > 0:
-                x = self.nodes[0].x
-                y = self.nodes[0].y
-
-            nodes = self.stroke_history.get_and_place_nodes(
-                idx, x, y
-            )
-            self.inject_nodes(nodes)
 
     # XXX for `node pick`
     def _restore_nodes_from_stroke_info(self, si, node_type_id): 
@@ -1895,28 +1788,3 @@ class RecallableNodeMixin(object):
         return raw_nodes
     # XXX for `node pick` end
 
-class RecallableNodePresnterMixin(object):
-    """Options presenter mixin for node recallable mixin
-
-    This mixin needs 'self._updating_ui' attributes, to show whether
-    user class is updating/creating user interface.
-    """
-
-    def create_recall_combobox(self, builder, name, cls):
-        """
-        :param cls: metaclass object which uses RecallableNodeMixin
-        """
-        combo = builder.get_object(name)
-        combo.set_model(cls.stroke_history.liststore)
-        cell = Gtk.CellRendererText()
-        combo.pack_start(cell,True)
-        combo.add_attribute(cell,'text',0)
-        self._stroke_history_combo = combo
-
-    def stroke_history_combobox_changed_cb(self, widget):
-        if self._updating_ui:
-            return
-        mode, node_idx = self.target
-        if mode:
-            mode.recall_nodes(self._stroke_history_combo.get_active())
-    

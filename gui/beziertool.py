@@ -41,7 +41,6 @@ from gui.oncanvas import *
 
 ## Function defs
 
-
 def detect_on_stroke(nodes, x, y, allow_distance = 4.0):
     """Detecting pressed point is on the stroke currently editing.
     To share this code between other modules, this is implemented
@@ -79,8 +78,6 @@ def detect_on_stroke(nodes, x, y, allow_distance = 4.0):
             i+=1
 
         return x # try any of x
-
-
 
     for i,cn in enumerate(nodes[:-1]):
         # Get boundary rectangle,to reduce processing segment
@@ -287,14 +284,14 @@ class _Node_Bezier (object):
         assert 0 <= idx <= 1
         return self._control_handles[idx]
 
-    def _replace(self, **kwarg):
-        ox = self.x
-        oy = self.y
-        for ck in kwarg:
-            if ck in self.__dict__:
-                self.__dict__[ck] = kwarg[ck]
-        self._refresh_control_handles(ox, oy, self.x, self.y)
-        return self
+   #def _replace(self, **kwarg):
+   #    ox = self.x
+   #    oy = self.y
+   #    for ck in kwarg:
+   #        if ck in self.__dict__:
+   #            self.__dict__[ck] = kwarg[ck]
+   #    self._refresh_control_handles(ox, oy, self.x, self.y)
+   #    return self
 
     def _refresh_control_handles(self, ox, oy, nx, ny):
         """ refresh control-handle position,when node position changed.
@@ -387,8 +384,10 @@ class _Phase(PressPhase):
     CALL_BUTTONS = 106      #: show action buttons around the clicked point. 
 
 
-_ActionButton = ActionButtonMixin
-
+class _ActionButton(ActionButtonMixin):
+    """Enumeration for the action button of ExInkingMode
+    """
+    EDIT=2 # To toggle editing node-pressure phase.
 
 class _Prefname:
     """Constants of the keys for app.preferences.
@@ -415,9 +414,6 @@ class PressureMap(object):
     def get_pressure(self, step):
         return self.curve_widget.get_pressure_value(step)
 
-        
-
-
 
 class BezierMode (PressureEditableMixin,
                   HandleNodeUserMixin,
@@ -434,7 +430,6 @@ class BezierMode (PressureEditableMixin,
 
     def get_usage(self):
         return _(u"Draw, and then adjust smooth lines with bezier curve")
-
 
     @property
     def active_cursor(self):
@@ -457,16 +452,23 @@ class BezierMode (PressureEditableMixin,
         # Such phase will need to setup at self.update_cursor_cb()
         return None  
 
+    ## Action buttons
+    buttons = {
+        ActionButtonMixin.ACCEPT : ('mypaint-ok-symbolic', 
+            'accept_button_cb'), 
+        _ActionButton.REJECT : ('mypaint-trash-symbolic', 
+            'reject_button_cb'),
+        _ActionButton.EDIT : ('mypaint-edit-symbolic', 
+            'edit_button_cb') 
+    }
+
+    ## Phase related
     @property
     def phase(self):
         return self._phase
 
     @phase.setter
     def phase(self, new_phase):
-       #if new_phase == _Phase.ADJUST:
-       #    self.enable_switch_actions(True)
-       #else:
-       #    self.enable_switch_actions(False)
         self._phase = new_phase
 
     def enter_insert_node_phase(self):
@@ -485,18 +487,25 @@ class BezierMode (PressureEditableMixin,
         else:
             self.app.show_transient_message(_("There is no stroke.Cannot enter insert phase."))
 
-    def is_editing_phase(self):
-        return self.phase in (_Phase.ADJUST,
-                              _Phase.ADJUST_POS,
-                              _Phase.ADJUST_PRESSURE,
-                              _Phase.ADJUST_HANDLE)
+   #def is_editing_phase(self):
+   #    return self.phase in (_Phase.ADJUST,
+   #                          _Phase.ADJUST_POS,
+   #                          _Phase.ADJUST_PRESSURE,
+   #                          _Phase.ADJUST_HANDLE,
+   #                          _Phase.ADJUST_ITEM)
 
     def is_adjusting_phase(self):
         return self.phase in (_Phase.ADJUST,
                               _Phase.ADJUST_POS,
                               _Phase.ADJUST_PRESSURE,
                               _Phase.ADJUST_PRESSURE_ONESHOT,
-                              _Phase.ADJUST_HANDLE)
+                              _Phase.ADJUST_HANDLE,
+                              _Phase.ADJUST_ITEM)
+
+    def is_pressure_modifying(self):
+        return self.phase in (_Phase.ADJUST_PRESSURE,
+                              _Phase.ADJUST_PRESSURE_ONESHOT,
+                              _Phase.ADJUST_ITEM)
 
     @classmethod
     def set_default_dtime(cls, new_dtime):
@@ -524,7 +533,6 @@ class BezierMode (PressureEditableMixin,
             gui.cursor.Name.ADD,
         )
 
-
     ## Class config vars
 
     DRAFT_STEP = 0.01 # Draft(Editing) Bezier curve stroke step.
@@ -536,22 +544,19 @@ class BezierMode (PressureEditableMixin,
 
     _DEFAULT_DTIME = 0.5 # default dtime value
 
-
     DEFAULT_POINT_CORNER = False       # default point is curve,not corner
 
     INITIAL_NODE_HANDLE_RANGE = (1, ) # Overriding HandleNodeUserMixin class attr
                                       # to Ignore the first control handle
-
     ## Other class vars
 
     _PRESSURE_MAP = None #: Pressure mapping object singleton
-
 
     ## Initialization & lifecycle methods
 
     def __init__(self, **kwargs):
         super(BezierMode, self).__init__(**kwargs)
-        self._init_recall()
+       #self._init_recall()
         self.forced_button_pos = None
 
     def _reset_capture_data(self):
@@ -573,9 +578,6 @@ class BezierMode (PressureEditableMixin,
     
     def _generate_overlay(self, tdw):
         return OverlayBezier(self, tdw)
-
-    ## Properties
-
 
     ## Options presenter
     def _generate_presenter(self):
@@ -616,12 +618,12 @@ class BezierMode (PressureEditableMixin,
         if self.phase == _Phase.INSERT_NODE:
             self._update_cursor(tdw) 
 
-
     def update_cursor_cb(self, tdw): 
         """  Update the cursor for not dragging mode.
         """
         cursor = None
-        if self.is_editing_phase():
+       #if self.is_editing_phase():
+        if self.is_adjusting_phase():
             if self.zone != _EditZone.EMPTY_CANVAS: # assume button
                 cursor = self._arrow_cursor
             else:
@@ -631,13 +633,9 @@ class BezierMode (PressureEditableMixin,
 
         return cursor
 
-
     def _start_new_capture_phase(self, rollback=False):
         super(BezierMode, self)._start_new_capture_phase(rollback)
-        self._stroke_from_history = False
-        self.options_presenter.reset_stroke_history()
         self.forced_button_pos = None
-
 
     ## Redraws
     def _queue_draw_node(self, tdw, i, offsets=None):
@@ -675,7 +673,6 @@ class BezierMode (PressureEditableMixin,
                 )
         else:
             self._queue_redraw_item()
-
 
     def _queue_redraw_item(self, step = 0.05, pressure_obj=None):
         """Redraws the entire curve on all known view TDWs
@@ -733,7 +730,6 @@ class BezierMode (PressureEditableMixin,
         the 'pressure variation mapping' feature disabled.
         """
         
-        
         cur_step = 0.0
         xtilt = 0.0
         ytilt = 0.0
@@ -769,7 +765,6 @@ class BezierMode (PressureEditableMixin,
                p0.y + o0[1], p1.y + o0[1], 
                p2.y + o3[1], p3.y + o3[1], cur_step)
 
-
             if pressure_src and internode_steps:
                 pressure_map = pressure_src.get_pressure(
                         gui.drawutils.linear_interpolation(
@@ -802,10 +797,7 @@ class BezierMode (PressureEditableMixin,
 
         draw_single_segment(1.0) # Ensure draw the last segment          
 
-
-
     ### Event handling
-
 
     ## Raw event handling (prelight & zone selection in adjust phase)
     def mode_button_press_cb(self, tdw, event):
@@ -862,9 +854,6 @@ class BezierMode (PressureEditableMixin,
 
                 self._divide_bezier(*pressed_segment)
 
-                # queue new node here.
-               #self._queue_draw_node(pressed_segment[0] + 1)
-                
                 self._bypass_phase(_Phase.ADJUST)
                 self.app.show_transient_message(_("Create a new node on stroke"))
                 return True # Cancel drag event
@@ -874,10 +863,6 @@ class BezierMode (PressureEditableMixin,
         # Supercall : inside inherited class, basic operation (such as
         # moving nodes) would be done.
         return super(BezierMode, self).mode_button_press_cb(tdw, event) 
-
-   #def mode_button_release_cb(self, tdw, event):
-   # does currently nothing special for this class, exactly same as base mixin.
-   # so removed.
 
     ## Drag handling (both capture and adjust phases)
     def node_drag_start_cb(self, tdw, event):
@@ -920,9 +905,10 @@ class BezierMode (PressureEditableMixin,
         elif self.phase == _Phase.ADJUST_HANDLE:
             self._last_event_node = self.nodes[self.current_node_index]
             self.drag_offset.start(mx, my) # Same as new node added case.
+        elif self.phase == _Phase.ADJUST_ITEM:
+            self._queue_draw_selected_nodes(tdw)
         else:
             super(BezierMode, self).node_drag_start_cb(tdw, event)
-
 
     def node_drag_update_cb(self, tdw, event, dx, dy):
         mx, my = tdw.display_to_model(event.x, event.y)
@@ -950,7 +936,6 @@ class BezierMode (PressureEditableMixin,
                 self._queue_redraw_all_nodes()
                 if len(self.nodes) > 1:
                     self._queue_draw_buttons()
-                
             
         elif self.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
             node = self._last_event_node
@@ -993,13 +978,13 @@ class BezierMode (PressureEditableMixin,
             self._queue_draw_selected_nodes(tdw) 
             self.phase = _Phase.ADJUST
         elif self.phase in (_Phase.ADJUST_PRESSURE, 
-                            _Phase.ADJUST_PRESSURE_ONESHOT): 
+                            _Phase.ADJUST_PRESSURE_ONESHOT,
+                            _Phase.ADJUST_ITEM): 
             self._pressure_modified = True
+            self._queue_draw_buttons()
             super(BezierMode, self).node_drag_stop_cb(tdw)
         else:
             super(BezierMode, self).node_drag_stop_cb(tdw)
-
-
 
         # Common processing
         if self.current_node_index != None:
@@ -1022,9 +1007,16 @@ class BezierMode (PressureEditableMixin,
             dtime=self._DEFAULT_DTIME,
             )
 
-
     ## Node editing
+    def set_node_pressure(self, idx, pressure):
+        assert idx < len(self.nodes)
+        self.nodes[idx].pressure=pressure
 
+    def set_node_pos(self, idx, x, y):
+        assert idx < len(self.nodes)
+        cn = self.nodes[idx]
+        cn.x = x
+        cn.y = y
 
     @property
     def pressure_map(self):
@@ -1042,7 +1034,6 @@ class BezierMode (PressureEditableMixin,
         assert index < len(self.nodes)-1
         cn = self.nodes[index]
         nn = self.nodes[index+1]
-        
 
         xa, xb, xc=gui.drawutils.get_cubic_bezier_raw(
                 cn.x, cn.get_control_handle(1).x,
@@ -1055,7 +1046,6 @@ class BezierMode (PressureEditableMixin,
 
         xd, xe=gui.drawutils.get_bezier_raw(xa, xb, xc, step)
         yd, ye=gui.drawutils.get_bezier_raw(ya, yb, yc, step)
-
 
         # The nodes around a new node changed to 'not curve' node,
         # to retain original shape.
@@ -1075,7 +1065,6 @@ class BezierMode (PressureEditableMixin,
 
         nn.curve = False
         nn.set_control_handle(0, xc, yc, False)
-
 
     def can_delete_node(self, idx):
         """ differed from InkingMode,
@@ -1125,13 +1114,8 @@ class BezierMode (PressureEditableMixin,
 
         # We need smooooth value, so treat the points
         # as Bezier-curve points.
-
-
         if len(self.nodes) < 2:
             return
-
-       #assert hasattr(self.options_presenter,'curve')
-       #curve = self.options_presenter.curve
 
         self._queue_redraw_item()
 
@@ -1141,7 +1125,6 @@ class BezierMode (PressureEditableMixin,
         node_length=[]
         total_length = 0.0
         initial_pressure = self.initial_pressure
-
         for idx, cn in enumerate(self.nodes[:-1]):
             nn = self.nodes[idx + 1]
             ox = gui.drawutils.get_cubic_bezier(
@@ -1179,7 +1162,6 @@ class BezierMode (PressureEditableMixin,
             cn.pressure = pressure
             cur_length += node_length[idx]
         self._queue_redraw_item()
-
 
     def delete_selected_nodes(self):
         """ Beziertool can delete any nodes...
@@ -1250,19 +1232,23 @@ class BezierMode (PressureEditableMixin,
         self._queue_draw_node(None, i)
         self._queue_redraw_item()
 
-
-        pass # placeholder, to be implemented in derived class.
-
     ## Action button handlers
 
     def accept_button_cb(self, tdw):
         if (len(self.nodes) > 1):
             self._queue_redraw_item(BezierMode.FINAL_STEP) # Redraw with hi-fidely curve
-            self.stroke_history.register(self.nodes)
             self._start_new_capture_phase(rollback=False)
 
     def reject_button_cb(self, tdw):
         self._start_new_capture_phase(rollback=True)
+
+    def edit_button_cb(self, tdw):
+        if self.phase != _Phase.ADJUST_ITEM:
+            self.phase = _Phase.ADJUST_ITEM
+        else:
+            self.phase = _Phase.ADJUST
+        self._queue_redraw_all_nodes()
+        self._queue_draw_buttons()
 
     # XXX for `node pick`
     ## Node pick
@@ -1320,7 +1306,7 @@ class OverlayBezier (OverlayOncanvasMixin):
         view_x0, view_y0 = alloc.x, alloc.y
         view_x1, view_y1 = view_x0+alloc.width, view_y0+alloc.height
         
-        def adjust_button_inside(cx, cy, radius):
+        def constrain_button(cx, cy, radius):
             if cx + radius > view_x1:
                 cx = view_x1 - radius
             elif cx - radius < view_x0:
@@ -1348,16 +1334,15 @@ class OverlayBezier (OverlayOncanvasMixin):
                 y = area_radius*math.cos(rad)
                 pos_list.append( (x + cx, - y + cy) )
 
-            self._button_pos[_ActionButton.ACCEPT] = \
-                    (pos_list[0][0], pos_list[0][1])
-            self._button_pos[_ActionButton.REJECT] = \
-                    (pos_list[1][0], pos_list[1][1])
+            ac_x, ac_y = pos_list[0][0], pos_list[0][1]
+            rj_x, rj_y = pos_list[1][0], pos_list[1][1]
         else:
-            # Usually, Bezier tool needs to keep extending control points.
+            # Usually, Bezier tool needs to keep extending control points
+            # to drawing(constructing) a stroke. 
             # So when buttons placed around the tail(newest) node, 
-            # it is something frastrating to manipulate new node...
-            # Thus,different to Inktool, place buttons around 
-            # the first(oldest) nodes.
+            # it is something frastrating to place new node...
+            # Thus,different from Inktool, place buttons around 
+            # the first(oldest) node of a stroke.
             
             node = nodes[0]
             cx, cy = self._tdw.model_to_display(node.x, node.y)
@@ -1380,16 +1365,31 @@ class OverlayBezier (OverlayOncanvasMixin):
                     vx = 0.0
                     vy = 1.0
 
-
                 # reverse vx, vy, to get right-angled position.
                 dx = vy * margin
                 dy = vx * margin
-            
-            self._button_pos[_ActionButton.ACCEPT] = \
-                    adjust_button_inside(cx + dx, cy - dy, button_radius * 1.5)
-            self._button_pos[_ActionButton.REJECT] = \
-                    adjust_button_inside(cx - dx, cy + dy, button_radius * 1.5)
 
+            ac_x, ac_y = cx + dx, cy - dy
+            rj_x, rj_y = cx - dx, cy + dy
+
+        margin = 2.0 * button_radius
+        ac_x, ac_y = constrain_button(ac_x, ac_y, margin)
+        rj_x, rj_y = constrain_button(rj_x, rj_y, margin)
+        self._button_pos[_ActionButton.ACCEPT] = (ac_x, ac_y)
+        self._button_pos[_ActionButton.REJECT] = (rj_x, rj_y)
+
+        # XXX Code duplication from exinktool.py
+        # `Edit button` placed at the center of the line between accept_button 
+        # to reject_button
+        l, nx, ny = length_and_normal(ac_x, ac_y, rj_x, rj_y)
+        ml = l / 2.0
+        bx = nx * ml 
+        by = ny * ml 
+
+        mx = -ny * margin + bx + ac_x 
+        my = nx * margin + by + ac_y
+        mx, my = constrain_button(mx, my, margin)
+        self._button_pos[_ActionButton.EDIT] = (mx, my)
         return True
 
     def paint_control_handle(self, cr, i, node, x, y, dx, dy, draw_line):
@@ -1424,7 +1424,6 @@ class OverlayBezier (OverlayOncanvasMixin):
                     cr.stroke()
 
         cr.restore()
-
     
     def paint(self, cr, draw_buttons=True):
         """Draw adjustable nodes to the screen"""
@@ -1432,8 +1431,7 @@ class OverlayBezier (OverlayOncanvasMixin):
         radius = gui.style.DRAGGABLE_POINT_HANDLE_SIZE
         alloc = self._tdw.get_allocation()
         dx, dy = mode.drag_offset.get_display_offset(self._tdw)
-        fill_flag = not mode.phase in (_Phase.ADJUST_PRESSURE,
-                _Phase.ADJUST_PRESSURE_ONESHOT)
+        fill_flag = not mode.is_pressure_modifying()
 
         for i, node, x, y in self._get_onscreen_nodes():
             show_node = not mode.hide_nodes
@@ -1445,12 +1443,12 @@ class OverlayBezier (OverlayOncanvasMixin):
                     _Phase.ADJUST_PRESSURE,
                     _Phase.ADJUST_PRESSURE_ONESHOT,
                     _Phase.ADJUST_HANDLE, 
-                    _Phase.INIT_HANDLE):
+                    _Phase.INIT_HANDLE,
+                    _Phase.ADJUST_ITEM):
                 if show_node:
                     if i == mode.current_node_index:
                         color = gui.style.ACTIVE_ITEM_COLOR
                         show_handle = True                 
-                                  
                     elif i == mode.target_node_index:
                         color = gui.style.PRELIT_ITEM_COLOR
                     elif i in mode.selected_nodes:
@@ -1459,18 +1457,22 @@ class OverlayBezier (OverlayOncanvasMixin):
                 else:
                     if i == mode.current_node_index:
                         # Drawing control handle
-                        if (mode.zone == _EditZone.CONTROL_NODE and
-                                mode.current_node_handle != None):
+                        if (mode.zone == _EditZone.CONTROL_NODE
+                                and mode.current_node_handle != None):
                             show_node = True
                             color = gui.style.ACTIVE_ITEM_COLOR
                                   
                     # not 'elif' ... because target_node_index
-                    # and current_node_index maight be same.
+                    # and current_node_index might be same.
                     if i == mode.target_node_index:
                         show_node = True
                         show_handle = True
                         color = gui.style.PRELIT_ITEM_COLOR
 
+                # If current node is moving by drag...
+                # At here, we use color of node to check 
+                # whether the current node is target of editing or not. 
+                # If that color is not `normal`, that node should be moved.
                 if (color != gui.style.EDITABLE_ITEM_COLOR and
                         mode.phase in (_Phase.ADJUST_POS,
                                        _Phase.ADJUST)):
@@ -1487,22 +1489,15 @@ class OverlayBezier (OverlayOncanvasMixin):
                 if show_handle and fill_flag:
                     self.paint_control_handle(cr, i, node, 
                             x, y, dx, dy, True)
-                                    
-    
                 
         # Buttons
         if (draw_buttons and 
                 not mode.in_drag and len(self._mode.nodes) > 1):
             self._draw_mode_buttons(cr)
-        
-
-                
 
 
-class OptionsPresenter_Bezier (OptionsPresenter_ExInking,
-                               RecallableNodePresnterMixin):
+class OptionsPresenter_Bezier (OptionsPresenter_ExInking):
     """Presents UI for directly editing point values etc."""
-
 
     def __init__(self):
         super(OptionsPresenter_Bezier, self).__init__()
@@ -1543,11 +1538,6 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking,
             _Prefname.DEFAULT_DTIME, BezierMode._DEFAULT_DTIME))
         self._default_pressure_adj.set_value(self._app.preferences.get(
             _Prefname.INITIAL_PRESSURE, 1.0))
-
-        self.create_recall_combobox(builder,
-                                    'stroke_history_combobox',
-                                    BezierMode)
-
 
         base_grid = builder.get_object("points_editing_grid")
         self.init_linecurve_widget(0, base_grid)
@@ -1609,21 +1599,6 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking,
         self._check_curvepoint.set_active(flag)
         self._updating_ui = entering_updating_ui
 
-   #def set_default_values(self, dtime, pressure):
-   #    """ called from BezierMode object,
-   #    when default dtime or pressure changed.
-   #    """
-   #
-   #    # avoid cancelling other ongoing ui updating
-   #    entering_updating_ui = self._updating_ui
-   #
-   #    self._updating_ui = True
-   #    if dtime:
-   #        self._default_dtime_adj.set_value(dtime)
-   #    if pressure:
-   #        self._default_pressure_adj.set_value(pressure)
-   #    self._updating_ui = entering_updating_ui
-
     def set_checkbutton_curvepoint(self, flag):
         """ called from BezierMode object,
         when current node curve status changed.
@@ -1638,11 +1613,6 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking,
         self._check_curvepoint.set_active(flag)
         self._updating_ui = False
 
-    def reset_stroke_history(self):
-        self._updating_ui = True
-        self._stroke_history_combo.set_active(0)
-        self._updating_ui = False
-
     def checkbutton_curvepoint_toggled_cb(self, button):
         if self._updating_ui:
             return
@@ -1654,7 +1624,6 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking,
                 beziermode.nodes[node_idx].curve = button.get_active()
                 beziermode._queue_draw_node(None, node_idx) 
                 beziermode._queue_redraw_item()
-
 
     def _variation_preset_combo_changed_cb(self, widget):
         if self._updating_ui:
@@ -1675,6 +1644,5 @@ class OptionsPresenter_Bezier (OptionsPresenter_ExInking,
             return
         self._app.preferences[_Prefname.INITIAL_PRESSURE] = adj.get_value()
         BezierMode.set_initial_pressure(adj.get_value())
-    
 
     ## Other handlers are as implemented in superclass.  

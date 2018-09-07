@@ -49,7 +49,6 @@
       <menuitem action='FlipInkingMode'/>
       <menuitem action='FlipExInkingMode'/>
       <menuitem action='FlipBezierCurveMode'/>
-      <menuitem action='FlipPolyfillMode'/>
       <menuitem action='FlipFloodFillMode'/>
       <menuitem action='FlipStraightMode'/>
       <menuitem action='FlipSequenceMode'/>

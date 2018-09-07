@@ -326,30 +326,6 @@ Negative values mean leftwards tilts.</property>
           </packing>
         </child>
         <child>
-          <object class="GtkLabel" id="stroke_history_label">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="margin_top">4</property>
-            <property name="label" translatable="yes">Stroke History:</property>
-          </object>
-          <packing>
-            <property name="left_attach">0</property>
-            <property name="top_attach">4</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkComboBox" id="stroke_history_combobox">
-            <property name="visible">True</property>
-            <property name="can_focus">False</property>
-            <property name="margin_top">4</property>
-            <signal name="changed" handler="stroke_history_combobox_changed_cb" swapped="no"/>
-          </object>
-          <packing>
-            <property name="left_attach">1</property>
-            <property name="top_attach">4</property>
-          </packing>
-        </child>
-        <child>
           <placeholder/>
         </child>
         <child>

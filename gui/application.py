@@ -92,7 +92,6 @@ import gui.profiling
 # XXX Added experimental modules (and needed from them)
 import sizechangemode
 import beziertool
-import polyfilltool
 import inktool
 import stamptool
 import selectionmode
