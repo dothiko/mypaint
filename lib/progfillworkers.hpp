@@ -206,8 +206,22 @@ public:
             if ((stat & Flagtile::FILLED) || (stat & Flagtile::EMPTY)) {
                 return false;
             }
-            else if (targ->get_stat() & Flagtile::FILLED_AREA) {
-                _process_only_ridge(targ, sx, sy);
+            else if (stat & Flagtile::FILLED_AREA) {
+                uint8_t above = targ->get(m_level, 0, 0);
+                // FILLED_AREA means `filled with PIXEL_AREA 
+                // (all pixels are same and undecided) at level-0`
+                // But, at progressing stage, the highest pixels
+                // already decided.
+                // so, fill and completely decide it now (if needed).
+                switch(above) {
+                    case PIXEL_OUTSIDE:
+                    case PIXEL_FILLED:
+                        targ->fill(above);
+                        break;
+                    default:
+                        _process_only_ridge(targ, sx, sy);
+                        break;
+                }
                 end(targ);
                 return false;
             }
@@ -818,12 +832,6 @@ public:
     DecideOutsideWorker(FlagtileSurface *surf, const int level) 
         : FillWorker(surf, level) 
     {}
-
-    virtual bool start(Flagtile *tile) {
-        if (tile->get_stat() & Flagtile::EMPTY)
-            return false;
-        return true;
-    }
 
     virtual bool match(const uint8_t pix) {
         return pix == PIXEL_AREA;

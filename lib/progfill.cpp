@@ -401,7 +401,7 @@ Flagtile::_build_progress_level(const int targ_level)
                 }
             }
 
-            uint8_t new_pixel = 0;
+            uint8_t new_pixel = PIXEL_EMPTY;
 
             if (area_cnt > 0) {
                 // Set flag which means `there should be some area pixels.`
@@ -412,7 +412,7 @@ Flagtile::_build_progress_level(const int targ_level)
                 new_pixel = PIXEL_CONTOUR;
             }
 
-            if (new_pixel != 0) {
+            if (new_pixel != PIXEL_EMPTY) {
                 replace(
                     targ_level,
                     x, y,
@@ -432,11 +432,19 @@ Flagtile::build_progress_seed(const int max_level)
     assert(max_level >= 1);
     assert(max_level <= MAX_PROGRESS);
 #endif
-    if ((get_stat() & FILLED_AREA) || (get_stat() & FILLED) || (get_stat() & EMPTY))
+    if (get_stat() & EMPTY)
         return; // There is nothing to do for already filled or empty tile.
-        
-    for(int i=1;i <= max_level; i++) {
-        _build_progress_level(i);
+
+    // In this stage, only filled level-0 pixels, still not complete 
+    // full-pixel-fill against tile. so `make flag true`
+    if (get_stat() & FILLED_AREA)
+        fill(PIXEL_AREA);
+    else if (get_stat() & FILLED_AREA)
+        fill(PIXEL_FILLED);
+    else {
+        for(int i=1;i <= max_level; i++) {
+            _build_progress_level(i);
+        }
     }
 }
 

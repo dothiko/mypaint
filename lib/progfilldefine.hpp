@@ -162,7 +162,7 @@ protected:
     // use for a tile which is filled some specific value.
     void _process_only_ridge(Flagtile *targ, const int sx, const int sy)
     {
-        int ridge = PROGRESS_TILE_SIZE(m_level) - 1;
+        int ridge = PROGRESS_TILE_SIZE(m_level);
 
         for(int y=0;y < ridge;y+=ridge-1){
             for(int x=0;x < ridge;x++){
@@ -171,8 +171,8 @@ protected:
         }
 
         // Corner pixels are already processed at above loop.
-        for(int x=1;x < ridge-1;x+=ridge-2){
-            for(int y=0;y < ridge;y++){
+        for(int x=0;x < ridge;x+=ridge-1){
+            for(int y=1;y < ridge-1;y++){
                 step(targ, x, y, sx+x, sy+y);
             }
         }
