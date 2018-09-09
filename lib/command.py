@@ -535,8 +535,8 @@ class PickableStrokework(Brushwork):
 
     def __init__(self, doc, pickinfo, layer_path=None, description=None,
                  abrupt_start=False, layer=None, **kwds):
-        super(PickableStrokework,self).__init__(
-            doc, layer_path, description, abrupt_start, layer, kwds
+        super(PickableStrokework, self).__init__(
+            doc, layer_path, description, abrupt_start, layer, **kwds
         )
         self._pickinfo = pickinfo
 

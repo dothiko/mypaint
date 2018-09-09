@@ -407,8 +407,8 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
         self.__active_brushwork[model] = cmd
 
     ## Use node pick as ruler pick.
-    def _apply_info(self, info, offset): 
-        cx, cy = self._unpack_info(info)
+    def _apply_info(self, si, offset): 
+        cx, cy = self._unpack_info(si.get_info())
         if offset != (0, 0):
             dx, dy = offset
             cx += dx 

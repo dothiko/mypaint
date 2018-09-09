@@ -102,7 +102,7 @@ class StrokeLastableMixin(object):
 
 class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
                             StrokeLastableMixin,
-                            RecallableNodwMixin):
+                            pickable.PickableInfoMixin):
     """Freehand drawing mode with parallel ruler.
 
     """
@@ -562,9 +562,9 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
         self.__active_brushwork[model] = cmd
 
     ## Use node pick as ruler pick.
-    def _apply_info(self, info, offset): 
+    def _apply_info(self, si, offset): 
         ruler = self.ruler
-        sx, sy, ex, ey = self._unpack_info(info)
+        sx, sy, ex, ey = self._unpack_info(si.get_info())
         if offset != (0, 0):
             dx, dy = offset
             sx += dx 

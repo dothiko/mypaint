@@ -19,6 +19,7 @@ logger = getLogger(__name__)
 import array
 import time
 import struct # XXX for `node pick` 
+import zlib
 
 from gettext import gettext as _
 import gi
@@ -417,8 +418,7 @@ class PressureMap(object):
 
 
 class BezierMode (PressureEditableMixin,
-                  HandleNodeUserMixin,
-                  pickable.PickableInfoMixin):
+                  HandleNodeUserMixin):
 
     ## Metadata properties
     ACTION_NAME = "BezierCurveMode"
@@ -1246,10 +1246,10 @@ class BezierMode (PressureEditableMixin,
 
     # XXX for `info pick`
     ## Node pick
-    def _apply_info(self, info, offset):
+    def _apply_info(self, si, offset):
         """Apply nodes from compressed bytestring.
         """
-        nodes = self._unpack_info(info)
+        nodes = self._unpack_info(si.get_info())
 
         # Note: This clears offset data in StrokeNode.
         assert offset is not None
@@ -1259,8 +1259,7 @@ class BezierMode (PressureEditableMixin,
                 n.move(dx, dy, relative=True)
 
         self.inject_nodes(nodes)
-
-        self._erase_old_stroke()
+        self._erase_old_stroke(si)
 
     def _match_info(self, infotype):
         return infotype == pickable.Infotype.BEZIER

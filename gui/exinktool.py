@@ -26,6 +26,7 @@ import os.path
 from logging import getLogger
 logger = getLogger(__name__)
 import struct
+import zlib
 
 from gettext import gettext as _
 import gi
@@ -115,8 +116,7 @@ class _ActionButton(ActionButtonMixin):
 # _Node object is imported from original inktool.
 
 class ExInkingMode (PressureEditableMixin, 
-                    NodeUserMixin,
-                    pickable.PickableInfoMixin):
+                    NodeUserMixin):
     """Experimental Inking mode
     to test new feature.
     """
@@ -1158,10 +1158,10 @@ class ExInkingMode (PressureEditableMixin,
 
     # XXX for `info pick`
     ## Node pick
-    def _apply_info(self, info, offset):
+    def _apply_info(self, si, offset):
         """Apply nodes from compressed bytestring.
         """
-        nodes = self._unpack_info(info)
+        nodes = self._unpack_info(si.get_info())
         # Note: This clears offset data in StrokeNode.
         assert offset is not None
         if offset != (0, 0):
@@ -1171,7 +1171,7 @@ class ExInkingMode (PressureEditableMixin,
 
         self.inject_nodes(nodes)
 
-        self._erase_old_stroke()
+        self._erase_old_stroke(si)
 
     def _match_info(self, infotype):
         return infotype == pickable.Infotype.TUPLE

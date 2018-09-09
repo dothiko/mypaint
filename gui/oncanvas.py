@@ -40,7 +40,8 @@ import gui.curve
 import gui.widgets
 from gui.linemode import *
 import gui.ui_utils
-import lib.strokemap # XXX for `node pick`
+import lib.strokemap # XXX for `info pick`
+import gui.pickable as pickable # XXX for `info pick`
 
 ## Module constants
 
@@ -118,7 +119,8 @@ class ActionButtonMixin:
 
 
 class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
-                        gui.mode.DragMode):
+                        gui.mode.DragMode,
+                        pickable.PickableInfoMixin):
     """ Mixin for modes which have on-canvas node editing ability.
 
     Actually, to create new oncanvas editable mode,
@@ -1444,7 +1446,7 @@ class PressureEditableMixin(OncanvasEditMixin,
         cmd = lib.command.Nodework(
             model, layer_path,
             self.doc, 
-            self._pack_info(nodes), # XXX for info-pick
+            self._pack_info(), # XXX for info-pick
             self.__class__,
             override_sshot_before=self._sshot_before,
             description=description,
@@ -1533,6 +1535,38 @@ class PressureEditableMixin(OncanvasEditMixin,
         """
         raise NotImplementedError("You must implement _unpack_info")
 
+    def inject_nodes(self, nodes):
+        """Inject nodes list from outside
+        """
+        self._queue_draw_buttons()
+        self._queue_redraw_all_nodes()
+        self._queue_redraw_item()
+
+        self.nodes = nodes
+
+        self._queue_redraw_item()
+        self._queue_redraw_all_nodes()
+        self._queue_draw_buttons()
+        self.phase = PhaseMixin.ADJUST
+
+    def _erase_old_stroke(self, si):
+        """Utility method for tools which is node-based stroke.
+        This would be called from self._apply_info() of 
+        PickableInfoMixin
+        """
+
+        # Erase old strokemap,
+        # Because it is drawn right after nodes recovered!
+        # If we dont remove that strokemap, unused strokemap
+        # remained in surface.
+        model = self.doc.model
+        cl = model.layer_stack.current
+        si.remove_from_surface(cl._surface)
+        assert hasattr(cl, "remove_stroke_info")
+
+        # Also, Remove stroke-node information from layer. 
+        # Without this, re-edited stroke still exist as older shape.
+        cl.remove_stroke_info(si) 
     # XXX end for `info-pick`
 
 class NodeUserMixin(object):
@@ -1670,6 +1704,7 @@ class HandleNodeUserMixin(NodeUserMixin):
     def is_drawn_handle(self, node_idx, hndl_idx):
         return ((hndl_idx == 0 and node_idx > 0) or 
                 (hndl_idx == 1 and node_idx <= len(self.nodes)-1))
+
 
 
 class OverlayOncanvasMixin(gui.overlays.Overlay):

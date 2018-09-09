@@ -1,7 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
+# This file is part of MyPaint.
+# Copyright (C) 2018 by Dothiko <a.t.dothiko@gmail.com>
+# Most part of this file is transplanted from
+# original gui/inktool.py, re-organized it as Mixin.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
 
 import struct
+
+import lib.strokemap
 
 class Infotype:
     """Module constants, to recognize information type
@@ -44,24 +56,6 @@ class PickableInfoMixin(object):
     def _match_info(self, info_type_id):
         raise NotImplementedError("You must implement _apply_info")
 
-    def _erase_old_stroke(si):
-        """Utility method for tools which is node-based stroke.
-        This would be called from self._apply_info()
-        """
-
-        # Erase old strokemap,
-        # Because it is drawn right after nodes recovered!
-        # If we dont remove that strokemap, unused strokemap
-        # remained in surface.
-        model = self.doc.model
-        cl = model.layer_stack.current
-        si.remove_from_surface(cl._surface)
-        assert hasattr(cl, "remove_stroke_info")
-
-        # Also, Remove stroke-node information from layer. 
-        # Without this, re-edited stroke still exist as older shape.
-        cl.remove_stroke_info(si) 
-
     def restore_from_stroke_info(self, si): 
         """Restore nodes from stroke info(StrokeNode class).
         Almost same as ExperimentInktool, but Node class is different.
@@ -81,7 +75,7 @@ class PickableInfoMixin(object):
             return False
 
         with si.get_offset() as offset:
-            self._apply_info(si.get_info(), offset)
+            self._apply_info(si, offset)
 
         return True
 
