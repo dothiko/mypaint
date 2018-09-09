@@ -47,6 +47,7 @@ from gui.linemode import *
 import gui.ui_utils
 from gui.oncanvas import *
 from gui.inktool import _Node, _NODE_FIELDS
+import gui.pickable as pickable
 
 ## Module constants
 
@@ -115,7 +116,7 @@ class _ActionButton(ActionButtonMixin):
 
 class ExInkingMode (PressureEditableMixin, 
                     NodeUserMixin,
-                    RecallableNodeMixin):
+                    pickable.PickableInfoMixin):
     """Experimental Inking mode
     to test new feature.
     """
@@ -1155,41 +1156,49 @@ class ExInkingMode (PressureEditableMixin,
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
-    # XXX for `node pick`
+    # XXX for `info pick`
     ## Node pick
-    def restore_nodes_from_stroke_info(self, si): 
-        """Restore nodes from stroke info(StrokeNode class).
+    def _apply_info(self, info, offset):
+        """Apply nodes from compressed bytestring.
         """
-        # node-type-id 0 means `generic namedtuple nodes` 
-        raw_node_bytes = self._restore_nodes_from_stroke_info(si, 0) 
+        nodes = self._unpack_info(info)
+        # Note: This clears offset data in StrokeNode.
+        assert offset is not None
+        if offset != (0, 0):
+            dx, dy = offset
+            for i,n in enumerate(nodes):
+                nodes[i] = n._replace(x=n.x+dx, y=n.y+dy)
 
-        if raw_node_bytes is None:
-            self.app.show_transient_message(
-                _("This stroke is not created by %s") % self.get_name()
-            )
-            return
+        self.inject_nodes(nodes)
 
+        self._erase_old_stroke()
+
+    def _match_info(self, infotype):
+        return infotype == pickable.Infotype.TUPLE
+
+    def _pack_info(self):
+        nodes = self.nodes
+        datas = struct.pack(">I", len(nodes))
+        fmt=">%dd" % len(nodes[0]) 
+        for n in nodes:
+            datas += struct.pack(fmt, *n)
+        return zlib.compress(datas)
+
+    def _unpack_info(self, nodesinfo):
+        raw_data = zlib.decompress(nodesinfo)
         idx = 4
-        count = struct.unpack('>I', raw_node_bytes[:idx])[0]
+        count = struct.unpack('>I', raw_data[:idx])[0]
         nodes = []
         field_cnt = len(_NODE_FIELDS)
         fmt = ">%dd" % field_cnt
         data_length = field_cnt * 8
         for i in range(count):
-            a = struct.unpack(fmt, raw_node_bytes[idx: idx+data_length])
+            a = struct.unpack(fmt, raw_data[idx: idx+data_length])
             node = _Node(*a)
             nodes.append(node)
             idx += data_length
-
-        with si.get_offset() as offset: 
-            # Note: This clears offset data in StrokeNode.
-            if offset != (0, 0):
-                dx, dy = offset
-                for i,n in enumerate(nodes):
-                    nodes[i] = n._replace(x=n.x+dx, y=n.y+dy)
-
-        self.inject_nodes(nodes)
-    # XXX for `node pick` end
+        return nodes
+    # XXX for `info pick` end
 
     ## Autoapply 
     def set_autoapply(self, method):

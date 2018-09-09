@@ -38,6 +38,7 @@ from gui.exinktool import *
 from gui.exinktool import _LayoutNode
 from gui.linemode import *
 from gui.oncanvas import *
+import gui.pickable as pickable
 
 ## Function defs
 
@@ -417,7 +418,7 @@ class PressureMap(object):
 
 class BezierMode (PressureEditableMixin,
                   HandleNodeUserMixin,
-                  RecallableNodeMixin):
+                  pickable.PickableInfoMixin):
 
     ## Metadata properties
     ACTION_NAME = "BezierCurveMode"
@@ -486,13 +487,6 @@ class BezierMode (PressureEditableMixin,
                 self._update_cursor(tdw) 
         else:
             self.app.show_transient_message(_("There is no stroke.Cannot enter insert phase."))
-
-   #def is_editing_phase(self):
-   #    return self.phase in (_Phase.ADJUST,
-   #                          _Phase.ADJUST_POS,
-   #                          _Phase.ADJUST_PRESSURE,
-   #                          _Phase.ADJUST_HANDLE,
-   #                          _Phase.ADJUST_ITEM)
 
     def is_adjusting_phase(self):
         return self.phase in (_Phase.ADJUST,
@@ -1250,18 +1244,36 @@ class BezierMode (PressureEditableMixin,
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
-    # XXX for `node pick`
+    # XXX for `info pick`
     ## Node pick
-    def restore_nodes_from_stroke_info(self, si): 
-        """Restore nodes from stroke info(StrokeNode class).
-        Almost same as ExperimentInktool, but Node class is different.
+    def _apply_info(self, info, offset):
+        """Apply nodes from compressed bytestring.
         """
-        raw_nodes = self._restore_nodes_from_stroke_info(si, _Node_Bezier.type_id) 
-        if raw_nodes is None:
-            self.app.show_transient_message(
-                _("This stroke is not created by %s") % self.get_name()
-            )
-            return
+        nodes = self._unpack_info(info)
+
+        # Note: This clears offset data in StrokeNode.
+        assert offset is not None
+        if offset != (0, 0):
+            dx, dy = offset
+            for n in nodes:
+                n.move(dx, dy, relative=True)
+
+        self.inject_nodes(nodes)
+
+        self._erase_old_stroke()
+
+    def _match_info(self, infotype):
+        return infotype == pickable.Infotype.BEZIER
+
+    def _pack_info(self):
+        nodes = self.nodes
+        datas = struct.pack(">I", len(nodes))
+        for n in nodes:
+            datas += n.serialize()
+        return zlib.compress(datas)
+
+    def _unpack_info(self, nodesinfo):
+        raw_data = zlib.decompress(info)
         idx = 4
         count = struct.unpack('>I', raw_nodes[:idx])[0]
         nodes = []
@@ -1269,17 +1281,8 @@ class BezierMode (PressureEditableMixin,
             data_length, node = _Node_Bezier.fromstring(raw_nodes, idx)
             nodes.append(node)
             idx += data_length
-
-        with si.get_offset() as offset: 
-            # Note: This clears offset data in StrokeNode.
-            if offset != (0, 0):
-                dx, dy = offset
-                for n in nodes:
-                    n.move(dx, dy, relative=True)
-
-        self.inject_nodes(nodes)
-
-    # XXX for `node pick` end
+        return nodes
+    # XXX for `info pick` end
 
 
 class OverlayBezier (OverlayOncanvasMixin):

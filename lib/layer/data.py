@@ -40,6 +40,7 @@ import lib.autosave
 import lib.projectsave
 import lib.xml
 import lib.feedback
+import gui.pickable as pickable
 
 import numpy as np
 
@@ -1807,41 +1808,41 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
             shape.brush_string = stroke.brush_settings
             self.strokes.append(shape)
 
-    # XXX for `node pick`
-    def add_stroke_node(self, stroke, before, nodes):
+    # XXX for `info pick`
+    def add_stroke_info(self, stroke, before, info):
         """Adds a rendered inking stroke/bezier's node to the strokemap.
 
         :param stroke: the stroke sequence which has been rendered
         :type stroke: lib.stroke.Stroke
         :param before: layer snapshot taken before the stroke started
         :type before: lib.layer.StrokemappedPaintingLayerSnapshot
-        :param nodes: inking stroke/bezier curve nodes.
-        :type list: list of node objects.
+        :param info: something zipped binary information.
+        :type info: binary string.
 
         NOTE: StrokeNode class is derived from StrokeShape,
               therefore it has compatibility with that class.
         """
         after_sshot = self._surface.save_snapshot()
-        shape = lib.strokemap.StrokeNode.new_from_snapshots(
+        shape = lib.strokemap.StrokeInfo.new_from_snapshots(
             before.surface_sshot,
             after_sshot
         )
 
         # Assume all of nodes are the instance of same class.
-        if isinstance(nodes[0], tuple):
-            type_id = 0
-        else:
-            # Also, assume non-tuple node is something 
-            # dedicated node class, which has type_id class attribute.
-            assert hasattr(nodes[0], "type_id")
-            type_id = nodes[0].type_id
+       #if isinstance(nodes[0], tuple):
+       #    type_id = 0
+       #else:
+       #    # Also, assume non-tuple node is something 
+       #    # dedicated node class, which has type_id class attribute.
+       #    assert hasattr(nodes[0], "type_id")
+       #    type_id = nodes[0].type_id
 
         if shape is not None:
-            shape.set_nodes(type_id, nodes) # Assume all nodes are same class object.
+            shape.set_info(info) 
             shape.brush_string = stroke.brush_settings
             self.strokes.append(shape)
 
-    def remove_stroke_node(self, shape):
+    def remove_stroke_info(self, shape):
         """When this method is called, some Node-editing tool 
         has been accepted re-editing stroke.
         That stroke would be registered again when new editing end.
@@ -1930,14 +1931,15 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
                     if t == 'b':
                         __read_brush_from_stream(f, brushes)
                     elif t == 'n':
-                        strokenode = __read_stroke_from_stream(
-                            f, lib.strokemap.StrokeNode()
+                        strokeinfo = __read_stroke_from_stream(
+                            f, lib.strokemap.StrokeInfo()
                         )
                         # Read additional node informations.
-                        node_type, node_length, tnx, tny = struct.unpack('>IIii', f.read(16))
-                        tmp = f.read(node_length)
-                        strokenode.init_nodes_from_string(tmp, node_type, tnx, tny)
-                        self.strokes.append(strokenode)
+                       #node_type, node_length, tnx, tny = struct.unpack('>IIii', f.read(16))
+                       #tmp = f.read(node_length)
+                       #strokenode.init_nodes_from_string(tmp, node_type, tnx, tny)
+                        strokeinfo.init_info_from_string(*pickable.load_info(f))
+                        self.strokes.append(strokeinfo)
                         block_cnt += 1
                     elif t == '}':
                         # The second end signature.
@@ -2138,11 +2140,11 @@ class PaintingLayer (StrokemappedPaintingLayer, core.ExternallyEditable):
 
 ## Stroke-mapped layer implementation details and helpers
 
-# XXX for `node pick`
+# XXX for `info pick`
 def _write_strokemap(f, strokes, dx, dy):
     brush2id = {}
     for stroke in strokes:
-        if not isinstance(stroke, lib.strokemap.StrokeNode):
+        if not isinstance(stroke, lib.strokemap.StrokeInfo):
             _write_strokemap_stroke(f, stroke, brush2id, dx, dy, 's')
     f.write('}')
 
@@ -2151,7 +2153,7 @@ def _write_strokemap(f, strokes, dx, dy):
     # With this, old version of MyPaint would just ignore the
     # unsupported StrokeNodes information.
     for stroke in strokes:
-        if isinstance(stroke, lib.strokemap.StrokeNode):
+        if isinstance(stroke, lib.strokemap.StrokeInfo):
             _write_strokemap_stroke(f, stroke, brush2id, dx, dy, 'n')
     f.write('}')
 
@@ -2172,10 +2174,10 @@ def _write_strokemap_stroke(f, stroke, brush2id, dx, dy, signature):
 
     # save node
     if signature == 'n':
-        s = stroke.save_nodes_to_string(dx, dy)
+        s = stroke.save_info_to_string(dx, dy)
         f.write(s)
 
-# XXX for `node pick` end
+# XXX for `info pick` end
 
 class _StrokemapFileUpdateTask (object):
     """Updates a strokemap file in chunked calls (for autosave)"""

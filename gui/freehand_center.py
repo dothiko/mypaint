@@ -33,6 +33,7 @@ import freehand_assisted
 from gui.ui_utils import *
 from gui.linemode import *
 from freehand_parallel import StrokeLastableMixin, LastableOptionsMixin 
+import gui.pickable as pickable
 
 ## Module settings
 class _Phase:
@@ -58,7 +59,8 @@ class _Prefs:
 
 ## Class defs
 class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
-                          StrokeLastableMixin):
+                          StrokeLastableMixin,
+                          pickable.PickableInfoMixin):
     """Freehand drawing mode with centerpoint ruler.
 
     """
@@ -376,6 +378,55 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
         diff = math.hypot(dx-cdx, dy-cdy)
         return (diff <= self._center_radius)
 
+    # Override brushwork_begin to set ruler information into strokemap. 
+    def brushwork_begin(self, model, description=None, abrupt=False,
+                        layer=None):
+        # XXX Almost copy from gui.mode.BrushworkModeMixin.
+
+        # Commit any previous work for this model
+        cmd = self.__active_brushwork.get(model)
+        if cmd is not None:
+            self.brushwork_commit(model, abrupt=abrupt)
+        # New segment of brushwork
+        if layer is None:
+            layer_path = model.layer_stack.current_path
+        else:
+            layer_path = None
+        # The difference from BrushworkModeMixin is
+        # using PickableStrokework, instead of Brushwork.
+        cmd = lib.command.PickableStrokework(
+            model,
+            info=self._pack_info(),
+            layer_path=layer_path,
+            description=description,
+            abrupt_start=(abrupt or self.__first_begin),
+            layer=layer,
+        )
+        self.__first_begin = False
+        cmd.__last_pos = None
+        self.__active_brushwork[model] = cmd
+
+    ## Use node pick as ruler pick.
+    def _apply_info(self, info, offset): 
+        cx, cy = self._unpack_info(info)
+        if offset != (0, 0):
+            dx, dy = offset
+            cx += dx 
+            cy += dy 
+        self.queue_draw_ui(None)
+
+    def _match_info(self, infotype):
+        return infotype == pickable.Infotype.CENTER
+
+    def _unpack_info(self, info):
+        field_cnt = 2 
+        fmt = ">%dd" % field_cnt
+        data_length = field_cnt * 8
+        return struct.unpack(fmt, info[:data_length])
+
+    def _pack_info(self, info):
+        return struct.pack(">2d", self._cx, self._cy)
+    # XXX for `info pick` end
 
 class CenterOptionsWidget (freehand_assisted.AssistantOptionsWidget,
                            LastableOptionsMixin,

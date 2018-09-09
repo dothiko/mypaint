@@ -82,13 +82,18 @@ class LinearController(object):
         # With reset() method, initialized some attributes.
         self.reset()
 
-    def set_start_pos(self, tdw, disp_pos):
+    def set_start_pos(self, tdw, pos):
         """Set gradient start position, from display coordinate.
+        :param tdw: TileDrawWidget. if None, pos is in model.
+                    Otherwise, pos is in display.
         :param disp_pos: start position for cairo.LinearGradient.
                           if None, used current polygon
                           center X and minimum Y coordinate.
         """
-        self._start_pos = tdw.display_to_model(*disp_pos)
+        if tdw is not None:
+            self._start_pos = tdw.display_to_model(*pos)
+        else:
+            self._start_pos = pos
 
     def set_end_pos(self, tdw, disp_pos):
         """Set gradient end position, from display coordinate.
@@ -96,7 +101,10 @@ class LinearController(object):
                           if None, used current polygon
                           center X and maximum Y coordinate.
         """
-        self._end_pos = tdw.display_to_model(*disp_pos)
+        if tdw is not None:
+            self._end_pos = tdw.display_to_model(*pos)
+        else:
+            self._end_pos = pos
 
     @property
     def start_pos(self):

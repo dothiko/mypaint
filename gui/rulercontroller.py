@@ -77,13 +77,13 @@ class RulerController(LinearController):
         self._end_pos = (sx + length * vx,
                          sy + length * vy)
 
-    def set_start_pos(self, tdw, disp_pos):
-        super(RulerController, self).set_start_pos(tdw, disp_pos)
+    def set_start_pos(self, tdw, pos):
+        super(RulerController, self).set_start_pos(tdw, pos)
         if len(self.nodes) < 1:
             self.nodes.append(RulerNode(0.0))
 
-    def set_end_pos(self, tdw, disp_pos):
-        super(RulerController, self).set_end_pos(tdw, disp_pos)
+    def set_end_pos(self, tdw, pos):
+        super(RulerController, self).set_end_pos(tdw, pos)
         if len(self.nodes) < 2:
             self.nodes.append(RulerNode(1.0))
 

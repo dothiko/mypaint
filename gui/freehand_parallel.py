@@ -33,6 +33,7 @@ import freehand_assisted
 from gui.ui_utils import *
 from gui.rulercontroller import *
 from gui.linemode import *
+import gui.pickable as pickable
 
 N = mypaintlib.TILE_SIZE
 
@@ -100,7 +101,8 @@ class StrokeLastableMixin(object):
         self._previous_release_pos = (event.x, event.y)
 
 class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
-                            StrokeLastableMixin):
+                            StrokeLastableMixin,
+                            RecallableNodwMixin):
     """Freehand drawing mode with parallel ruler.
 
     """
@@ -123,6 +125,14 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
     # Common ruler object for each ParallelFreehandMode instance.
     _ruler = None
 
+    # XXX for `node pick`
+    # Node type id. This is used for ruler pickable strokemap. 
+    # This MUST be unique, 32bit unsigned value.
+    # And type_id 0 means `generic namedtuple node`,
+    # which is used in inktool.
+    type_id = 0x00000002
+    # XXX for `node pick` end
+ 
     ## Initialization
 
     def __init__(self, ignore_modifiers=True, **args):
@@ -180,12 +190,6 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
 
         self._init_lastable_mixin(doc.app, _Prefs)
 
-   #def leave(self, **kwds):
-   #    """Leave freehand mode"""
-   #    self.queue_draw_ui(None)
-   #    super(AssistedFreehandMode, self).leave(**kwds)
-   #    self._discard_overlays()
-    
     ## Input handlers
     def drag_start_cb(self, tdw, event, pressure):
         self._latest_pressure = pressure
@@ -527,6 +531,65 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
 
             self._ruler.snap(lx, ly)
             self.queue_draw_ui(None)
+
+    # XXX for `info pick`
+    # Override brushwork_begin to set ruler information into strokemap. 
+    def brushwork_begin(self, model, description=None, abrupt=False,
+                        layer=None):
+        # XXX Almost copy from gui.mode.BrushworkModeMixin.
+
+        # Commit any previous work for this model
+        cmd = self.__active_brushwork.get(model)
+        if cmd is not None:
+            self.brushwork_commit(model, abrupt=abrupt)
+        # New segment of brushwork
+        if layer is None:
+            layer_path = model.layer_stack.current_path
+        else:
+            layer_path = None
+        # The difference from BrushworkModeMixin is
+        # using PickableStrokework, instead of Brushwork.
+        cmd = lib.command.PickableStrokework(
+            model,
+            info=self._pack_info(),
+            layer_path=layer_path,
+            description=description,
+            abrupt_start=(abrupt or self.__first_begin),
+            layer=layer,
+        )
+        self.__first_begin = False
+        cmd.__last_pos = None
+        self.__active_brushwork[model] = cmd
+
+    ## Use node pick as ruler pick.
+    def _apply_info(self, info, offset): 
+        ruler = self.ruler
+        sx, sy, ex, ey = self._unpack_info(info)
+        if offset != (0, 0):
+            dx, dy = offset
+            sx += dx 
+            ex += dx 
+            sy += dy 
+            ey += dy 
+        ruler.set_start_pos(None, (sx, sy)) 
+        ruler.set_end_pos(None, (ex, ey)) 
+        self.queue_draw_ui(None)
+
+    def _match_info(self, infotype):
+        return infotype == pickable.Infotype.RULER
+
+    def _unpack_info(self, info):
+        field_cnt = 4 
+        fmt = ">%dd" % field_cnt
+        data_length = field_cnt * 8
+        return struct.unpack(fmt, info[:data_length])
+
+    def _pack_info(self, info):
+        ruler = self._ruler
+        sx, sy = ruler.get_start_pos()
+        ex, ey = ruler.get_end_pos()
+        return struct.pack(">4d", sx, sy, ex, ey)
+    # XXX for `info pick` end
 
 class LastableOptionsMixin(object):
     """A mixin to share codes of Optionspresnter

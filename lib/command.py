@@ -266,6 +266,7 @@ class Brushwork (Command):
         :param unicode description: Descriptive name for this brushwork
         :param bool abrupt_start: Reset brush & dwell before starting
         :param gui.layer.data.SimplePaintingLayer layer: explicit target layer
+        :param info : Additional info for strokemap.
 
         The Brushwork command is created as an active command which can
         be used for capturing brushstrokes. Recording must be stopped
@@ -526,17 +527,101 @@ class Brushwork (Command):
 
 
 ## Concrete command classes
+class PickableStrokework(Brushwork):
+    """PickableStrokework for some tools to pick additional information 
+    from strokemap.
+    This is basically same as Brushwork command.
+    """
+
+    def __init__(self, doc, pickinfo, layer_path=None, description=None,
+                 abrupt_start=False, layer=None, **kwds):
+        super(PickableStrokework,self).__init__(
+            doc, layer_path, description, abrupt_start, layer, kwds
+        )
+        self._pickinfo = pickinfo
+
+    # XXX for `info pick`
+    def update(self, brushinfo):
+        """Retrace the last stroke with a new brush.
+
+        Almost same as Brushwork.update, but just one line is different.
+        We cannot deal it with overriding.
+        """
+        layer = self._target_layer
+        assert self._recording_finished, "Call stop_recording() first"
+        assert self._sshot_after_applied, \
+            "command.Brushwork must be applied before being updated"
+        layer.load_snapshot(self._sshot_before)
+        stroke = self._stroke_seq.copy_using_different_brush(brushinfo)
+        layer.render_stroke(stroke)
+        self._stroke_seq = stroke
+        # XXX The difference against Brushwork is below 1 line.
+        layer.add_stroke_info(stroke, self._sshot_before, self._pickinfo)
+        self._sshot_after = layer.save_snapshot()
+
+    def stop_recording(self, revert=False):
+        """Ends the recording phase
+
+        :param bool revert: revert any changes to the model
+        :rtype: bool
+        :returns: whether any changes were made
+
+        Almost same as Brushwork.stop_recording, but just one line is different.
+        We cannot deal it with overriding.
+        """
+        self._check_recording_started()
+        layer = self._stroke_target_layer
+        self._stroke_target_layer = None  # prevent potential leak
+        self._recording_finished = True
+        if self._stroke_seq is None:
+            # Unclear circumstances, but I've seen it happen
+            # (unpaintable layers and visibility state toggling).
+            # Perhaps _recording_started should be made synonymous with this?
+            logger.warning(
+                "No recorded stroke, but recording was started? "
+                "Please report this glitch if you can reliably reproduce it."
+            )
+            return False  # nothing recorded, so nothing changed
+        self._stroke_seq.stop_recording()
+        if layer is None:
+            return False  # wasn't suitable for painting, thus nothing changed
+        if revert:
+            assert self._sshot_before is not None
+            layer.load_snapshot(self._sshot_before)
+            logger.debug("Reverted %r: tiles_changed=%r", self, False)
+            return False  # nothing changed
+        t0 = self._time_before
+        self._time_after = t0 + self._stroke_seq.total_painting_time
+        # XXX The difference against Brushwork is below 1 line.
+        layer.add_stroke_info(self._stroke_seq, self._sshot_before, self._pickinfo)
+        self._sshot_after = layer.save_snapshot()
+        self._sshot_after_applied = True  # changes happened before redo()
+        tiles_changed = (not self._stroke_seq.empty)
+        logger.debug(
+            "Stopped recording %r: tiles_changed=%r",
+            self, tiles_changed,
+        )
+        return tiles_changed
+    # XXX for `info pick` end
+
 
 class _Phase_Nodework:
+    """Enumeration for Nodework state.
+    With this, Nodework knows its own state at undo/redo.
+    If Nodework.phase is _Phase_Nodework.EDIT, `undo` should be
+    `go to previous command`.
+    Otherwise (i.e. _Phase_Nodework.DRAW), `undo` should be
+    `restore editing nodes again and tool should enter editing phase`,
+    if current tool is same as generate that nodes.
+    """
     INIT = -1
     EDIT = 0
     DRAW = 1
 
-class Nodework (Brushwork):
+class Nodework (PickableStrokework):
     """ node based stroke drawing command, 
     to enable undo into node editing phase.
     """
-
 
     def __init__(self, model, layer_path, gui_doc, nodes, 
                  operation_mode = None,
@@ -561,7 +646,7 @@ class Nodework (Brushwork):
         before the command is added to the CommandStack.
 
         """
-        super(Nodework, self).__init__(model, 
+        super(Nodework, self).__init__(model, nodes, 
                 layer_path, description, abrupt_start, **kwds)
 
         self.gui_doc = gui_doc
@@ -602,7 +687,6 @@ class Nodework (Brushwork):
         else:
             raise Exception("Unknown phase of Nodework")
 
-
     def redo(self):
         """Performs, or re-performs after undo"""
 
@@ -619,7 +703,6 @@ class Nodework (Brushwork):
                         curmode.redo_nodes_cb(self, self.nodes)
 
         super(Nodework, self).redo()
-
 
     def undo(self):
         """Undoes the effects of redo()"""
@@ -652,7 +735,6 @@ class Nodework (Brushwork):
             # so entering DRAW phase.  
             self.phase = _Phase_Nodework.DRAW
 
-
     def _check_recording_started(self):
         """Ensure command is in the recording phase"""
         assert not self._recording_finished
@@ -675,7 +757,9 @@ class Nodework (Brushwork):
         assert self._time_before is None
         assert self._stroke_seq is None
         # Overriding sshot_before, to preserve previous
-        # layer
+        # layer. This is needed for redrawing canvas
+        # without this stroke. Otherwise, even end-user
+        # moves node, there is still old stroke remained.
         if not self._override_before:
             self._sshot_before = layer.save_snapshot()
         else:
@@ -686,71 +770,6 @@ class Nodework (Brushwork):
         self._stroke_seq.start_recording(model.brush)
         assert self._sshot_after is None
         self._recording_started = True
-
-    # XXX for `node pick`
-    def update(self, brushinfo):
-        """Retrace the last stroke with a new brush.
-
-        Almost same as Brushwork.update, but just one line is different.
-        We cannot deal it with overriding.
-        """
-        layer = self._target_layer
-        assert self._recording_finished, "Call stop_recording() first"
-        assert self._sshot_after_applied, \
-            "command.Brushwork must be applied before being updated"
-        layer.load_snapshot(self._sshot_before)
-        stroke = self._stroke_seq.copy_using_different_brush(brushinfo)
-        layer.render_stroke(stroke)
-        self._stroke_seq = stroke
-        # XXX The difference against Brushwork is below 1 line.
-        layer.add_stroke_node(stroke, self._sshot_before, self.nodes)
-        self._sshot_after = layer.save_snapshot()
-
-    def stop_recording(self, revert=False):
-        """Ends the recording phase
-
-        :param bool revert: revert any changes to the model
-        :rtype: bool
-        :returns: whether any changes were made
-
-        Almost same as Brushwork.stop_recording, but just one line is different.
-        We cannot deal it with overriding.
-        """
-        self._check_recording_started()
-        layer = self._stroke_target_layer
-        self._stroke_target_layer = None  # prevent potential leak
-        self._recording_finished = True
-        if self._stroke_seq is None:
-            # Unclear circumstances, but I've seen it happen
-            # (unpaintable layers and visibility state toggling).
-            # Perhaps _recording_started should be made synonymous with this?
-            logger.warning(
-                "No recorded stroke, but recording was started? "
-                "Please report this glitch if you can reliably reproduce it."
-            )
-            return False  # nothing recorded, so nothing changed
-        self._stroke_seq.stop_recording()
-        if layer is None:
-            return False  # wasn't suitable for painting, thus nothing changed
-        if revert:
-            assert self._sshot_before is not None
-            layer.load_snapshot(self._sshot_before)
-            logger.debug("Reverted %r: tiles_changed=%r", self, False)
-            return False  # nothing changed
-        t0 = self._time_before
-        self._time_after = t0 + self._stroke_seq.total_painting_time
-        # XXX The difference against Brushwork is below 1 line.
-        layer.add_stroke_node(self._stroke_seq, self._sshot_before, self.nodes)
-        self._sshot_after = layer.save_snapshot()
-        self._sshot_after_applied = True  # changes happened before redo()
-        tiles_changed = (not self._stroke_seq.empty)
-        logger.debug(
-            "Stopped recording %r: tiles_changed=%r",
-            self, tiles_changed,
-        )
-        return tiles_changed
-    # XXX for `node pick` end
-
 
 class FloodFill (Command):
     """Flood-fill on the current layer"""

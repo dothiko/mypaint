@@ -1443,7 +1443,8 @@ class PressureEditableMixin(OncanvasEditMixin,
         layer_path = model.layer_stack.current_path
         cmd = lib.command.Nodework(
             model, layer_path,
-            self.doc, self.nodes,
+            self.doc, 
+            self._pack_info(nodes), # XXX for info-pick
             self.__class__,
             override_sshot_before=self._sshot_before,
             description=description,
@@ -1482,7 +1483,7 @@ class PressureEditableMixin(OncanvasEditMixin,
                 self._pending_cmd = None
             model.do(cmd)
 
-    def undo_nodes_cb(self, cmd, nodes, sshot_before):
+    def undo_nodes_cb(self, cmd, nodesinfo, sshot_before):
         """ called from lib.command.Nodework.undo().
         
         This callback is called when a work using this mode
@@ -1490,7 +1491,8 @@ class PressureEditableMixin(OncanvasEditMixin,
         Nodework command detects current operation mode and only when
         current mode is this mode, call this callback.
         """
-        self.nodes = nodes
+       #self.nodes = nodes
+        self.nodes = self._unpack_info(nodesinfo) # XXX for info-pick
         self.phase = PhaseMixin.ADJUST
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
@@ -1507,7 +1509,8 @@ class PressureEditableMixin(OncanvasEditMixin,
         """
 
         if len(nodes) >= 2:
-            self.nodes = nodes
+           #self.nodes = nodes
+            self.nodes = self._unpack_info(nodesinfo) # XXX for info-pick
             self.phase = PhaseMixin.ADJUST
             self._queue_redraw_all_nodes()
             self._queue_draw_buttons()
@@ -1515,6 +1518,22 @@ class PressureEditableMixin(OncanvasEditMixin,
         else:
             logger.warning('redo notified, but node count %d is not suffcient.' % len(nodes))
 
+    # XXX for `info-pick`
+    ## Info pick related
+    def _pack_info(self):
+        """Pack nodes as bytestring datas.
+        Compressing it with zlib is optional.
+        :return : nodes as bytestring data.
+        """
+        raise NotImplementedError("You must implement _pack_info")
+
+    def _unpack_info(self, nodesinfo):
+        """Unpack nodes from bytestring datas.
+        :param nodesinfo: a bytestring, generate from _pack_info
+        """
+        raise NotImplementedError("You must implement _unpack_info")
+
+    # XXX end for `info-pick`
 
 class NodeUserMixin(object):
     """ The Mixin which use oncanvas node object.
@@ -1748,43 +1767,4 @@ class OverlayOncanvasMixin(gui.overlays.Overlay):
         """Draw adjustable nodes to the screen"""
         pass
 
-## Recallable on-canvas nodes mixin
         
-class RecallableNodeMixin(object):
-    """Node recall feature, which is to record nodes position
-    when final rendering a oncanvas-editing item, and later, 
-    we can recall node and re-edit it from that records.
-    """
-
-    # XXX for `node pick`
-    def _restore_nodes_from_stroke_info(self, si, node_type_id): 
-        """Restore nodes from stroke info(StrokeNode class).
-        Almost same as ExperimentInktool, but Node class is different.
-
-        :return : unpacked raw nodes data string.
-
-        CAUTION: Returned object is raw string node datas.
-                 You must de-serialize them into node objects and
-                 call inject_nodes method of this mixin.
-        """
-        assert isinstance(si, lib.strokemap.StrokeNode) 
-
-        raw_nodes = si.unpack_nodes(node_type_id)
-
-        # raw nodes might be None if the type_id does not match.
-        if raw_nodes is None:
-            return None
-
-        # Erase old stroke forcefully!
-        model = self.doc.model
-        cl = model.layer_stack.current
-        si.remove_from_surface(cl._surface)
-        assert hasattr(cl, "remove_stroke_node")
-
-        # Also, Remove stroke-node information from layer. 
-        # Without this, re-edited stroke still exist as older shape.
-        cl.remove_stroke_node(si) 
-
-        return raw_nodes
-    # XXX for `node pick` end
-

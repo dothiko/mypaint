@@ -24,6 +24,7 @@ import mypaintlib
 
 import tiledsurface
 import idletask
+import gui.pickable as pickable
 
 TILE_SIZE = N = mypaintlib.TILE_SIZE
 
@@ -220,9 +221,9 @@ class StrokeShape (object):
                 self.strokemap.pop((tx, ty))
         return bool(self.strokemap)
 
-# XXX for `node-pick`
-class StrokeNode(StrokeShape): 
-    """The nodes of a single inkingstroke/bezier curve.
+# XXX for `info-pick`
+class StrokeInfo(StrokeShape): 
+    """A StrokeShape variant, contains binary string information. 
 
     This class stores the nodes of a stroke in as a 1-bit bitmap,
     Like a StrokeShape.
@@ -230,16 +231,16 @@ class StrokeNode(StrokeShape):
     """
     def __init__(self):
         """Construct a new, blank StrokeNode."""
-        super(StrokeNode, self).__init__()
+        super(StrokeInfo, self).__init__()
         # _nodedata is compressed bytestring of node data.
         # Actually node objects are constructed in owner
         # drawing mode object, so this class works without
         # node object metaclass.
-        self._nodedata = None
+        self._infobody = None
 
         # We need to distinguish node object class.
         # If this is 0, it means `it is generic namedtuple nodes`
-        self._nodetype = 0
+        self._infotype = 0
 
         # Offset value for load time tile shift.
         # When picture file loaded, transparent tile would be removed.
@@ -253,29 +254,21 @@ class StrokeNode(StrokeShape):
         This is a contextlib.contextmanager method,
         You should call this by `with` statement.
 
-        NOTE: After this method is called, offset data is cleared.
+        NOTE: Once after this method is called, offset data is cleared.
         """
         yield (self._offset_x, self._offset_y)
 
         self._offset_x = 0
         self._offset_y = 0
 
-    def set_nodes(self, nodetype, nodes):
-        """Set nodes information, with converting bytestream
-        and compressing it.
-        """
-        self._nodetype = nodetype
-         
-        datas = struct.pack(">I", len(nodes))
-        if nodetype == 0:
-            fmt=">%dd" % len(nodes[0]) # Assume all nodes have same size.
-            for n in nodes:
-                datas += struct.pack(fmt, *n)
-        else:
-            # Other dedicated node object should have `serialize` method.
-            for n in nodes:
-                datas += n.serialize()
-        self._nodedata = zlib.compress(datas)
+    def set_info(self, info):
+        self._infobody = info
+
+    def get_info(self):
+        return self._infobody
+
+    def get_info_type(self):
+        return self._infotype
 
     def remove_from_surface(self, surf, center=None):
         """Remove all or part of the shape to a tile-accessible surface.
@@ -304,38 +297,18 @@ class StrokeNode(StrokeShape):
             with surf.tile_request(tx, ty, readonly=False) as surf_arr:
                 diff_tile.erase_from_surface_tile_array(surf_arr)
 
-    def save_nodes_to_string(self, translate_x, translate_y):
+    def save_info_to_string(self, translate_x, translate_y):
         """Return a compressed string representing the stroke shape.
-
+    
         This can be used with init_from_sting on subsequent file loads.
-
+    
         See lib.layer.data.PaintingLayer.save_to_openraster().
         Format: "v2" strokemap format.
-
+    
         """
-        nodedata = self._nodedata
-        nodetype = self._nodetype
-
-        data = struct.pack(
-            '>IIii', 
-            nodetype, len(nodedata),
-            int(translate_x), int(translate_y)
-        )
-        data += nodedata
-        return data
-
-    def unpack_nodes(self, requested_nodetype):
-        """Unpack nodes data from compressed bytestring.
-
-        NOTE: Unpacked nodes is still raw bytestring.
-              Caller(Drawing mode object) must convert 
-              that raw string into node objects.
-        """
-        if requested_nodetype == self._nodetype:
-            return zlib.decompress(self._nodedata)
-        return None
-
-    def init_from_string(self, data, translate_x, translate_y):
+        return pickable.pack_info(self._infotype, self._infobody, translate_x, translate_y)
+    
+    def init_from_string(self, shapedata, translate_x, translate_y):
         """To override StrokeShape.init_from_string.
 
         We need to override this method to initialize offset attributes.
@@ -346,41 +319,45 @@ class StrokeNode(StrokeShape):
         # StrokeNode.translate() call, which is prior to init_node_from_string() 
         # call.
         # Before that addition, we need to initialize them.
-        super(StrokeNode, self).init_from_string(data, translate_x, translate_y)
+        super(StrokeInfo, self).init_from_string(shapedata, translate_x, translate_y)
 
         self._offset_x = translate_x
         self._offset_y = translate_y
 
         # We have no need to refrect actual node position in this time.
-        # Different from stroke bitmap tile, it is enough for node to change position 
-        # when actually user picked the nodes of stroke.
+        # Different from stroke bitmap tile, it is enough for users of this class
+        # to change position 
+        # when actually user picked the stroke.
         # So just remember offset here.
+        # 
+        # You can get offset with get_offset method.
+        # That method uses yield, so use `with` statement.
 
-    def init_nodes_from_string(self, data, nodetype, translate_x, translate_y):
+    def init_nodes_from_string(self, data, infotype, translate_x, translate_y):
         """Initialize node datas from a saved compressed string.
-
+    
         translate_ parameters of this method are actually assigned at save-time,
         completely different from init_from_string one.
         They are applied into tile dictionary already at StrokeShape.save_to_string(), 
         but not yet for node list - because, offsets for nodes are applied 
         when they are picked.
-
+    
         NOTE:Call this method after base bitmap information is loaded
         by StrokeShape.init_from_string. These two methods are simular
         but different.
         """
         assert self._nodedata is None
-
-        self._nodetype = nodetype
-        self._nodedata = data
+    
+        self._infotype = infotype
+        self._infobody = data
         self._offset_x += translate_x
         self._offset_y += translate_y
-
+    
     def translate(self, dx, dy):
-        super(StrokeNode, self).translate(dx, dy)
+        super(StrokeInfo, self).translate(dx, dy)
         self._offset_x += dx
         self._offset_y += dy
-# XXX for `node-pick` end
+# XXX for `info-pick` end
         
 
 class _TileDiffUpdateTask:

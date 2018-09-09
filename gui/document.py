@@ -1038,14 +1038,14 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
                     bbox=bbox,
                     center=(x, y),
                 )
-                # XXX For `node pick`
+                # XXX For `info-pick`
                 # Restoring nodes from stroke infomation,
                 # If that info has node information and 
                 # current drawing mode accepts it.
                 curmode = self.modes.top
-                if hasattr(curmode, "restore_nodes_from_stroke_info"):
-                    curmode.restore_nodes_from_stroke_info(si)
-                # XXX For `node pick` end
+                if hasattr(curmode, "restore_from_stroke_info"):
+                    curmode.restore_from_stroke_info(si)
+                # XXX For `info-pick` end
             return
 
     def pick_layer(self, x, y, action=None):
