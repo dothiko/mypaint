@@ -28,7 +28,7 @@
 
 // XXX borrowed from `_floodfill_color_match` of lib/fill.cpp. almost same.
 static inline fix15_t
-_closefill_color_match(const fix15_short_t c1_premult[4],
+progfill_color_match(const fix15_short_t c1_premult[4],
                        const fix15_short_t c2_premult[4],
                        const fix15_t tolerance)
 {
@@ -127,7 +127,7 @@ const int TileWorker::xoffset[] = { 0, 1, 0, -1};
 const int TileWorker::yoffset[] = {-1, 0, 1,  0};
 
 uint8_t 
-TileWorker::_get_neighbor_pixel(const int level,
+TileWorker::get_neighbor_pixel(const int level,
                     const int direction, 
                     const int sx, const int sy) 
 {
@@ -140,19 +140,6 @@ TileWorker::_get_neighbor_pixel(const int level,
 
 //--------------------------------------
 /// KernelWorker 
-
-KernelWorker::KernelWorker(FlagtileSurface *surf, const int level)
-    : TileWorker(surf, level)
-{
-    // C++ virtual function call cannot work properly
-    //
-    // in constructor.It just call its own method,
-    // not virtual(derived) one.
-    // Therefore, we need call `set_target_level` of
-    // this class here.
-    set_target_level(level);
-} 
-
 
 void 
 KernelWorker::set_target_level(const int level) 
@@ -193,6 +180,16 @@ KernelWorker::end(Flagtile* targ)
 {
 }
 
+/**
+* @finalize
+* Called when the entire pixel operation has end.
+*
+* @detail 
+* This method called when the entire pixel operation has end.
+* It seems that such codes should be written in destructor,
+* but virtual destructor would be called parent class one,
+* it cannot be cancelled easily. so this method is created.
+*/ 
 void
 KernelWorker::finalize() 
 {
@@ -212,7 +209,7 @@ KernelWorker::finalize()
 
 // Wrapper method to get pixel with direction.
 uint8_t 
-WalkingKernel::_get_pixel_with_direction(const int x, const int y, 
+WalkingKernel::get_pixel_with_direction(const int x, const int y, 
                                           const int direction) 
 {
     return m_surf->get_pixel(
@@ -225,7 +222,7 @@ WalkingKernel::_get_pixel_with_direction(const int x, const int y,
 // Check whether the right side pixel of current position / direction
 // is match to forward.
 bool 
-WalkingKernel::_is_wall_pixel(const uint8_t pixel) 
+WalkingKernel::is_wall_pixel(const uint8_t pixel) 
 {
     return ((pixel & PIXEL_MASK) == PIXEL_FILLED);
 }
@@ -233,41 +230,41 @@ WalkingKernel::_is_wall_pixel(const uint8_t pixel)
 // Rotate to right.
 // This is used when we missed wall at right-hand. 
 void 
-WalkingKernel::_rotate_right() 
+WalkingKernel::rotate_right() 
 {
     // We need update current direction
     // before call rotation handler.
     m_cur_dir = (m_cur_dir + 1) & 3;
-    _on_rotate_cb(true);   
+    on_rotate_cb(true);   
 }
 
 // Rotate to left. 
 // This is used when we face `wall`
 void 
-WalkingKernel::_rotate_left() 
+WalkingKernel::rotate_left() 
 {
     // We need update current direction
     // before call rotation handler
     m_cur_dir = (m_cur_dir - 1) & 3;          
     m_left_rotate_cnt++;
-    _on_rotate_cb(false); 
+    on_rotate_cb(false); 
 }
 
 bool 
-WalkingKernel::_forward() 
+WalkingKernel::forward() 
 {
     uint8_t pix;
 
     // see front.
-    pix = _get_front_pixel(); 
+    pix = get_front_pixel(); 
 
-    if (_is_wall_pixel(pix)) {
+    if (is_wall_pixel(pix)) {
         // Face to wall.
         // Now, we must turn left.
         // With this turn, this kernel draws antialias line or
         // initialize internal status of this object.
         
-        _rotate_left();
+        rotate_left();
         if (m_left_rotate_cnt >= 4)
             return false; // Exit from infnite loop of 1px hole!
     } 
@@ -290,7 +287,7 @@ WalkingKernel::_forward()
             return false; // Walking end!!
         }
 
-        _on_new_pixel();
+        on_new_pixel();
     }
     return true;
 }
@@ -298,18 +295,18 @@ WalkingKernel::_forward()
 // Walk single step.
 // when end walking, return false.
 bool 
-WalkingKernel::_proceed() 
+WalkingKernel::proceed() 
 {
-    if (!_is_wall_pixel(_get_hand_pixel())) {
+    if (!is_wall_pixel(get_hand_pixel())) {
         // Right hand of kernel misses the wall.
         // Couldn't forward.
-        _rotate_right();
+        rotate_right();
     }
-    return _forward();
+    return forward();
 }
 
 void 
-WalkingKernel::_walk(const int sx, const int sy, const int direction) 
+WalkingKernel::walk(const int sx, const int sy, const int direction) 
 {
 #ifdef HEAVY_DEBUG
     unsigned int cnt = 0;
@@ -325,9 +322,9 @@ WalkingKernel::_walk(const int sx, const int sy, const int direction)
     m_cur_dir = direction;
 
     // At first, walk into initial pixel 
-    _on_new_pixel();
+    on_new_pixel();
 
-    while (_proceed()) {
+    while (proceed()) {
 #ifdef HEAVY_DEBUG
         cnt++;
         // `Walking over 100 million pixel` cannot happen.
@@ -369,7 +366,7 @@ Flagtile::~Flagtile()
 }
 
 void 
-Flagtile::_build_progress_level(const int targ_level) 
+Flagtile::build_progress_level(const int targ_level) 
 {
 #ifdef HEAVY_DEBUG
     assert(targ_level >= 1);
@@ -443,7 +440,7 @@ Flagtile::build_progress_seed(const int max_level)
         fill(PIXEL_FILLED);
     else {
         for(int i=1;i <= max_level; i++) {
-            _build_progress_level(i);
+            build_progress_level(i);
         }
     }
 }
@@ -510,7 +507,7 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
             fix15_t alpha = (fix15_t)cptr[3];
             if (!limit_within_opaque || alpha > 0) {
                 if (pix == PIXEL_AREA && alpha >= f15_threshold) {
-                    fix15_t match = _closefill_color_match(
+                    fix15_t match = progfill_color_match(
                         targ, cptr,
                         f15_tolerance
                     );
@@ -603,7 +600,7 @@ Flagtile::convert_to_color(PyObject *py_targ_tile,
             // Anti-aliasing pixel is not compatible
             // with another PIXEL_* values.
             if ((pix & FLAG_AA) != 0) {
-                double alpha = _get_aa_double_value(pix & AA_MASK);
+                double alpha = get_aa_double_value(pix & AA_MASK);
                 fix15_short_t cur_alpha = fix15_short_clamp(
                     (alpha * fix15_one) + cptr[3]
                 );
@@ -664,7 +661,7 @@ Flagtile::convert_to_transparent(PyObject *py_targ_tile)
             // Some of them accidentally misdetected.
             if ((pix & FLAG_AA) != 0) {
                 pix &= AA_MASK;
-                double cur_alpha = _get_aa_double_value(pix);
+                double cur_alpha = get_aa_double_value(pix);
                 double targ_alpha = (double)cptr[3];
                 // Reverse premult color as original float color(0.0 - 1.0)
                 double targ_r = (double)cptr[0] / targ_alpha; 
@@ -741,7 +738,7 @@ FlagtileSurface::~FlagtileSurface()
 //// Internal methods
 
 void
-FlagtileSurface::_generate_tileptr_buf(const int ox, const int oy,
+FlagtileSurface::generate_tileptr_buf(const int ox, const int oy,
                                        const int w, const int h)
 {
 #ifdef HEAVY_DEBUG
@@ -811,8 +808,8 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
 
     // Populate a working queue with seeds
     GQueue *queue = g_queue_new();   /* Of tuples, to be exhausted */
-    _progfill_point *seed_pt = (_progfill_point*)
-                                  malloc(sizeof(_progfill_point));
+    progfill_point *seed_pt = (progfill_point*)
+                                  malloc(sizeof(progfill_point));
     seed_pt->x = sx;
     seed_pt->y = sy;
     g_queue_push_tail(queue, seed_pt);
@@ -823,7 +820,7 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
     const int max_y = tile_size * m_height;
 
     while (! g_queue_is_empty(queue)) {
-        _progfill_point *pos = (_progfill_point*) g_queue_pop_head(queue);
+        progfill_point *pos = (progfill_point*) g_queue_pop_head(queue);
         int x0 = pos->x;
         int y = pos->y;
         free(pos);
@@ -876,8 +873,8 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
                     if(w->match(pix)) {
                         if (look_above) {
                             // Enqueue the pixel to the north
-                            _progfill_point *p = (_progfill_point *) malloc(
-                                                    sizeof(_progfill_point)
+                            progfill_point *p = (progfill_point *) malloc(
+                                                    sizeof(progfill_point)
                                                   );
                             p->x = x;
                             p->y = y-1;
@@ -895,8 +892,8 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
                     if(w->match(pix)) {
                         if (look_below) {
                             // Enqueue the pixel to the South
-                            _progfill_point *p = (_progfill_point *) malloc(
-                                                    sizeof(_progfill_point)
+                            progfill_point *p = (progfill_point *) malloc(
+                                                    sizeof(progfill_point)
                                                   );
                             p->x = x;
                             p->y = y+1;
@@ -1039,7 +1036,7 @@ FlagtileSurface::progress_tiles()
 // A callback used in FlagtileSurface::remove_small_areas
 void __foreach_perimeter_cb(gpointer data, gpointer user_data)
 {
-    _perimeter_info *info = (_perimeter_info*)data;
+    perimeter_info *info = (perimeter_info*)data;
     int *max_length = (int*)user_data;
 
     if (info->length > *max_length) {
@@ -1068,7 +1065,7 @@ FlagtileSurface::remove_small_areas()
     // targeting gap-closing-level(m_level) is less than or equal to 1.
     if (m_level > 1) {
         GQueue *queue = g_queue_new();
-        CountPerimeterKernel pk(this, 0, queue);
+        CountPerimeterKernel pk(this, queue);
         filter_tiles((KernelWorker*)&pk);
 
         int max_length=0;
@@ -1077,7 +1074,7 @@ FlagtileSurface::remove_small_areas()
         assert(max_length > 0);
 #endif
 
-        RemoveAreaWorker ra(this, 0);
+        RemoveAreaWorker ra(this);
         ClearflagWalker cf(this, PIXEL_FILLED);
         // Now, use max_length as threshold.
         // Allow half of max_length, when it is enough large.
@@ -1085,7 +1082,7 @@ FlagtileSurface::remove_small_areas()
             max_length /= 2;
         
         while(g_queue_get_length(queue) > 0) {
-            _perimeter_info *info = (_perimeter_info*)g_queue_pop_head(queue);
+            perimeter_info *info = (perimeter_info*)g_queue_pop_head(queue);
             // NOTE: We cannot reject `hole` area at here because
             // That area might be multiple areas which has a composition 
             // of diagonally connected. Such areas are needed to be detected
@@ -1144,7 +1141,8 @@ void
 FlagtileSurface::fill_holes()
 {
     // As first, remove all contour
-    ConvertKernel ck(this, 0, PIXEL_CONTOUR, PIXEL_AREA);
+    ConvertKernel ck(this);
+    ck.setup(0, PIXEL_CONTOUR, PIXEL_AREA);
     filter_tiles((KernelWorker*)&ck);
 
     // That makes hole. so fill it.
@@ -1155,7 +1153,7 @@ FlagtileSurface::fill_holes()
     ClearflagWalker cf(this, PIXEL_AREA);
     FillHoleWorker fh(this);
     while(g_queue_get_length(queue) > 0) {
-        _perimeter_info *info = (_perimeter_info*)g_queue_pop_head(queue);
+        perimeter_info *info = (perimeter_info*)g_queue_pop_head(queue);
 
         cf.walk_from(info->sx, info->sy, info->direction, false);
         if (!info->clockwise && info->encount == 0) {
@@ -1246,7 +1244,7 @@ FloodfillSurface::FloodfillSurface(PyObject* tiledict,
         }
     }
 
-    _generate_tileptr_buf(
+    generate_tileptr_buf(
         min_x, min_y,
         (max_x - min_x) + 1,
         (max_y - min_y) + 1
@@ -1284,7 +1282,7 @@ FloodfillSurface::~FloodfillSurface()
 void
 FloodfillSurface::borrow_tile(const int tx, const int ty, Flagtile* tile)
 {
-    int idx = _get_tile_index(tx, ty);
+    int idx = get_tile_index(tx, ty);
     m_tiles[idx] = tile;
     tile->set_borrowed();
 }
@@ -1306,8 +1304,8 @@ ClosefillSurface::ClosefillSurface(const int start_level,
     assert(PROGRESS_TILE_SIZE(0) == MYPAINT_TILE_SIZE);
     assert(node_list != NULL);
 #endif
-    _init_nodes(node_list);
-    _scanline_fill();
+    init_nodes(node_list);
+    scanline_fill();
 }
 
 ClosefillSurface::~ClosefillSurface(){
@@ -1318,7 +1316,7 @@ ClosefillSurface::~ClosefillSurface(){
 }
 
 void
-ClosefillSurface::_init_nodes(PyObject* node_list) 
+ClosefillSurface::init_nodes(PyObject* node_list) 
 {
 #ifdef HEAVY_DEBUG
     assert(PyList_Check(node_list));
@@ -1368,19 +1366,19 @@ ClosefillSurface::_init_nodes(PyObject* node_list)
     max_x = ((max_x / TILE_SIZE) + 1) * TILE_SIZE;
     max_y = ((max_y / TILE_SIZE) + 1) * TILE_SIZE;
 
-    _generate_tileptr_buf(
+    generate_tileptr_buf(
         min_x / TILE_SIZE, 
         min_y / TILE_SIZE, 
         (max_x - min_x) / TILE_SIZE, 
         (max_y - min_y) / TILE_SIZE 
     );
 
-    // After _generate_tileptr_buf,
+    // After generate_tileptr_buf,
     // we can use m_ox, m_oy member.
     int opx = m_ox * PROGRESS_TILE_SIZE(0);
     int opy = m_oy * PROGRESS_TILE_SIZE(0);
 
-    m_nodes = new _progfill_point[actual_cnt];
+    m_nodes = new progfill_point[actual_cnt];
     m_node_cnt = actual_cnt;
     m_cur_node = 0;
     
@@ -1397,18 +1395,18 @@ ClosefillSurface::_init_nodes(PyObject* node_list)
     px = !x;
     py = !y;
 
-    _move_to(x, y);
+    move_to(x, y);
     for(int i=1; i < m_node_cnt; i++) {
         pynode = PyList_GetItem(node_list, i);
         x = (int)PyFloat_AsDouble(PyObject_GetAttr(pynode, attr_x)) - opx;
         y = (int)PyFloat_AsDouble(PyObject_GetAttr(pynode, attr_y)) - opy;
         if(px != x || py != y) {
-            _line_to((DrawWorker*)&dw, x, y, false);
+            line_to((DrawWorker*)&dw, x, y, false);
             px = x;
             py = y;
         }
     }
-    _close_line((DrawWorker*)&dw);
+    close_line((DrawWorker*)&dw);
 
     Py_DECREF(attr_x);
     Py_DECREF(attr_y);
@@ -1425,7 +1423,7 @@ ClosefillSurface::_init_nodes(PyObject* node_list)
 * If there is any flag in pixel (i.e. intersected)
 */
 void 
-ClosefillSurface::_walk_line(int sx, int sy, 
+ClosefillSurface::walk_line(int sx, int sy, 
                              int ex, int ey,
                              DrawWorker *f)
 {
@@ -1486,18 +1484,18 @@ ClosefillSurface::_walk_line(int sx, int sy,
 * for its own progress level.
 */
 void 
-ClosefillSurface::_walk_polygon(DrawWorker* w) 
+ClosefillSurface::walk_polygon(DrawWorker* w) 
 {
 
     for (int i=0; i < m_node_cnt-1; i++) {
-        _walk_line(
+        walk_line(
             m_nodes[i].x, m_nodes[i].y,
             m_nodes[i+1].x, m_nodes[i+1].y,
             w
         );
     }
 
-    _walk_line(
+    walk_line(
         m_nodes[m_node_cnt-1].x, m_nodes[m_node_cnt-1].y, 
         m_nodes[0].x, m_nodes[0].y,
         w
@@ -1515,7 +1513,7 @@ ClosefillSurface::_walk_polygon(DrawWorker* w)
 *
 */
 void 
-ClosefillSurface::_move_to(const int sx, const int sy) 
+ClosefillSurface::move_to(const int sx, const int sy) 
 {
     m_nodes[0].x = sx;
     m_nodes[0].y = sy;
@@ -1533,7 +1531,7 @@ ClosefillSurface::_move_to(const int sx, const int sy)
 *
 */
 void 
-ClosefillSurface::_line_to(DrawWorker* w, 
+ClosefillSurface::line_to(DrawWorker* w, 
                            const int ex, const int ey, 
                            const bool closing) 
 {
@@ -1548,7 +1546,7 @@ ClosefillSurface::_line_to(DrawWorker* w,
     int sx = m_nodes[m_cur_node-1].x;
     int sy = m_nodes[m_cur_node-1].y;
 
-    _walk_line(sx, sy,
+    walk_line(sx, sy,
                ex, ey, 
                w);
 
@@ -1569,9 +1567,9 @@ ClosefillSurface::_line_to(DrawWorker* w,
 * line drawing.
 */
 void 
-ClosefillSurface::_close_line(DrawWorker* w) 
+ClosefillSurface::close_line(DrawWorker* w) 
 {
-    _line_to(
+    line_to(
         w,
         m_nodes[0].x, 
         m_nodes[0].y,
@@ -1591,7 +1589,7 @@ ClosefillSurface::_close_line(DrawWorker* w)
 * https://en.wikipedia.org/wiki/Even%E2%80%93odd_rule 
 */
 bool 
-ClosefillSurface::_is_inside_polygon(const int x1, const int x2, const int y)
+ClosefillSurface::is_inside_polygon(const int x1, const int x2, const int y)
 {
   int j = m_node_cnt - 1;
   bool c1 = false;
@@ -1602,10 +1600,10 @@ ClosefillSurface::_is_inside_polygon(const int x1, const int x2, const int y)
       int ex = m_nodes[j].x;
       int ey = m_nodes[j].y;
       
-      if (_is_inside_polygon_point(x1, y, sx, sy, ex, ey))
+      if (is_inside_polygon_point(x1, y, sx, sy, ex, ey))
             c1 = !c1;
 
-      if (_is_inside_polygon_point(x2, y, sx, sy, ex, ey))
+      if (is_inside_polygon_point(x2, y, sx, sy, ex, ey))
             c2 = !c2;
 
       j = i;
@@ -1622,7 +1620,7 @@ ClosefillSurface::_is_inside_polygon(const int x1, const int x2, const int y)
 * and polygon edges drawn.
 */
 void 
-ClosefillSurface::_scanline_fill() 
+ClosefillSurface::scanline_fill() 
 {
     uint8_t pix;
     static const int SKIPPING = 0;// Initial state of scanline.
@@ -1657,7 +1655,7 @@ ClosefillSurface::_scanline_fill()
                     if (pix == PIXEL_AREA) {
                         // Due to bresenham precision error, we might get
                         // 1 px wrong value to assigned position.
-                        if (_is_inside_polygon(start_x+1, x-2, y)) {
+                        if (is_inside_polygon(start_x+1, x-2, y)) {
                             int tx;
                             int ty = y / tile_size;
                             for(int px=start_x; px<x; px++) {
@@ -1677,7 +1675,7 @@ ClosefillSurface::_scanline_fill()
                         }
                         // Reset state.
                         // From now on, we reject outside polygon pixels
-                        // with _is_inside_polygon method,
+                        // with is_inside_polygon method,
                         // instead of using SKIPPING state.
                         // Because there might be complicatedly crossed polygon. 
                         // SKIPPING state might skip pixels in such case mistakenly.
@@ -1716,12 +1714,14 @@ ClosefillSurface::decide_area()
     // when vacant area pixel found.
     // With this, we fill progress pixel of outside contours with
     // PIXEL_OUTSIDE.
-    DecideTriggerWorker w(this, m_level);   // Worker for trigger flood-fill
-    _walk_polygon(&w);
+    DecideTriggerWorker w(this);   // Worker for trigger flood-fill
+    w.set_target_level(m_level);
+    walk_polygon(&w);
 
     // Then, convert remained vacant PIXEL_AREA into PIXEL_FILLED.
     // With this, we fill the inside of contour with PIXEL_FILLED.
-    ConvertKernel k(this, m_level, PIXEL_AREA, PIXEL_FILLED);
+    ConvertKernel k(this);
+    k.setup(m_level, PIXEL_AREA, PIXEL_FILLED);
     filter_tiles((KernelWorker*)&k);
 }
 
@@ -1752,7 +1752,8 @@ LassofillSurface::~LassofillSurface()
 void
 LassofillSurface::convert_result_area()
 {
-    ConvertKernel ck(this, 0, PIXEL_CONTOUR, PIXEL_OUTSIDE);
+    ConvertKernel ck(this);
+    ck.setup(0, PIXEL_CONTOUR, PIXEL_OUTSIDE);
     filter_tiles((KernelWorker*)&ck);
     ck.setup(0, PIXEL_AREA, PIXEL_FILLED);
     filter_tiles((KernelWorker*)&ck);
@@ -1822,8 +1823,8 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
         y = MAX(0, MIN(y, tile_size-1));
         uint8_t pix = tile->get(level, x, y);
         if (pix == PIXEL_AREA) {
-            _progfill_point *seed_pt = (_progfill_point*)
-                                          malloc(sizeof(_progfill_point));
+            progfill_point *seed_pt = (progfill_point*)
+                                          malloc(sizeof(progfill_point));
             seed_pt->x = x;
             seed_pt->y = y;
             g_queue_push_tail(queue, seed_pt);
@@ -1841,7 +1842,7 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
         
         tile->fill(PIXEL_FILLED);
         
-        _progfill_point *pos = (_progfill_point*) g_queue_pop_head(queue);
+        progfill_point *pos = (progfill_point*) g_queue_pop_head(queue);
         PyObject* result = result_w;
         int dx = tile_size - 1;
 
@@ -1882,7 +1883,7 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
     else {
         // Ordinary flood-fill
         while (! g_queue_is_empty(queue)) {
-            _progfill_point *pos = (_progfill_point*) g_queue_pop_head(queue);
+            progfill_point *pos = (progfill_point*) g_queue_pop_head(queue);
             int x0 = pos->x;
             int y = pos->y;
             free(pos);
@@ -1918,8 +1919,8 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
                         if (pix_above == PIXEL_AREA) {
                             if (look_above) {
                                 // Enqueue the pixel to the north
-                                _progfill_point *p = (_progfill_point *) malloc(
-                                                        sizeof(_progfill_point)
+                                progfill_point *p = (progfill_point *) malloc(
+                                                        sizeof(progfill_point)
                                                       );
                                 p->x = x;
                                 p->y = y-1;
@@ -1946,8 +1947,8 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
                         if (pix_below == PIXEL_AREA) {
                             if (look_below) {
                                 // Enqueue the pixel to the South
-                                _progfill_point *p = (_progfill_point *) malloc(
-                                                        sizeof(_progfill_point)
+                                progfill_point *p = (progfill_point *) malloc(
+                                                        sizeof(progfill_point)
                                                       );
                                 p->x = x;
                                 p->y = y+1;

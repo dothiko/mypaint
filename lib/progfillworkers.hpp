@@ -24,17 +24,16 @@
 // Dilation kernel.
 class DilateKernel : public KernelWorker
 {
-protected:
 public:
     DilateKernel(FlagtileSurface *surf)
-        : KernelWorker(surf, 0) 
-    {}
+        : KernelWorker(surf) { }
 
-    virtual bool start(Flagtile *targ, const int sx, const int sy) {
+    virtual bool start(Flagtile *targ, const int sx, const int sy) 
+    {
         // We cannot use parent class method for DilateKernel.
         // Because this kernel accepts NULL tile.
         if (targ == NULL || (targ->get_stat() & Flagtile::EMPTY)) {
-            _process_only_ridge(targ, sx, sy);
+            process_only_ridge(targ, sx, sy);
             end(targ);
             return false;
         }
@@ -49,10 +48,11 @@ public:
 
     virtual void step(Flagtile *targ, 
                       const int x, const int y,
-                      const int sx, const int sy) {
+                      const int sx, const int sy) 
+    {
         uint8_t pix;
         if (targ == NULL) {
-            // _process_only_ridge might reach here.
+            // process_only_ridge might reach here.
             pix = PIXEL_EMPTY;
         }
         else {
@@ -63,7 +63,7 @@ public:
         // Ignore such pixel to avoid chain reaction.
         if (pix != PIXEL_FILLED && (pix & FLAG_WORK) == 0) {
             for(int i=0; i<4; i++) {
-                uint8_t kpix = _get_neighbor_pixel(0, i, sx, sy);
+                uint8_t kpix = get_neighbor_pixel(0, i, sx, sy);
                 if (kpix == PIXEL_FILLED) {
                     if (targ == NULL) {
                         // We need to generate(or get) a new tile for NULL target.
@@ -88,32 +88,25 @@ protected:
     uint8_t m_new_pixel;
 
 public:
-    ConvertKernel(FlagtileSurface *surf, const int level, 
-                  const uint8_t targ_pixel, const uint8_t new_pixel)
-        : KernelWorker(surf, level), 
-          m_targ_pixel(targ_pixel),
-          m_new_pixel(new_pixel) {
-    }
-
-    // Another contsructor. Used for class member.
-    ConvertKernel(FlagtileSurface *surf) 
-        : KernelWorker(surf, 0), 
+    ConvertKernel(FlagtileSurface *surf)
+        : KernelWorker(surf), 
           m_targ_pixel(0),
-          m_new_pixel(0) {
-    }
+          m_new_pixel(0) { }
 
-    // To avoid repeatedly generate convert-kernel object,
-    // Some class reuse only one kernel object over a series of processes.
-    // For such case, we need this (re)setup method.
+    // You MUST call setup method before using ConvertKernel instance.
+    // And, some function repeatedly use an instance, so initialization
+    // should not be done in constructor, for this class.
     void setup(const int level, 
                const uint8_t targ_pixel, 
-               const uint8_t new_pixel) {
+               const uint8_t new_pixel) 
+    {
         set_target_level(level);
         m_targ_pixel = targ_pixel;
         m_new_pixel = new_pixel;
     }
 
-    virtual bool start(Flagtile *targ, const int sx, const int sy) {
+    virtual bool start(Flagtile *targ, const int sx, const int sy) 
+    {
         if (targ == NULL && m_targ_pixel == PIXEL_EMPTY) {
             targ = m_surf->get_tile_from_pixel(0, sx, sy, true);
             targ->fill(m_new_pixel);
@@ -131,7 +124,8 @@ public:
 
     virtual void step(Flagtile *targ, 
                       const int x, const int y,
-                      const int sx, const int sy) {
+                      const int sx, const int sy) 
+    {
         uint8_t pix = targ->get(m_level, x, y);
         if (pix == m_targ_pixel) {
             targ->replace(m_level, x, y, m_new_pixel);
@@ -145,19 +139,19 @@ public:
 // filled pixel area with virtually gap-closing.
 class ProgressKernel: public KernelWorker
 {
-protected:
 public:
     // This class does not use initial level parameter.
     // Because it would be changed frequently.
     // It would be set at loop, with `set_target_level` method.
     ProgressKernel(FlagtileSurface *surf) 
-        : KernelWorker(surf, 0) {}
+        : KernelWorker(surf) { }
 
     // Disable default finalize. 
     // This kernel does not use FLAG_WORK.
-    virtual void finalize() {} 
+    virtual void finalize() { } 
     
-    virtual bool start(Flagtile *targ, const int sx, const int sy) {
+    virtual bool start(Flagtile *targ, const int sx, const int sy) 
+    {
         if (KernelWorker::start(targ, sx, sy)) {
             // Target tile 
             int stat = targ->get_stat();
@@ -186,7 +180,7 @@ public:
                         break;
 #endif
                     default:
-                        _process_only_ridge(targ, sx, sy);
+                        process_only_ridge(targ, sx, sy);
                         break;
                 }
                 end(targ);
@@ -199,7 +193,8 @@ public:
 
     virtual void step(Flagtile *targ, 
                       const int x, const int y,
-                      const int sx, const int sy) {
+                      const int sx, const int sy) 
+    {
         // `pixel is greater than PIXEL_FILLED` 
         // means `PIXEL_FILLED or PIXEL_CONTOUR`
         uint8_t above = targ->get(m_level, x, y);
@@ -216,10 +211,10 @@ public:
             }
         }
         else {
-            uint8_t top = _get_neighbor_pixel(m_level, 0, sx, sy);
-            uint8_t right = _get_neighbor_pixel(m_level, 1, sx, sy);
-            uint8_t bottom = _get_neighbor_pixel(m_level, 2, sx, sy);
-            uint8_t left = _get_neighbor_pixel(m_level, 3, sx, sy);
+            uint8_t top = get_neighbor_pixel(m_level, 0, sx, sy);
+            uint8_t right = get_neighbor_pixel(m_level, 1, sx, sy);
+            uint8_t bottom = get_neighbor_pixel(m_level, 2, sx, sy);
+            uint8_t left = get_neighbor_pixel(m_level, 3, sx, sy);
 
             // The param x and y is current(above) progress coordinate.
             // The coordinate of level beneath should be double of them.
@@ -269,8 +264,9 @@ protected:
     bool m_walking_started;
     
     // Dedicated wrapper method to get pixel with direction.
-    virtual uint8_t _get_pixel_with_direction(const int x, const int y, 
-                                              const int direction) {
+    virtual uint8_t get_pixel_with_direction(const int x, const int y, 
+                                              const int direction) 
+    {
         uint8_t pix = m_surf->get_pixel(m_level,
                                         x + xoffset[direction],
                                         y + yoffset[direction]);
@@ -289,8 +285,9 @@ protected:
     //// Drawing related.
     
     // Get anti-aliasing value (0.0 to 1.0) from a pixel point.
-    double _get_aa_value(
-        int x, int y, const bool is_start, const bool face_wall) {
+    double get_aa_value(
+        int x, int y, const bool is_start, const bool face_wall) 
+    {
         if (is_start) {
             // For staring pixel check, we need the `back` pixel
             // to determine starting point value.
@@ -311,7 +308,7 @@ protected:
 
         if ((m_surf->get_pixel(0, x, y) & PIXEL_MASK) == PIXEL_FILLED) {
             int leftdir = (m_line_dir + 3) & 3;
-            uint8_t side_pixel = _get_pixel_with_direction(x, y, leftdir);
+            uint8_t side_pixel = get_pixel_with_direction(x, y, leftdir);
             if ((side_pixel & PIXEL_MASK) == PIXEL_FILLED) {
                 // The target pixel is `cliff`
                 // It is not suitable as antialias point.
@@ -326,7 +323,8 @@ protected:
         }
     }
 
-    void _draw_antialias(const int ex, const int ey, const bool right) {
+    void draw_antialias(const int ex, const int ey, const bool right) 
+    {
         if (m_step > 0) { 
             if ((m_sx == ex) && (m_sy == ey)) {
                 // This might be 1px anti-aliasing. 
@@ -338,8 +336,8 @@ protected:
             }
        
             // `not right` means `left turn`.
-            double start_value = _get_aa_value(m_sx, m_sy, true, !right);
-            double end_value = _get_aa_value(ex, ey, false, !right);
+            double start_value = get_aa_value(m_sx, m_sy, true, !right);
+            double end_value = get_aa_value(ex, ey, false, !right);
 
             // Gradient from 0 to 0 is meaningless. 
             if (start_value == 0 && end_value == 0) 
@@ -393,10 +391,11 @@ protected:
     //// Walking related.
 
     // Initialize origin or draw antialiasing line.
-    virtual void _on_rotate_cb(const bool right) {
+    virtual void on_rotate_cb(const bool right) 
+    {
         if (m_walking_started ) {
             if (m_step > 0) {
-               _draw_antialias(m_x, m_y, right);
+               draw_antialias(m_x, m_y, right);
             }
         } 
         else {
@@ -425,14 +424,14 @@ protected:
         m_line_dir = m_cur_dir;
     }
  
-    virtual bool _is_wall_pixel(const uint8_t pixel)  {
+    virtual bool is_wall_pixel(const uint8_t pixel)  
+    {
         return ((pixel & FLAG_AA)==0 && pixel == PIXEL_FILLED);
     }
 
 public:
     AntialiasKernel(FlagtileSurface *surf) 
-        : WalkingKernel(surf, 0) {
-    }
+        : WalkingKernel(surf) { }
 
     // Disable finalize method.
     //
@@ -440,12 +439,13 @@ public:
     // and erase all flags.
     // And, Antialiasing is the last procedure of progress-fill,
     // so there is no need to clear (dirty) flags.
-    virtual void finalize() {}
+    virtual void finalize() { }
 
-    virtual bool start(Flagtile *targ, const int sx, const int sy) {
+    virtual bool start(Flagtile *targ, const int sx, const int sy) 
+    {
         // This kernel accepts NULL tile.
         if(targ == NULL) {
-            _process_only_ridge(targ, sx, sy);
+            process_only_ridge(targ, sx, sy);
             end(targ);
             return false;
         }
@@ -457,7 +457,7 @@ public:
             }
             else if ((s & Flagtile::EMPTY)
                         || (s & Flagtile::FILLED_AREA)) {
-                _process_only_ridge(targ, sx, sy);
+                process_only_ridge(targ, sx, sy);
                 end(targ);
                 return false;
             }
@@ -469,7 +469,8 @@ public:
     // `progress level` coordinate.
     virtual void step(Flagtile *targ, 
                       const int x, const int y,
-                      const int sx, const int sy) {
+                      const int sx, const int sy) 
+    {
         uint8_t pix;
         uint8_t pix_right;
 
@@ -502,7 +503,7 @@ public:
             m_line_dir = 0; // 0 means "Currently face top"
             m_sx = m_x;
             m_sy = m_y;
-            _walk(sx, sy, 0);
+            walk(sx, sy, 0);
         }
     }
 };
@@ -512,20 +513,19 @@ public:
 // This class is used post-processing of FlagtileSurface::remove_small_areas
 class RemoveAreaWorker : public FillWorker 
 {
-protected:
 public:
-    RemoveAreaWorker(FlagtileSurface *surf,
-                     const int targ_level) 
-        : FillWorker(surf, targ_level) {
-    }
+    RemoveAreaWorker(FlagtileSurface *surf)
+        : FillWorker(surf) { }
     
-    virtual bool match(const uint8_t pix) {
+    virtual bool match(const uint8_t pix) 
+    {
         return (pix & PIXEL_MASK) == PIXEL_FILLED;
     }
 
     virtual void step(Flagtile *tile,
                       const int x, const int y,
-                      const int sx, const int sy) {
+                      const int sx, const int sy) 
+    {
         tile->replace(m_level, x, y, PIXEL_AREA);
     }
 };
@@ -540,7 +540,7 @@ typedef struct {
     int direction;
     int encount;
     bool clockwise;
-} _perimeter_info;
+} perimeter_info;
 
 // Count perimeter of filled area.
 // This class just walk and count perimeter, and stores that position, length and 
@@ -553,7 +553,8 @@ protected:
     GQueue* m_queue; // Borrowed queue, set at start method.
     
     // tells whether the pixel value is wall pixel or not.
-    virtual bool _is_wall_pixel(const uint8_t pixel) {
+    virtual bool is_wall_pixel(const uint8_t pixel) 
+    {
         switch(pixel & PIXEL_MASK) {
             case PIXEL_FILLED:
                 return false;
@@ -569,21 +570,24 @@ protected:
         }
     }
 
-    virtual void _on_rotate_cb(const bool right) {
+    virtual void on_rotate_cb(const bool right) 
+    {
         // If rotating right, it is `vacant pixel` of perimeter.
         // so decliment perimeter(i.e. m_step).
         if (right)
             m_step--;
     }
 
-    virtual void _on_new_pixel() {
+    virtual void on_new_pixel() 
+    {
         // Mark this pixel as `already walked`.
         m_surf->replace_pixel(m_level, m_x, m_y, 
                               PIXEL_FILLED | FLAG_WORK);
     }
 
-    void _push_queue(const int sx, const int sy, const int direction) {
-        _perimeter_info *info = new _perimeter_info();
+    void push_queue(const int sx, const int sy, const int direction) 
+    {
+        perimeter_info *info = new perimeter_info();
         info->sx = sx;
         info->sy = sy;
         info->length = m_step;
@@ -595,19 +599,18 @@ protected:
     
 public:
     CountPerimeterKernel(FlagtileSurface *surf,  
-                         const int targ_level,
                          GQueue* queue)
-        :   WalkingKernel(surf, targ_level),
-            m_queue(queue) 
-    {}
+        :   WalkingKernel(surf),
+            m_queue(queue) { }
 
-    virtual bool start(Flagtile *targ, const int sx, const int sy) {
+    virtual bool start(Flagtile *targ, const int sx, const int sy) 
+    {
 #ifdef HEAVY_DEBUG
             assert(m_queue != NULL);
 #endif
         if (targ != NULL) {
             if (targ->get_stat() & Flagtile::FILLED) {
-                _process_only_ridge(targ, sx, sy);
+                process_only_ridge(targ, sx, sy);
                 end(targ);
                 return false;
             }
@@ -625,7 +628,8 @@ public:
 
     virtual void step(Flagtile *targ, 
                       const int x, const int y,
-                      const int sx, const int sy) {
+                      const int sx, const int sy) 
+    {
         // Use raw pixel, DO not remove FLAG_DECIDED.
         // (some area previously walked and it might have been marked
         // with FLAG_DECIDED)
@@ -633,14 +637,14 @@ public:
 
         if (pixel == PIXEL_FILLED) {
             for(int i=0; i<4; i++) {
-                uint8_t pix_n = _get_neighbor_pixel(m_level, i, sx, sy);
+                uint8_t pix_n = get_neighbor_pixel(m_level, i, sx, sy);
                 m_encount = 0;// IMPORTANT: initialize this here. 
-                              // This might be increased in _is_wall_pixel.
+                              // This might be increased in is_wall_pixel.
 
-                if (_is_wall_pixel(pix_n)) {
+                if (is_wall_pixel(pix_n)) {
                     // Start from current kernel pixel.
-                    _walk(sx, sy, _get_reversed_hand_dir(i));
-                    _push_queue(sx, sy, i);
+                    walk(sx, sy, get_reversed_hand_dir(i));
+                    push_queue(sx, sy, i);
                     return;
                 }
             }
@@ -655,11 +659,13 @@ class ClearflagWalker: public WalkingKernel
 protected:
     const uint8_t m_targ_pix;
 
-    virtual bool _is_wall_pixel(const uint8_t pixel) {
+    virtual bool is_wall_pixel(const uint8_t pixel) 
+    {
         return (pixel & PIXEL_MASK) != m_targ_pix;//(pixel & FLAG_MASK) == 0;
     }
 
-    virtual void _on_new_pixel() {
+    virtual void on_new_pixel() 
+    {
         // Replace PIXEL_FILLED... i.e. `clear flag`
         uint8_t pix = m_surf->get_pixel(0, m_x, m_y);
         m_surf->replace_pixel(0, m_x, m_y, (pix & PIXEL_MASK));
@@ -667,15 +673,15 @@ protected:
     
 public:
     ClearflagWalker(FlagtileSurface *surf, const uint8_t targ_pix)
-        :   WalkingKernel(surf, 0),
-            m_targ_pix(targ_pix) {
-    }
+        :   WalkingKernel(surf),
+            m_targ_pix(targ_pix) { }
 
-    void walk_from(const int sx, const int sy, const int direction, const bool outside) {
+    void walk_from(const int sx, const int sy, const int direction, const bool outside) 
+    {
         if (outside)
-            _walk(sx, sy, _get_hand_dir(direction));
+            walk(sx, sy, get_hand_dir(direction));
         else
-            _walk(sx, sy, _get_reversed_hand_dir(direction));
+            walk(sx, sy, get_reversed_hand_dir(direction));
     }
 };
 
@@ -683,19 +689,19 @@ public:
 // to fill all small holes inside a large area.
 class FillHoleWorker : public FillWorker 
 {
-protected:
 public:
     FillHoleWorker(FlagtileSurface *surf)
-        : FillWorker(surf, 0) {
-    }
+        : FillWorker(surf) { }
     
-    virtual bool match(const uint8_t pix) {
+    virtual bool match(const uint8_t pix) 
+    {
         return (pix & PIXEL_MASK) == PIXEL_AREA;
     }
 
     virtual void step(Flagtile *tile,
                       const int x, const int y,
-                      const int sx, const int sy) {
+                      const int sx, const int sy) 
+    {
         tile->replace(0, x, y, PIXEL_FILLED);
     }   
 };
@@ -709,7 +715,8 @@ public:
 class FillHoleKernel: public CountPerimeterKernel
 {
 protected:
-    virtual bool _is_wall_pixel(const uint8_t pixel) {
+    virtual bool is_wall_pixel(const uint8_t pixel) 
+    {
         switch(pixel & PIXEL_MASK) {
             case PIXEL_FILLED:
                 return true;
@@ -724,7 +731,8 @@ protected:
         }
     }
 
-    virtual void _on_new_pixel() {
+    virtual void on_new_pixel() 
+    {
         // Mark current(new) pixel as `walked`
         m_surf->replace_pixel(0, m_x, m_y, PIXEL_AREA | FLAG_WORK);
     }
@@ -735,10 +743,11 @@ public:
     * Constructor of FillHoleKernel.
     */    
     FillHoleKernel(FlagtileSurface *surf, GQueue *queue) 
-        :   CountPerimeterKernel(surf, 0, queue) 
-    {}
+        :   CountPerimeterKernel(surf, queue) 
+    { }
 
-    virtual bool start(Flagtile *targ, const int sx, const int sy) {
+    virtual bool start(Flagtile *targ, const int sx, const int sy) 
+    {
         // Not baseclass `CountPerimeterKernel::start`,
         // call base-baseclass `KernelWorker::start`.
         // baseclass::start method is not compatible for this class.
@@ -750,7 +759,7 @@ public:
                 return false;
             }
             else if (s & Flagtile::FILLED_AREA) {
-                _process_only_ridge(targ, sx, sy);
+                process_only_ridge(targ, sx, sy);
                 end(targ);
                 return false;
             }
@@ -761,23 +770,24 @@ public:
 
     virtual void step(Flagtile *targ, 
                       const int x, const int y,
-                      const int sx, const int sy) {
+                      const int sx, const int sy) 
+    {
         uint8_t pixel = targ->get(0, x, y); 
         if (pixel == PIXEL_AREA) {
             for(int i=0; i<4; i++) {
-                uint8_t kpix = _get_neighbor_pixel(0, i, sx, sy);
+                uint8_t kpix = get_neighbor_pixel(0, i, sx, sy);
                 // When kpix is EXACTLY filled pixel... 
                 // (A ridge of already detected area would be a combination of
                 // PIXEL_FILLED | FLAG_DECIDED, so skip it.)
                 if (kpix == PIXEL_FILLED) {
                     m_encount = 0;
                     // We walk into `hole`, so proceed reversed direction.
-                    _walk(sx, sy, _get_reversed_hand_dir(i));
+                    walk(sx, sy, get_reversed_hand_dir(i));
                     if (m_step > 0) {
                         // After walking, we might fill current `hole` area.
                         // That is processd later (at FlagtileSurface::fill_holes()) 
                         // just store it into queue for now.
-                        _push_queue(sx, sy, i);
+                        push_queue(sx, sy, i);
                         return;
                     }
                 }
@@ -793,11 +803,11 @@ protected:
     const uint8_t m_flag;
 public:
     DrawLineWorker(FlagtileSurface *surf, const uint8_t flag) 
-        : DrawWorker(surf, 0), m_flag(flag) 
-    {
-    }
+        : DrawWorker(surf), 
+          m_flag(flag) { }
     
-    virtual bool step(const int x, const int y) { 
+    virtual bool step(const int x, const int y) 
+    { 
         m_surf->replace_pixel(0, x, y, m_flag);
         return true;
     }
@@ -807,30 +817,30 @@ public:
 // for flood-fill operation 
 class DecideOutsideWorker : public FillWorker 
 {
-protected:
 public:
-    DecideOutsideWorker(FlagtileSurface *surf, const int level) 
-        : FillWorker(surf, level) 
-    {}
+    DecideOutsideWorker(FlagtileSurface *surf)
+        : FillWorker(surf) { }
 
-    virtual bool match(const uint8_t pix) {
+    virtual bool match(const uint8_t pix) 
+    {
         return pix == PIXEL_AREA;
     }
 
     virtual void step(Flagtile *tile,
                       const int x, const int y,
-                      const int sx, const int sy) {
+                      const int sx, const int sy) 
+    {
         tile->replace(m_level, x, y, PIXEL_OUTSIDE);
     }   
 };
 
 // Trigger flood-fill worker.
 // Actually this worker itself does no any pixel-writing operation.
-// This worker is called from _walk_polygon(and _walk_line) 
+// This worker is called from walk_polygon(and walk_line) 
 // of FlagtileSurface and do flood-fill when condition met.
 //
 // Caution:
-// _walk_polygon/_walk_line method uses progress level 0 coodinate,
+// walk_polygon/_walk_line method uses progress level 0 coodinate,
 // but the this worker might needs another progress level coodinate.
 // So we need to convert them in `match` and `step`  method.
 class DecideTriggerWorker: public DrawWorker 
@@ -847,14 +857,19 @@ public:
     *                      This is only used for m_worker,
     *                      This class itself uses fixed progress level = 0.
     */
-    DecideTriggerWorker(FlagtileSurface *surf, 
-                        const int worker_level) 
-        :  DrawWorker(surf, 0), 
-           m_worker(surf, worker_level) 
-    {}
+    DecideTriggerWorker(FlagtileSurface *surf) 
+        :  DrawWorker(surf), 
+           m_worker(surf) { }
 
-    virtual bool step(const int sx, const int sy) {
-        // _walk_polygon/_walk_line method uses progress level 0 coodinate,
+    virtual void set_target_level(const int level) 
+    {
+        m_worker.set_target_level(level);
+        // The target level of trigger worker is unchanged.
+    }
+
+    virtual bool step(const int sx, const int sy) 
+    {
+        // walk_polygon/_walk_line method uses progress level 0 coodinate,
         // so sx and sy are not target level coordinate, 
         // we need to convert them.
         int worker_level = m_worker.get_target_level();

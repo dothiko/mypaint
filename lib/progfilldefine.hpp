@@ -7,6 +7,12 @@
  * (at your option) any later version.
  */
 
+
+/* This file is to hide base classes from python interface.
+ * Also, all classes in this file are base class, so all
+ * uses protected keyword as inner method/members.
+ */
+
 #ifndef PROGFILLDEFINE_HPP
 #define PROGFILLDEFINE_HPP
 
@@ -21,8 +27,8 @@
 // Force positive modulo against every number.
 // C/C++ would produce platform-dependent result
 // with modulo against negative number.
-// This macro is used in closefill.cpp/hpp
-#define positive_mod(a, b) (((a) % (b) + (b)) % (b))
+// This macro is used in progfill.cpp/hpp
+#define POSITIVE_MOD(a, b) (((a) % (b) + (b)) % (b))
 
 #define MAX_PROGRESS 6
 
@@ -36,10 +42,11 @@
 
 #define TILE_SIZE MYPAINT_TILE_SIZE
 
+// Maximum Anti-Aliasing transparency level.
 #define MAX_AA_LEVEL 127
 
 // For Flagtile class. to get progress-level ptr from
-#define _BUF_PTR(l, x, y) (m_buf + m_buf_offsets[(l)] + ((y) * PROGRESS_TILE_SIZE((l)) + (x))) 
+#define BUF_PTR(l, x, y) (m_buf + m_buf_offsets[(l)] + ((y) * PROGRESS_TILE_SIZE((l)) + (x))) 
 
 // PIXEL_ Constants.
 enum PixelFlags {
@@ -47,15 +54,13 @@ enum PixelFlags {
     // The vacant pixel is 0.
     // PIXEL_AREA means 'The pixel is fillable, but not filled(yet)'
     PIXEL_MASK = 0x0F,
-    PIXEL_EMPTY = 0x00,
-    PIXEL_OUTSIDE = 0x02,  
-    PIXEL_AREA = 0x03,
-    PIXEL_FILLED = 0x05,
-    PIXEL_CONTOUR, // PIXEL_CONTOUR is one of a filled pixel.
-                   // This should be larger than PIXEL_FILLED
-                   // to ease finding `filled` pixel.
-                   // So, PIXEL_CONTOUR should be largest value
-                   // of PIXEL_ constants, and defined next to PIXEL_FILLED.
+    PIXEL_EMPTY = 0x00,   // PIXEL_EMPTY should lower than PIXEL_OUTSIDE
+    PIXEL_OUTSIDE = 0x01, // Thus, we can know total outside pixel as <= PIXEL_OUTSIDE
+    PIXEL_AREA = 0x02,
+    PIXEL_FILLED = 0x03,
+    PIXEL_CONTOUR = 0x04, // PIXEL_CONTOUR is one of a filled pixel.
+                          // This should be larger than PIXEL_FILLED
+                          // to ease finding `filled(or unchangeable)` pixel.
                          
     // FLAG_ values are bitwise flag. 
     FLAG_MASK = 0xF0,
@@ -85,34 +90,34 @@ class FlagtileSurface;
 * This is to share same logic between drawing line
 * and searching unfilled target area.
 */
-
-class PixelWorker {
+class PixelWorker 
+{
 protected:
     FlagtileSurface* m_surf;
     int m_level;
 
 public:
-    PixelWorker(FlagtileSurface* surf, const int level) 
-        : m_surf(surf), m_level(level) 
+    PixelWorker(FlagtileSurface* surf) 
+        : m_surf(surf), m_level(0) 
     {
         // Calling virtual method `set_target_level` 
         // at here (i.e. constructor) is meaningless.
-        // It cannot call derived virtual one by C++
-        // design.
+        // Derived virtual function cannot be called from
+        // constructor by C++ design.
         // So I use initialization list.
     }
     virtual ~PixelWorker(){}
 
     inline int get_target_level() { return m_level;}
 
-    virtual void set_target_level(const int level) {
+    virtual void set_target_level(const int level) 
+    {
 #ifdef HEAVY_DEBUG
         assert(level >= 0); 
         assert(level <= MAX_PROGRESS); 
 #endif
         m_level = level; 
     }
-    
 };
 
 /**
@@ -122,18 +127,12 @@ public:
 * Abstruct Worker class of walking line or some basic pixel operation.
 * This worker is used for pixel operations for all over the surface.
 */
-class DrawWorker : public PixelWorker {
+class DrawWorker : public PixelWorker 
+{
 protected:
 public:
-    DrawWorker(FlagtileSurface* surf, const int level) 
-        : PixelWorker(surf, level) 
-    {
-        // Calling virtual method `set_target_level` 
-        // at here (i.e. constructor) is meaningless.
-        // It cannot call derived virtual one by C++
-        // design.
-        // So I use initialization list.
-    }
+    DrawWorker(FlagtileSurface* surf) 
+        : PixelWorker(surf) { }
 
     /**
     * @step
@@ -145,7 +144,6 @@ public:
     * return false. Otherwise, return true.
     */    
     virtual bool step(const int x, const int y) = 0;
-        
 };
 
 /**
@@ -153,14 +151,13 @@ public:
 * @brief Abstruct class of tile-based pixel operation.
 *
 */
-class TileWorker : public PixelWorker {
+class TileWorker : public PixelWorker 
+{
 protected:
-    int m_processed; // Processed pixel count. update this in child class.
-
     
     // process only outerrim ridges of a tile.
     // use for a tile which is filled some specific value.
-    void _process_only_ridge(Flagtile *targ, const int sx, const int sy)
+    void process_only_ridge(Flagtile *targ, const int sx, const int sy)
     {
         int ridge = PROGRESS_TILE_SIZE(m_level);
 
@@ -178,24 +175,18 @@ protected:
         }
     }
 
-    inline uint8_t _get_neighbor_pixel(const int level,
+    inline uint8_t get_neighbor_pixel(const int level,
                                        const int direction, 
                                        const int sx, const int sy); 
 
 public:
-    TileWorker(FlagtileSurface* surf, const int level) 
-        : PixelWorker(surf, level) ,
-          m_processed(0)
-    {
-    }
+    TileWorker(FlagtileSurface* surf) 
+        : PixelWorker(surf) { }
     
-    inline const int get_processed_count() {
-        return m_processed;
-    }  
-               
     // `start` called at the starting point of tile processing.
     // All processing cancelled when this return false.
-    virtual bool start(Flagtile *tile, const int sx, const int sy) {
+    virtual bool start(Flagtile *tile, const int sx, const int sy) 
+    {
         return true; // As a default, always return true.
     }
    
@@ -210,13 +201,13 @@ public:
     */    
     virtual void step(Flagtile* tile, 
                       const int x, const int y,
-                      const int sx, const int sy) {}
+                      const int sx, const int sy) { }
     
     // Called when a tile processing end.
-    virtual void end( Flagtile* tile){}
+    virtual void end( Flagtile* tile) { }
     
     // Called when entire tiles processing end.
-    virtual void finalize(){}
+    virtual void finalize() { }
     
     // Offsets to refer neighboring pixels. 
     // This is public. Some class might refer them.
@@ -229,12 +220,12 @@ public:
 * @brief Dedicated pixelworker for flood-fill operation
 *
 */
-class FillWorker : public TileWorker{
+class FillWorker : public TileWorker
+{
 protected:
 public:
-    FillWorker(FlagtileSurface* surf, const int level) 
-        : TileWorker(surf, level) 
-    {}
+    FillWorker(FlagtileSurface* surf)
+        : TileWorker(surf) { }
     
     // To check whether a pixel to be processed or not. 
     // `match` and `step` methods are almost same, it seems to be done
@@ -251,35 +242,24 @@ public:
 * 
 * Abstruct class of pixel filter worker.
 */
-class KernelWorker : public TileWorker {
+class KernelWorker : public TileWorker 
+{
 protected:
     // Cache of m_surf information
     int m_max_x;
     int m_max_y;
 
-
 public:
     // Defined at lib/progfill.cpp
-    KernelWorker(FlagtileSurface *surf, const int level);
-
+    KernelWorker(FlagtileSurface *surf)
+        : TileWorker(surf) { }
 
     virtual void set_target_level(const int level);
 
     virtual bool start(Flagtile *tile, const int sx, const int sy);
     virtual void end(Flagtile *tile);
     
-    /**
-    * @finalize
-    * Called when the entire pixel operation has end.
-    *
-    * @detail 
-    * This method called when the entire pixel operation has end.
-    * It seems that such codes should be written in destructor,
-    * but virtual destructor would be called parent class one,
-    * it cannot be cancelled easily. so this method is created.
-    */ 
     virtual void finalize();
-
 };
 
 // Walking kernel base class.
@@ -319,91 +299,92 @@ protected:
     // To detect walking is closewise or counter-clockwise.
     long m_clockwise_cnt;
 
-    inline int _get_hand_dir(const int dir) { return (dir + 1) & 3; }
-    inline int _get_reversed_hand_dir(const int dir) { return (dir + 3) & 3; }
+    inline int get_hand_dir(const int dir) { return (dir + 1) & 3; }
+    inline int get_reversed_hand_dir(const int dir) { return (dir + 3) & 3; }
 
     // Wrapper method to get pixel with direction.
-    virtual uint8_t _get_pixel_with_direction(const int x, const int y, 
+    virtual uint8_t get_pixel_with_direction(const int x, const int y, 
                                               const int direction);
 
-    inline uint8_t _get_front_pixel() {
-        return _get_pixel_with_direction(m_x, m_y, m_cur_dir);
+    inline uint8_t get_front_pixel() 
+    {
+        return get_pixel_with_direction(m_x, m_y, m_cur_dir);
     }
 
-    inline uint8_t _get_hand_pixel() {
-        return _get_pixel_with_direction(m_x, m_y, _get_hand_dir(m_cur_dir));
+    inline uint8_t get_hand_pixel() 
+    {
+        return get_pixel_with_direction(m_x, m_y, get_hand_dir(m_cur_dir));
     }
 
     //// Walking related.
     
     // Rotate to right.
     // This is used when we missed wall at right-hand. 
-    void _rotate_right();
+    void rotate_right();
     
     // Rotate to left. 
-    // This is used when we face `wall`. called from _proceed().
-    void _rotate_left();
+    // This is used when we face `wall`. called from proceed().
+    void rotate_left();
 
     // Go forward. 
-    // Called from _proceed().
-    bool _forward();
+    // Called from proceed().
+    bool forward();
 
     // Rotate or Proceed (walk) single step, around the target area.
     // when reaches end of walking, return false.
-    bool _proceed();
+    bool proceed();
 
-    void _walk(const int sx, const int sy, const int direction);
+    void walk(const int sx, const int sy, const int direction);
     
     //// Walking callbacks / virtual methods
     
     // Rotation callback. 
     // If parameter `right` is true, kernel turns right. 
     // otherwise turns left.
-    virtual void _on_rotate_cb(const bool right){}
+    virtual void on_rotate_cb(const bool right) { }
 
     // `Entering new pixel` callback.
-    // This called when _forward() method go (forward) into new pixel.
+    // This called when forward() method go (forward) into new pixel.
     // Current pixel is ensured as `forwardable` target pixel.
-    virtual void _on_new_pixel(){}
+    virtual void on_new_pixel() { }
 
     // Check whether the right side pixel of current position / direction
     // is match to forward.
-    virtual bool _is_wall_pixel(const uint8_t pixel);
+    virtual bool is_wall_pixel(const uint8_t pixel);
 
     
 public:
-    WalkingKernel(FlagtileSurface *surf, const int level) 
-        : KernelWorker(surf, level)
-    {} 
+    WalkingKernel(FlagtileSurface *surf)
+        : KernelWorker(surf) { } 
 
     // start/end should be implemented in child class.
-    virtual bool start(Flagtile* targ, const int sx, const int sy) {
+    virtual bool start(Flagtile* targ, const int sx, const int sy) 
+    {
         return false;
     }
-    virtual void end(Flagtile* targ) {}
+
+    virtual void end(Flagtile* targ) { }
 
     // Tell whether the walking is clockwise or not.
     // We can use this method only after the walking.
     inline bool is_clockwise() {
         return m_clockwise_cnt < 0;
     }
-
 };
 
-// XXX Currently almost same as _floodfill_point of fill.cpp,
-// But _progfill_point member might be changed in future.
+// XXX Currently almost same as floodfill_point of fill.cpp,
+// But progfill_point member might be changed in future.
 typedef struct {
     int x;
     int y;
-} _progfill_point;
+} progfill_point;
 
-// _progfill_tilepoint used for flood-fill operation of FlagtileSurface.
+// progfill_tilepoint used for flood-fill operation of FlagtileSurface.
 typedef struct {
     int x; // Pixel location of tile 
     int y;
     int tx; // Tile location
     int ty;
-} _progfill_tilepoint;
-
+} progfill_tilepoint;
 
 #endif

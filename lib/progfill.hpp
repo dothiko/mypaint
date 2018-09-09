@@ -12,10 +12,9 @@
 
 #include <Python.h>
 #include "progfilldefine.hpp"
-#include "fix15.hpp"
-#include <glib.h>
 
-// This Module is for implementing 'progressive fill' 
+// This Module is for implementing python interface of 
+// 'progressive fill' 
 
 /* Flagtile class, to contain flag information. 
  * 
@@ -25,7 +24,7 @@
  */
 class Flagtile 
 {
-protected:
+private:
     uint8_t *m_buf;
 
     // Pixel counts.
@@ -51,10 +50,10 @@ protected:
     int32_t m_statflag;
 
     // Build single progress level
-    void _build_progress_level(const int targ_level);
+    void build_progress_level(const int targ_level);
 
     // Get antialias value(0.0 - 1.0) from Antialias pixel of flagtile.
-    inline double _get_aa_double_value(const uint8_t pix)
+    inline double get_aa_double_value(const uint8_t pix)
     {
         // 0.9 is practical factor, not to become alpha value too opaque.
         return ((((double)(pix)) / MAX_AA_LEVEL) * 0.9);
@@ -70,12 +69,12 @@ public:
 
     inline uint8_t get(const int level, const int x, const int y) 
     {
-        return *_BUF_PTR(level, x, y);
+        return *BUF_PTR(level, x, y);
     }
 
     inline void replace(const int level, int x, int y, uint8_t val) 
     {
-        uint8_t oldpix = *_BUF_PTR(level, x, y) & PIXEL_MASK;
+        uint8_t oldpix = *BUF_PTR(level, x, y) & PIXEL_MASK;
         if (level == 0 
                 && (val & PIXEL_MASK) != oldpix) {
             switch (val & PIXEL_MASK) {
@@ -90,7 +89,7 @@ public:
                     break;
             }
 
-            switch (oldpix & PIXEL_MASK) {
+            switch (oldpix) {
                 case PIXEL_FILLED:
                     m_filledcnt--;
                     break;
@@ -102,15 +101,17 @@ public:
                     break;
             }
 
-            if((val & FLAG_MASK) != 0)
-                set_dirty();
         }
-        *_BUF_PTR(level, x, y) = val;
+
+        if((val & FLAG_MASK) != 0)
+            set_dirty();
+        
+        *BUF_PTR(level, x, y) = val;
     }
 
     void clear_bitwise_flag(const int level, const uint8_t flag) 
     {
-        uint8_t *cp = _BUF_PTR(level, 0, 0);
+        uint8_t *cp = BUF_PTR(level, 0, 0);
         for(int i=0; i < PROGRESS_BUF_SIZE(level); i++) {
             *cp &= (~flag);
             cp++;
@@ -135,7 +136,8 @@ public:
 
     void convert_to_transparent(PyObject *py_targ_tile);
 
-    inline int get_stat(){
+    inline int get_stat()
+    {
         if (m_filledcnt == TILE_SIZE*TILE_SIZE)
             return (m_statflag | FILLED | HAS_PIXEL);
         else if (m_areacnt == TILE_SIZE*TILE_SIZE)
@@ -157,10 +159,10 @@ public:
             retflag |= HAS_AREA;
 
         return retflag;
-
     }
 
-    inline bool is_filled_with(const uint8_t pix) { 
+    inline bool is_filled_with(const uint8_t pix) 
+    { 
         switch(pix) {
             case PIXEL_AREA:
                 return (m_statflag & FILLED_AREA);
@@ -175,16 +177,27 @@ public:
                 return false;
         }
     }
+    
+    inline int get_pixel_count(const uint8_t pix) {
+        switch(pix) {
+            case PIXEL_AREA:
+                return m_areacnt;
+            case PIXEL_FILLED:
+                return m_filledcnt;
+            case PIXEL_CONTOUR:
+                return m_contourcnt;
+            case PIXEL_EMPTY:
+            case PIXEL_OUTSIDE:
+                return (TILE_SIZE*TILE_SIZE) 
+                            - (m_areacnt+m_filledcnt+m_contourcnt);
+            default:
+                return 0;
+        }
+    }
 
-    inline void set_dirty() {
-        m_statflag |= DIRTY;
-    }
-    inline void clear_dirty() {
-        m_statflag &= (~DIRTY);
-    }
-    inline void set_borrowed() {
-        m_statflag |= BORROWED;
-    }
+    inline void set_dirty() {m_statflag |= DIRTY;}
+    inline void clear_dirty() {m_statflag &= (~DIRTY);}
+    inline void set_borrowed() {m_statflag |= BORROWED;}
 
     // Progress methods
     void build_progress_seed(const int start_level);
@@ -195,38 +208,38 @@ public:
     // This flag would be used in
     // FlagtileSurface::_filter method and 
     // some Kernelworkers finalize_worker method.
-    static const int DIRTY = 0x00000001;
+    static const int32_t DIRTY = 0x00000001;
     
     // This tile is a borrowed one from python dictionary.
     // i.e. this tile should not be deleted. just replace with NULL.
-    static const int BORROWED = 0x00000002;
+    static const int32_t BORROWED = 0x00000002;
     
     /// Status flags of below are exclusive.
     /// We can set only each one of them for status flag.
     
     // This tile is not filled entirely but has some valid pixel.
-    static const int HAS_PIXEL = 0x00000100;
+    static const int32_t HAS_PIXEL = 0x00000100;
     //
     // This tile has completely filled with PIXEL_FILLED,
     // without any contour.
     // When this flag is set, statflag should also have HAS_PIXEL.
-    static const int FILLED = 0x00000200;
+    static const int32_t FILLED = 0x00000200;
     
     // This tile has some contour pixel.
-    static const int HAS_CONTOUR = 0x00000400;
+    static const int32_t HAS_CONTOUR = 0x00000400;
     // Rarely but possible, a tile has only contour pixel.
     // When this flag is set, statflag should also have HAS_CONTOUR.
-    static const int FILLED_CONTOUR = 0x00000800;
+    static const int32_t FILLED_CONTOUR = 0x00000800;
 
     // This tile has some vacant pixel.
-    static const int HAS_AREA = 0x00001000;
+    static const int32_t HAS_AREA = 0x00001000;
 
     // This tile has completely filled with PIXEL_AREA.
     // When this flag is set, statflag should also have HAS_AREA.
-    static const int FILLED_AREA = 0x00002000;
+    static const int32_t FILLED_AREA = 0x00002000;
     
     // This tile is empty(i.e. filled with 0)
-    static const int EMPTY = 0x00004000;
+    static const int32_t EMPTY = 0x00004000;
     
 };
 
@@ -236,7 +249,7 @@ public:
  */
 class FlagtileSurface 
 {
-protected:
+protected:// Use protected, this is base-class.
     // The array of pointer of Flagtiles.
     Flagtile** m_tiles;
 
@@ -250,30 +263,31 @@ protected:
     int m_width;
     int m_height;
     
-    // Start progress level
+    // Starting progress level
     const int m_level;
 
     // Initial tile values
     // This is different between each Surface classes.
     const uint8_t m_initial_tile_val;
 
-    void _generate_tileptr_buf(const int ox, const int oy, 
+    void generate_tileptr_buf(const int ox, const int oy, 
                                const int w, const int h);
 
-    void _init_nodes(const int max_count);
+    void init_nodes(const int max_count);
 
     // Offsets used for pixel search kernel.
-    inline int _get_tile_index(const int tx, const int ty) {
+    inline int get_tile_index(const int tx, const int ty) 
+    {
         return (ty * m_width + tx);
     }
 
     // Replace pixel when that pixel exactly same with targ_flag.
-    void _convert_flag(const uint8_t targ_flag, 
+    void convert_flag(const uint8_t targ_flag, 
                        const uint8_t flag,
                        const bool look_dirty=false);
 
     // Hided default constructor.
-    // for only initialize derive class. 
+    // This is only for derive class. 
     FlagtileSurface(const int start_level, 
                     const uint8_t initial_tile_val);
 
@@ -290,24 +304,28 @@ public:
     // progress tile have different dimension.
     // So, maximum size of surface or pixel coordinate
     // is different from original(progress level 0).
-    inline int get_pixel_max_x(const int level) {
+    inline int get_pixel_max_x(const int level) 
+    {
         return m_width * PROGRESS_TILE_SIZE(level);
     }
 
-    inline int get_pixel_max_y(const int level) {
+    inline int get_pixel_max_y(const int level) 
+    {
         return m_height * PROGRESS_TILE_SIZE(level);
     }
 
     inline int get_target_level(){ return m_level;}
 
     inline Flagtile* get_tile(const int tx, const int ty, 
-                              const bool request=false) {
-        return get_tile(_get_tile_index(tx, ty), request);
+                              const bool request=false) 
+    {
+        return get_tile(get_tile_index(tx, ty), request);
     }
 
     inline Flagtile* get_tile_from_pixel(const int level, 
                                          const int sx, const int sy, 
-                                         const bool request) { 
+                                         const bool request) 
+    { 
         int tile_size = PROGRESS_TILE_SIZE(level);
         int raw_tx = sx / tile_size;
         int raw_ty = sy / tile_size;
@@ -318,17 +336,13 @@ public:
         
         // above raw_tx/ty is zero-based, 
         // adjusted by origin already. 
-        // so do not use _get_tile_index, 
+        // so do not use get_tile_index, 
         return get_tile(raw_ty * m_width + raw_tx, request);
     }
     
-    inline Flagtile* get_tile(const int idx, const bool request=false) {
+    inline Flagtile* get_tile(const int idx, const bool request=false) 
+    {
 #ifdef HEAVY_DEBUG
-// XXX DEBUG
-if (idx >= (m_width * m_height)) {
-    printf("Exceeding tile limit!! idx %d\n" , idx);
-    return NULL;
-}
 assert(idx < (m_width * m_height));
 #endif
         Flagtile* ct = m_tiles[idx];
@@ -341,25 +355,28 @@ assert(idx < (m_width * m_height));
     
     // Check existence of a tile, 
     // without generating/discarding a wrapper object.
-    inline bool tile_exists(const int tx, const int ty) {
-        return get_tile(_get_tile_index(tx, ty), false) != NULL;
+    inline bool tile_exists(const int tx, const int ty) 
+    {
+        return get_tile(get_tile_index(tx, ty), false) != NULL;
     }
 
     inline uint8_t get_pixel(const int level, 
-                             const int sx, const int sy) {
+                             const int sx, const int sy) 
+    {
         Flagtile *ct = get_tile_from_pixel(level, sx, sy, false);
         if (ct == NULL)
             return 0; 
 
         const int tile_size = PROGRESS_TILE_SIZE(level);
         return ct->get(level,
-                       positive_mod(sx, tile_size), 
-                       positive_mod(sy, tile_size));
+                       POSITIVE_MOD(sx, tile_size), 
+                       POSITIVE_MOD(sy, tile_size));
     }
 
     inline void replace_pixel(const int level, 
                               const int sx, const int sy, 
-                              const uint8_t val) {
+                              const uint8_t val) 
+    {
         Flagtile *ct = get_tile_from_pixel(level, sx, sy, true);
         
 #ifdef HEAVY_DEBUG
@@ -367,8 +384,8 @@ assert(ct != NULL);
 #endif
         const int tile_size = PROGRESS_TILE_SIZE(level);
         ct->replace(level,
-                    positive_mod(sx, tile_size), 
-                    positive_mod(sy, tile_size), 
+                    POSITIVE_MOD(sx, tile_size), 
+                    POSITIVE_MOD(sy, tile_size), 
                     val);
     }
 
@@ -384,8 +401,7 @@ assert(ct != NULL);
     // So this must be public method.
     // From python, use progfloodfill function of tiledsurface.py.
     // XXX We might use C++ friend keyword for this...
-    void flood_fill(const int sx, const int sy, 
-                    FillWorker *w);
+    void flood_fill(const int sx, const int sy, FillWorker *w);
     
     // Also, filter method would be called from some worker classes.
     // Make it public.
@@ -409,7 +425,7 @@ assert(ct != NULL);
  */
 class FloodfillSurface : public FlagtileSurface 
 {
-protected:
+private:
     // m_src_dict holds pointer of python dictinary 
     // from python code, used for Py_INCREF / Py_DECREF
     // to it.
@@ -435,46 +451,47 @@ public:
  */
 class ClosefillSurface : public FlagtileSurface 
 {
-protected:
+private:
 
     //// Line drawing & polygon
-    _progfill_point *m_nodes;
+    progfill_point *m_nodes;
     int m_cur_node;
     int m_node_cnt;
     
-    void _walk_line(int sx, int sy, 
+    void walk_line(int sx, int sy, 
                     int ex, int ey,
                     DrawWorker *f);
     
     // Walk among the eitire nodes.
-    void _walk_polygon(DrawWorker *w);
+    void walk_polygon(DrawWorker *w);
 
-    bool _is_inside_polygon(const int x1, const int x2, const int y);
+    bool is_inside_polygon(const int x1, const int x2, const int y);
 
-    inline bool _is_inside_polygon_point(const int x, const int y,
+    inline bool is_inside_polygon_point(const int x, const int y,
                                          const int sx, const int sy,      
-                                         const int ex, const int ey) {
+                                         const int ex, const int ey) 
+    {
       return (((sy > y) != (ey > y)) 
                 && (x < (ex - sx) * (y - sy) / (ey - sy) + sx));
     } 
     
     //// Edge line(Polygon) drawing
-    // _move_to ,_line_to and _close_line are used in 
-    // _init_node method.
+    // move_to ,_line_to and close_line are used in 
+    // init_node method.
     // Not only drawing outerrim flags, also register
     // nodes to internal buffer.
     // That polygon edge buffer uses later with
-    // _walk_polygon method.
-    void _move_to(const int sx, const int sy);
-    void _line_to(DrawWorker* w, 
+    // walk_polygon method.
+    void move_to(const int sx, const int sy);
+    void line_to(DrawWorker* w, 
                   const int ex, const int ey, 
                   const bool closing=false);
-    void _close_line(DrawWorker* w);
+    void close_line(DrawWorker* w);
 
-    void _init_nodes(PyObject* node_list);
+    void init_nodes(PyObject* node_list);
     
     // Scanline fill the polygon.
-    void _scanline_fill();
+    void scanline_fill();
 
 public:
 
@@ -493,7 +510,6 @@ public:
  */
 class LassofillSurface : public ClosefillSurface 
 {
-protected:
 public:
     /**
     * @Constructor
