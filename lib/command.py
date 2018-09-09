@@ -2187,10 +2187,10 @@ class ClosedAreaFill (FloodFill):
         
         # From lib/progfilldefine.hpp
         PIXEL_EMPTY= 0x00 
-        PIXEL_OUTSIDE = 0x02 
-        PIXEL_AREA = 0x03
-        PIXEL_FILLED = 0x05        
-        PIXEL_CONTOUR = 0x06
+        PIXEL_OUTSIDE = 0x01 
+        PIXEL_AREA = 0x02
+        PIXEL_FILLED = 0x03        
+        PIXEL_CONTOUR = 0x04
         FLAG_WORK = 0x10
         FLAG_AA = 0x80
         npbuf = None

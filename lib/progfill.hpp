@@ -203,43 +203,47 @@ public:
     void build_progress_seed(const int start_level);
 
     //// Tile Status flags.
+    // Actually, it is int32_t. but, for SWIG, we need 
+    // %include stdint.i 
+    // at SWIG interface file.
+    // So, currently use int.
     
     // DIRTY means this tile is written something.
     // This flag would be used in
     // FlagtileSurface::_filter method and 
     // some Kernelworkers finalize_worker method.
-    static const int32_t DIRTY = 0x00000001;
+    static const int DIRTY = 0x00000001;
     
     // This tile is a borrowed one from python dictionary.
     // i.e. this tile should not be deleted. just replace with NULL.
-    static const int32_t BORROWED = 0x00000002;
+    static const int BORROWED = 0x00000002;
     
     /// Status flags of below are exclusive.
     /// We can set only each one of them for status flag.
     
     // This tile is not filled entirely but has some valid pixel.
-    static const int32_t HAS_PIXEL = 0x00000100;
+    static const int HAS_PIXEL = 0x00000100;
     //
     // This tile has completely filled with PIXEL_FILLED,
     // without any contour.
     // When this flag is set, statflag should also have HAS_PIXEL.
-    static const int32_t FILLED = 0x00000200;
+    static const int FILLED = 0x00000200;
     
     // This tile has some contour pixel.
-    static const int32_t HAS_CONTOUR = 0x00000400;
+    static const int HAS_CONTOUR = 0x00000400;
     // Rarely but possible, a tile has only contour pixel.
     // When this flag is set, statflag should also have HAS_CONTOUR.
-    static const int32_t FILLED_CONTOUR = 0x00000800;
+    static const int FILLED_CONTOUR = 0x00000800;
 
     // This tile has some vacant pixel.
-    static const int32_t HAS_AREA = 0x00001000;
+    static const int HAS_AREA = 0x00001000;
 
     // This tile has completely filled with PIXEL_AREA.
     // When this flag is set, statflag should also have HAS_AREA.
-    static const int32_t FILLED_AREA = 0x00002000;
+    static const int FILLED_AREA = 0x00002000;
     
     // This tile is empty(i.e. filled with 0)
-    static const int32_t EMPTY = 0x00004000;
+    static const int EMPTY = 0x00004000;
     
 };
 
