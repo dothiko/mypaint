@@ -16,6 +16,7 @@ import logging
 from collections import deque
 logger = logging.getLogger(__name__)
 import weakref
+import struct
 
 from gettext import gettext as _
 from gi.repository import Gtk
@@ -36,7 +37,7 @@ from freehand_parallel import StrokeLastableMixin, LastableOptionsMixin
 import gui.pickable as pickable
 
 ## Module settings
-class _Phase:
+class _Phase(object):
     INVALID = -1
     DRAW = 0
     SET_POINT = 1
@@ -44,7 +45,7 @@ class _Phase:
     FINALIZE = 5
     JUMP = 6
 
-class _Prefs:
+class _Prefs(object):
     """Preference key constants"""
     LASTING_PREF_KEY = "assisted.centerpoint.context_lasting"
     DISTANCE_PREF_KEY = "assisted.centerpoint.context_distance"
@@ -71,15 +72,13 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
     ACTION_NAME = 'CenterFreehandMode'
 
     _initial_cursor = None
-    _center_radius = 3
+    _center_radius = 4
 
     # Centerpoint.
     _cx = None
     _cy = None
 
-
     ## Initialization
-
     def __init__(self, ignore_modifiers=True, **args):
         # Ignore the additional arg that flip actions feed us
         super(CenterFreehandMode, self).__init__(**args)
@@ -90,7 +89,6 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
             self._phase = _Phase.INVALID
 
     ## Metadata
-
     @classmethod
     def get_name(cls):
         return _(u"Freehand Centerpoint")
@@ -99,10 +97,6 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
         return _(u"Paint free-form brush strokes with centerpoint ruler")
 
     ## Properties
-
-    def is_ready(self):
-        return (self._cx is not None)
-
     @property
     def initial_cursor(self):
         cursors = self.app.cursors
@@ -118,15 +112,14 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
     def enter(self, doc, **kwds):
         """Enter freehand mode"""
         super(CenterFreehandMode, self).enter(doc, **kwds)
+        self._ensure_overlay_for_tdw(doc.tdw)
         if self.is_ready():
-            self._ensure_overlay_for_tdw(doc.tdw)
             self.queue_draw_ui(doc.tdw)
 
         self._init_lastable_mixin(doc.app, _Prefs)
 
     def leave(self, **kwds):
         super(CenterFreehandMode, self).leave(**kwds)
-    
     
     ## Input handlers
     def drag_start_cb(self, tdw, event, pressure):
@@ -141,7 +134,7 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
 
             if hit_flag:
                 # For centerpoint moving
-                self._start_center_pt(tdw, event.x, event.y)
+                self._move_center_pt(tdw, event.x, event.y)
             else:
                 # For drawing.
                 self._rx, self._ry = tdw.display_to_model(event.x, event.y)
@@ -150,6 +143,7 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
                 else:
                     self._phase = _Phase.INIT
                     self._sx, self._sy = self._rx, self._ry
+                    self._px, self._py = self._sx, self._sy
                     self._update_center_vector()
                     # Queue empty stroke, to eliminate heading stroke glitch.
                     self.queue_motion(tdw, event.time, 
@@ -157,7 +151,7 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
                                       pressure=0.0)
 
         elif self._phase == _Phase.INVALID:
-            self._start_center_pt(tdw, event.x, event.y)
+            self._move_center_pt(tdw, event.x, event.y)
         else:
             print('other mode %d' % self._phase)
 
@@ -170,11 +164,10 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
         it can be detected only motion_notify_cb. 
         """
         if self._phase == _Phase.SET_POINT:
-            self._start_center_pt(tdw, event.x, event.y)
+            self._move_center_pt(tdw, event.x, event.y)
             return True
 
     def motion_notify_cb(self, tdw, event, fakepressure=None):
-
         if self.last_button is None:
             cursor = None
             if self.is_ready():
@@ -208,10 +201,9 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
             self._phase = _Phase.INIT
         elif self._phase == _Phase.SET_POINT:
             self._phase = _Phase.INIT
-            self._update_positions(event.x, event.y)
+            self._set_center_point(*tdw.display_to_model(event.x, event.y))
 
     ## Mode options
-
     def get_options_widget(self):
         """Get the (class singleton) options widget"""
         cls = self.__class__
@@ -221,7 +213,6 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
         else:
             cls._OPTIONS_WIDGET.set_mode(self)
         return cls._OPTIONS_WIDGET
-
                 
     def enum_samples(self, tdw):
         if not self.is_ready():
@@ -237,22 +228,21 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
         if self._phase == _Phase.DRAW:
             # All position attributes are in model coordinate.
 
-            # _cx, _cy : center position 
+            # cx, cy : center position 
             # _px, _py : previous position of stylus.
             # _sx, _sy : current position of 'stroke'. not stylus.
             # _vx, _vy : Identity vector of ruler direction.
             # _rx, _ry : raw point of stylus. 
             
             if length > 0:
-            
                 if direction > 0.0:
                     length *= -1.0
             
-                cx = (length * self._vx) + self._sx
-                cy = (length * self._vy) + self._sy
-                self._sx = cx
-                self._sy = cy
-                yield (cx , cy , self._latest_pressure)
+                sx = (length * self._vx) + self._sx
+                sy = (length * self._vy) + self._sy
+                self._sx = sx
+                self._sy = sy
+                yield (sx , sy , self._latest_pressure)
                 self._px, self._py = self._rx, self._ry
 
         elif self._phase == _Phase.INIT:
@@ -284,11 +274,11 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
                 if direction > 0.0:
                     length *= -1.0
             
-                cx = (length * self._vx) + self._sx
-                cy = (length * self._vy) + self._sy
-                self._sx = cx
-                self._sy = cy
-                yield (cx , cy , 0.0)
+                sx = (length * self._vx) + self._sx
+                sy = (length * self._vy) + self._sy
+                self._sx = sx
+                self._sy = sy
+                yield (sx , sy , 0.0)
 
             self._phase = _Phase.DRAW
 
@@ -333,16 +323,7 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
             self._latest_pressure = pressure
             self._rx, self._ry = x, y
 
-    def _update_positions(self, x, y):
-        self._set_center_point(x, y)
-    
-    def _set_center_point(self, cx, cy):
-        cls = self.__class__
-        cls._cx = cx
-        cls._cy = cy
-
     ## Overlay related
-
     def _generate_overlay(self, tdw):
         return _Overlay_Center(self, tdw)
 
@@ -352,39 +333,60 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
             for tdw in self._overlays.keys():
                 self.queue_draw_ui(tdw)
             return
-        x, y = tdw.model_to_display(self._cx, self._cy)
+        x, y = tdw.model_to_display(self.cx, self.cy)
         radius = self._center_radius + gui.style.DROP_SHADOW_BLUR + 1
         tdw.queue_draw_area(x - radius, y - radius,
                             radius*2+1, radius*2+1)
 
     ## Centerpoint related
+    def is_ready(self):
+        return (self.cx is not None)
 
-    def _start_center_pt(self, tdw, dx, dy):
+    def _set_center_point(self, cx, cy):
+        """Set center point in model coordinate.
+        """
+        cls = self.__class__
+        cls._cx = cx
+        cls._cy = cy
+
+    # property of cx, cy, to avoid mistakenly overwrite with
+    # self attribute.
+    @property
+    def cx(self):
+        return self.__class__._cx
+    @property
+    def cy(self):
+        return self.__class__._cy
+
+    def _move_center_pt(self, tdw, dx, dy):
         mpos = tdw.display_to_model(dx, dy)
         # In this time, _cx & _px & _sx are
         # same.
-        self._cx, self._cy = mpos
+        self._set_center_point(*mpos)
         self._px, self._py = mpos
         self._sx, self._sy = mpos
         self._phase = _Phase.SET_POINT
         self.queue_draw_ui(tdw)
 
     def _update_center_vector(self):
-        self._vx, self._vy = normal(self._cx, self._cy, 
+        self._vx, self._vy = normal(self.cx, self.cy, 
                                     self._rx, self._ry)
 
     def _is_hit_center(self, tdw, dx, dy):
-        cdx, cdy = tdw.model_to_display(self._cx, self._cy)
+        cdx, cdy = tdw.model_to_display(self.cx, self.cy)
         diff = math.hypot(dx-cdx, dy-cdy)
         return (diff <= self._center_radius)
 
+    # XXX for `info pick`
+    ## Centerpoint-pick
     # Override brushwork_begin to set ruler information into strokemap. 
     def brushwork_begin(self, model, description=None, abrupt=False,
                         layer=None):
-        # XXX Almost copy from gui.mode.BrushworkModeMixin.
-
+        # XXX code duplication: Copy from freehand_parallel.py
+    
         # Commit any previous work for this model
-        cmd = self.__active_brushwork.get(model)
+        brushwork = self._BrushworkModeMixin__active_brushwork
+        cmd = brushwork.get(model)
         if cmd is not None:
             self.brushwork_commit(model, abrupt=abrupt)
         # New segment of brushwork
@@ -396,24 +398,33 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
         # using PickableStrokework, instead of Brushwork.
         cmd = lib.command.PickableStrokework(
             model,
-            info=self._pack_info(),
+            self._pack_info(),
             layer_path=layer_path,
             description=description,
-            abrupt_start=(abrupt or self.__first_begin),
+            abrupt_start=(abrupt or self._BrushworkModeMixin__first_begin),
             layer=layer,
         )
-        self.__first_begin = False
+        self._BrushworkModeMixin__first_begin = False
         cmd.__last_pos = None
-        self.__active_brushwork[model] = cmd
+        brushwork[model] = cmd
 
-    ## Use node pick as ruler pick.
     def _apply_info(self, si, offset): 
         cx, cy = self._unpack_info(si.get_info())
+        # Detect cx is nan or valid float, with operator `!=`
+        if cx != cx: 
+            assert cy != cy
+            return # Centerpoint invalid.(undefined). There is nothing to do.
+
+        if self.cx != None:
+            self.queue_draw_ui(None)
+
         if offset != (0, 0):
             dx, dy = offset
             cx += dx 
             cy += dy 
+        self._set_center_point(cx, cy)
         self.queue_draw_ui(None)
+        self._phase = _Phase.INIT
 
     def _match_info(self, infotype):
         return infotype == pickable.Infotype.CENTER
@@ -424,9 +435,17 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
         data_length = field_cnt * 8
         return struct.unpack(fmt, info[:data_length])
 
-    def _pack_info(self, info):
-        return struct.pack(">2d", self._cx, self._cy)
+    def _pack_info(self):
+        if self.cx is None:
+            assert self.cy is None
+            n = float('nan')
+            cx, cy = n, n
+        else:
+            cx, cy = self.cx, self.cy
+        return pickable.regularize_info(struct.pack(">2d", cx, cy),
+                                        pickable.Infotype.CENTER)
     # XXX for `info pick` end
+
 
 class CenterOptionsWidget (freehand_assisted.AssistantOptionsWidget,
                            LastableOptionsMixin,
@@ -483,4 +502,3 @@ class _Overlay_Center(gui.overlays.Overlay):
                         x, y,
                         gui.style.EDITABLE_ITEM_COLOR,
                         mode._center_radius)
-

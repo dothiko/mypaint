@@ -650,7 +650,6 @@ class Nodework (PickableStrokework):
                 layer_path, description, abrupt_start, **kwds)
 
         self.gui_doc = gui_doc
-        self.nodes = nodes
         self._override_before = override_sshot_before
         self._operation_mode = operation_mode
         self._phase = _Phase_Nodework.INIT
@@ -698,10 +697,9 @@ class Nodework (PickableStrokework):
             curmode = self.gui_doc.modes.top
             if isinstance(curmode, self._operation_mode):
                 if curmode.phase == 0:
-                    if self.nodes != None and len(self.nodes) > 1:
+                    if self._pickinfo != None and len(self._pickinfo) > 1:
                         self.phase = _Phase_Nodework.EDIT
-                        curmode.redo_nodes_cb(self, self.nodes)
-
+                        curmode.redo_nodes_cb(self, self._pickinfo)
         super(Nodework, self).redo()
 
     def undo(self):
@@ -715,7 +713,7 @@ class Nodework (PickableStrokework):
             if curmode.phase == 0:
                 if self.phase == _Phase_Nodework.DRAW:
                     self.phase = _Phase_Nodework.EDIT
-                    curmode.undo_nodes_cb(self, self.nodes, self._sshot_before)
+                    curmode.undo_nodes_cb(self, self._pickinfo, self._sshot_before)
 
                     if self._sshot_after:
                         # Redrawing previous stroke, with loading

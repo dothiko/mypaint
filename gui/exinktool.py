@@ -611,8 +611,10 @@ class ExInkingMode (PressureEditableMixin,
             if (self._autoapply is not None 
                     and len(self.nodes) > self._autoapply_threshold):
                 if self._autoapply == 'cull':
+                    self._queue_redraw_all_nodes() # To erase
                     self._cull_nodes()
                 elif self._autoapply == 'simple':
+                    self._queue_redraw_all_nodes() # To erase
                     self._simplify_nodes()
 
             if len(self.nodes) > 1:
@@ -1170,8 +1172,12 @@ class ExInkingMode (PressureEditableMixin,
                 nodes[i] = n._replace(x=n.x+dx, y=n.y+dy)
 
         self.inject_nodes(nodes)
-
         self._erase_old_stroke(si)
+
+        # For oncanvas editing tool, it automatically
+        # registers offsetted nodes into strokemap.
+        # So reset offset each time nodes picked.
+        si.reset_offset() 
 
     def _match_info(self, infotype):
         return infotype == pickable.Infotype.TUPLE
@@ -1182,7 +1188,8 @@ class ExInkingMode (PressureEditableMixin,
         fmt=">%dd" % len(nodes[0]) 
         for n in nodes:
             datas += struct.pack(fmt, *n)
-        return zlib.compress(datas)
+        return pickable.regularize_info(zlib.compress(datas),
+                                        pickable.Infotype.TUPLE)
 
     def _unpack_info(self, nodesinfo):
         raw_data = zlib.decompress(nodesinfo)

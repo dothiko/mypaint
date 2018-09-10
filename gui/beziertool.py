@@ -1261,6 +1261,11 @@ class BezierMode (PressureEditableMixin,
         self.inject_nodes(nodes)
         self._erase_old_stroke(si)
 
+        # For oncanvas editing tool, it automatically
+        # registers offsetted nodes into strokemap.
+        # So reset offset each time nodes picked.
+        si.reset_offset() 
+
     def _match_info(self, infotype):
         return infotype == pickable.Infotype.BEZIER
 
@@ -1269,15 +1274,16 @@ class BezierMode (PressureEditableMixin,
         datas = struct.pack(">I", len(nodes))
         for n in nodes:
             datas += n.serialize()
-        return zlib.compress(datas)
+        return pickable.regularize_info(zlib.compress(datas),
+                                        pickable.Infotype.BEZIER)
 
-    def _unpack_info(self, nodesinfo):
+    def _unpack_info(self, info):
         raw_data = zlib.decompress(info)
         idx = 4
-        count = struct.unpack('>I', raw_nodes[:idx])[0]
+        count = struct.unpack('>I', raw_data[:idx])[0]
         nodes = []
         for i in range(count):
-            data_length, node = _Node_Bezier.fromstring(raw_nodes, idx)
+            data_length, node = _Node_Bezier.fromstring(raw_data, idx)
             nodes.append(node)
             idx += data_length
         return nodes

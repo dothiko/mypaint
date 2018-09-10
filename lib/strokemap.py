@@ -238,37 +238,36 @@ class StrokeInfo(StrokeShape):
         # node object metaclass.
         self._infobody = None
 
-        # We need to distinguish node object class.
-        # If this is 0, it means `it is generic namedtuple nodes`
-        self._infotype = 0
-
         # Offset value for load time tile shift.
         # When picture file loaded, transparent tile would be removed.
         # It may changes all tile location.
         self._offset_x = 0
         self._offset_y = 0
 
-    @contextlib.contextmanager
     def get_offset(self):
-        """Get tile offsets to adjust node positions.
-        This is a contextlib.contextmanager method,
-        You should call this by `with` statement.
-
-        NOTE: Once after this method is called, offset data is cleared.
+        """Get offset from loaded time position.
+        NOTE: For oncanvas tools, such as exinktool or beziertool,
+        once they picked StrokeInfo, they would register their nodes
+        with newly offsetted position.
+        So such tool should call reset_offset() right after get_offset.
         """
-        yield (self._offset_x, self._offset_y)
+        return (self._offset_x, self._offset_y)
 
+    def reset_offset(self):
         self._offset_x = 0
         self._offset_y = 0
 
     def set_info(self, info):
+        assert info is not None
         self._infobody = info
 
     def get_info(self):
-        return self._infobody
+        assert self._infobody is not None
+        return pickable.extract_info(self._infobody)
 
     def get_info_type(self):
-        return self._infotype
+        assert self._infobody is not None
+        return pickable.extract_infotype(self._infobody)
 
     def remove_from_surface(self, surf, center=None):
         """Remove all or part of the shape to a tile-accessible surface.
@@ -284,16 +283,28 @@ class StrokeInfo(StrokeShape):
             #maxhits = 2000,   # tiles
         )
         self._complete_tile_tasks(pred)
+
         tile_idxs = list(pred.hits) + [
             ti
             for ti in self.strokemap
             if ti not in pred.hits
         ]
         for tx, ty in tile_idxs:
+            # In certain case, tx or ty might be float.
+            # This code is very simular to StrokeShape.render_to_surface,
+            # but render_to_surface changes surface just temporally.
+            # On the other hand, remove_from_surface changes surface
+            # permanently.  
+            # And, if we use float value as tile coordinate, 
+            # it injects floating number into surface tiledict,
+            # and it causes exception later in Surface.__init__ of
+            # thumbnail generation.
+            # Make sure tx and ty is integer.
+            tx = int(tx)
+            ty = int(ty)
             if not pred((tx, ty)):
                 continue
             diff_tile = self.strokemap[(tx, ty)]
-            diff_arr = diff_tile.to_array()
             with surf.tile_request(tx, ty, readonly=False) as surf_arr:
                 diff_tile.erase_from_surface_tile_array(surf_arr)
 
@@ -306,50 +317,39 @@ class StrokeInfo(StrokeShape):
         Format: "v2" strokemap format.
     
         """
-        return pickable.pack_info(self._infotype, self._infobody, translate_x, translate_y)
+        return pickable.pack_for_filestream(self._infobody, 
+                                            self._offset_x + translate_x, 
+                                            self._offset_y + translate_y)
     
     def init_from_string(self, shapedata, translate_x, translate_y):
         """To override StrokeShape.init_from_string.
 
-        We need to override this method to initialize offset attributes.
+        We need to override this method to initialize `offset` attributes.
+        `additional pickable information` would be set later.
         """
-        # Initialize offset attributes first, before init_from_string supercall.
-        # They might be added some unaligned offset values from 
-        # StrokemappedPaintingLayer._load_strokemap_from_file() ->
-        # StrokeNode.translate() call, which is prior to init_node_from_string() 
-        # call.
-        # Before that addition, we need to initialize them.
         super(StrokeInfo, self).init_from_string(shapedata, translate_x, translate_y)
 
         self._offset_x = translate_x
         self._offset_y = translate_y
 
-        # We have no need to refrect actual node position in this time.
-        # Different from stroke bitmap tile, it is enough for users of this class
-        # to change position 
-        # when actually user picked the stroke.
-        # So just remember offset here.
-        # 
-        # You can get offset with get_offset method.
-        # That method uses yield, so use `with` statement.
-
-    def init_nodes_from_string(self, data, infotype, translate_x, translate_y):
+    def init_info_from_string(self, info, translate_x, translate_y):
         """Initialize node datas from a saved compressed string.
     
-        translate_ parameters of this method are actually assigned at save-time,
-        completely different from init_from_string one.
-        They are applied into tile dictionary already at StrokeShape.save_to_string(), 
-        but not yet for node list - because, offsets for nodes are applied 
-        when they are picked.
+        translate_ parameters of this method are actually assigned at save-time.
+        This is completely different from init_from_string of parent class.
+
+        In parent class, offsets are applied into tile dictionary itself at 
+        StrokeShape.save_to_string(). 
+        But in this class, offsets are reserved and applied to `infomation`
+        (i.e. stroke nodes position ,ruler position or something like that) 
+        by pickable.PickableInfoMixin at when they are picked, on-demand.
     
         NOTE:Call this method after base bitmap information is loaded
         by StrokeShape.init_from_string. These two methods are simular
         but different.
         """
-        assert self._nodedata is None
-    
-        self._infotype = infotype
-        self._infobody = data
+        self.set_info(info)
+
         self._offset_x += translate_x
         self._offset_y += translate_y
     

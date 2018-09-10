@@ -12,49 +12,96 @@
 
 
 import struct
+from gettext import gettext as _
 
 import lib.strokemap
+import lib.command
 
 class Infotype:
     """Module constants, to recognize information type
     in strokemap.
+    This is the first byte of regularized `info` bytestring.
     """
     TUPLE = 0
     BEZIER = 1
     RULER = 2
-    POINT = 3
+    CENTER = 3
 
-def load_info(f):
+def load_from_filestream(f):
     """Load base information from file stream.
     Called at 
     data.StrokemappedPaintingLayer._load_strokemap_from_file
     """
-    node_type, node_length, tlx, tly = struct.unpack('>IIii', f.read(16))
-    body = f.read(node_length)
-    return (body, node_type, tlx, tly)
+    info_length, tlx, tly = struct.unpack('>Iii', f.read(12))
+    body = f.read(info_length)
+    return (body, tlx, tly)
 
-def pack_info(infotype, infobody, translate_x, translate_y):
-    """Pack infomation, compatible with load_info method.
+def pack_for_filestream(infobody, translate_x, translate_y):
+    """Pack infomation for file stream, compatible with load_info method.
     Place this function here to ease maintainance.
+
+    :param infobody: A bytestring, which contains infotype at the first byte
+                     of it, by regularize_info() function.
     """
     data = struct.pack(
-        '>IIii', 
-        infotype, len(infobody),
+        '>Iii', 
+        len(infobody),
         int(translate_x), int(translate_y)
     )
     data += infobody
     return data
+
+def regularize_info(infobody, infotype):
+    """Utility function to add infotype, at the head of info bytestring.
+    This is to regularize info data format over all derived class.
+    Use this when PickableInfoMixin._pack_info returns bytestring.
+    """
+    assert infotype <= 255
+    t = struct.pack('>B', infotype)
+    return t + infobody
+
+def extract_infotype(info):
+    """Utility function to extract infotype from regularized infobody.
+    """
+    return ord(info[0])
+
+def extract_info(info):
+    """Utility function to extract info itself from regularized infobody.
+    """
+    return info[1:]
 
 class PickableInfoMixin(object):
     """For context-pick feature, pick additional information
     from strokemap.
     """
 
-    def _apply_info(self, info, offset):
+    def _apply_info(self, strokeinfo, offset):
+        """
+        :param strokeinfo: Instance of lib.strokemap.StrokeInfo
+        :param offset: A tuple of (x, y). This cannot be None.
+                       If there is no offeet, use tuple (0, 0)
+        """
         raise NotImplementedError("You must implement _apply_info")
 
     def _match_info(self, info_type_id):
-        raise NotImplementedError("You must implement _apply_info")
+        raise NotImplementedError("You must implement _match_info")
+
+    def _pack_info(self):
+        """Pack nodes as bytestring datas.
+        Compressing it with zlib is optional.
+
+        See regularize_info() function. Use that method to 
+        return bytestring info.
+
+        :return : nodes as bytestring data.
+        """
+        raise NotImplementedError("You must implement _pack_info")
+
+    def _unpack_info(self, nodesinfo):
+        """Unpack nodes from bytestring datas.
+        :param noesinfo: a bytestring, generate from _pack_info
+        """
+        raise NotImplementedError("You must implement _unpack_info")
 
     def restore_from_stroke_info(self, si): 
         """Restore nodes from stroke info(StrokeNode class).
@@ -70,14 +117,41 @@ class PickableInfoMixin(object):
 
         if not self._match_info(si.get_info_type()):
             self.app.show_transient_message(
-                _("This stroke is not drawn by %s" % self.name)
+                _("This stroke is not drawn by %s" % self.get_name())
             )
             return False
 
-        with si.get_offset() as offset:
-            self._apply_info(si, offset)
-
+        self._apply_info(si, si.get_offset())
         return True
+
+   #def brushwork_begin(self, model, description=None, abrupt=False,
+   #                    layer=None):
+   #    """The default overided brushwork_begin.
+   #    """
+   #    # XXX Almost copy from gui.mode.BrushworkModeMixin.
+   #
+   #    # Commit any previous work for this model
+   #    cmd = self._BrushworkModeMixin__active_brushwork.get(model)
+   #    if cmd is not None:
+   #        self.brushwork_commit(model, abrupt=abrupt)
+   #    # New segment of brushwork
+   #    if layer is None:
+   #        layer_path = model.layer_stack.current_path
+   #    else:
+   #        layer_path = None
+   #    # The difference from BrushworkModeMixin is
+   #    # using PickableStrokework, instead of Brushwork.
+   #    cmd = lib.command.PickableStrokework(
+   #        model,
+   #        info=self._pack_info(),
+   #        layer_path=layer_path,
+   #        description=description,
+   #        abrupt_start=(abrupt or self._BrushworkModeMixin__first_begin),
+   #        layer=layer,
+   #    )
+   #    self._BrushworkModeMixin__first_begin = False
+   #    cmd.__last_pos = None
+   #    self.__active_brushwork[model] = cmd
 
 if __name__ == '__main__':
 

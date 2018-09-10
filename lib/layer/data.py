@@ -1828,15 +1828,6 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
             after_sshot
         )
 
-        # Assume all of nodes are the instance of same class.
-       #if isinstance(nodes[0], tuple):
-       #    type_id = 0
-       #else:
-       #    # Also, assume non-tuple node is something 
-       #    # dedicated node class, which has type_id class attribute.
-       #    assert hasattr(nodes[0], "type_id")
-       #    type_id = nodes[0].type_id
-
         if shape is not None:
             shape.set_info(info) 
             shape.brush_string = stroke.brush_settings
@@ -1851,7 +1842,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         """
         self.strokes.remove(shape)
 
-    # XXX for `node pick` end
+    # XXX for `info pick` end
 
     ## Snapshots
 
@@ -1930,15 +1921,14 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
                     t = f.read(1)
                     if t == 'b':
                         __read_brush_from_stream(f, brushes)
-                    elif t == 'n':
+                    elif t == 'i':
                         strokeinfo = __read_stroke_from_stream(
                             f, lib.strokemap.StrokeInfo()
                         )
                         # Read additional node informations.
-                       #node_type, node_length, tnx, tny = struct.unpack('>IIii', f.read(16))
-                       #tmp = f.read(node_length)
-                       #strokenode.init_nodes_from_string(tmp, node_type, tnx, tny)
-                        strokeinfo.init_info_from_string(*pickable.load_info(f))
+                        strokeinfo.init_info_from_string(
+                            *pickable.load_from_filestream(f)
+                        )
                         self.strokes.append(strokeinfo)
                         block_cnt += 1
                     elif t == '}':
@@ -2154,7 +2144,7 @@ def _write_strokemap(f, strokes, dx, dy):
     # unsupported StrokeNodes information.
     for stroke in strokes:
         if isinstance(stroke, lib.strokemap.StrokeInfo):
-            _write_strokemap_stroke(f, stroke, brush2id, dx, dy, 'n')
+            _write_strokemap_stroke(f, stroke, brush2id, dx, dy, 'i')
     f.write('}')
 
 def _write_strokemap_stroke(f, stroke, brush2id, dx, dy, signature):
@@ -2173,10 +2163,9 @@ def _write_strokemap_stroke(f, stroke, brush2id, dx, dy, signature):
     f.write(s)
 
     # save node
-    if signature == 'n':
+    if signature == 'i':
         s = stroke.save_info_to_string(dx, dy)
         f.write(s)
-
 # XXX for `info pick` end
 
 class _StrokemapFileUpdateTask (object):

@@ -1413,7 +1413,8 @@ class PressureEditableMixin(OncanvasEditMixin,
 
     ## Brushwork related, to enable undo node operations.
 
-    def brushwork_begin(self, model, description=None, abrupt=False):
+    def brushwork_begin(self, model, description=None, abrupt=False, 
+                        layer=None):
         """Begins a new segment of active brushwork for a model
     
         :param lib.document.Document model: The model to begin work on
@@ -1436,13 +1437,17 @@ class PressureEditableMixin(OncanvasEditMixin,
     
         """
         # Commit any previous work for this model
-        brushwork = self.active_brushwork
+        brushwork = self._BrushworkModeMixin__active_brushwork
         cmd = brushwork.get(model)
         if cmd is not None:
             self.brushwork_commit(model, abrupt=abrupt)
     
         # New segment of brushwork
-        layer_path = model.layer_stack.current_path
+        if layer is None:
+            layer_path = model.layer_stack.current_path
+        else:
+            layer_path = None
+       #layer_path = model.layer_stack.current_path
         cmd = lib.command.Nodework(
             model, layer_path,
             self.doc, 
@@ -1450,10 +1455,10 @@ class PressureEditableMixin(OncanvasEditMixin,
             self.__class__,
             override_sshot_before=self._sshot_before,
             description=description,
-            abrupt_start=(abrupt or self.__first_begin),
+            abrupt_start=(abrupt or self._BrushworkModeMixin__first_begin),
         )
         self._sshot_before = None
-        self.__first_begin = False
+        self._BrushworkModeMixin__first_begin= False
         cmd.__last_pos = None
         brushwork[model] = cmd
 
@@ -1469,7 +1474,7 @@ class PressureEditableMixin(OncanvasEditMixin,
 
         See also `brushwork_rollback()`.
         """
-        brushwork = self.active_brushwork
+        brushwork = self._BrushworkModeMixin__active_brushwork
         cmd = brushwork.pop(model, None)
         if cmd is None:
             return
@@ -1522,18 +1527,6 @@ class PressureEditableMixin(OncanvasEditMixin,
 
     # XXX for `info-pick`
     ## Info pick related
-    def _pack_info(self):
-        """Pack nodes as bytestring datas.
-        Compressing it with zlib is optional.
-        :return : nodes as bytestring data.
-        """
-        raise NotImplementedError("You must implement _pack_info")
-
-    def _unpack_info(self, nodesinfo):
-        """Unpack nodes from bytestring datas.
-        :param nodesinfo: a bytestring, generate from _pack_info
-        """
-        raise NotImplementedError("You must implement _unpack_info")
 
     def inject_nodes(self, nodes):
         """Inject nodes list from outside
@@ -1553,6 +1546,7 @@ class PressureEditableMixin(OncanvasEditMixin,
         """Utility method for tools which is node-based stroke.
         This would be called from self._apply_info() of 
         PickableInfoMixin
+        :param si: Instance of lib.strokemap.StrokeInfo
         """
 
         # Erase old strokemap,

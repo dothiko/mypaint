@@ -697,12 +697,6 @@ class BrushworkModeMixin (InteractionMode):
         self.__first_begin = True
         self.__active_brushwork = {}  # {model: Brushwork}
 
-    # XXX Added for OnCanvas mixin
-    @property
-    def active_brushwork(self):
-        return self.__active_brushwork
-    # XXX Added for OnCanvas mixin end
-
     def brushwork_begin(self, model, description=None, abrupt=False,
                         layer=None):
         """Begins a new segment of active brushwork for a model

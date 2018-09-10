@@ -95,7 +95,7 @@ class LinearController(object):
         else:
             self._start_pos = pos
 
-    def set_end_pos(self, tdw, disp_pos):
+    def set_end_pos(self, tdw, pos):
         """Set gradient end position, from display coordinate.
         :param disp_pos: end position for cairo.LinearGradient.
                           if None, used current polygon

@@ -16,6 +16,7 @@ import logging
 from collections import deque
 logger = logging.getLogger(__name__)
 import weakref
+import struct
 
 from gettext import gettext as _
 from gi.repository import Gtk
@@ -38,7 +39,7 @@ import gui.pickable as pickable
 N = mypaintlib.TILE_SIZE
 
 ## Module settings
-class _Phase:
+class _Phase(object):
     INVALID = -1
     DRAW = 0
     SET_BASE = 1
@@ -49,7 +50,7 @@ class _Phase:
 
 ## Class defs
 
-class _Prefs:
+class _Prefs(object):
     """Preference key constants"""
     LASTING_PREF_KEY = "assisted.parallelruler.context_lasting"
     DISTANCE_PREF_KEY = "assisted.parallelruler.context_distance"
@@ -165,9 +166,9 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
 
     ## Properties
 
-    def is_ready(self):
-        return (self._ruler.is_ready() 
-                and self.last_button is not None)
+   #def is_ready(self):
+   #    return (self._ruler.is_ready() 
+   #            and self.last_button is not None)
 
     @property
     def initial_cursor(self):
@@ -184,8 +185,8 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
     def enter(self, doc, **kwds):
         """Enter freehand mode"""
         super(ParallelFreehandMode, self).enter(doc, **kwds)
+        self._ensure_overlay_for_tdw(doc.tdw)
         if self._ruler.is_ready():
-            self._ensure_overlay_for_tdw(doc.tdw)
             self.queue_draw_ui(doc.tdw)
 
         self._init_lastable_mixin(doc.app, _Prefs)
@@ -254,7 +255,6 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
             return True
 
     def motion_notify_cb(self, tdw, event, fakepressure=None):
-
         if self.last_button is None:
             if self._ruler.is_ready():
                 self.queue_draw_ui(tdw)
@@ -323,7 +323,9 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
 
                 
     def enum_samples(self, tdw):
-        if not self.is_ready():
+       #if not self.is_ready():
+       #    raise StopIteration
+        if not self._ruler.is_ready():
             raise StopIteration
 
         assert self.last_button is not None
@@ -439,6 +441,8 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
     ## Overlay related
 
     def _generate_overlay(self, tdw):
+        """Called from OverlayMixin. 
+        """
         return _Overlay_Parallel(self, tdw)
 
     def queue_draw_ui(self, tdw):
@@ -456,8 +460,6 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
         of model coordinate.
         """
         if starting:
-           #if self._phase == _Phase.INIT:
-           #    self._sx, self._sy = x, y
             self._px, self._py = x, y
 
         self._cx, self._cy = x, y
@@ -537,9 +539,12 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
     def brushwork_begin(self, model, description=None, abrupt=False,
                         layer=None):
         # XXX Almost copy from gui.mode.BrushworkModeMixin.
-
+        # But using active_brushwork property which is added
+        # for OncanvasEditMixin
+    
         # Commit any previous work for this model
-        cmd = self.__active_brushwork.get(model)
+        brushwork = self._BrushworkModeMixin__active_brushwork
+        cmd = brushwork.get(model)
         if cmd is not None:
             self.brushwork_commit(model, abrupt=abrupt)
         # New segment of brushwork
@@ -551,28 +556,40 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
         # using PickableStrokework, instead of Brushwork.
         cmd = lib.command.PickableStrokework(
             model,
-            info=self._pack_info(),
+            self._pack_info(),
             layer_path=layer_path,
             description=description,
-            abrupt_start=(abrupt or self.__first_begin),
+            abrupt_start=(abrupt or self._BrushworkModeMixin__first_begin),
             layer=layer,
         )
-        self.__first_begin = False
+        self._BrushworkModeMixin__first_begin = False
         cmd.__last_pos = None
-        self.__active_brushwork[model] = cmd
+        brushwork[model] = cmd
 
     ## Use node pick as ruler pick.
     def _apply_info(self, si, offset): 
-        ruler = self.ruler
+        ruler = self._ruler
         sx, sy, ex, ey = self._unpack_info(si.get_info())
+        if sx != sx: # i.e. sx is nan
+            return 
+
+        # Erase previous ruler, if exists.
+        if ruler.is_ready():
+            self.queue_draw_ui(None)
+
         if offset != (0, 0):
             dx, dy = offset
             sx += dx 
             ex += dx 
             sy += dy 
             ey += dy 
+
         ruler.set_start_pos(None, (sx, sy)) 
         ruler.set_end_pos(None, (ex, ey)) 
+        # Important: make self._phase same as right after ruler defined.
+        # With this, self._px/_py are initialized at button press.
+        self._phase = _Phase.INIT
+        self._update_ruler_vector()
         self.queue_draw_ui(None)
 
     def _match_info(self, infotype):
@@ -583,12 +600,17 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
         fmt = ">%dd" % field_cnt
         data_length = field_cnt * 8
         return struct.unpack(fmt, info[:data_length])
-
-    def _pack_info(self, info):
+                     
+    def _pack_info(self):
         ruler = self._ruler
-        sx, sy = ruler.get_start_pos()
-        ex, ey = ruler.get_end_pos()
-        return struct.pack(">4d", sx, sy, ex, ey)
+        if ruler.end_pos is None:
+            n = float('nan')
+            sx, sy, ex, ey = n, n, n, n
+        else:
+            sx, sy = ruler.start_pos
+            ex, ey = ruler.end_pos
+        return pickable.regularize_info(struct.pack(">4d", sx, sy, ex, ey),
+                                        pickable.Infotype.RULER)
     # XXX for `info pick` end
 
 class LastableOptionsMixin(object):
