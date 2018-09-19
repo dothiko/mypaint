@@ -107,15 +107,17 @@ class PickableInfoMixin(object):
         """Restore nodes from stroke info(StrokeNode class).
         Almost same as ExperimentInktool, but Node class is different.
 
+        :param si: Picked stroke information.
+                   This param can be either of StrokeInfo or StrokeShape.
+                   And this method only accepts StrokeInfo.
         :return : unpacked raw nodes data string.
 
         CAUTION: Returned object is raw string node datas.
                  You must de-serialize them into node objects and
                  call inject_nodes method of this mixin.
         """
-        assert isinstance(si, lib.strokemap.StrokeInfo) 
-
-        if not self._match_info(si.get_info_type()):
+        if not (isinstance(si, lib.strokemap.StrokeInfo)
+                    and self._match_info(si.get_info_type())):
             self.app.show_transient_message(
                 _("This stroke is not drawn by %s" % self.get_name())
             )
