@@ -1338,30 +1338,40 @@ class Overlay (OverlayOncanvasMixin):
         # to reject_button
         l, nx, ny = length_and_normal(accept_button.x, accept_button.y,
                                       reject_button.x, reject_button.y)
+
+        # Get center vector from accept_button
         ml = l / 2.0
         bx = nx * ml 
         by = ny * ml 
-        mx, my = bx, by
-        ml = 0
+
+        ml = 0 # Recycle variable `ml`
+        ax = accept_button.x
+        ay = accept_button.y
+        mx = bx + ax
+        my = by + ay
+        tdw = self._tdw
+
         # Check edit_button distance against every nodes.
+        # CAUTION: nodes are in model, but buttons are in display.
         for iter_i in range(100):
             modified = False
             for cn in nodes:
-                dist = math.hypot(cn.x-(mx+accept_button.x), 
-                                  cn.y-(my+accept_button.y))
+                cx, cy = tdw.model_to_display(cn.x, cn.y)
+                dist = math.hypot(cx-mx, 
+                                  cy-my)
                 if dist < t_margin:
                     ml += t_margin
                     # Get a bit far, right-angled vector
                     # From accept-button to reject-button
-                    mx = -ny * ml + bx 
-                    my = nx * ml + by
+                    mx = -ny * ml + bx + ax
+                    my = nx * ml + by + ay
                     modified = True
                     break
             if not modified:
                 break
 
-        edit_button.x = mx + accept_button.x
-        edit_button.y = my + accept_button.y
+        edit_button.x = mx
+        edit_button.y = my
         edit_button.constrain_position(*edit_button_bbox)
         self._button_pos[_ActionButton.EDIT] = edit_button.x, edit_button.y
 

@@ -126,37 +126,3 @@ class PickableInfoMixin(object):
         self._apply_info(si, si.get_offset())
         return True
 
-   #def brushwork_begin(self, model, description=None, abrupt=False,
-   #                    layer=None):
-   #    """The default overided brushwork_begin.
-   #    """
-   #    # XXX Almost copy from gui.mode.BrushworkModeMixin.
-   #
-   #    # Commit any previous work for this model
-   #    cmd = self._BrushworkModeMixin__active_brushwork.get(model)
-   #    if cmd is not None:
-   #        self.brushwork_commit(model, abrupt=abrupt)
-   #    # New segment of brushwork
-   #    if layer is None:
-   #        layer_path = model.layer_stack.current_path
-   #    else:
-   #        layer_path = None
-   #    # The difference from BrushworkModeMixin is
-   #    # using PickableStrokework, instead of Brushwork.
-   #    cmd = lib.command.PickableStrokework(
-   #        model,
-   #        info=self._pack_info(),
-   #        layer_path=layer_path,
-   #        description=description,
-   #        abrupt_start=(abrupt or self._BrushworkModeMixin__first_begin),
-   #        layer=layer,
-   #    )
-   #    self._BrushworkModeMixin__first_begin = False
-   #    cmd.__last_pos = None
-   #    self.__active_brushwork[model] = cmd
-
-if __name__ == '__main__':
-
-    pass
-
-
