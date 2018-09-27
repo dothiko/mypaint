@@ -409,7 +409,8 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
         brushwork[model] = cmd
 
     def _apply_info(self, si, offset): 
-        cx, cy = self._unpack_info(si.get_info())
+        info = pickable.extract_info(si.get_info())
+        cx, cy = self._unpack_info(info)
         # Detect cx is nan or valid float, with operator `!=`
         if cx != cx: 
             assert cy != cy
@@ -442,8 +443,8 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
             cx, cy = n, n
         else:
             cx, cy = self.cx, self.cy
-        return pickable.regularize_info(struct.pack(">2d", cx, cy),
-                                        pickable.Infotype.CENTER)
+        return (struct.pack(">2d", cx, cy),
+                    pickable.Infotype.CENTER)
     # XXX for `info pick` end
 
 

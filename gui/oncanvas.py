@@ -1447,11 +1447,14 @@ class PressureEditableMixin(OncanvasEditMixin,
             layer_path = model.layer_stack.current_path
         else:
             layer_path = None
-       #layer_path = model.layer_stack.current_path
+
+        # Make unified pickable-information data
+        info = pickable.regularize_info(*self._pack_info())
+
         cmd = lib.command.Nodework(
             model, layer_path,
             self.doc, 
-            self._pack_info(), # XXX for info-pick
+            info, # XXX for info-pick
             self.__class__,
             override_sshot_before=self._sshot_before,
             description=description,
@@ -1498,15 +1501,15 @@ class PressureEditableMixin(OncanvasEditMixin,
         Nodework command detects current operation mode and only when
         current mode is this mode, call this callback.
         """
-       #self.nodes = nodes
-        self.nodes = self._unpack_info(nodesinfo) # XXX for info-pick
+        info = pickable.extract_info(nodesinfo)
+        self.nodes = self._unpack_info(info) # XXX for info-pick
         self.phase = PhaseMixin.ADJUST
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
         self._sshot_before = sshot_before
         self._pending_cmd = cmd
         
-    def redo_nodes_cb(self, cmd, nodes):
+    def redo_nodes_cb(self, cmd, nodesinfo):
         """ called from lib.command.Nodework.redo().
         
         This callback is called when a command which using this mode
@@ -1514,16 +1517,12 @@ class PressureEditableMixin(OncanvasEditMixin,
         Nodework command detects current operation mode and only when
         current mode is this mode, call this callback.
         """
-
-        if len(nodes) >= 2:
-           #self.nodes = nodes
-            self.nodes = self._unpack_info(nodesinfo) # XXX for info-pick
-            self.phase = PhaseMixin.ADJUST
-            self._queue_redraw_all_nodes()
-            self._queue_draw_buttons()
-            self._pending_cmd = cmd
-        else:
-            logger.warning('redo notified, but node count %d is not suffcient.' % len(nodes))
+        info = pickable.extract_info(nodesinfo)
+        self.nodes = self._unpack_info(info) # XXX for info-pick
+        self.phase = PhaseMixin.ADJUST
+        self._queue_redraw_all_nodes()
+        self._queue_draw_buttons()
+        self._pending_cmd = cmd
 
     # XXX for `info-pick`
     ## Info pick related

@@ -262,8 +262,16 @@ class StrokeInfo(StrokeShape):
         self._infobody = info
 
     def get_info(self):
+        """Get raw info bytestring.
+        CAUTION:
+            _infobody attribute of this class is not only packed(in some
+            case, compressed) bytestring data, also it is added info-type 
+            at leading byte.
+            You must extract information body(i.e. data without infotype)
+            with pickable.extract_info() module function.
+        """
         assert self._infobody is not None
-        return pickable.extract_info(self._infobody)
+        return self._infobody
 
     def get_info_type(self):
         assert self._infobody is not None

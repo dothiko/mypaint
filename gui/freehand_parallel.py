@@ -552,11 +552,15 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
             layer_path = model.layer_stack.current_path
         else:
             layer_path = None
+
+        # Make unified pickable-information data
+        info = pickable.regularize_info(*self._pack_info())
+
         # The difference from BrushworkModeMixin is
         # using PickableStrokework, instead of Brushwork.
         cmd = lib.command.PickableStrokework(
             model,
-            self._pack_info(),
+            info,
             layer_path=layer_path,
             description=description,
             abrupt_start=(abrupt or self._BrushworkModeMixin__first_begin),
@@ -569,7 +573,8 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
     ## Use node pick as ruler pick.
     def _apply_info(self, si, offset): 
         ruler = self._ruler
-        sx, sy, ex, ey = self._unpack_info(si.get_info())
+        info = pickable.extract_info(si.get_info())
+        sx, sy, ex, ey = self._unpack_info(info)
         if sx != sx: # i.e. sx is nan
             return 
 
@@ -609,8 +614,8 @@ class ParallelFreehandMode (freehand_assisted.AssistedFreehandMode,
         else:
             sx, sy = ruler.start_pos
             ex, ey = ruler.end_pos
-        return pickable.regularize_info(struct.pack(">4d", sx, sy, ex, ey),
-                                        pickable.Infotype.RULER)
+        return (struct.pack(">4d", sx, sy, ex, ey),
+                    pickable.Infotype.RULER)
     # XXX for `info pick` end
 
 class LastableOptionsMixin(object):

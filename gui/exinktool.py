@@ -1163,7 +1163,8 @@ class ExInkingMode (PressureEditableMixin,
     def _apply_info(self, si, offset):
         """Apply nodes from compressed bytestring.
         """
-        nodes = self._unpack_info(si.get_info())
+        info = pickable.extract_info(si.get_info())
+        nodes = self._unpack_info(info)
         # Note: This clears offset data in StrokeNode.
         assert offset is not None
         if offset != (0, 0):
@@ -1188,8 +1189,7 @@ class ExInkingMode (PressureEditableMixin,
         fmt=">%dd" % len(nodes[0]) 
         for n in nodes:
             datas += struct.pack(fmt, *n)
-        return pickable.regularize_info(zlib.compress(datas),
-                                        pickable.Infotype.TUPLE)
+        return (zlib.compress(datas), pickable.Infotype.TUPLE)
 
     def _unpack_info(self, nodesinfo):
         raw_data = zlib.decompress(nodesinfo)

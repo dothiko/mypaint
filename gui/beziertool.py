@@ -1249,7 +1249,8 @@ class BezierMode (PressureEditableMixin,
     def _apply_info(self, si, offset):
         """Apply nodes from compressed bytestring.
         """
-        nodes = self._unpack_info(si.get_info())
+        info = pickable.extract_info(si.get_info())
+        nodes = self._unpack_info(info)
 
         # Note: This clears offset data in StrokeNode.
         assert offset is not None
@@ -1274,8 +1275,7 @@ class BezierMode (PressureEditableMixin,
         datas = struct.pack(">I", len(nodes))
         for n in nodes:
             datas += n.serialize()
-        return pickable.regularize_info(zlib.compress(datas),
-                                        pickable.Infotype.BEZIER)
+        return (zlib.compress(datas), pickable.Infotype.BEZIER)
 
     def _unpack_info(self, info):
         raw_data = zlib.decompress(info)
