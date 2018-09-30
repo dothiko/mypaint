@@ -474,8 +474,13 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
     def key_release_cb(self, win ,tdw, event):
         """Keyboard release handler, for overriding fill method.
         """
-        if event.keyval in self._MODIFIER_CHANGE_FILL:
-            assert self._overridden_fill_method is not None
+        if (event.keyval in self._MODIFIER_CHANGE_FILL
+                and self._overridden_fill_method is not None):
+            # In some environment, some key combination (such as SHIFT-n) 
+            # does not invoke independent key_press_cb event
+            # but invoke this event handler.
+            # So we need to check whether the current modifier key 
+            # have been actually pressed.
             opts = self.options_presenter
             opts.override_fill_method(self._overridden_fill_method)
             self._overridden_fill_method = None
