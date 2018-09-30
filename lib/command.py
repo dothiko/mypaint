@@ -2202,7 +2202,7 @@ class ClosedAreaFill (FloodFill):
             PIXEL_CONTOUR : (255, 255, 0),
             0 : (0, 255, 0), # level color
             PIXEL_OUTSIDE : (255, 0, 128),
-            PIXEL_FILLED | FLAG_DECIDED: (0, 255, 0),
+            PIXEL_FILLED | FLAG_WORK: (0, 255, 0),
             FLAG_WORK : (255, 0, 0),
             FLAG_AA : (0, 255, 255)
         }
@@ -2235,12 +2235,12 @@ class ClosedAreaFill (FloodFill):
                 npbuf = create_npbuf(npbuf, level, PIXEL_AREA)
                 npbuf = create_npbuf(npbuf, level, PIXEL_FILLED)
                 npbuf = create_npbuf(npbuf, level, PIXEL_CONTOUR)
-                npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED | FLAG_DECIDED)
+                npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED | FLAG_WORK)
             elif m == 'result':
                 npbuf = create_npbuf(npbuf, 0, PIXEL_OUTSIDE)
                 npbuf = create_npbuf(npbuf, 0, PIXEL_AREA)
                 npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED)
-                npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED | FLAG_DECIDED)
+                npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED | FLAG_WORK)
             elif m == 'walking':
                 npbuf = create_npbuf(npbuf, -1, FLAG_WORK)
             elif m == 'alias':
