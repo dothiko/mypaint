@@ -38,7 +38,6 @@ logger = logging.getLogger(__name__)
 
 TILE_SIZE = N = mypaintlib.TILE_SIZE
 MAX_MIPMAP_LEVEL = mypaintlib.MAX_MIPMAP_LEVEL
-PROGRESSIVE_PIXEL_AREA = 0x02 # Important: From lib/progfilldefine.hpp
 
 SYMMETRY_TYPES = tuple(range(lib.mypaintlib.NumSymmetryTypes))
 SYMMETRY_STRINGS = {
@@ -1284,6 +1283,8 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
                     if tile_output:
                         srcdict[(tx, ty)] = src_tile 
     # XXX DEBUG END
+
+    initial_pixel = 0x02 # Important: Same as PIXEL_AREA, from lib/progfilldefine.hpp
     
     while len(tileq) > 0:
         (tx, ty), seeds = tileq.pop(0)
@@ -1310,7 +1311,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
         flag_tile = filled.get((tx, ty), None)
         if flag_tile is None:
             with src.tile_request(tx, ty, readonly=True) as src_tile:
-                flag_tile = mypaintlib.Flagtile(PROGRESSIVE_PIXEL_AREA)
+                flag_tile = mypaintlib.Flagtile(initial_pixel)
                 flag_tile.convert_from_color(
                     src_tile,
                     targ_r, targ_g, targ_b, targ_a,
@@ -1372,12 +1373,12 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     # XXX DEBUG END
     
     # Progress pixels.
-    ft.progress_tiles(-1, 0) # Flood-fill does not need `early area rejection`
+    ft.progress_tiles() 
 
     # Finalize pixels.
     # The processing sequence MUST be : 
     # removing needless areas -> dilation -> finally, draw anti-aliasing pixels.
-    ft.remove_small_areas(MN * 4 * 2)
+    ft.remove_small_areas()
     ft.dilate(int(dilation_size))
     if fill_all_holes:
         ft.fill_holes()
@@ -1387,7 +1388,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     # XXX DEBUG START
     print("end tile")
     if kwargs.get('show_flag', False):
-        _dbg_show_flag(ft)
+        _dbg_show_flag(ft, progress_level)
     print("--- finalize end ---")
     # XXX DEBUG END
 
@@ -1459,15 +1460,14 @@ def _dbg_tile_output(ft, color, tolerance, dilation_size, gap_close_level, x, y,
         json.dump(info, ofp)
 
 # XXX DEBUG FUNC
-def _dbg_show_flag(ft):
+def _dbg_show_flag(ft, lvl):
     # From lib/progfilldefine.h
     PIXEL_FILLED = 0x04
     PIXEL_CONTOUR = 0x05
     PIXEL_AREA = 0x01
     npbuf = None
-    npbuf = ft.render_to_numpy(npbuf, PIXEL_FILLED, 0, 255, 255) 
-    npbuf = ft.render_to_numpy(npbuf, PIXEL_CONTOUR, 255, 0, 0) 
-    npbuf = ft.render_to_numpy(npbuf, PIXEL_FILLED | FLAG_CONTOUR, 255, 0, 0) 
+    npbuf = ft.render_to_numpy(npbuf, PIXEL_FILLED, 0, 255, 255, lvl) 
+    npbuf = ft.render_to_numpy(npbuf, PIXEL_CONTOUR, 255, 0, 0, lvl) 
     
     print('---- rendering tiles completed')
     from PIL import Image

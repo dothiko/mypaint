@@ -334,8 +334,14 @@ public:
         int raw_tx = sx / tile_size;
         int raw_ty = sy / tile_size;
 
-        if(raw_tx >= m_width || raw_tx < 0 
-                || raw_ty >= m_height || raw_ty < 0)
+        // sx and sy should start from (0,0) 
+        // in every case.
+        // Flagtilesurface reserves 1 tile around
+        // of original tiles, and every pixel operation
+        // MUST not exceed 64 pixel away(from original tiles).
+        // Thus, when sx or sy is lower than zero, it is empty tile.
+        if(raw_tx >= m_width || sx < 0 
+                || raw_ty >= m_height || sy < 0)
             return NULL;
         
         // above raw_tx/ty is zero-based, 
@@ -504,6 +510,9 @@ public:
     
     // Decide outside and inside pixels.
     void decide_area();
+
+    // Dedicated version of progress_tiles
+    void progress_tiles();
 };
 
 /* LassofillSurface for Lasso fill.

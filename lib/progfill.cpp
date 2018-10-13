@@ -1026,11 +1026,6 @@ FlagtileSurface::progress_tiles()
             filter_tiles((KernelWorker*)&k);
         }
     }
-
-    // Then, finalize the result.
-    ConvertKernel ck(this);
-    ck.setup(0, PIXEL_AREA, PIXEL_FILLED);
-    filter_tiles((KernelWorker*)&ck);
 }
 
 // A callback used in FlagtileSurface::remove_small_areas
@@ -1725,6 +1720,19 @@ ClosefillSurface::decide_area()
     filter_tiles((KernelWorker*)&k);
 }
 
+// Dedicated version of progress_tiles.
+void 
+ClosefillSurface::progress_tiles()
+{
+    FlagtileSurface::progress_tiles();
+
+    // Then, convert all PIXEL_AREA into PIXEL_FILLED.
+    // Unneeded filled area would be removed with `remove_small_areas` later.
+    ConvertKernel ck(this);
+    ck.setup(0, PIXEL_AREA, PIXEL_FILLED);
+    filter_tiles((KernelWorker*)&ck);
+}
+
 //--------------------------------------
 // Lasso fill
 
@@ -1837,7 +1845,7 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
     PyObject *result_w = PyList_New(0);
 
 
-    // Instantly fill up when the tile is empty(filled by PIXEL_AREA).
+    // Instantly fill up when the tile is empty.
     if (tile->get_stat() & Flagtile::FILLED_AREA) {
         
         tile->fill(PIXEL_FILLED);
@@ -1846,6 +1854,7 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
         PyObject* result = result_w;
         int dx = tile_size - 1;
 
+        // Enqueue all edges of the tile.
         for(int x=0; x<=tile_size-1; x+=(tile_size-1)) {
             for(int y=0; y<=tile_size-1; y++) {
                 if (pos->x != x && pos->y != y) {
