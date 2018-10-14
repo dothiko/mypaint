@@ -346,8 +346,8 @@ class CenterFreehandMode (freehand_assisted.AssistedFreehandMode,
         """Set center point in model coordinate.
         """
         cls = self.__class__
-        cls._cx = cx
-        cls._cy = cy
+        cls._cx = int(cx)
+        cls._cy = int(cy)
 
     # property of cx, cy, to avoid mistakenly overwrite with
     # self attribute.
