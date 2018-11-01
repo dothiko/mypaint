@@ -280,8 +280,9 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
         self._cmd = None
         self._drag_active_tdw = None
         self._drag_active_model = None
-        self._update_ui()
-        tdw.set_sensitive(True)
+        if tdw is not None:
+            # self._update_ui() would be called in self._drag_cleanup()
+            tdw.set_sensitive(True)
         model.do(cmd)
         self._drag_cleanup()
         return False
