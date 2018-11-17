@@ -1904,18 +1904,18 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
                     f, lib.strokemap.StrokeShape()
                 )
                 self.strokes.append(stroke)
+            elif t == 'i':
+                strokeinfo = __read_stroke_from_stream(
+                    f, lib.strokemap.StrokeInfo()
+                )
+                # Read additional node informations.
+                strokeinfo.init_info_from_string(
+                    *pickable.load_from_filestream(f)
+                )
+                self.strokes.append(strokeinfo)
             elif t == '}':
-                # For Backward compatiblity,
-                # StrokeNode informations are read 
-                # after the genuine first end(`}`) signature.
-                # With this, old version of MyPaint would
-                # just ignore expanded portion.
-                #
-                # When we reach to the very tail of the file,
-                # we will get empty string from f.read(1).
-                # If the loop encount unknown signature,
-                # tells only warning, without assert exception
-                # for further expansion.
+                # For Backward compatiblity of wrong codes.
+                # TODO This block should be removed as soon as possible.
                 block_cnt = 0
                 while True:
                     t = f.read(1)
@@ -2134,21 +2134,16 @@ class PaintingLayer (StrokemappedPaintingLayer, core.ExternallyEditable):
 def _write_strokemap(f, strokes, dx, dy):
     brush2id = {}
     for stroke in strokes:
-        if not isinstance(stroke, lib.strokemap.StrokeInfo):
-            _write_strokemap_stroke(f, stroke, brush2id, dx, dy, 's')
+        _write_strokemap_stroke(f, stroke, brush2id, dx, dy)
     f.write('}')
 
-    # For keep backward compatibility,
-    # write StrokeNodes after `end` signature.
-    # With this, old version of MyPaint would just ignore the
-    # unsupported StrokeNodes information.
-    for stroke in strokes:
-        if isinstance(stroke, lib.strokemap.StrokeInfo):
-            _write_strokemap_stroke(f, stroke, brush2id, dx, dy, 'i')
-    f.write('}')
-
-def _write_strokemap_stroke(f, stroke, brush2id, dx, dy, signature):
+def _write_strokemap_stroke(f, stroke, brush2id, dx, dy):
     s = stroke.brush_string
+    if isinstance(stroke, lib.strokemap.StrokeInfo):
+        signature = 'i'
+    else:
+        signature = 's'
+
     # save brush (if not already known)
     if s not in brush2id:
         brush2id[s] = len(brush2id)
@@ -2162,7 +2157,7 @@ def _write_strokemap_stroke(f, stroke, brush2id, dx, dy, signature):
     f.write(struct.pack('>II', brush2id[stroke.brush_string], len(s)))
     f.write(s)
 
-    # save node
+    # save nodes if exist
     if signature == 'i':
         s = stroke.save_info_to_string(dx, dy)
         f.write(s)
