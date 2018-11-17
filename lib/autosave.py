@@ -32,16 +32,18 @@ class Autosaveable:
 
         The initial value is True.
         """
+        # XXX For project-save , private attribute __autosave_dirty
+        # changed psuedo-protected attribute _autosave_dirty
         try:
-            return self.__autosave_dirty
+            return self._autosave_dirty
         except AttributeError:
-            self.__autosave_dirty = True
-            return self.__autosave_dirty
+            self._autosave_dirty = True
+            return self._autosave_dirty
 
     @autosave_dirty.setter
     def autosave_dirty(self, value):
         """Setter for the dirty flag"""
-        self.__autosave_dirty = bool(value)
+        self._autosave_dirty = bool(value)
 
     @property
     def autosave_uuid(self):

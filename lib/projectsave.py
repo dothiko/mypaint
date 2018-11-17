@@ -89,8 +89,13 @@ class Projectsaveable(lib.autosave.Autosaveable):
 
     @property
     def autosave_dirty(self):
-        # To call superclass property
-        return lib.autosave.Autosaveable.autosave_dirty.fget(self)
+        # XXX Code Duplication from autosave.py
+        # For re-defining autosave_dirty setter.
+        try:
+            return self._autosave_dirty
+        except AttributeError:
+            self._autosave_dirty = True
+            return self._autosave_dirty
 
     @autosave_dirty.setter
     def autosave_dirty(self, value):
@@ -103,9 +108,9 @@ class Projectsaveable(lib.autosave.Autosaveable):
         project_dirty is remained.
         """
         value = bool(value)
-        self.__autosave_dirty = value
+        self._autosave_dirty = value
         if value == True:
-            self.__project_dirty = True
+            self._project_dirty = True
         
     def save_to_project(self, projdir, path,
                            canvas_bbox, frame_bbox, force_write, **kwargs):
@@ -147,7 +152,7 @@ class Projectsaveable(lib.autosave.Autosaveable):
         setting dirty flag should be done from
         autosave_dirty.
         """
-        self.__project_dirty = False
+        self._project_dirty = False
 
     @property
     def project_dirty(self):
@@ -159,10 +164,10 @@ class Projectsaveable(lib.autosave.Autosaveable):
         we can only clear this.
         """
         try:
-            return self.__project_dirty
+            return self._project_dirty
         except AttributeError:
-            self.__project_dirty = True
-            return self.__project_dirty
+            self._project_dirty = True
+            return self._project_dirty
 
     @property
     def filename(self):
