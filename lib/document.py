@@ -576,7 +576,7 @@ class Document (object):
         assert not self._painting_only
         self.sync_pending_changes(flush=True)
         self._queue_autosave_writes()
-        self._autosave_countdown_id = None
+       #self._autosave_countdown_id = None # XXX I comment out this. Why clear id?
         return False
 
     ## Queued autosave writes: low priority & chunked
@@ -761,6 +761,7 @@ class Document (object):
             )
         self._autosave_dirty = False
         logger.debug("autosave: all done, doc marked autosave-clean")
+        self._stop_autosave_countdown() # XXX I added
         return False
 
     def _stop_autosave_writes(self):
