@@ -683,13 +683,11 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 self.phase = PhaseMixin.ACTION
                 return False
 
-        elif self.is_adjusting_phase():
-
+        else:
             if (self.phase == PhaseMixin.CAPTURE
-                and self.zone == EditZoneMixin.EMPTY_CANVAS):
-                    self._start_new_capture_phase(rollback=False)
-
-            if self.zone == EditZoneMixin.CONTROL_NODE:
+                    and self.zone == EditZoneMixin.EMPTY_CANVAS):
+                self._start_new_capture_phase(rollback=False)
+            elif self.zone == EditZoneMixin.CONTROL_NODE:
                 # clicked a node.
                 mx, my = tdw.display_to_model(event.x, event.y)
                 self.drag_offset.start(mx, my)

@@ -868,7 +868,9 @@ class BezierMode (PressureEditableMixin,
         if self.phase == _Phase.ADJUST:
 
             if self.zone == _EditZone.EMPTY_CANVAS:
-                if event.state != 0:
+                # Workaround for numlock status.
+                # When numlock is on, always GDK_MOD2_MASK is on!
+                if event.state != 0 and event.state != Gdk.ModifierType.MOD2_MASK:
                     # To activate some mode override
                     self._last_event_node = None
                     return 

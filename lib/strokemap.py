@@ -259,6 +259,7 @@ class StrokeInfo(StrokeShape):
 
     def set_info(self, info):
         assert info is not None
+        assert isinstance(info, bytearray) or isinstance(info, str)
         self._infobody = info
 
     def get_info(self):

@@ -516,7 +516,9 @@ class ExInkingMode (PressureEditableMixin,
         self._node_dragged = False
         if self.phase == _Phase.CAPTURE:
             assert len(self.nodes) == 0
-            if event.state != 0:
+            # Workaround for numlock status.
+            # When numlock is on, always GDK_MOD2_MASK is on!
+            if event.state != 0 and event.state != Gdk.ModifierType.MOD2_MASK:
                 # To activate some mode override
                 self._last_event_node = None
                 return super(ExInkingMode, self).node_drag_start_cb(tdw, event)
@@ -2052,7 +2054,6 @@ class OptionsPresenter_ExInking (object):
         if inkmode:
             radios = self._autoapply_radios
             assert button in radios
-            print(button)
             if button.get_active():
                 value = radios[button]
                 inkmode.set_autoapply(value)
