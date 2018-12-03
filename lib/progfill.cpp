@@ -287,7 +287,8 @@ WalkingKernel::forward()
             return false; // Walking end!!
         }
 
-        on_new_pixel();
+        if ((m_surf->get_pixel(m_level, m_x, m_y) & FLAG_WORK) == 0)
+            on_new_pixel();
     }
     return true;
 }
@@ -624,35 +625,64 @@ Flagtile::convert_to_color(PyObject *py_targ_tile,
 }
 
 void 
-Flagtile::convert_to_transparent(PyObject *py_targ_tile)
+Flagtile::convert_from_transparency(PyObject *py_src_tile,
+                                    const double alpha_threshold,
+                                    const int pixel_value)
+{
+    PyArrayObject *array = (PyArrayObject*)py_src_tile;
+#ifdef HEAVY_DEBUG
+    assert_tile(array);
+#endif
+
+    const unsigned int xstride = PyArray_STRIDE(array, 1) / sizeof(fix15_short_t);
+    const unsigned int ystride = PyArray_STRIDE(array, 0) / sizeof(fix15_short_t);
+    fix15_short_t *cptr_base = (fix15_short_t*)PyArray_BYTES(array);
+    fix15_short_t threshold = (fix15_short_t)(alpha_threshold * fix15_one);
+    
+    // Converting progress level 0 pixel into color tile.
+    for(int y=0; y<TILE_SIZE; y++) {
+        fix15_short_t *cptr = cptr_base;
+        for(int x=0; x<TILE_SIZE; x++) {
+            if (cptr[3] > threshold) {
+                replace(0, x, y, (uint8_t)pixel_value);
+            }
+            cptr += xstride;
+        }
+        cptr_base += ystride;
+    }
+}
+
+void 
+Flagtile::convert_to_transparent(PyObject *py_targ_tile,
+                                 const int target_pixel)
 {
     PyArrayObject *array = (PyArrayObject*)py_targ_tile;
 #ifdef HEAVY_DEBUG
     assert_tile(array);
 #endif
-     
-    if ((get_stat() & Flagtile::FILLED_AREA) 
-            || (get_stat() & Flagtile::EMPTY)) {
+    if (get_pixel_count(target_pixel) == 0) {
         return;
     }
 
     const unsigned int xstride = PyArray_STRIDE(array, 1) / sizeof(fix15_short_t);
     const unsigned int ystride = PyArray_STRIDE(array, 0) / sizeof(fix15_short_t);
-    const unsigned int yoffset = ystride - xstride * TILE_SIZE;
-    fix15_short_t *cptr = (fix15_short_t*)PyArray_BYTES(array);
-    uint8_t *sptr = m_buf;
+    fix15_short_t *cptr_base = (fix15_short_t*)PyArray_BYTES(array);
 
     // Completely filled tile can be cleared with memset.
-    if (get_stat() & Flagtile::FILLED) {
+    if (is_filled_with(target_pixel)){
         for(int y=0; y<TILE_SIZE; y++) {
-            memset(cptr, 0, sizeof(fix15_short_t) * 4 * TILE_SIZE);
-            cptr += ystride;
+            memset(cptr_base, 0, sizeof(fix15_short_t) * 4 * TILE_SIZE);
+            cptr_base += ystride;
         }
         return;
     }
     
+    uint8_t *sptr = m_buf;// This function just refers flagtile pixels, 
+                          // so do faster direct access.
+    
     // Converting progress level 0 pixel into color tile.
     for(int y=0; y<TILE_SIZE; y++) {
+        fix15_short_t *cptr = cptr_base;
         for(int x=0; x<TILE_SIZE; x++) {
             uint8_t pix = *sptr;
             // We need check anti-aliasing pixel first.
@@ -676,7 +706,7 @@ Flagtile::convert_to_transparent(PyObject *py_targ_tile)
                 cptr[2] = fix15_short_clamp(targ_b * final_alpha);
                 cptr[3] = (fix15_short_t)final_alpha;
             }
-            else if ((pix & PIXEL_MASK) == PIXEL_FILLED) {
+            else if ((pix & PIXEL_MASK) == target_pixel) {
                 cptr[0] = 0;
                 cptr[1] = 0;
                 cptr[2] = 0;
@@ -685,7 +715,7 @@ Flagtile::convert_to_transparent(PyObject *py_targ_tile)
             cptr += xstride;
             sptr++;
         }
-        cptr += yoffset;
+        cptr_base += ystride;
     }
 }
 
@@ -1028,8 +1058,10 @@ FlagtileSurface::progress_tiles()
     }
 }
 
-// A callback used in FlagtileSurface::remove_small_areas
-void __foreach_perimeter_cb(gpointer data, gpointer user_data)
+// A callback for `g_queue_foreach` function,
+// used in FlagtileSurface::remove_small_areas.
+// This callback is to get the largest pixel area perimeter.
+void __foreach_largest_cb(gpointer data, gpointer user_data)
 {
     perimeter_info *info = (perimeter_info*)data;
     int *max_length = (int*)user_data;
@@ -1039,89 +1071,91 @@ void __foreach_perimeter_cb(gpointer data, gpointer user_data)
     }
 }
 
+// This callback is to mark the pixel area is 
+// `valid` (i.e. Its hole is small enough against entire
+// area perimeter) or not.
+void __foreach_percentage_cb(gpointer data, gpointer user_data)
+{
+    perimeter_info *info = (perimeter_info*)data;
+    if (info->length > 0 && info->clockwise == false) {
+        double percentage = (double)info->encount / (double)info->length;
+        double *threshold = (double*)user_data;
+        if (percentage > *threshold) { 
+            info->encount = -1; // Invalidate this area.
+        }
+    }
+}
+
 /**
 * @remove_small_areas
 * Remove small areas, and fill all small holes if needed.
 *
-* @param threshold: The threshold value of filled area perimeter.
-*                   If an area which perimeter is less than this value,
-*                   that area is removed(filled with PIXEL_AREA)
+* @param threshold: The threshold value of `opened` pixels ratio of
+*                   filled area perimeter.
+*                   This value should be between 0.0 and 1.0.
 * 
 * @detail 
 * This method is to reject small needless areas by counting its perimeter. 
 */
 void
-FlagtileSurface::remove_small_areas()
+FlagtileSurface::remove_small_areas(double threshold)
 {
+#ifdef HEAVY_DEBUG
+    assert(threshold >= 0.0);
+    assert(threshold <= 1.0);
+#endif
     // Remove annoying small glich-like pixel area.
     // `Progressive fill` would mistakenly fill some
     // concaved areas around jagged contour edges as gap.
     // Theorically, such area cannot be produced when
     // targeting gap-closing-level(m_level) is less than or equal to 1.
-    if (m_level > 1) {
-        GQueue *queue = g_queue_new();
-        CountPerimeterKernel pk(this, queue);
-        filter_tiles((KernelWorker*)&pk);
+    GQueue *queue = g_queue_new();
+    CountPerimeterKernel pk(this, queue);
+    filter_tiles((KernelWorker*)&pk);
 
-        int max_length=0;
-        g_queue_foreach(queue, __foreach_perimeter_cb, &max_length);
-#ifdef HEAVY_DEBUG
-        assert(max_length > 0);
-#endif
+    int max_length = 0;
+    g_queue_foreach(queue, __foreach_largest_cb, &max_length);
 
-        RemoveAreaWorker ra(this);
-        ClearflagWalker cf(this, PIXEL_FILLED);
-        // Now, use max_length as threshold.
-        // Allow half of max_length, when it is enough large.
-        if (max_length > (1<<m_level) * 4 * 4)
-            max_length /= 2;
+    g_queue_foreach(queue, __foreach_percentage_cb, &threshold);
+
+    RemoveAreaWorker ra(this);
+    ClearflagWalker cf(this, PIXEL_FILLED);
+    
+    while(g_queue_get_length(queue) > 0) {
+        perimeter_info *info = (perimeter_info*)g_queue_pop_head(queue);
+        // NOTE: We cannot reject `hole` area at here because
+        // That area might be multiple areas which has a composition 
+        // of diagonally connected. Such areas are needed to be detected
+        // separately - i.e. we need new search for `hole` pixels.
         
-        while(g_queue_get_length(queue) > 0) {
-            perimeter_info *info = (perimeter_info*)g_queue_pop_head(queue);
-            // NOTE: We cannot reject `hole` area at here because
-            // That area might be multiple areas which has a composition 
-            // of diagonally connected. Such areas are needed to be detected
-            // separately - i.e. we need new search for `hole` pixels.
-            
+        if (info->clockwise) {
             // info->clockwise == true : i.e. it is not area, it's hole.
-            // info->encount > 0 : i.e. 
-
-            if (info->clockwise) {
-                // It is hole. It would be filled later,
-                // Just erase walking flags for now.
-                cf.walk_from(info->sx, info->sy, info->direction, false);
+            // It would be filled later,
+            // Just erase walking flags for now.
+            cf.walk_from(info->sx, info->sy, info->direction, false);
+        }
+        else {
+            if (info->length == 0) {
+                // Just a dot. Erase it.
+                replace_pixel(0, info->sx, info->sy, PIXEL_AREA); 
+            }
+            else if (info->encount < 0 && info->length < max_length) {
+                // That area has been surrounded with
+                // relatively too many `invalid` pixels .
+                // So erase it.
+                flood_fill(
+                    info->sx, info->sy,
+                    (FillWorker*)&ra
+                );
             }
             else {
-                if (info->length < max_length 
-                        && (info->encount > 0 || info->length < (1<<m_level))) {
-                    // When the area 
-                    // * Smaller than threshold 
-                    // * Encount some empty pixels - it is `open`
-                    // * Or, really too small... 
-                    // It should be removed!
-
-                    if (info->length == 0) {
-                        // Just a dot. Erase it.
-                        cf.walk_from(info->sx, info->sy, info->direction, false);
-                        replace_pixel(0, info->sx, info->sy, PIXEL_AREA); 
-                    }
-                    else {
-                        // With this flood-fill, erase all surrounding `flaged` pixel.
-                        // So no need to use ClearflagWalker.
-                        flood_fill(
-                            info->sx, info->sy,
-                            (FillWorker*)&ra
-                        );
-                    }
-                }
-                else {
-                    cf.walk_from(info->sx, info->sy, info->direction, false);
-                }
+                // Just erase perimeter walking flags.
+                cf.walk_from(info->sx, info->sy, info->direction, false);
             }
-            delete info;
         }
-        g_queue_free(queue);
+        delete info;
     }
+    g_queue_free(queue);
 }
 
 /**
@@ -1168,10 +1202,10 @@ FlagtileSurface::fill_holes()
 }
 
 void
-FlagtileSurface::dilate(const int dilation_size)
+FlagtileSurface::dilate(const int pixel, const int dilation_size)
 {
     if (dilation_size > 0) {
-        DilateKernel dk(this);
+        DilateKernel dk(this, pixel);
         for(int i=0; i<dilation_size; i++) {
             filter_tiles((KernelWorker*)&dk);
         }

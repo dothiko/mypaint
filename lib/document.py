@@ -1336,6 +1336,22 @@ class Document (object):
         return True
     # XXX for `cut with another layer` end
 
+    # XXX for `cut protruding pixels`
+    def cut_protruding_pixels(self, tolerance, alpha_threshold):
+        """Cut protruding pixels."""
+        cmd = command.CutProtruding(
+            self, 
+            tolerance,
+            # kwds params
+            alpha_threshold=alpha_threshold,
+            # debug options
+            show_flag = False,
+            tile_output = False
+        )
+        self.do(cmd)
+        return True
+    # XXX for `cut protruding pixels` end
+
     def merge_visible_layers(self):
         """Merge all visible layers into one & discard originals."""
         self.do(command.MergeVisibleLayers(self))

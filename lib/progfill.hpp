@@ -134,7 +134,11 @@ public:
                           const double g, 
                           const double b);
 
-    void convert_to_transparent(PyObject *py_targ_tile);
+    void convert_from_transparency(PyObject *py_targ_tile,
+                                   const double alpha_threshold,
+                                   const int pixel_value);
+
+    void convert_to_transparent(PyObject *py_targ_tile, const int pixel_value);
 
     inline int get_stat()
     {
@@ -245,6 +249,13 @@ public:
     // This tile is empty(i.e. filled with 0)
     static const int EMPTY = 0x00004000;
     
+
+    // To Expose PIXEL_ enum for python.
+    static const int PIXEL_FILLED = PixelFlags::PIXEL_FILLED;
+    static const int PIXEL_AREA = PixelFlags::PIXEL_AREA;
+    static const int PIXEL_EMPTY = PixelFlags::PIXEL_EMPTY;
+    static const int PIXEL_CONTOUR = PixelFlags::PIXEL_CONTOUR;
+    static const int PIXEL_OUTSIDE = PixelFlags::PIXEL_OUTSIDE;
 };
 
 /* Flagtile psuedo surface object.
@@ -418,8 +429,8 @@ assert(ct != NULL);
     void filter_tiles(KernelWorker *k);
     
     // Finalize related methods.
-    void remove_small_areas();
-    void dilate(const int dilation_size);
+    void remove_small_areas(double threshold);
+    void dilate(const int pixel, const int dilation_size);
     void fill_holes();
     void draw_antialias();
     

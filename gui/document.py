@@ -1421,6 +1421,26 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         if self.model.cut_current_layer_down():
             self.layerblink_state.activate(action)
     # XXX for `merge opaque area` / cut function end
+
+    # XXX for `Cut protruding pixels` / cut function
+    def cut_protruding_pixels_cb(self, action):
+        """Action callback: cut protoruding pixels of current layer 
+        against visible contents(contours).
+        """
+        # This command use same setting as 
+        # `Close and Fill` feature.
+        prefs = self.app.preferences
+        tolerance = prefs.get(
+            'closed_area_fill.tolerance',
+            0.2
+        )
+        alpha_threshold = prefs.get(
+            'closed_area_fill.alpha_threshold',
+            0.0156
+        )
+        if self.model.cut_protruding_pixels(tolerance, alpha_threshold):
+            self.layerblink_state.activate(action)
+    # XXX for `Cut protruding pixels` / cut function end
     
     def _update_merge_layer_down_action(self, *_ignored):
         """Updates the layer Merge Down action's sensitivity"""

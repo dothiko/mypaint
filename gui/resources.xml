@@ -725,6 +725,15 @@ Vocabulary
         </object>
       </child>      
       <!-- XXX for `marked` layer states end -->
+      <!-- XXX for `Cut protruding pixels` start -->
+      <child>
+        <object class="GtkAction" id="CutProtrudingPixels">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">Cut protruding pixels</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Cut protruding pixels of current layer against visible contents(contours).</property>
+          <signal name="activate" handler="cut_protruding_pixels_cb"/>
+        </object>
+      </child>      
+      <!-- XXX for `Cut prorruding pixels` end -->
       <!-- }}} -->
       <!-- {{{ View manipulation -->
       <child>

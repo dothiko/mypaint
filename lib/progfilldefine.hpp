@@ -53,6 +53,7 @@ enum PixelFlags {
     // PIXEL_ values are not bitwise flag. They are just number.
     // The vacant pixel is 0.
     // PIXEL_AREA means 'The pixel is fillable, but not filled(yet)'
+    //
     PIXEL_MASK = 0x0F,
     PIXEL_EMPTY = 0x00,   // PIXEL_EMPTY should lower than PIXEL_OUTSIDE
     PIXEL_OUTSIDE = 0x01, // Thus, we can know total outside pixel as <= PIXEL_OUTSIDE
@@ -61,6 +62,11 @@ enum PixelFlags {
     PIXEL_CONTOUR = 0x04, // PIXEL_CONTOUR is one of a filled pixel.
                           // This should be larger than PIXEL_FILLED
                           // to ease finding `filled(or unchangeable)` pixel.
+
+    // PIXEL_EMPTY, PIXEL_AREA, PIXEL_FILLED and PIXEL_CONTOUR are redefined as
+    // static const of Flagtile class, and you can access them from python
+    // as lib.mypaintlib.Flagtile.PIXEL_*.
+    // Other enum constants are hidden from python.
                          
     // FLAG_ values are bitwise flag. 
     FLAG_MASK = 0xF0,

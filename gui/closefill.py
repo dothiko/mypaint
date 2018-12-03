@@ -843,6 +843,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                 progress_level=opts.gap_level,
                 erase_pixel=erase_pixel,
                 fill_all_holes=opts.fill_all_holes,
+                alpha_threshold=opts.alpha_threshold,
                 # XXX Debug arguments
                 show_flag=opts.show_flag,
                 tile_output=opts.tile_output
@@ -861,6 +862,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                 progress_level=opts.gap_level,
                 erase_pixel=erase_pixel,
                 fill_all_holes=opts.fill_all_holes,
+                alpha_threshold=opts.alpha_threshold,
                 # debug options
                 show_flag = opts.show_flag,
                 tile_output = opts.tile_output
@@ -878,6 +880,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                 # kwds params
                 erase_pixel=erase_pixel,
                 fill_all_holes=opts.fill_all_holes,
+                alpha_threshold=opts.alpha_threshold,
                 # debug options
                 show_flag = opts.show_flag,
                 tile_output = opts.tile_output

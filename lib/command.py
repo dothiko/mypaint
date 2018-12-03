@@ -2141,6 +2141,11 @@ class ClosedAreaFill (FloodFill):
 
     display_name = _("Closed area Fill")
 
+    PIXEL_AREA = lib.mypaintlib.Flagtile.PIXEL_AREA
+    PIXEL_FILLED = lib.mypaintlib.Flagtile.PIXEL_FILLED
+    PIXEL_CONTOUR = lib.mypaintlib.Flagtile.PIXEL_CONTOUR
+    PIXEL_EMPTY = lib.mypaintlib.Flagtile.PIXEL_EMPTY
+
     def __init__(self, doc, 
                  nodes, color, tolerance, 
                  sample_merged, make_new_layer, 
@@ -2160,7 +2165,9 @@ class ClosedAreaFill (FloodFill):
             **kwds
         )
         # self.erase_pixel would be set at superclass constructor. 
-        assert(len(nodes) > 2)
+        
+        # Nodes might be None for some inherited classes.
+        # So we cannot assert it here.
         self.nodes = nodes
         self.dilation_size = int(dilation_size)
 
@@ -2183,12 +2190,12 @@ class ClosedAreaFill (FloodFill):
     def _dbg_show_flag(self, ft, method, level=0, title=None):
         # XXX debug method
         
+        PIXEL_EMPTY = self.PIXEL_EMPTY
+        PIXEL_CONTOUR = self.PIXEL_CONTOUR
+        PIXEL_AREA = self.PIXEL_AREA
+        PIXEL_FILLED = self.PIXEL_FILLED
+        PIXEL_OUTSIDE = lib.mypaintlib.Flagtile.PIXEL_OUTSIDE
         # From lib/progfilldefine.hpp
-        PIXEL_EMPTY= 0x00 
-        PIXEL_OUTSIDE = 0x01 
-        PIXEL_AREA = 0x02
-        PIXEL_FILLED = 0x03        
-        PIXEL_CONTOUR = 0x04
         FLAG_WORK = 0x10
         FLAG_AA = 0x80
         npbuf = None
@@ -2200,7 +2207,7 @@ class ClosedAreaFill (FloodFill):
             PIXEL_FILLED : (255, 160, 0),
             PIXEL_AREA : (0, 255, 255),
             PIXEL_CONTOUR : (255, 255, 0),
-            0 : (0, 255, 0), # level color
+            PIXEL_EMPTY : (0, 255, 0), # level color
             PIXEL_OUTSIDE : (255, 0, 128),
             PIXEL_FILLED | FLAG_WORK: (0, 255, 0),
             FLAG_WORK : (255, 0, 0),
@@ -2225,7 +2232,7 @@ class ClosedAreaFill (FloodFill):
                 npbuf = create_npbuf(npbuf, level, PIXEL_AREA)
             elif m == 'close_area':
                 npbuf = create_npbuf(npbuf, 0, PIXEL_AREA)
-            elif m == 'initial_level':
+            elif m == 'initial_level' or m == 'empty':
                 npbuf = create_npbuf(npbuf, level, 0)
             elif m == 'contour':
                 npbuf = create_npbuf(npbuf, level, PIXEL_CONTOUR)
@@ -2335,7 +2342,10 @@ class ClosedAreaFill (FloodFill):
                     with dstsurf.tile_request(tx, ty, readonly=False) \
                             as dst_tile:
                         if self.erase_pixel:
-                            ct.convert_to_transparent(dst_tile)
+                            ct.convert_to_transparent(
+                                dst_tile,
+                                0x03 # PIXEL_FILLED
+                            )
                         else:
                             ct.convert_to_color(
                                 dst_tile,
@@ -2448,12 +2458,15 @@ class ClosedAreaFill (FloodFill):
         #XXX debug code end
 
         # Finalize progressive fill.
-        ft.remove_small_areas()
+        if level > 1:
+            ft.remove_small_areas(0.08) # 0.08 is practical value.
+            # TODO This should be remaked as relative to
+            # progress level.
 
         if self.fill_all_holes:
             ft.fill_holes()
 
-        ft.dilate(self.dilation_size)
+        ft.dilate(self.PIXEL_FILLED, self.dilation_size)
         ft.draw_antialias()
         
         # Convert flagtiles into that new layer.
@@ -2575,7 +2588,7 @@ class LassoFill(ClosedAreaFill):
                         )
         
         # Finalize lasso fill
-        lt.dilate(self.dilation_size)
+        lt.dilate(self.PIXEL_FILLED, self.dilation_size)
         lt.convert_result_area()
         if self.fill_all_holes:
             lt.fill_holes()
@@ -2594,3 +2607,137 @@ class LassoFill(ClosedAreaFill):
             self._dbg_show_flag(lt)
         #XXX debug code end
 # XXX for `close-and-fill / lasso-fill` feature end.
+
+# XXX for `cut-protruding` feature.
+class CutProtruding(ClosedAreaFill):
+    """Cut protruding areas"""
+
+    display_name = _("Cut Protruding")
+
+    def __init__(self, doc, 
+                 tolerance, 
+                 **kwds):
+        super(CutProtruding, self).__init__(
+            doc, 
+            None, None, # Nodes and colors are unused for this class. 
+            tolerance, 
+            False, False, # Also, sample_merged and make_new_layer is False.  
+            0,            # Dilation is not executed.
+            **kwds        # Keyword parameters same as ClosedAreaFill
+        )
+
+    def redo(self):
+        # TODO Implement 'fill once' option.
+
+        _TILE_SIZE = lib.mypaintlib.TILE_SIZE
+        layers = self.doc.layer_stack
+        saved_bg_state = False
+        if self.sample_merged:
+            cl = layers
+        else:
+            cl = layers.current
+
+        # XXX Debug/profiling code
+        import time
+        ctm = time.time()
+        show_flag = self.show_flag
+        # XXX Debug code end
+
+        # Overwrite current, but snapshot 1st
+        assert self.snapshot is None
+        self.snapshot = layers.current.save_snapshot()
+
+        # Convert all tiles of current layer as flagtile.
+
+        # PIXEL_ enum constants are defined in lib/progfilldefine.hpp
+        PIXEL_EMPTY = self.PIXEL_EMPTY  
+        PIXEL_AREA = self.PIXEL_AREA
+        PIXEL_CONTOUR = self.PIXEL_CONTOUR
+        PIXEL_FILLED = self.PIXEL_FILLED
+        flagtiles = {}
+        cursurf = cl._surface
+        curtiles = cl.get_tile_coords()
+        # Get entire visible contents, without background.
+        allsurf = self._get_source_surface(layers)
+        alpha_threshold = self.alpha_threshold
+        alpha_threshold = 0.4 # for test
+
+        # Important: We must reject current layer temporally 
+        # from visible contents.
+        cl.visible = False 
+
+        for tx, ty in curtiles:
+            flag_tile = None
+            with cursurf.tile_request(tx, ty, readonly=True) as src_tile:
+                flag_tile = lib.mypaintlib.Flagtile(PIXEL_EMPTY)
+                # As first, convert current layer as 
+                flag_tile.convert_from_transparency(
+                    src_tile,
+                    alpha_threshold, 
+                    PIXEL_FILLED
+                )
+                # Then, overwrite with visible contents 
+                # (except for current layer).
+                with allsurf.tile_request(tx, ty, readonly=True) as src_tile:
+                    flag_tile.convert_from_transparency(
+                        src_tile,
+                        alpha_threshold,
+                        PIXEL_CONTOUR, # Placing pixel, same as PIXEL_CONTOUR
+                    )
+                flagtiles[(tx, ty)] = flag_tile
+
+        # Utilize FloodfillSurface. 
+        ft = lib.mypaintlib.FloodfillSurface(flagtiles, 0)
+        ox = ft.get_origin_x()
+        oy = ft.get_origin_y()
+        for tx, ty in flagtiles:
+            ftx = tx - ox 
+            fty = ty - oy 
+            ft.borrow_tile(ftx, fty, flagtiles[(tx, ty)])
+
+        # XXX Debug/profiling code
+        if show_flag:
+            self._dbg_show_flag(
+                ft, 
+                'contour,area,filled', 
+                title='pre-remove'
+            )
+        #XXX debug code end
+
+        # Just remove `Protruding` area.
+        # That area would be,
+        # 1. smaller than largest area.
+        # 2. it is surrounded by many of transparent pixel.
+        ft.remove_small_areas(0.2)
+
+        # XXX Debug/profiling code
+        if show_flag:
+            self._dbg_show_flag(
+                ft, 
+                'contour,area,filled', 
+                title='post-remove'
+            )
+        #XXX debug code end
+
+        # Dilate result(PIXEL_AREA) a bit 
+        # and eliminate garbage pixels.
+        ft.dilate(PIXEL_AREA, 1)
+
+        # This class reserves layer contents
+        # except for removing protruding pixels.
+        for tx, ty in curtiles:
+            flag_tile = flagtiles[(tx, ty)]
+            with cursurf.tile_request(tx, ty, readonly=False) as dst_tile:
+                flag_tile.convert_to_transparent(
+                    dst_tile,
+                    PIXEL_AREA # `remove_small_areas` changes PIXEL_FILLED
+                               # into PIXEL_AREA
+                )
+
+        # Restore background visible state
+        assert hasattr(layers, "background_visible")
+        layers.background_visible = True
+        cl.visible = True
+            
+
+# XXX for `cut-protruding` end.

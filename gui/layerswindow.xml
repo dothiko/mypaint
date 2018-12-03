@@ -4,7 +4,7 @@
       <menuitem action='LayerProperties'/>
       <menuitem action='LayerLockedToggle'/>
       <menuitem action='LayerVisibleToggle'/>
-      <menuitem action='LayerMarkedToggle'/> <!-- Added for `marked` layer -->
+      <menuitem action='LayerMarkedToggle'/> <!-- XXX Added for `marked` layer -->
       <separator/>
       <menuitem action='LayerMode'/>
     </placeholder>
@@ -30,7 +30,7 @@
       <menuitem action='MergeVisibleLayers'/>
       <menuitem action='NewLayerMergedFromVisible'/>
       <menuitem action='NormalizeLayerMode'/>
-      <!-- Added for `marked` layer -->
+      <!-- XXX Added for `marked` layer -->
       <separator/>
       <menuitem action='MergeMarkedLayers'/>
       <menuitem action='GroupMarkedLayers'/>
@@ -41,7 +41,8 @@
       <menuitem action='AlignWithMarkedLayer'/>
       <separator/>
       <menuitem action='ClearAllLayersMark'/>
-      <!-- Added for `marked` layer end -->
+      <!-- XXX Added for `marked` layer end -->
+      <menuitem action='CutProtrudingPixels'/><!-- XXX Added for `cut protruding pixels` -->
     </placeholder>
     <separator/>
     <placeholder name="AdvancedListActions"/>

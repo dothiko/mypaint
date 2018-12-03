@@ -242,7 +242,7 @@
       <menuitem action='FlipLayerMoveMode'/>
       <menuitem action="RaiseLayerInStack"/>
       <menuitem action="LowerLayerInStack"/>
-      <menuitem action='AlignWithMarkedLayer'/> <!-- Added for `marked` layer -->
+      <menuitem action='AlignWithMarkedLayer'/> <!-- XXX Added for `marked` layer -->
       <!-- Current layer: creation -->
       <separator/>
       <menuitem action='NewPaintingLayerAbove'/>
@@ -263,6 +263,7 @@
       <menuitem action='RemoveLayer'/>
       <separator/>
       <menuitem action='TrimLayer'/>
+      <menuitem action='CutProtrudingPixels'/><!-- XXX Added for `cut protruding pixels` -->
       <!-- Current layer: Splitting and merging -->
       <separator/>
       <menuitem action='DuplicateLayer'/>
@@ -273,8 +274,8 @@
       <menuitem action='MergeVisibleLayers'/>
       <menuitem action='NewLayerMergedFromVisible'/>
       <menuitem action='NormalizeLayerMode'/>
-      <menuitem action='CutLayerWithMarkedOpaque'/><!-- Added for `marked` layer -->
-      <menuitem action='CutLayerWithMarkedTransparent'/><!-- Added for `marked` layer -->
+      <menuitem action='CutLayerWithMarkedOpaque'/><!-- XXX Added for `marked` layer -->
+      <menuitem action='CutLayerWithMarkedTransparent'/><!-- XXX Added for `marked` layer -->
       <!-- Current layer: external editing -->
       <separator/>
       <menuitem action='BeginExternalLayerEdit'/>

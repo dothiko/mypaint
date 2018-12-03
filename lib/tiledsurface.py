@@ -1284,7 +1284,10 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
                         srcdict[(tx, ty)] = src_tile 
     # XXX DEBUG END
 
-    initial_pixel = 0x02 # Important: Same as PIXEL_AREA, from lib/progfilldefine.hpp
+    # Important: Same as PIXEL_AREA, from lib/progfilldefine.hpp
+    PIXEL_AREA = 0x02
+    PIXEL_FILLED = 0x03
+    initial_pixel = PIXEL_AREA
     
     while len(tileq) > 0:
         (tx, ty), seeds = tileq.pop(0)
@@ -1405,7 +1408,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
                 ty = fty + oy
                 with dst.tile_request(tx, ty, readonly=False) as dst_tile:
                     if erase_pixel:
-                        flag_tile.convert_to_transparent(dst_tile)
+                        flag_tile.convert_to_transparent(dst_tile, PIXEL_FILLED)
                     else:
                         flag_tile.convert_to_color(
                             dst_tile,
