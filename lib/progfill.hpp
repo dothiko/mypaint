@@ -411,10 +411,10 @@ assert(ct != NULL);
     }
 
 
-    // Progress methods.
+    //// Progress methods.
     void build_progress_seed();
     // Actually progress pixels based on progress seeds.
-    void progress_tiles();
+    void progress_tile(const int level, const bool expand_outside=true);
 
     // flood_fill method. 
     // This should not be called from Python codes.
@@ -425,12 +425,15 @@ assert(ct != NULL);
     void flood_fill(const int sx, const int sy, FillWorker *w);
     
     // Also, filter method would be called from some worker classes.
-    // Make it public.
+    // Not for python.
     void filter_tiles(KernelWorker *k);
+
+    // Utility Methods
+    void convert_pixel(const int level, const int targ_pixel, const int new_pixel); 
+    void remove_small_areas(int level, double threshold, int size_threshold=-1);
+    void dilate(const int pixel, const int dilation_size);
     
     // Finalize related methods.
-    void remove_small_areas(double threshold);
-    void dilate(const int pixel, const int dilation_size);
     void fill_holes();
     void draw_antialias();
     
@@ -522,8 +525,6 @@ public:
     // Decide outside and inside pixels.
     void decide_area();
 
-    // Dedicated version of progress_tiles
-    void progress_tiles();
 };
 
 /* LassofillSurface for Lasso fill.
@@ -543,8 +544,6 @@ public:
     */
     LassofillSurface(PyObject* node_list);
     virtual ~LassofillSurface();
- 
-    void convert_result_area();
 };
 
 //// functions

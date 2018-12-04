@@ -142,12 +142,17 @@ public:
 // filled pixel area with virtually gap-closing.
 class ProgressKernel: public KernelWorker
 {
+protected:
+    const bool m_outside_expandable;// Flag to PIXEL_OUTSIDE areas can expandable into PIXEL_AREA
+                                    // This should be true for ClosedAreaFill
+                                    // But to be false for CutProtrudingPixels.
+                                    // CutProtrudingPixels needs to keep the shape of PIXEL_AREA.
 public:
     // This class does not use initial level parameter.
     // Because it would be changed frequently.
     // It would be set at loop, with `set_target_level` method.
-    ProgressKernel(FlagtileSurface *surf) 
-        : KernelWorker(surf) { }
+    ProgressKernel(FlagtileSurface *surf, const bool outside_expandable=true) 
+        : KernelWorker(surf), m_outside_expandable(outside_expandable) { }
 
     // Disable default finalize. 
     // This kernel does not use FLAG_WORK.
@@ -229,10 +234,14 @@ public:
                 for(int px=bx; px < bx+2; px++) {
                     uint8_t pix = targ->get(beneath_level, px, py);
                     if (pix == PIXEL_AREA) {
-                        if (pix_h <= PIXEL_OUTSIDE || pix_v <= PIXEL_OUTSIDE) { 
-                            targ->replace(beneath_level, px, py, PIXEL_OUTSIDE);
+                        if (pix_h <= PIXEL_OUTSIDE || pix_v <= PIXEL_OUTSIDE) {
+                            if (m_outside_expandable)
+                                targ->replace(beneath_level, px, py, PIXEL_OUTSIDE);
                         }
                         else if (pix_h == PIXEL_FILLED || pix_v == PIXEL_FILLED) {
+                            targ->replace(beneath_level, px, py, PIXEL_FILLED);
+                        }
+                        else if (pix_h == PIXEL_CONTOUR && pix_v == PIXEL_CONTOUR) {
                             targ->replace(beneath_level, px, py, PIXEL_FILLED);
                         }
                     }
@@ -557,10 +566,13 @@ protected:
     GQueue* m_queue; // Borrowed queue, set at start method.
 
     // Check whether wall pixel is `opened` one.
-    inline void check_wall_pixel(const uint8_t pixel) {
+    virtual void check_opened_pixel(const uint8_t pixel) {
         switch(pixel & PIXEL_MASK) {
             case PIXEL_OUTSIDE:
+                m_encount+=100; // Touching outside pixel is very bad thing.
+                break;
             case PIXEL_EMPTY:
+            case PIXEL_AREA:
                 m_encount++;
                 break;
             default:
@@ -589,7 +601,7 @@ protected:
         if (right)
             m_step--;
         else
-            check_wall_pixel(get_hand_pixel());
+            check_opened_pixel(get_hand_pixel());
     }
 
     virtual void on_new_pixel() 
@@ -598,7 +610,7 @@ protected:
         m_surf->replace_pixel(m_level, m_x, m_y, 
                               PIXEL_FILLED | FLAG_WORK);
 
-        check_wall_pixel(get_hand_pixel());
+        check_opened_pixel(get_hand_pixel());
     }
 
     void push_queue(const int sx, const int sy, const int direction) 
@@ -675,6 +687,7 @@ class ClearflagWalker: public WalkingKernel
 {
 protected:
     const uint8_t m_targ_pix;
+    
 
     virtual bool is_wall_pixel(const uint8_t pixel) 
     {
@@ -684,8 +697,8 @@ protected:
     virtual void on_new_pixel() 
     {
         // Replace PIXEL_FILLED... i.e. `clear flag`
-        uint8_t pix = m_surf->get_pixel(0, m_x, m_y);
-        m_surf->replace_pixel(0, m_x, m_y, (pix & PIXEL_MASK));
+        uint8_t pix = m_surf->get_pixel(m_level, m_x, m_y);
+        m_surf->replace_pixel(m_level, m_x, m_y, (pix & PIXEL_MASK));
     }
     
 public:
@@ -732,6 +745,24 @@ public:
 class FillHoleKernel: public CountPerimeterKernel
 {
 protected:
+    // Check whether wall pixel is `opened` one.
+    virtual void check_opened_pixel(const uint8_t pixel) {
+        switch(pixel & PIXEL_MASK) {
+            case PIXEL_OUTSIDE:
+                m_encount+=10; // Touching outside pixel is very bad thing.
+                break;
+            case PIXEL_EMPTY:
+                m_encount++;
+                break;
+            case PIXEL_AREA:   // Different from CountPerimeterKernel, This
+                               // Walker is intended to walk inside PIXEL_AREA.
+                               // Therefore, PIXEL_AREA should not be treated as
+                               // `opened` pixel.
+            default:
+                break;
+        }
+    }
+
     virtual bool is_wall_pixel(const uint8_t pixel) 
     {
         // Reversed version from CountPerimeterKernel in return value.
@@ -752,7 +783,7 @@ protected:
         // Mark current(new) pixel as `walked`
         m_surf->replace_pixel(0, m_x, m_y, PIXEL_AREA | FLAG_WORK);
 
-        check_wall_pixel(get_hand_pixel());
+        check_opened_pixel(get_hand_pixel());
     }
     
 public:
@@ -807,6 +838,10 @@ public:
                         // just store it into queue for now.
                         push_queue(sx, sy, i);
                         return;
+                    }
+                    else {
+                        // Just 1px hole. fill it now!
+                        m_surf->replace_pixel(0, sx, sy, PIXEL_FILLED);
                     }
                 }
             }

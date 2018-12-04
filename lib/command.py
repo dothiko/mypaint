@@ -2384,6 +2384,7 @@ class ClosedAreaFill (FloodFill):
             cl = layers.current
         tcpos = self.targ_color_pos
         level = self.progress_level
+        early_culling_level = 2 # XXX fixed value, early culling for 4x4 pixel level
 
         # XXX Debug/profiling code
         import time
@@ -2439,14 +2440,18 @@ class ClosedAreaFill (FloodFill):
        #    self._dbg_show_flag(ft, 'contour,filled',title='post-convert tile')
         #XXX debug code end
 
-        # Mipmap build
+        # Build pyramid
         ft.build_progress_seed()
 
         # Deciding filling area
         ft.decide_area()
           
         # Then, start progressing tiles.
-        ft.progress_tiles()
+        for i in range(level, 0, -1):
+            ft.progress_tile(i, False)
+            # For early culling:
+            if i == early_culling_level:
+                ft.remove_small_areas(i, 0.3) # 0.3(30%) is practical value.
 
         # XXX Debug/profiling code
         if show_flag:
@@ -2458,15 +2463,17 @@ class ClosedAreaFill (FloodFill):
         #XXX debug code end
 
         # Finalize progressive fill.
-        if level > 1:
-            ft.remove_small_areas(0.08) # 0.08 is practical value.
-            # TODO This should be remaked as relative to
+        if level >= 1:
+            ft.remove_small_areas(0, 0.08) # 0.08(8%) is practical value.
+            # TODO `percentage` should be remaked as relative to
             # progress level.
 
+        ft.dilate(self.PIXEL_FILLED, self.dilation_size)
+
+        # After dilation, fill all holes.
         if self.fill_all_holes:
             ft.fill_holes()
 
-        ft.dilate(self.PIXEL_FILLED, self.dilation_size)
         ft.draw_antialias()
         
         # Convert flagtiles into that new layer.
@@ -2587,9 +2594,13 @@ class LassoFill(ClosedAreaFill):
                             True
                         )
         
-        # Finalize lasso fill
+        # Finalize lasso fill, with converting 
+        # PIXEL_CONTOUR into PIXEL_OUTSIDE (need to fill contour holes)
+        # and remained PIXEL_AREA into PIXEL_FILLED.
         lt.dilate(self.PIXEL_FILLED, self.dilation_size)
-        lt.convert_result_area()
+        lt.convert_pixel(0, self.PIXEL_CONTOUR, self.PIXEL_OUTSIDE)
+        lt.convert_pixel(0, self.PIXEL_AREA, self.PIXEL_FILLED)
+
         if self.fill_all_holes:
             lt.fill_holes()
         lt.draw_antialias()
@@ -2636,11 +2647,13 @@ class CutProtruding(ClosedAreaFill):
             cl = layers
         else:
             cl = layers.current
+        level = 2 # Default progress level as 2(4x4 pixel).
 
         # XXX Debug/profiling code
         import time
         ctm = time.time()
         show_flag = self.show_flag
+        show_flag = True
         # XXX Debug code end
 
         # Overwrite current, but snapshot 1st
@@ -2674,7 +2687,7 @@ class CutProtruding(ClosedAreaFill):
                 flag_tile.convert_from_transparency(
                     src_tile,
                     alpha_threshold, 
-                    PIXEL_FILLED
+                    PIXEL_AREA
                 )
                 # Then, overwrite with visible contents 
                 # (except for current layer).
@@ -2687,7 +2700,7 @@ class CutProtruding(ClosedAreaFill):
                 flagtiles[(tx, ty)] = flag_tile
 
         # Utilize FloodfillSurface. 
-        ft = lib.mypaintlib.FloodfillSurface(flagtiles, 0)
+        ft = lib.mypaintlib.FloodfillSurface(flagtiles, level)
         ox = ft.get_origin_x()
         oy = ft.get_origin_y()
         for tx, ty in flagtiles:
@@ -2704,22 +2717,63 @@ class CutProtruding(ClosedAreaFill):
             )
         #XXX debug code end
 
-        # Just remove `Protruding` area.
-        # That area would be,
+        # Build pyramid
+        ft.build_progress_seed()
+
+        # Just convert all PIXEL_AREA into PIXEL_FILLED at top level. 
+        # With this, we can get a pyramid which has
+        # initialized by PIXEL_AREA, but only top level
+        # pixels are `covered` with PIXEL_FILLED. 
+        ft.convert_pixel(level, PIXEL_AREA, PIXEL_FILLED)
+
+        # Remove (i.e. convert to PIXEL_AREA again) `Protruding` area, 
+        # in top level.
+        # That area would match all of following conditions,
         # 1. smaller than largest area.
-        # 2. it is surrounded by many of transparent pixel.
-        ft.remove_small_areas(0.2)
+        # 2. it is surrounded by many of opened pixel(greater than 40%).
+        ft.remove_small_areas(level, 0.4, 0) # XXX 0.4(40%) is practical value.
 
         # XXX Debug/profiling code
         if show_flag:
             self._dbg_show_flag(
                 ft, 
                 'contour,area,filled', 
+                level=level,
                 title='post-remove'
             )
         #XXX debug code end
 
-        # Dilate result(PIXEL_AREA) a bit 
+        # Progress seed pixels into lower levels.
+        # Some pixels convert to FILLED, others remained
+        # as vacant AREA, following to algorithm.
+        for i in range(level, 0, -1):
+            ft.progress_tile(i, False)
+
+        # XXX Debug/profiling code
+        if show_flag:
+            self._dbg_show_flag(
+                ft, 
+                'contour,area,filled', 
+                level=0,
+                title='progressed'
+            )
+        #XXX debug code end
+
+        # Then, remove remained small areas again
+        # at final level.
+        ft.remove_small_areas(0, 0.2, 0) # XXX 0.2(20%) is practical value.
+
+        # XXX Debug/profiling code
+        if show_flag:
+            self._dbg_show_flag(
+                ft, 
+                'contour,area,filled', 
+                level=0,
+                title='finalized'
+            )
+        #XXX debug code end
+
+        # Dilate erasing result(PIXEL_AREA) a bit 
         # and eliminate garbage pixels.
         ft.dilate(PIXEL_AREA, 1)
 

@@ -1047,17 +1047,34 @@ FlagtileSurface::build_progress_seed()
 * ProgressWorker class.
 */
 void 
-FlagtileSurface::progress_tiles()
+FlagtileSurface::progress_tile(const int level, const bool expand_outside)
 {
-    if (m_level > 0) {
-        ProgressKernel k(this); 
-        for (int i=m_level; i>0; i--) {
-            k.set_target_level(i);            
-            filter_tiles((KernelWorker*)&k);
-        }
-    }
+#ifdef HEAVY_DEBUG
+    assert(level > 0);
+    assert(level <= MAX_PROGRESS);
+#endif
+    ProgressKernel k(this, expand_outside); 
+    k.set_target_level(level);            
+    filter_tiles((KernelWorker*)&k);
 }
 
+/**
+* @convert_pixel
+* Utility method to convert pixels from python
+*
+*/
+void
+FlagtileSurface::convert_pixel(const int level, 
+                               const int targ_pixel,
+                               const int new_pixel) 
+{
+    ConvertKernel ck(this);
+    ck.setup(level, targ_pixel, new_pixel);
+    filter_tiles((KernelWorker*)&ck);
+}
+
+//// Callbacks used from remove_small_areas
+//
 // A callback for `g_queue_foreach` function,
 // used in FlagtileSurface::remove_small_areas.
 // This callback is to get the largest pixel area perimeter.
@@ -1093,16 +1110,26 @@ void __foreach_percentage_cb(gpointer data, gpointer user_data)
 * @param threshold: The threshold value of `opened` pixels ratio of
 *                   filled area perimeter.
 *                   This value should be between 0.0 and 1.0.
+*
+* @param size_threshold: To eliminate a glitch-like pixels, which is 
+*                        small but completely surrounded by contour.
+*                        That pixel area is not wrong, but looks like 
+*                        something weird error.
+*                        If assigning -1(the default param) to this, it means
+*                        `use the 1/16 of maximum perimeter length`.
+*                        Also, this threshold can be disabled by assigning 0.
 * 
 * @detail 
 * This method is to reject small needless areas by counting its perimeter. 
 */
 void
-FlagtileSurface::remove_small_areas(double threshold)
+FlagtileSurface::remove_small_areas(int level, double threshold, int size_threshold)
 {
 #ifdef HEAVY_DEBUG
     assert(threshold >= 0.0);
     assert(threshold <= 1.0);
+    assert(level <= m_level);
+    assert(level >= 0);
 #endif
     // Remove annoying small glich-like pixel area.
     // `Progressive fill` would mistakenly fill some
@@ -1111,15 +1138,27 @@ FlagtileSurface::remove_small_areas(double threshold)
     // targeting gap-closing-level(m_level) is less than or equal to 1.
     GQueue *queue = g_queue_new();
     CountPerimeterKernel pk(this, queue);
+    pk.set_target_level(level);
     filter_tiles((KernelWorker*)&pk);
 
+    // Get maximum perimeter, to decide largest main area.
     int max_length = 0;
     g_queue_foreach(queue, __foreach_largest_cb, &max_length);
 
+    // Calculate the ratio of how many `opened` pixel surround 
+    // each perimeters(pixel areas).
+    // And, when it is greater than threshold, the `encount` member
+    // of that perimeter structure is set to -1(less than 0).
     g_queue_foreach(queue, __foreach_percentage_cb, &threshold);
 
     RemoveAreaWorker ra(this);
     ClearflagWalker cf(this, PIXEL_FILLED);
+
+    ra.set_target_level(level);
+    cf.set_target_level(level);
+
+    if (size_threshold < 0)
+        size_threshold = max_length >> 4;
     
     while(g_queue_get_length(queue) > 0) {
         perimeter_info *info = (perimeter_info*)g_queue_pop_head(queue);
@@ -1135,13 +1174,16 @@ FlagtileSurface::remove_small_areas(double threshold)
             cf.walk_from(info->sx, info->sy, info->direction, false);
         }
         else {
-            if (info->length == 0) {
+            if (info->length == 0 && level == 0) {
                 // Just a dot. Erase it.
                 replace_pixel(0, info->sx, info->sy, PIXEL_AREA); 
             }
-            else if (info->encount < 0 && info->length < max_length) {
+            else if ((info->encount < 0 && info->length < max_length) 
+                        || (info->length < size_threshold)){
                 // That area has been surrounded with
                 // relatively too many `invalid` pixels .
+                // or, just too small.
+                // small area would be filled later with `fill-hole` feature.
                 // So erase it.
                 flood_fill(
                     info->sx, info->sy,
@@ -1170,9 +1212,7 @@ void
 FlagtileSurface::fill_holes()
 {
     // As first, remove all contour
-    ConvertKernel ck(this);
-    ck.setup(0, PIXEL_CONTOUR, PIXEL_AREA);
-    filter_tiles((KernelWorker*)&ck);
+    convert_pixel(0, PIXEL_CONTOUR, PIXEL_AREA);
 
     // That makes hole. so fill it.
     GQueue *queue = g_queue_new();
@@ -1186,15 +1226,15 @@ FlagtileSurface::fill_holes()
 
         cf.walk_from(info->sx, info->sy, info->direction, false);
         if (!info->clockwise && info->encount == 0) {
-            if (info->length == 0) {
-                replace_pixel(0, info->sx, info->sy, PIXEL_AREA);
-            }
-            else {
-                flood_fill(
-                    info->sx, info->sy,
-                    (FillWorker*)&fh
-                );
-            }
+#ifdef HEAVY_DEBUG
+                // Just 1px hole should be filled at FillHoleworker. 
+                // So info->length cannot be 0 at here.
+                assert(info->length > 0);
+#endif
+            flood_fill(
+                info->sx, info->sy,
+                (FillWorker*)&fh
+            );
         }
         delete info;
     }
@@ -1747,24 +1787,10 @@ ClosefillSurface::decide_area()
     w.set_target_level(m_level);
     walk_polygon(&w);
 
+    
     // Then, convert remained vacant PIXEL_AREA into PIXEL_FILLED.
     // With this, we fill the inside of contour with PIXEL_FILLED.
-    ConvertKernel k(this);
-    k.setup(m_level, PIXEL_AREA, PIXEL_FILLED);
-    filter_tiles((KernelWorker*)&k);
-}
-
-// Dedicated version of progress_tiles.
-void 
-ClosefillSurface::progress_tiles()
-{
-    FlagtileSurface::progress_tiles();
-
-    // Then, convert all PIXEL_AREA into PIXEL_FILLED.
-    // Unneeded filled area would be removed with `remove_small_areas` later.
-    ConvertKernel ck(this);
-    ck.setup(0, PIXEL_AREA, PIXEL_FILLED);
-    filter_tiles((KernelWorker*)&ck);
+    convert_pixel(m_level, PIXEL_AREA, PIXEL_FILLED);
 }
 
 //--------------------------------------
@@ -1780,25 +1806,6 @@ LassofillSurface::~LassofillSurface()
 #ifdef HEAVY_DEBUG
     printf("LassofillSurface destructor called.\n");
 #endif
-}
-
-/**
-* @convert_result_area
-* convert PIXEL_AREA as final result(PIXEL_FILLED)
-*
-* @detail 
-* Just convert valid pixel area as filled area.
-* This method should be called next to `dilate` method 
-* and prior to `draw_antialias` method,
-*/
-void
-LassofillSurface::convert_result_area()
-{
-    ConvertKernel ck(this);
-    ck.setup(0, PIXEL_CONTOUR, PIXEL_OUTSIDE);
-    filter_tiles((KernelWorker*)&ck);
-    ck.setup(0, PIXEL_AREA, PIXEL_FILLED);
-    filter_tiles((KernelWorker*)&ck);
 }
 
 //-----------------------------------------------------------------------------
@@ -1877,7 +1884,6 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
     PyObject *result_e = PyList_New(0);
     PyObject *result_s = PyList_New(0);
     PyObject *result_w = PyList_New(0);
-
 
     // Instantly fill up when the tile is empty.
     if (tile->get_stat() & Flagtile::FILLED_AREA) {
