@@ -2653,7 +2653,6 @@ class CutProtruding(ClosedAreaFill):
         import time
         ctm = time.time()
         show_flag = self.show_flag
-        show_flag = True
         # XXX Debug code end
 
         # Overwrite current, but snapshot 1st
