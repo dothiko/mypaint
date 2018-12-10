@@ -182,8 +182,8 @@ protected:
     }
 
     inline uint8_t get_neighbor_pixel(const int level,
-                                       const int direction, 
-                                       const int sx, const int sy); 
+                                      const int sx, const int sy, 
+                                      const int direction); 
 
 public:
     TileWorker(FlagtileSurface* surf) 

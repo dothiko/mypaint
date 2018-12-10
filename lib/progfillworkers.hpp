@@ -66,7 +66,7 @@ public:
         // Also, PIXEL_CONTOUR should be included in target (to be filled) pixel type. 
         if (pix != m_targ_pixel && (pix & FLAG_WORK) == 0) {
             for(int i=0; i<4; i++) {
-                uint8_t kpix = get_neighbor_pixel(0, i, sx, sy);
+                uint8_t kpix = get_neighbor_pixel(0, sx, sy, i);
                 if (kpix == m_targ_pixel) {
                     if (targ == NULL) {
                         // We need to generate(or get) a new tile for NULL target.
@@ -219,10 +219,10 @@ public:
             }
         }
         else {
-            uint8_t top = get_neighbor_pixel(m_level, 0, sx, sy);
-            uint8_t right = get_neighbor_pixel(m_level, 1, sx, sy);
-            uint8_t bottom = get_neighbor_pixel(m_level, 2, sx, sy);
-            uint8_t left = get_neighbor_pixel(m_level, 3, sx, sy);
+            uint8_t top = get_neighbor_pixel(m_level, sx, sy, 0);
+            uint8_t right = get_neighbor_pixel(m_level, sx, sy, 1);
+            uint8_t bottom = get_neighbor_pixel(m_level, sx, sy, 2);
+            uint8_t left = get_neighbor_pixel(m_level, sx, sy, 3);
 
             // The param x and y is current(above) progress coordinate.
             // The coordinate of level beneath should be double of them.
@@ -583,15 +583,8 @@ protected:
     // tells whether the pixel value is wall pixel or not.
     virtual bool is_wall_pixel(const uint8_t pixel) 
     {
-        switch(pixel & PIXEL_MASK) {
-            case PIXEL_FILLED:
-                return false;
-
-            default: // Both of PIXEL_OUTSIDE, PIXEL_EMPTY
-            case PIXEL_AREA:
-            case PIXEL_CONTOUR:
-                return true;
-        }
+        // Return True when pixel is NOT PIXEL_FILLED
+        return !((pixel & PIXEL_MASK) == PIXEL_FILLED);
     }
 
     virtual void on_rotate_cb(const bool right) 
@@ -665,7 +658,7 @@ public:
 
         if (pixel == PIXEL_FILLED) {
             for(int i=0; i<4; i++) {
-                uint8_t pix_n = get_neighbor_pixel(m_level, i, sx, sy);
+                uint8_t pix_n = get_neighbor_pixel(m_level, sx, sy, i);
                 if (is_wall_pixel(pix_n)) {
                     m_encount = 0;
                     // Start from current kernel pixel.
@@ -824,7 +817,7 @@ public:
         uint8_t pixel = targ->get(0, x, y); 
         if (pixel == PIXEL_AREA) {
             for(int i=0; i<4; i++) {
-                uint8_t kpix = get_neighbor_pixel(0, i, sx, sy);
+                uint8_t kpix = get_neighbor_pixel(0, sx, sy, i);
                 // When kpix is EXACTLY filled pixel... 
                 // (A ridge of already detected area would be a combination of
                 // PIXEL_FILLED | FLAG_DECIDED, so skip it.)

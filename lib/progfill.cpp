@@ -128,8 +128,8 @@ const int TileWorker::yoffset[] = {-1, 0, 1,  0};
 
 uint8_t 
 TileWorker::get_neighbor_pixel(const int level,
-                    const int direction, 
-                    const int sx, const int sy) 
+                    const int sx, const int sy,
+                    const int direction) 
 {
     return m_surf->get_pixel(
         level, 
@@ -234,7 +234,7 @@ WalkingKernel::rotate_right()
 {
     // We need update current direction
     // before call rotation handler.
-    m_cur_dir = (m_cur_dir + 1) & 3;
+    m_cur_dir = get_hand_dir(m_cur_dir);//(m_cur_dir + 1) & 3;
     on_rotate_cb(true);   
 }
 
@@ -245,7 +245,7 @@ WalkingKernel::rotate_left()
 {
     // We need update current direction
     // before call rotation handler
-    m_cur_dir = (m_cur_dir - 1) & 3;          
+    m_cur_dir = get_reversed_hand_dir(m_cur_dir);//(m_cur_dir - 1) & 3;          
     m_left_rotate_cnt++;
     on_rotate_cb(false); 
 }
@@ -374,41 +374,32 @@ Flagtile::build_progress_level(const int targ_level)
 #endif
     int c_size = PROGRESS_TILE_SIZE(targ_level);
     int b_level = targ_level - 1;
-    int total_area = 0;
 
     for (int y=0; y < c_size; y++) {
         for (int x=0; x < c_size; x++) {
-            int contour_cnt = 0;
-            int area_cnt = 0;
 
             // The progress level beneath is always
             // double sized of current level.
             int bbx = x << 1;
             int bby = y << 1;
+            uint8_t new_pixel = PIXEL_EMPTY;
+
+            // process chunk of pixels, like `pooling`
             for (int by=0; by < 2; by++) {
                 for (int bx=0; bx < 2; bx++) {
                     uint8_t pix = get(b_level, bbx+bx, bby+by);
                     switch(pix) {
                         case PIXEL_CONTOUR:
-                            contour_cnt++;
-                            break;
+                            new_pixel = PIXEL_CONTOUR;
+                            goto exit_pixel_loop;
                         case PIXEL_AREA:
-                            area_cnt++;
+                            new_pixel = PIXEL_AREA;
                             break;
                     }
                 }
             }
 
-            uint8_t new_pixel = PIXEL_EMPTY;
-
-            if (area_cnt > 0) {
-                // Set flag which means `there should be some area pixels.`
-                new_pixel = PIXEL_AREA;
-            }
-
-            if (contour_cnt > 0) {
-                new_pixel = PIXEL_CONTOUR;
-            }
+        exit_pixel_loop:
 
             if (new_pixel != PIXEL_EMPTY) {
                 replace(
@@ -417,8 +408,6 @@ Flagtile::build_progress_level(const int targ_level)
                     new_pixel
                 );
             }
-
-            total_area += area_cnt;
         }
     }// Tile processing end
 }
