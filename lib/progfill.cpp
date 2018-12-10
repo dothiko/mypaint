@@ -210,7 +210,7 @@ KernelWorker::finalize()
 // Wrapper method to get pixel with direction.
 uint8_t 
 WalkingKernel::get_pixel_with_direction(const int x, const int y, 
-                                          const int direction) 
+                                        const int direction) 
 {
     return m_surf->get_pixel(
         m_level,
@@ -230,24 +230,24 @@ WalkingKernel::is_wall_pixel(const uint8_t pixel)
 // Rotate to right.
 // This is used when we missed wall at right-hand. 
 void 
-WalkingKernel::rotate_right() 
+WalkingKernel::rotate_left() 
 {
     // We need update current direction
     // before call rotation handler.
-    m_cur_dir = get_hand_dir(m_cur_dir);//(m_cur_dir + 1) & 3;
-    on_rotate_cb(true);   
+    m_cur_dir = get_hand_dir(m_cur_dir);
+    on_rotate_cb(false);   
 }
 
 // Rotate to left. 
 // This is used when we face `wall`
 void 
-WalkingKernel::rotate_left() 
+WalkingKernel::rotate_right() 
 {
     // We need update current direction
     // before call rotation handler
-    m_cur_dir = get_reversed_hand_dir(m_cur_dir);//(m_cur_dir - 1) & 3;          
-    m_left_rotate_cnt++;
-    on_rotate_cb(false); 
+    m_cur_dir = get_reversed_hand_dir(m_cur_dir);
+    m_right_rotate_cnt++;
+    on_rotate_cb(true); 
 }
 
 bool 
@@ -264,8 +264,8 @@ WalkingKernel::forward()
         // With this turn, this kernel draws antialias line or
         // initialize internal status of this object.
         
-        rotate_left();
-        if (m_left_rotate_cnt >= 4)
+        rotate_right();
+        if (m_right_rotate_cnt >= 4)
             return false; // Exit from infnite loop of 1px hole!
     } 
     else {
@@ -276,12 +276,14 @@ WalkingKernel::forward()
         // Refreshing clockwise counter.
         // Algorithm from
         // https://stackoverflow.com/questions/1165647/how-to-determine-if-a-list-of-polygon-points-are-in-clockwise-order
+        // CAUTION: mypaint uses inverted Cartesian coordinate system, so the result is also inverted.
+        // when m_clockwise_cnt is negative or zero, that area should be clockwise.
         m_clockwise_cnt += (nx - m_x) * (ny + m_y);
 
         m_x = nx;
         m_y = ny;
         m_step++;
-        m_left_rotate_cnt = 0;
+        m_right_rotate_cnt = 0;
 
         if (m_x == m_ox && m_y == m_oy) {
             return false; // Walking end!!
@@ -301,7 +303,7 @@ WalkingKernel::proceed()
     if (!is_wall_pixel(get_hand_pixel())) {
         // Right hand of kernel misses the wall.
         // Couldn't forward.
-        rotate_right();
+        rotate_left();
     }
     return forward();
 }
@@ -317,7 +319,7 @@ WalkingKernel::walk(const int sx, const int sy, const int direction)
     m_x = sx;
     m_y = sy;
     m_step = 0;
-    m_left_rotate_cnt = 0;
+    m_right_rotate_cnt = 0;
     m_clockwise_cnt = 0;
     
     m_cur_dir = direction;
@@ -1083,7 +1085,7 @@ void __foreach_largest_cb(gpointer data, gpointer user_data)
 void __foreach_percentage_cb(gpointer data, gpointer user_data)
 {
     perimeter_info *info = (perimeter_info*)data;
-    if (info->length > 0 && info->clockwise == false) {
+    if (info->length > 0 && info->clockwise == true) {
         double percentage = (double)info->encount / (double)info->length;
         double *threshold = (double*)user_data;
         if (percentage > *threshold) { 
@@ -1146,21 +1148,21 @@ FlagtileSurface::remove_small_areas(int level, double threshold, int size_thresh
     ra.set_target_level(level);
     cf.set_target_level(level);
 
-    if (size_threshold < 0)
+    if (size_threshold <= 0)
         size_threshold = max_length >> 4;
-    
+
     while(g_queue_get_length(queue) > 0) {
         perimeter_info *info = (perimeter_info*)g_queue_pop_head(queue);
         // NOTE: We cannot reject `hole` area at here because
         // That area might be multiple areas which has a composition 
         // of diagonally connected. Such areas are needed to be detected
         // separately - i.e. we need new search for `hole` pixels.
-        
-        if (info->clockwise) {
-            // info->clockwise == true : i.e. it is not area, it's hole.
+
+        if (info->clockwise==false) {
+            // info->clockwise == false: i.e. it is not area, it's hole.
             // It would be filled later,
             // Just erase walking flags for now.
-            cf.walk_from(info->sx, info->sy, info->direction, false);
+            cf.walk(info->sx, info->sy, cf.get_hand_dir(info->direction));
         }
         else {
             if (info->length == 0 && level == 0) {
@@ -1181,7 +1183,7 @@ FlagtileSurface::remove_small_areas(int level, double threshold, int size_thresh
             }
             else {
                 // Just erase perimeter walking flags.
-                cf.walk_from(info->sx, info->sy, info->direction, false);
+                cf.walk(info->sx, info->sy, cf.get_hand_dir(info->direction));
             }
         }
         delete info;
@@ -1213,8 +1215,8 @@ FlagtileSurface::fill_holes()
     while(g_queue_get_length(queue) > 0) {
         perimeter_info *info = (perimeter_info*)g_queue_pop_head(queue);
 
-        cf.walk_from(info->sx, info->sy, info->direction, false);
-        if (!info->clockwise && info->encount == 0) {
+        cf.walk(info->sx, info->sy, cf.get_hand_dir(info->direction));
+        if (info->clockwise && info->encount == 0) {
 #ifdef HEAVY_DEBUG
                 // Just 1px hole should be filled at FillHoleworker. 
                 // So info->length cannot be 0 at here.

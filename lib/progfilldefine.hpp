@@ -300,13 +300,11 @@ protected:
 
     // To detect 1px infinite loop. if this is greater or equal to 4, 
     // Walking kernel enters infinite rotating state in 1px hole.
-    int m_left_rotate_cnt;
+    int m_right_rotate_cnt;
 
     // To detect walking is closewise or counter-clockwise.
     long m_clockwise_cnt;
 
-    inline int get_hand_dir(const int dir) { return (dir + 1) & 3; }
-    inline int get_reversed_hand_dir(const int dir) { return (dir + 3) & 3; }
 
     // Wrapper method to get pixel with direction.
     virtual uint8_t get_pixel_with_direction(const int x, const int y, 
@@ -340,7 +338,6 @@ protected:
     // when reaches end of walking, return false.
     bool proceed();
 
-    void walk(const int sx, const int sy, const int direction);
     
     //// Walking callbacks / virtual methods
     
@@ -372,10 +369,15 @@ public:
     virtual void end(Flagtile* targ) { }
 
     // Tell whether the walking is clockwise or not.
-    // We can use this method only after the walking.
+    // We can use this method only after the walking finished.
     inline bool is_clockwise() {
-        return m_clockwise_cnt < 0;
+        return m_clockwise_cnt <= 0;
     }
+
+    // These methods are used when calling walk method from outside.
+    inline int get_hand_dir(const int dir) { return (dir + 3) & 3; }
+    inline int get_reversed_hand_dir(const int dir) { return (dir + 1) & 3; }
+    void walk(const int sx, const int sy, const int direction);
 };
 
 // XXX Currently almost same as floodfill_point of fill.cpp,

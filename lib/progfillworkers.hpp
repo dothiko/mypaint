@@ -277,7 +277,7 @@ protected:
     
     // Dedicated wrapper method to get pixel with direction.
     virtual uint8_t get_pixel_with_direction(const int x, const int y, 
-                                              const int direction) 
+                                     const int direction) 
     {
         uint8_t pix = m_surf->get_pixel(m_level,
                                         x + xoffset[direction],
@@ -319,8 +319,8 @@ protected:
         }
 
         if ((m_surf->get_pixel(0, x, y) & PIXEL_MASK) == PIXEL_FILLED) {
-            int leftdir = (m_line_dir + 3) & 3;
-            uint8_t side_pixel = get_pixel_with_direction(x, y, leftdir);
+            int rightdir = (m_line_dir + 1) & 3;
+            uint8_t side_pixel = get_pixel_with_direction(x, y, rightdir);
             if ((side_pixel & PIXEL_MASK) == PIXEL_FILLED) {
                 // The target pixel is `cliff`
                 // It is not suitable as antialias point.
@@ -348,8 +348,8 @@ protected:
             }
        
             // `not right` means `left turn`.
-            double start_value = get_aa_value(m_sx, m_sy, true, !right);
-            double end_value = get_aa_value(ex, ey, false, !right);
+            double start_value = get_aa_value(m_sx, m_sy, true, right);
+            double end_value = get_aa_value(ex, ey, false, right);
 
             // Gradient from 0 to 0 is meaningless. 
             if (start_value == 0 && end_value == 0) 
@@ -371,7 +371,7 @@ protected:
             if (start_value == 1.0)
                 value_step = -value_step;
                 
-            if (!right)
+            if (right)
                 pixel_step++;
 
             // Set initial value.
@@ -417,7 +417,7 @@ protected:
             m_walking_started = true;
         }
 
-        if (right) {
+        if (!right) {
             // This is for after right rotation.
             // And, actual starting point is one pixel forward.
             // NOTE: Therefore, we need to update(rotate) m_curdir
@@ -438,7 +438,13 @@ protected:
  
     virtual bool is_wall_pixel(const uint8_t pixel)  
     {
-        return ((pixel & FLAG_AA)==0 && pixel == PIXEL_FILLED);
+        return ((pixel & FLAG_AA) == 0 && (pixel & PIXEL_MASK) == PIXEL_FILLED);
+    }
+
+    virtual void on_new_pixel() 
+    { 
+        // This needed to avoid misdetecting area which is already Anti-Aliased.
+        m_surf->replace_pixel(0, m_x, m_y, FLAG_AA);
     }
 
 public:
@@ -512,7 +518,8 @@ public:
 
             // IMPORTANT: initialize class unique members before walk!
             m_walking_started = false;
-            m_line_dir = 0; // 0 means "Currently face top"
+            m_line_dir = 2; // 2 means "Currently face below" - 
+                            // to proceed outside the area (counter-clockwise).
             m_sx = m_x;
             m_sy = m_y;
             walk(sx, sy, 0);
@@ -589,9 +596,9 @@ protected:
 
     virtual void on_rotate_cb(const bool right) 
     {
-        // If rotating right, it is `vacant pixel` of perimeter.
+        // If rotating left, it is `vacant pixel` of perimeter.
         // so decliment perimeter(i.e. m_step).
-        if (right)
+        if (!right)
             m_step--;
         else
             check_opened_pixel(get_hand_pixel());
@@ -698,14 +705,6 @@ public:
     ClearflagWalker(FlagtileSurface *surf, const uint8_t targ_pix)
         :   WalkingKernel(surf),
             m_targ_pix(targ_pix) { }
-
-    void walk_from(const int sx, const int sy, const int direction, const bool outside) 
-    {
-        if (outside)
-            walk(sx, sy, get_hand_dir(direction));
-        else
-            walk(sx, sy, get_reversed_hand_dir(direction));
-    }
 };
 
 // FillHoleWorker
