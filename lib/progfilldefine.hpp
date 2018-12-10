@@ -180,10 +180,10 @@ protected:
             }
         }
     }
-
-    inline uint8_t get_neighbor_pixel(const int level,
-                                      const int sx, const int sy, 
-                                      const int direction); 
+    
+    // Wrapper method to get pixel with direction.
+    virtual uint8_t get_pixel_with_direction(const int x, const int y, 
+                                             const int direction);
 
 public:
     TileWorker(FlagtileSurface* surf) 
@@ -254,6 +254,7 @@ protected:
     // Cache of m_surf information
     int m_max_x;
     int m_max_y;
+    
 
 public:
     // Defined at lib/progfill.cpp
@@ -306,9 +307,6 @@ protected:
     long m_clockwise_cnt;
 
 
-    // Wrapper method to get pixel with direction.
-    virtual uint8_t get_pixel_with_direction(const int x, const int y, 
-                                              const int direction);
 
     inline uint8_t get_front_pixel() 
     {
@@ -337,7 +335,6 @@ protected:
     // Rotate or Proceed (walk) single step, around the target area.
     // when reaches end of walking, return false.
     bool proceed();
-
     
     //// Walking callbacks / virtual methods
     

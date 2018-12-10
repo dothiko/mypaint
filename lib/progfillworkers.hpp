@@ -66,7 +66,7 @@ public:
         // Also, PIXEL_CONTOUR should be included in target (to be filled) pixel type. 
         if (pix != m_targ_pixel && (pix & FLAG_WORK) == 0) {
             for(int i=0; i<4; i++) {
-                uint8_t kpix = get_neighbor_pixel(0, sx, sy, i);
+                uint8_t kpix = get_pixel_with_direction(sx, sy, i);
                 if (kpix == m_targ_pixel) {
                     if (targ == NULL) {
                         // We need to generate(or get) a new tile for NULL target.
@@ -219,10 +219,10 @@ public:
             }
         }
         else {
-            uint8_t top = get_neighbor_pixel(m_level, sx, sy, 0);
-            uint8_t right = get_neighbor_pixel(m_level, sx, sy, 1);
-            uint8_t bottom = get_neighbor_pixel(m_level, sx, sy, 2);
-            uint8_t left = get_neighbor_pixel(m_level, sx, sy, 3);
+            uint8_t top = get_pixel_with_direction(sx, sy, 0);
+            uint8_t right = get_pixel_with_direction(sx, sy, 1);
+            uint8_t bottom = get_pixel_with_direction(sx, sy, 2);
+            uint8_t left = get_pixel_with_direction(sx, sy, 3);
 
             // The param x and y is current(above) progress coordinate.
             // The coordinate of level beneath should be double of them.
@@ -665,7 +665,7 @@ public:
 
         if (pixel == PIXEL_FILLED) {
             for(int i=0; i<4; i++) {
-                uint8_t pix_n = get_neighbor_pixel(m_level, sx, sy, i);
+                uint8_t pix_n = get_pixel_with_direction(sx, sy, i);
                 if (is_wall_pixel(pix_n)) {
                     m_encount = 0;
                     // Start from current kernel pixel.
@@ -816,7 +816,7 @@ public:
         uint8_t pixel = targ->get(0, x, y); 
         if (pixel == PIXEL_AREA) {
             for(int i=0; i<4; i++) {
-                uint8_t kpix = get_neighbor_pixel(0, sx, sy, i);
+                uint8_t kpix = get_pixel_with_direction(sx, sy, i);
                 // When kpix is EXACTLY filled pixel... 
                 // (A ridge of already detected area would be a combination of
                 // PIXEL_FILLED | FLAG_DECIDED, so skip it.)

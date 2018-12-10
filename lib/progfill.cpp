@@ -126,16 +126,16 @@ assert_tile(PyArrayObject* array) {
 const int TileWorker::xoffset[] = { 0, 1, 0, -1};
 const int TileWorker::yoffset[] = {-1, 0, 1,  0};
 
+// Wrapper method to get pixel with direction.
 uint8_t 
-TileWorker::get_neighbor_pixel(const int level,
-                    const int sx, const int sy,
-                    const int direction) 
+TileWorker::get_pixel_with_direction(const int x, const int y, 
+                                       const int direction) 
 {
     return m_surf->get_pixel(
-        level, 
-        sx+xoffset[direction], 
-        sy+yoffset[direction]
-    ); 
+        m_level,
+        x + xoffset[direction],
+        y + yoffset[direction]
+    );
 }
 
 //--------------------------------------
@@ -152,6 +152,7 @@ KernelWorker::set_target_level(const int level)
     m_max_x = m_surf->get_pixel_max_x(level);
     m_max_y = m_surf->get_pixel_max_y(level);
 }
+
 
 /**
 * @start
@@ -206,18 +207,6 @@ KernelWorker::finalize()
 
 //--------------------------------------
 //// WalkingKernel class
-
-// Wrapper method to get pixel with direction.
-uint8_t 
-WalkingKernel::get_pixel_with_direction(const int x, const int y, 
-                                        const int direction) 
-{
-    return m_surf->get_pixel(
-        m_level,
-        x + xoffset[direction],
-        y + yoffset[direction]
-    );
-}
 
 // Check whether the right side pixel of current position / direction
 // is match to forward.
