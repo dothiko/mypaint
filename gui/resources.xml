@@ -2066,26 +2066,6 @@ Vocabulary
         </object>
       </child>
       <!-- }}} -->
-      <!-- {{{ Stamp tool and flip actions -->
-      <child>
-        <object class="GtkRadioAction" id="StampMode">
-          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">Stamp Tool</property>
-          <property name="short-label" translatable="yes" context="Toolbar (short labels)">Stamp</property>
-          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">Stamp bitmap file,clipboard or portion of a layer.</property>
-          <property name="group">StampMode</property>
-          <property name="icon-name">mypaint-tool-bezier-symbolic</property>
-          <property name="value">17</property>
-        </object>
-      </child>
-      <child>
-        <object class="GtkAction" id="FlipStampMode">
-          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">Stamp Tool</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">draw bitmap stamp</property>
-          <property name="icon-name">mypaint-tool-bezier-symbolic</property>
-          <signal name="activate" handler="mode_flip_action_activated_cb"/>
-        </object>
-      </child>
-      <!-- }}} -->
       <!-- {{{ Selection mode and flip actions -->
       <child>
         <object class="GtkRadioAction" id="SelectionMode">
@@ -2244,6 +2224,26 @@ Vocabulary
         </object>
       </child>
       <!-- }}} -->
+      <!-- {{{ Adjustlayer actions -->
+      <child>
+        <object class="GtkRadioAction" id="AdjustLayerMode">
+          <property name="label" translatable="yes" context="Menu→Edit→Current Mode (labels)">AdjustLayer</property>
+          <property name="short-label" translatable="yes" context="Toolbar (short labels)">AdjLayer</property>
+          <property name="tooltip" translatable="yes" context="Toolbar (tooltips)">AdjustLayer: Adjust layer contents with free transform.</property>
+          <property name="icon-name">mypaint-layer-adjust-symbolic</property>
+          <property name="group">EllipseMode</property>
+          <property name="value">26</property>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="FlipAdjustLayerMode">
+          <property name="label" translatable="yes" context="Menu→Edit (labels), Accel Editor (labels)">AdjustLayer</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Adjust layer contents.</property>
+          <property name="icon-name">mypaint-layer-adjust-symbolic</property>
+          <signal name="activate" handler="mode_flip_action_activated_cb"/>
+        </object>
+      </child>
+      <!-- }}} -->
     </object>
   </child>
   <!-- }}} -->
@@ -2341,15 +2341,6 @@ Vocabulary
           <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Enter Insert node phase</property>
           <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Enter inserting node phase.</property>
           <signal name="activate" handler="enter_insert_node_phase_cb"/>
-        </object>
-      </child>
-      <!-- }}} -->
-      <!-- {{{ Stamptool actions -->
-      <child>
-        <object class="GtkAction" id="StampFillAtop">
-          <property name="label" translatable="yes" context="Menu→Brush (labels), Accel Editor (labels)">Stamp Fill Atop</property>
-          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Draw stamps over opaque area of current layer.</property>
-          <signal name="activate" handler="item_fill_contents_cb"/>
         </object>
       </child>
       <!-- }}} -->

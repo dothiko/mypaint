@@ -587,7 +587,7 @@ class _OptionsPresenter(Gtk.Grid):
 
     @property
     def target(self):
-        if mode is not None:
+        if self._mode_ref is not None:
             return self._mode_ref()
         else:
             return None

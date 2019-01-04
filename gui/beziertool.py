@@ -368,7 +368,10 @@ class _Node_Bezier (object):
         return (data_length+1, node)
 
 
-_EditZone = EditZoneMixin # Same as basic EditZoneMixin at gui/oncanvas.py
+class _EditZone(EditZoneMixin):
+    CONTROL_HANDLE = 3 #: Control handle index to manipulate node onscreen, 
+                       #  not all mixin user use this constant.
+
 
 class _Phase(PressPhase):
     """Enumeration of the states that an BezierCurveMode can be in"""
@@ -391,12 +394,14 @@ class _ActionButton(ActionButtonMixin):
     """
     EDIT=2 # To toggle editing node-pressure phase.
 
+
 class _Prefname:
     """Constants of the keys for app.preferences.
     To share this constants between multiple classes."""
     INITIAL_PRESSURE = "beziertool.initial_pressure"
     DEFAULT_DTIME = 'beziertool.default_dtime'
         
+
 class PressureMap(object):
     """ PressureMap wrapper object, to mapping 'pressure-variation'
     configuration to current stroke.
@@ -608,6 +613,12 @@ class BezierMode (PressureEditableMixin,
         """
         super(BezierMode, self)._update_zone_and_target(
                 tdw, x, y)
+
+        ti = self.target_node_index
+        if ti is not None:
+            self.current_node_handle = self._get_current_handle(tdw, ti, x, y)
+        else:
+            self.current_node_handle = None
 
         if self.phase == _Phase.INSERT_NODE:
             self._update_cursor(tdw) 
@@ -1161,7 +1172,8 @@ class BezierMode (PressureEditableMixin,
 
     def delete_selected_nodes(self):
         """ Beziertool can delete any nodes...
-        even first / last one!
+        even first / last one! 
+        (That cannot be done in inktool)
         """
 
         # First of all,queue redraw area.
@@ -1328,7 +1340,7 @@ class OverlayBezier (OverlayOncanvasMixin):
                 cy = view_y0 + radius
             return cx, cy
 
-        if mode.forced_button_pos:
+        if mode.forced_button_pos is not None:
             # User deceided button position 
             cx, cy = mode.forced_button_pos
             margin = 1.5 * button_radius

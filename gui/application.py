@@ -105,6 +105,7 @@ import freehand_center
 import lib.tiledsurface
 import oncanvas
 import closefill
+import adjustmode # XXX for adjustlayer 
 # XXX Added experimental modules (and needed from them) end
 
 logger = logging.getLogger(__name__)

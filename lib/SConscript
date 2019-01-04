@@ -217,6 +217,7 @@ module_src = [
         'fastpng.cpp',
         'brushsettings.cpp',
         'progfill.cpp',
+        'opencv_util.cpp',
     ]
 module = build_py_module(
     env,

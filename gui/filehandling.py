@@ -1624,7 +1624,7 @@ class FileHandler (object):
             return False
         return True
 
-    ##+ Project related
+    ## XXX for `project-save`
     @property
     def model_is_project(self):
         return self.doc.model.is_project(self.filename)
@@ -1859,4 +1859,6 @@ class FileHandler (object):
             import json
             with open(jsonfile_path, 'w') as ofp:
                 json.dump(self.recent_projects_info, ofp)
+
+    ## XXX for `project-save` end
 

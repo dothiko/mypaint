@@ -107,9 +107,7 @@ class EditZoneMixin:
 
     EMPTY_CANVAS = 0  #: Nothing, empty space
     CONTROL_NODE = 1  #: Any control node; see target_node_index
-    CONTROL_HANDLE = 2 #: Control handle index to manipulate node onscreen, 
-                       #  not all mixin user use this constant.
-    ACTION_BUTTON = 3  #: On-canvas action button. Also used when drawing overlay.
+    ACTION_BUTTON = 2  #: On-canvas action button. Also used when drawing overlay.
 
 
 class ActionButtonMixin:
@@ -438,7 +436,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
  
         overlay = self._ensure_overlay_for_tdw(tdw)
         new_zone = EditZoneMixin.EMPTY_CANVAS
-        new_handle_idx = None
  
         if not self.in_drag:
            #if self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
@@ -461,10 +458,11 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                         self.current_button_id = btn_id
                         break
 
+                # Fallthrough
+
             # Test nodes for a hit, in reverse draw order
             if new_zone == EditZoneMixin.EMPTY_CANVAS:
-                new_target_node_index, new_handle_idx = \
-                        self._search_target_node(tdw, x, y)
+                new_target_node_index = self._search_target_node(tdw, x, y)
                 if new_target_node_index != None:
                     new_zone = EditZoneMixin.CONTROL_NODE
 
@@ -480,7 +478,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                     self._queue_draw_node(tdw, self.target_node_index)
                     self.node_enter_cb(tdw, self.nodes[self.target_node_index]) 
 
-            self.current_node_handle = new_handle_idx
  
         # Update the zone, and assume any change implies a button state
         # change as well (for now...)
@@ -739,7 +736,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 assert self._button_down >= 1
                 assert self._clicked_button_id != None
                 self.phase = self._returning_phase
-                self._call_action_button(self._clicked_button_id, tdw)
+                self._call_action_button(tdw, self._clicked_button_id)
                 # Inside action button handler, self.phase would be set as 
                 # PhaseMixin.CAPTURE in many case
                 # (by calling _start_new_capture_phase).
@@ -1136,7 +1133,7 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                                PhaseMixin.ADJUST, 
                                PhaseMixin.ADJUST_ITEM))
 
-    def _call_action_button(self, id, tdw):
+    def _call_action_button(self, tdw, id):
         """ Call action button, from id (i.e. _ActionButton constants)
 
         Internally, this method get method from string 
@@ -1573,10 +1570,7 @@ class NodeUserMixin(object):
         without a control handle, it always returns -1 for handles.
         So you might need to override this method.
 
-        :return : a tuple of (target-node-index, control-handle-idx)
-                  if no target node found, that index should be None.
-                  also if no control handle found, that index should be None.
-        :rtype tuple:
+        :return : target-node-index
         """
         hit_dist = gui.style.DRAGGABLE_POINT_HANDLE_SIZE + margin
         new_target_node_index = None
@@ -1587,7 +1581,7 @@ class NodeUserMixin(object):
                 continue
             new_target_node_index = i
             break
-        return (new_target_node_index, None)
+        return new_target_node_index
 
 class HandleNodeUserMixin(NodeUserMixin):
     """ The mixin which use a sort of node class
@@ -1597,37 +1591,36 @@ class HandleNodeUserMixin(NodeUserMixin):
     INITIAL_NODE_HANDLE_RANGE = (0, 1)
 
     def _search_target_node(self, tdw, x, y, margin=12):
-        """ utility method: to commonize node searching codes
-        This class 
-        Since this Mixin is created assuming a node 
-        without a control handle, it always returns -1 for handles.
-        So you might need to override this method.
+        """Search currently active node index.
+        This mixin returns the node index when actually not node itself
+        but node-handle is active.
 
-        :return : a tuple of (new target node index, new control handle idx)
-        :rtype tuple:
+        :return : new target node index
         """
-        targidx, node_handle = \
-                super(HandleNodeUserMixin, self)._search_target_node(tdw, x, y, margin)
+        targidx = super(HandleNodeUserMixin, self)._search_target_node(tdw, x, y, margin)
         if targidx == None:
-            for n in xrange(len(self.nodes)):
-                c_node = self.nodes[n]
-                hit_dist = gui.style.FLOATING_BUTTON_RADIUS
-                if n == 0:
-                    seq = self.INITIAL_NODE_HANDLE_RANGE #(1,)
-                else:
-                    seq = (0, 1)
-                for i in seq:
-                    handle = c_node.get_control_handle(i)
-                    hx, hy = tdw.model_to_display(handle.x, handle.y)
-                    d = math.hypot(hx - x, hy - y)
-                    if d > hit_dist:
-                        continue
-                    node_handle = i
-
+            for n in range(len(self.nodes)):
+                node_handle = self._get_current_handle(tdw, n, x, y, margin)
                 if node_handle != None:
-                    return (n, node_handle)
+                    return n
+        return targidx
 
-        return (targidx, node_handle)
+    def _get_current_handle(self, tdw, nodeidx, x, y, margin=12):
+        """Get currently active handle index.
+        """
+        c_node = self.nodes[nodeidx]
+        hit_dist = gui.style.FLOATING_BUTTON_RADIUS
+        if n == 0:
+            seq = self.INITIAL_NODE_HANDLE_RANGE #(1,)
+        else:
+            seq = (0, 1)
+        for i in seq:
+            handle = c_node.get_control_handle(i)
+            hx, hy = tdw.model_to_display(handle.x, handle.y)
+            d = math.hypot(hx - x, hy - y)
+            if d > hit_dist:
+                continue
+            return i
 
     def _queue_draw_handle_node(self, tdw, i, offsets=None):
         """Redraws a specific control node on all known view TDWs
@@ -1788,6 +1781,21 @@ class OverlayOncanvasMixin(gui.overlays.Overlay):
                 self._draw_button(cr, 
                         self._button_pos[id], resource, radius, 
                         mode.current_button_id == id)
+
+    def _draw_node(self, cr, radius, sx, sy, selected):
+        """ Draw a standard movable GUI node.
+        """
+        if selected:
+            color = gui.style.ACTIVE_ITEM_COLOR
+        else:
+            color = gui.style.EDITABLE_ITEM_COLOR
+            
+        gui.drawutils.render_round_floating_color_chip(
+            cr,
+            sx, sy,
+            color,
+            radius
+        )
  
     def paint(self, cr):
         """Draw adjustable nodes to the screen"""

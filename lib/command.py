@@ -11,6 +11,7 @@
 from __future__ import division, print_function
 
 from gi.repository import Gtk
+import numpy as np # XXX for `adjust-layer`
 
 import lib.layer
 import helpers
@@ -2794,3 +2795,414 @@ class CutProtruding(ClosedAreaFill):
             
 
 # XXX for `cut-protruding` end.
+
+# XXX for `adjust layer` feature.
+class AdjustLayer (Command):
+    """Adjust a parts of layer 
+
+    Adjust Layer commands are intended to be manipulated by the UI
+    after creation, and before being committed to the command stack.  
+    During this initial selecting area phase, we just store
+    the source rectangle and the selected area pixels as numpy array.
+    Then, we proceed to adjusing area phase. In this phase,
+    `transform_to()` repositions the target rectangle nodes,
+    and `process_transform()` handles the effects of doing
+    this in chunks so that the screen can be updated smoothly.  After
+    the layer is committed to the command stack, the active transform phase
+    methods can no longer be used.
+    """
+
+    # TRANSLATORS: Command to move a layer in the horizontal plane,
+    # TRANSLATORS: preserving its position in the stack.
+    display_name = _("Adjust Layer")
+
+    cv2 = None
+
+    def __init__(self, doc, layer, src_bbox, **kwds):
+        """Initializes, as an active layer move command
+
+        :param doc: document to be moved
+        :type doc: lib.document.Document
+        :param layer: target layer or layer-like object.
+        :param src_bbox: A sequence of (x, y, width, height)
+                         This defines the source rectangle.
+        :param targ_bbox: A sequence of (x, y, width, height)
+                          This defines the maximum target bbox.
+        :param targ_nodes: A sequence which has 4 tuples of control node positions.
+                         They define actual target `shape`
+        """
+        super(AdjustLayer, self). __init__(doc, **kwds)
+        
+        self.layer = layer 
+
+        # layer parameter might be not PaintingLayer,
+        # it might be unwritable Layergroup, RootLayerstack, Vectorlayer,
+        # or, locked Paintinglayer.
+        # For such unwritable object, make new layer.
+        self.make_new_layer = (not layer.get_paintable() 
+                                 or not hasattr(layer, '_surface'))
+        if not self.make_new_layer:
+            self._snapshot = layer.save_snapshot()
+        else:
+            self._snapshot = None  # This would be taken at new_layer property.
+
+        self._new_layer = None
+        self._new_layer_path = None
+        self._src_area = src_bbox
+        self._src_img = None
+        self._src_alpha = None
+        self._redraw_bbox = None
+        # But leave _snapshor_after as None.
+        self._snapshot_after = None
+        self._restore_bg = False
+
+        # Finally, call capture source image.
+        self._capture_source()
+
+       #self._transform = layer.get_transform(src_area)
+       #self._processing_complete = True
+
+    @classmethod
+    def get_opencv2(cls):
+        if cls.cv2 is None:
+            try:
+                import cv2
+                cls.cv2 = cv2
+                logger.info(
+                    "AdjustLayer: Successfully import opencv2"
+                )
+            except ImportError:
+                logger.warning(
+                    "AdjustLayer: cannot import opencv2"
+                )
+                cls.cv2 = 0 # Use 0 to tell already import test is failed.
+        elif cls.cv2 is 0:
+            return None
+        return cls.cv2
+
+    ## Active transforming phase
+    def transform_to(self, targ_bbox, targ_nodes, update_canvas=False):
+        """Move the reference point to a new position
+
+        :param targ_bbox: A sequence of (x, y, width, height)
+                          This defines the maximum target bbox.
+        :param targ_nodes: A sequence which has 4 tuples of control node positions.
+                         They define actual target `shape`
+
+        This is a higher-level wrapper around the raw layer and surface
+        transforming API, tailored for use by GUI code.
+        """
+        cv2 = self.get_opencv2()
+        if cv2 is None:
+            return
+
+        assert self._src_img is not None
+        assert self._src_alpha is not None
+        img = self._src_img
+        alpha = self._src_alpha
+        model = self.doc
+        layers = model.layer_stack
+        N = lib.mypaintlib.TILE_SIZE
+
+        sx, sy, sw, sh = self._src_area
+
+        dx, dy, dw, dh = targ_bbox
+        dtx = dx // N # Destination tile position, in tile unit.
+        dty = dy // N
+        # Make destination width & height with tile-border aligned.
+        tw = dw // N + int(((dx + dw) % N) != 0) + int(dx % N != 0)
+        th = dh // N + int(((dy + dh) % N) != 0) + int(dy % N != 0)
+        dw = tw * N
+        dh = th * N
+
+        # Modifying destination box, as in source rectangle.
+       #stx = sx // N # Source tile position, in tile unit.
+       #sty = sy // N
+        ox = dtx * N  # Source tile position, in pixel(model) unit.
+        oy = dty * N
+        pos_dst = []
+        for nx, ny in targ_nodes:
+            pos_dst.append((nx-ox, ny-oy))
+
+        # Then, adjust source position as local of source rectangle.
+        # It is tile aligned.
+        sx %= N
+        sy %= N
+
+        # Define source node positions at here. 
+        # Because they are adjusted local coordinate at above codes.
+        # Also, positions are placed along with clockwise direction,
+        # from top-left.
+        pos_src = [[sx, sy],[sx+sw, sy],[sx+sw, sy+sh],[sx, sy+sh]]
+
+       #print("command src %s" % str(pos_src))
+       #print("command dst %s" % str(pos_dst))
+
+        pts1 = np.float32(pos_src)
+        pts2 = np.float32(pos_dst)
+        M = cv2.getPerspectiveTransform(pts1, pts2)
+
+        dst_img = cv2.warpPerspective(img, M, (dw, dh))
+        dst_alpha = cv2.warpPerspective(alpha, M, (dw, dh))
+        dst_mask = np.zeros(dst_alpha.shape, 'uint8')
+
+        # Writing generated tiles into mypaint 
+        if self.make_new_layer:
+            # Use entire visible contents
+            layer = self.new_layer
+            self.register_new_layer()
+            self.layer = layer
+        else:
+            layer = self.layer
+        layer.load_snapshot(self._snapshot)# Erase all.
+        dstsurf = layer._surface
+
+        # First loop: Erase target background
+        empty_areas = self._erase_surface(
+            dst_mask, 
+            dstsurf, 
+            pts2,
+            (dtx, dty, tw, th)
+        )
+
+        # Second loop: Write transformed image into layer.
+        for ty in range(th):
+            cty = ty + dty
+            for tx in range(tw):
+                ptx = tx * N
+                pty = ty * N
+                if not (ptx, pty) in empty_areas:
+                    view = dst_alpha[pty:pty+N, ptx:ptx+N]
+                    if view.any():
+                        ctx = tx + dtx
+                        with dstsurf.tile_request(ctx, cty, readonly=False) as dst_tile:
+                            lib.mypaintlib.opencvutil_convert_image_to_tile(
+                                dst_img, 
+                                dst_alpha,
+                                dst_tile,
+                                dst_mask,
+                                tx*N, ty*N # These params are local coordinate of dst_img.
+                            )
+
+        # Update canvas : not only destination area, include its tile borders.
+       #self.debug_show_array((img, dst_img,), ('source', 'dest',))
+        self._redraw_bbox = helpers.Rect(ox, oy, dw, dh)
+
+        if update_canvas:
+            dstsurf.notify_observers(*self._redraw_bbox)
+
+    def _erase_surface(self, buf, dstsurf, points, tile_dim):
+        """Erase destination tile surface pixels.
+
+        :param buf: numpy uint8 2d array, which has same dimension
+                    as dst_alpha
+        :param dstsurf: Destination color surface tiles.
+                        Pixels of these tiles would be erased with
+                        the shape of assigned polygon.
+        :param points: Erasing polygon shape.it is sequence of 
+                       [[x,y], [x1, y1], [x2, y2]....]
+        :param tile_dim: A tuple of tile coordinate dimension information.
+        :return : A list of tuple, where is empty area exists.
+                  That empty area list would be used later, 
+                  to roughly reject exactly empty area of alpha channel.
+        """
+        cv2 = self.get_opencv2()
+        if cv2 is None:
+            return
+        pix = 255
+        dtx, dty, tw, th = tile_dim
+        empty_areas = []
+        # We need this points conversion to avoid assertion from
+        # cv2.fillPoly. and we needs to wrap it as a list
+        # for `pts` param. Without this wrapping, exception will raise.
+        points = np.array(points).reshape((-1,1,2)).astype(np.int32)
+        cv2.fillPoly(buf, pts=[points], color=pix)
+        N = lib.mypaintlib.TILE_SIZE
+        # Pure Python version
+        for ty in range(th):
+            cty = ty + dty
+            for tx in range(tw):
+                ptx = tx * N
+                pty = ty * N
+                view = buf[pty:pty+N, ptx:ptx+N]
+                if view.any():
+                    ctx = tx + dtx
+                    with dstsurf.tile_request(ctx, cty, readonly=False) as dst_tile:
+                        dst_tile[view==pix] = [0,0,0,0]
+                else:
+                    empty_areas.append((ptx, pty))
+        return empty_areas
+
+    def _get_source_surface(self):
+        """Get source surface from layer object.
+        If the layer is layergroup, use TileRequestWrapper.
+        But, temporally hide background to get transparent pixels.
+        """
+        cl = self.layer
+        if hasattr(cl, "_surface"):
+            return cl._surface
+        else:
+            # Layerstack, or layer group, something.
+            model = self.doc
+            if cl is model.layer_stack:
+                assert hasattr(cl, "background_visible")
+                self._restore_bg = cl.background_visible
+                cl.background_visible = False
+            return lib.surface.TileRequestWrapper(cl)
+
+    def _capture_source(self):
+        assert self._src_area is not None
+        assert self._snapshot is not None
+        assert self._src_img is None
+        assert self._src_alpha is None
+
+        x, y, w, h = self._src_area
+        srcsurf = self._get_source_surface()
+        N = lib.mypaintlib.TILE_SIZE
+        btx = x // N
+        bty = y // N
+        
+        # Calc tilewise width and height.
+        # We need to add one tile when the each of edge of source area
+        # exceed tile border.
+        tw = (w // N) + int((x + w) % N != 0) + int(x % N !=0)
+        th = (h // N) + int((y + h) % N != 0) + int(y % N !=0)
+
+        img = np.zeros((th*N, tw*N, 3), 'uint8')
+        alpha = np.zeros((th*N, tw*N, 1), 'uint8')
+        for ty in range(th):
+            cty = ty * N
+            sty = ty + bty
+            for tx in range(tw):
+                stx = tx + btx
+                with srcsurf.tile_request(stx, sty, readonly=True) as tile:
+                    if not tile is lib.tiledsurface.transparent_tile.rgba:
+                        ctx = tx * N
+                        lib.mypaintlib.opencvutil_convert_tile_to_image(
+                            img, 
+                            alpha,
+                            tile,
+                            ctx, cty
+                        )
+        self._src_img = img
+        self._src_alpha = alpha
+
+        if self._restore_bg:
+            layers = self.doc.layer_stack
+            assert hasattr(layers, "background_visible")
+            cl.background_visible = True
+            self._restore_bg = False
+       #self.debug_show_array((buf,), ('source',))
+
+    @property
+    def new_layer(self):
+        # Write to a new layer
+        if self._new_layer is not None:
+            nl = self._new_layer
+        else:
+            assert self._new_layer is None
+            assert self._snapshot is None
+            layers = self.doc.layer_stack
+            nl = lib.layer.PaintingLayer()
+            self._new_layer = nl
+            self._snapshot = layer.save_snapshot()
+
+        return nl
+
+    def register_new_layer(self):
+        if self._new_layer_path is None:
+            nl = self.new_layer
+            assert nl is not None
+            path = layers.get_current_path()
+            path = layers.path_above(path, insert=1)
+            layers.deepinsert(path, nl)
+            path = layers.deepindex(nl)
+            self._new_layer_path = path
+            layers.set_current_path(path)
+
+    def reject_new_layer(self):
+        assert self.make_new_layer == True
+        assert self._new_layer is not None
+        model = self.doc
+        layers = model.layer_stack
+        path = layers.get_current_path()
+        layers.deepremove(self._new_layer)
+        layers.set_current_path(path)  # or attempt to
+        self._new_layer_path = None
+
+    def restore_snapshot(self):
+        """Restore snapshot from Outside of this command 
+        (i.e. Called from gui/adjustmode.py)
+        """
+        assert self._snapshot is not None
+        layer = self.layer
+        if self.make_new_layer:
+            self.reject_new_layer()
+        else:
+            layer.load_snapshot(self._snapshot)
+
+    # XXX for debug
+    def debug_show_array(self, bufs, names=None):
+        from matplotlib import pyplot as plt
+        for i, buf in enumerate(bufs):
+            if names is not None:
+                cname = names[i]
+            else:
+                cname = 'buf %d' % i
+            plt.subplot(121+i),plt.imshow(buf),plt.title(cname)
+        plt.show()
+
+    # XXX for debug
+    def debug_output_array(self, buf, tw, th, filename='/tmp/test.png'):
+        test = np.zeros((th*N, tw*N, 4), 'uint8')
+        test[:,:,:] = buf[:,:,:]
+        import scipy.misc 
+        scipy.misc.imsave(filename, test)
+
+    ## Command stack callbacks
+
+    def redo(self):
+        """Updates the document as needed when do()/redo() is invoked"""
+        model = self.doc
+        if self.make_new_layer:
+            assert self._new_layer is not None
+            layer = self.new_layer
+            self.register_new_layer()
+        else:
+            layer = self.layer
+
+        if self._snapshot_after is None:
+            # This should be the first time of redo() called.
+            # self.transform_to() should be executed already.
+            # And, self._redraw_bbox is generated once self.transform_to is 
+            # executed.
+            assert self._redraw_bbox is not None
+            self._snapshot_after = layer.save_snapshot()
+
+            # Thus transform has been completed,
+            # source informations are not needed anymore.
+            del self._src_area
+            del self._src_img
+            del self._src_alpha
+        else:
+            layer.load_snapshot(self._snapshot_after)
+
+        layer._surface.notify_observers(*self._redraw_bbox)
+
+    def undo(self):
+        """Updates the document as needed when undo() is invoked"""
+        # When called, this is always reversing a previous redo().
+        # Update the doc and send notifications.
+        assert self._snapshot is not None
+        assert self._redraw_bbox is not None
+        model = self.doc
+
+        if self.make_new_layer:
+            # New layer should be created already.
+            self.reject_new_layer()
+        else:
+            layer = self.layer
+            layer.load_snapshot(self._snapshot)
+            layer._surface.notify_observers(*self._redraw_bbox)
+
+# XXX for `adjust layer` end.

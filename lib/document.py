@@ -26,6 +26,7 @@ import json
 import logging
 from lib.fileutils import safename
 from lib.naming import make_unique_name
+import random # XXX for project-save
 
 from gi.repository import GObject
 from gi.repository import GLib
@@ -2230,22 +2231,30 @@ class Document (object):
             all files are forced to write.
             This keyword is used when 'save_as_project' action is executed.
         """
+        assert os.path.abspath(dirname)
         t0 = time.time()
         logger.debug("projectsave started")
-        force_write = (not os.path.exists(dirname) or
-                        ('init_project' in kwargs and kwargs['init_project'] == True))
+        force_write = ('init_project' in kwargs 
+                            and kwargs['init_project'] == True)
 
-        if force_write:
-            logger.info("the entire project forced to write.")
-
+        # Ensure there is no any projectsave idle task.
         if self._projectsave_processor.has_work():
             logger.info("project copy processor still have pending works. it is forced to finish.")
             self._projectsave_processor.finish_all()
 
+        # Sanitize dirname param, remove trailing path separator if exists.
+        # It might cause problem to detect `project path has been changed`.
+        if dirname[-1] == os.path.sep:
+            dirname = dirname[:-1]
+
         # Create needed directories
         if not os.path.exists(dirname):
+            logger.info("Create new directory for project : %s" % dirname)
             os.mkdir(dirname)
             force_write = True
+
+        if force_write:
+            logger.info("the entire project forced to write.")
 
         for subdir in ('Thumbnails', 'data', 'checkpoints'):
             subpath = os.path.join(dirname, subdir)
@@ -2257,10 +2266,10 @@ class Document (object):
             assert kwargs != None
             rootstack = self.layer_stack
 
-            if 'source_dir' in kwargs:
+            if (hasattr(self, '_project_path') 
+                    and self._project_path != dirname):
                 # Current document is a project and now assigned to 'save as
                 # another project' by user.
-                # This is same as "copy entire project into another directory"
 
                 # So, simply copy all unchanged layer images here.
                 # With calling self._queue_autosave_writes() later,
@@ -2269,7 +2278,7 @@ class Document (object):
 
                 logger.info("copy save of project is initiated.")
 
-                dirname_src = kwargs['source_dir']
+                dirname_src = self._project_path
 
                 def copy_single_layer(cl):
                     if hasattr(cl, 'enum_filenames'):
@@ -2278,8 +2287,19 @@ class Document (object):
                                 srcpath = os.path.join(dirname_src, cfname)
                                 dstpath = os.path.join(dirname, cfname)
                                 assert os.path.exists(srcpath)
-                                # This operation might do 'overwrite',
-                                # so there is no need to check dstpath.
+                                if os.path.exists(dstpath):
+                                    lt = time.localtime()
+                                    tmpname = "%s_orig" % dstpath 
+                                    while os.path.exists(tmpname):
+                                        tmpname = "%s_orig_%d" % (
+                                            dstpath, 
+                                            random.randint(2**32)
+                                        )
+                                    shutil.move(dstpath, tmpname)
+                                    logger.info(
+                                        "%s(%s) has been renamed to avoid overwrite",
+                                        (cl.name, dstpath)
+                                    )
                                 shutil.copy(srcpath, dstpath)
                         else:
                             logger.info("%s has marked as dirty,so not copied",
@@ -2290,8 +2310,7 @@ class Document (object):
                             cl.name
                         )
 
-
-                # Background layer is not included walk generator.
+                # Background layer is not included rootstack.walk generator.
                 # so copy it here.
                 copy_single_layer(rootstack.background_layer)
 
@@ -2346,13 +2365,13 @@ class Document (object):
         finally:
             t1 = time.time()
             logger.debug("projectsave ended in %.3fs", t1-t0)
-            self._is_project = True
+            self._project_path = dirname
 
-
-    def load_project(self, dirname,feedback_cb=None, progress=None, **kwargs):
+    def load_project(self, dirname, feedback_cb=None, progress=None, **kwargs):
         """ load a directory as a project
         """
         assert os.path.isdir(dirname)
+        assert os.path.abspath(dirname)
 
         app_cache_dir = get_app_cache_root()
         self._stop_cache_updater()
@@ -2402,6 +2421,10 @@ class Document (object):
             # On the other hand, NEW layers are always dirty initially.
             for pos, cl in self.layer_stack.walk():
                 cl.clear_project_dirty()
+
+            # Reserve project path. This might be used at 
+            # `save_project`
+            self._project_path = dirname
 
     def _project_write(self, dirname,
             xres=None,yres=None,

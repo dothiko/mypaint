@@ -27,3 +27,4 @@
 #include "brushsettings.hpp"
 
 #include "progfill.hpp"
+#include "opencv_util.hpp"
