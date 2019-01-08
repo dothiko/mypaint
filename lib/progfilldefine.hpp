@@ -48,41 +48,46 @@
 // For Flagtile class. to get progress-level ptr from
 #define BUF_PTR(l, x, y) (m_buf + m_buf_offsets[(l)] + ((y) * PROGRESS_TILE_SIZE((l)) + (x))) 
 
-// PIXEL_ Constants.
-enum PixelFlags {
-    // PIXEL_ values are not bitwise flag. They are just number.
-    // The vacant pixel is 0.
-    // PIXEL_AREA means 'The pixel is fillable, but not filled(yet)'
-    //
-    PIXEL_MASK = 0x0F,
-    PIXEL_EMPTY = 0x00,   // PIXEL_EMPTY should lower than PIXEL_OUTSIDE
-    PIXEL_OUTSIDE = 0x01, // Thus, we can know total outside pixel as <= PIXEL_OUTSIDE
-    PIXEL_AREA = 0x02,
-    PIXEL_FILLED = 0x03,
-    PIXEL_CONTOUR = 0x04, // PIXEL_CONTOUR is one of a filled pixel.
-                          // This should be larger than PIXEL_FILLED
-                          // to ease finding `filled(or unchangeable)` pixel.
+//// PIXEL_ Constants.
+//
+// PIXEL_ values are not bitwise flag. They are just number.
+// The vacant pixel is 0.
+// PIXEL_AREA means 'The pixel is fillable, but not filled(yet)'
+//
+#define PIXEL_MASK 0x0F
+#define PIXEL_EMPTY 0x00   // PIXEL_EMPTY should lower than PIXEL_OUTSIDE
+#define PIXEL_OUTSIDE 0x01 // Thus we can know total outside pixel as <PIXEL_OUTSIDE
+#define PIXEL_AREA 0x02
+#define PIXEL_FILLED 0x03
+#define PIXEL_CONTOUR 0x04 // PIXEL_CONTOUR is one of a filled pixel.
+                           // This should be larger than PIXEL_FILLED
+                           // to ease finding `filled(or unchangeable)` pixel.
 
-    // PIXEL_EMPTY, PIXEL_AREA, PIXEL_FILLED and PIXEL_CONTOUR are redefined as
-    // static const of Flagtile class, and you can access them from python
-    // as lib.mypaintlib.Flagtile.PIXEL_*.
-    // Other enum constants are hidden from python.
+// PIXEL_EMPTY, PIXEL_AREA, PIXEL_FILLED and PIXEL_CONTOUR are redefined as
+// static const of Flagtile class, and you can access them from python
+// as lib.mypaintlib.Flagtile.PIXEL_*.
+// Other enum constants are hidden from python.
                          
-    // FLAG_ values are bitwise flag. 
-    FLAG_MASK = 0xF0,
+// FLAG_ values are bitwise flag. 
+#define FLAG_MASK 0xF0
     
-    // FLAG_WORK flag is temporary flag, used for filter operation. 
-    // This flag should be most significant bit, for final antialiasing.
-    FLAG_WORK = 0x10, 
+// FLAG_WORK flag is temporary flag, used for filter operation. 
+// This flag should be most significant bit, for final antialiasing.
+#define FLAG_WORK 0x10 
     
-    // FLAG_AA used for final anti-aliasing.
-    // CAUTION: With this flag set, the pixel contains 128 Level of antialias
-    // alpha seed value. 
-    // Therefore, all of PIXEL_ constants are invalid for such pixel.
-    // And, FLAG_AA should be most significant bit (== 0x80 for uint8_t).
-    FLAG_AA = 0x80,
-    AA_MASK = 0x7F 
-};
+// FLAG_AA used for final anti-aliasing.
+// CAUTION: With this flag set, the pixel contains 128 Level of antialias
+// alpha seed value. 
+// Therefore, all of PIXEL_ constants are invalid for such pixel.
+// And, FLAG_AA should be most significant bit (== 0x80 for uint8_t).
+#define FLAG_AA 0x80
+#define AA_MASK 0x7F 
+
+// Offset Direction constants, to refer TileWorker::xoffset/yoffset.  
+#define OFFSET_TOP 0
+#define OFFSET_RIGHT 1
+#define OFFSET_BOTTOM 2
+#define OFFSET_LEFT 3
 
 // Dummy definition of Flagtile / FlagtileSurface.
 class Flagtile;

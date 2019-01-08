@@ -313,7 +313,7 @@ WalkingKernel::walk(const int sx, const int sy, const int direction)
     
     m_cur_dir = direction;
 
-    // At first, walk into initial pixel 
+    // At first, walk into staring point pixel. 
     on_new_pixel();
 
     while (proceed()) {
@@ -1075,7 +1075,7 @@ void __foreach_percentage_cb(gpointer data, gpointer user_data)
 {
     perimeter_info *info = (perimeter_info*)data;
     if (info->length > 0 && info->clockwise == true) {
-        double percentage = (double)info->encount / (double)info->length;
+        double percentage = (double)info->encount / (double)info->total_surround;
         double *threshold = (double*)user_data;
         if (percentage > *threshold) { 
             info->encount = -1; // Invalidate this area.
@@ -1152,7 +1152,7 @@ FlagtileSurface::remove_small_areas(int level, double threshold, int size_thresh
             // It would be filled later,
             // Just erase walking flags for now.
             cf.walk(info->sx, info->sy, cf.get_hand_dir(info->direction));
-        }
+        }           
         else {
             if (info->length == 0 && level == 0) {
                 // Just a dot. Erase it.
@@ -1160,15 +1160,44 @@ FlagtileSurface::remove_small_areas(int level, double threshold, int size_thresh
             }
             else if ((info->encount < 0 && info->length < max_length) 
                         || (info->length < size_threshold)){
+                int sx = info->sx;
+                int sy = info->sy;
+
                 // That area has been surrounded with
                 // relatively too many `invalid` pixels .
                 // or, just too small.
                 // small area would be filled later with `fill-hole` feature.
                 // So erase it.
-                flood_fill(
-                    info->sx, info->sy,
-                    (FillWorker*)&ra
-                );
+                
+                // But, in rare case, if there is a small area above a large filled
+                // area and they are connected with only 1 pixel hole
+                // just below the starting point(info->sx, info->sy),
+                // for example,
+                //
+                //  @ = starting point
+                //  # = pixel area
+                //
+                //       @#### <- Current area, to be erased area.
+                //  ######     <- large area to be remained (filled).
+                //  ########### 
+                //
+                //  Walking of current small area would return to start point immidiately.
+                //  So it it detected as `too small area` 
+                //  But that large area would be also erased by flood-fill
+                //  because they are connected barely one pixel.
+                //
+                if ((get_pixel(level, sx, sy+1) & PIXEL_MASK) == PIXEL_FILLED
+                        && (get_pixel(level, sx+1, sy+1) & PIXEL_MASK) != PIXEL_FILLED) {
+                    // So, place sentinel at starting point
+                    replace_pixel(level, sx, sy, PIXEL_AREA); 
+
+                    if ((get_pixel(level, sx+1, sy) & PIXEL_MASK) == PIXEL_FILLED) 
+                        flood_fill(sx+1, sy, (FillWorker*)&ra);
+                }
+                else {
+                // Normal case. just fill it.
+                    flood_fill(sx, sy, (FillWorker*)&ra);
+                }
             }
             else {
                 // Just erase perimeter walking flags.

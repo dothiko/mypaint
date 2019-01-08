@@ -250,12 +250,13 @@ public:
     static const int EMPTY = 0x00004000;
     
 
-    // To Expose PIXEL_ enum for python.
-    static const int PIXEL_FILLED = PixelFlags::PIXEL_FILLED;
-    static const int PIXEL_AREA = PixelFlags::PIXEL_AREA;
-    static const int PIXEL_EMPTY = PixelFlags::PIXEL_EMPTY;
-    static const int PIXEL_CONTOUR = PixelFlags::PIXEL_CONTOUR;
-    static const int PIXEL_OUTSIDE = PixelFlags::PIXEL_OUTSIDE;
+    // To Expose PIXEL_ values for python
+    // without `contaminating` original mypaint namespace.
+    static const int PIXEL_FILLED_VALUE = PIXEL_FILLED;
+    static const int PIXEL_AREA_VALUE = PIXEL_AREA;
+    static const int PIXEL_EMPTY_VALUE = PIXEL_EMPTY;
+    static const int PIXEL_CONTOUR_VALUE = PIXEL_CONTOUR;
+    static const int PIXEL_OUTSIDE_VALUE = PIXEL_OUTSIDE;
 };
 
 /* Flagtile psuedo surface object.

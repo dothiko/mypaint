@@ -2142,10 +2142,10 @@ class ClosedAreaFill (FloodFill):
 
     display_name = _("Closed area Fill")
 
-    PIXEL_AREA = lib.mypaintlib.Flagtile.PIXEL_AREA
-    PIXEL_FILLED = lib.mypaintlib.Flagtile.PIXEL_FILLED
-    PIXEL_CONTOUR = lib.mypaintlib.Flagtile.PIXEL_CONTOUR
-    PIXEL_EMPTY = lib.mypaintlib.Flagtile.PIXEL_EMPTY
+    PIXEL_AREA = lib.mypaintlib.Flagtile.PIXEL_AREA_VALUE
+    PIXEL_FILLED = lib.mypaintlib.Flagtile.PIXEL_FILLED_VALUE
+    PIXEL_CONTOUR = lib.mypaintlib.Flagtile.PIXEL_CONTOUR_VALUE
+    PIXEL_EMPTY = lib.mypaintlib.Flagtile.PIXEL_EMPTY_VALUE
 
     def __init__(self, doc, 
                  nodes, color, tolerance, 
@@ -2195,7 +2195,7 @@ class ClosedAreaFill (FloodFill):
         PIXEL_CONTOUR = self.PIXEL_CONTOUR
         PIXEL_AREA = self.PIXEL_AREA
         PIXEL_FILLED = self.PIXEL_FILLED
-        PIXEL_OUTSIDE = lib.mypaintlib.Flagtile.PIXEL_OUTSIDE
+        PIXEL_OUTSIDE = lib.mypaintlib.Flagtile.PIXEL_OUTSIDE_VALUE
         # From lib/progfilldefine.hpp
         FLAG_WORK = 0x10
         FLAG_AA = 0x80
@@ -2345,7 +2345,7 @@ class ClosedAreaFill (FloodFill):
                         if self.erase_pixel:
                             ct.convert_to_transparent(
                                 dst_tile,
-                                0x03 # PIXEL_FILLED
+                                self.PIXEL_FILLED
                             )
                         else:
                             ct.convert_to_color(

@@ -557,6 +557,7 @@ typedef struct {
     int sy;
     int length;
     int direction;
+    int total_surround;
     int encount;    // count of surrounding `invalid` pixels.
                     // Also used for invalid area flag(when this is -1)
     bool clockwise;
@@ -569,14 +570,18 @@ typedef struct {
 class CountPerimeterKernel: public WalkingKernel
 {
 protected:
-    int m_encount; // A counter, incremented when walker `touch` outside/vacant pixels. 
+    int m_encount; // A counter, incremented when walker touch `opened wall pixels` 
+    int m_total_surround; // Total surronding pixel count. Used for removing `too opened` area.
     GQueue* m_queue; // Borrowed queue, set at start method.
 
     // Check whether wall pixel is `opened` one.
+    // `opened` means `It is a wall pixel but not PIXEL_CONTOUR`
+    // This method should be called ONLT AT ONCE PER 
+    // entering a new pixel or right-rotation.
     virtual void check_opened_pixel(const uint8_t pixel) {
         switch(pixel & PIXEL_MASK) {
             case PIXEL_OUTSIDE:
-                m_encount+=100; // Touching outside pixel is very bad thing.
+                m_encount+=1000; // Touching outside pixel is very bad thing.
                 break;
             case PIXEL_EMPTY:
             case PIXEL_AREA:
@@ -585,6 +590,8 @@ protected:
             default:
                 break;
         }
+
+        m_total_surround++;
     }
     
     // tells whether the pixel value is wall pixel or not.
@@ -600,8 +607,9 @@ protected:
         // so decliment perimeter(i.e. m_step).
         if (!right)
             m_step--;
-        else
+        else {
             check_opened_pixel(get_hand_pixel());
+        }
     }
 
     virtual void on_new_pixel() 
@@ -621,6 +629,7 @@ protected:
         info->length = m_step;
         info->direction = direction;
         info->encount = m_encount;
+        info->total_surround = m_total_surround;
         info->clockwise = is_clockwise();
         g_queue_push_tail(m_queue, info);
     }
@@ -664,18 +673,28 @@ public:
         uint8_t pixel = targ->get(m_level, x, y); 
 
         if (pixel == PIXEL_FILLED) {
-            for(int i=0; i<4; i++) {
-                uint8_t pix_n = get_pixel_with_direction(sx, sy, i);
-                if (is_wall_pixel(pix_n)) {
-                    m_encount = 0;
-                    // Start from current kernel pixel.
-                    walk(sx, sy, get_reversed_hand_dir(i));
-                    // This kernel just walk and queue(GQueue) the result.
-                    // That queue would be processed (or might be discarded) 
-                    // later.
-                    push_queue(sx, sy, i);
-                    return;
-                }
+            // Look just only left pixel. it is enough for ALL situation.
+            // Because this search is done from left to right of each
+            // scanline. 
+            uint8_t pix_l = get_pixel_with_direction(sx, sy, OFFSET_LEFT);
+            if (is_wall_pixel(pix_l)) {
+                m_encount = 0;
+                m_total_surround = 0;
+                
+                // Walking always starts from the pixel
+                // which is surrounded by at least two wall pixels.
+                // But, we always check `top` pixel of starting point at
+                // initial call of `on_new_pixel` from `walk` method.
+                // So we need just check `left` pixel at here.
+                check_opened_pixel(pix_l);
+
+                // Start from current kernel pixel.
+                walk(sx, sy, OFFSET_RIGHT);
+                // This kernel just walk and queue(GQueue) the result.
+                // That queue would be processed (or might be discarded) 
+                // later.
+                push_queue(sx, sy, OFFSET_RIGHT);
+                return;
             }
         }
     }
@@ -928,4 +947,5 @@ public:
         return false;
     }
 };
+
 #endif
