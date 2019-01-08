@@ -129,6 +129,9 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         self.get_alpha = self._backend.get_alpha
         self.draw_dab = self._backend.draw_dab
 
+        # XXX for `faster-bbox`
+        self._bbox = None
+
     def _create_mipmap_surfaces(self):
         """Internal: initializes an internal mipmap lookup table
 
@@ -165,6 +168,7 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
     def notify_observers(self, *args):
         for f in self.observers:
             f(*args)
+        self._bbox = None # XXX for `faster-bbox` : to tell cache is invalidated.
 
     def clear(self):
         tiles = self.tiledict.keys()
@@ -621,7 +625,13 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         lib.surface.save_as_png(self, filename, *args, **kwargs)
 
     def get_bbox(self):
-        return lib.surface.get_tiles_bbox(self.tiledict)
+        # XXX for `faster-bbox`
+        # return lib.surface.get_tiles_bbox(self.tiledict) # Original code
+        if self._bbox is None:
+            self._bbox = lib.surface.get_tiles_bbox(self.tiledict)
+
+        return self._bbox
+        # XXX for `faster-bbox` end
 
     def get_tiles(self):
         return self.tiledict
