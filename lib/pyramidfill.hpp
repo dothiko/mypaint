@@ -11,38 +11,38 @@
 #define PROGFILL_HPP
 
 #include <Python.h>
-#include "progfilldefine.hpp"
+#include "pyramiddefine.hpp"
 
 // This Module is for implementing python interface of 
-// 'progressive fill' 
+// 'Pyramid fill' 
 
 /* Flagtile class, to contain flag information. 
  * 
  * This class holds pixels in like a pyramid shape.
- * Actually, though it is the same concept as `mipmap`, 
- * I named it `Progress` to avoid confusion with existing surface mipmaps.
+ * Actually, it is the same concept as `mipmap`, 
+ * but I named it `Pyramid` to avoid confusion with already existing `surface mipmap`.
+ *
+ * TODO: Currently, the flag buffer is allocated with C++ `new` function.
+ *       This can be numpy buffer, to modefy the contents easily from python.
  */
 class Flagtile 
 {
 private:
     uint8_t *m_buf;
-
-    // Pixel counts.
-    int m_filledcnt;
-    int m_areacnt;
-    int m_contourcnt;
+    // Pixel counts. This stores how many pixels per pixel value in this tile.
+    uint16_t m_pixcnt[8];
 
     // The total buffer size,
-    static const int BUF_SIZE = PROGRESS_BUF_SIZE(0) + 
-                                PROGRESS_BUF_SIZE(1) + 
-                                PROGRESS_BUF_SIZE(2) + 
-                                PROGRESS_BUF_SIZE(3) + 
-                                PROGRESS_BUF_SIZE(4) + 
-                                PROGRESS_BUF_SIZE(5) +
-                                PROGRESS_BUF_SIZE(6); 
+    static const int BUF_SIZE = PYRAMID_BUF_SIZE(0) + 
+                                PYRAMID_BUF_SIZE(1) + 
+                                PYRAMID_BUF_SIZE(2) + 
+                                PYRAMID_BUF_SIZE(3) + 
+                                PYRAMID_BUF_SIZE(4) + 
+                                PYRAMID_BUF_SIZE(5) +
+                                PYRAMID_BUF_SIZE(6); 
 
     // buffer offsets of progress levels.
-    static const int m_buf_offsets[MAX_PROGRESS+1];
+    static const int m_buf_offsets[MAX_PYRAMID+1];
     
     // Status bit flag for each tile.
     // It is Dirty flag, etc.
@@ -77,30 +77,8 @@ public:
         uint8_t oldpix = *BUF_PTR(level, x, y) & PIXEL_MASK;
         if (level == 0 
                 && (val & PIXEL_MASK) != oldpix) {
-            switch (val & PIXEL_MASK) {
-                case PIXEL_FILLED:
-                    m_filledcnt++;
-                    break;
-                case PIXEL_AREA:
-                    m_areacnt++;
-                    break;
-                case PIXEL_CONTOUR:
-                    m_contourcnt++;
-                    break;
-            }
-
-            switch (oldpix) {
-                case PIXEL_FILLED:
-                    m_filledcnt--;
-                    break;
-                case PIXEL_AREA:
-                    m_areacnt--;
-                    break;
-                case PIXEL_CONTOUR:
-                    m_contourcnt--;
-                    break;
-            }
-
+            m_pixcnt[oldpix]--;
+            m_pixcnt[val & PIXEL_MASK]++;
         }
 
         if((val & FLAG_MASK) != 0)
@@ -112,12 +90,13 @@ public:
     void clear_bitwise_flag(const int level, const uint8_t flag) 
     {
         uint8_t *cp = BUF_PTR(level, 0, 0);
-        for(int i=0; i < PROGRESS_BUF_SIZE(level); i++) {
+        for(int i=0; i < PYRAMID_BUF_SIZE(level); i++) {
             *cp &= (~flag);
             cp++;
         }
     }
 
+    // Fill entire progress level pixels, with assigned value.
     void fill(const uint8_t val);
 
     void convert_from_color(PyObject *py_src_tile,
@@ -136,67 +115,28 @@ public:
 
     void convert_from_transparency(PyObject *py_targ_tile,
                                    const double alpha_threshold,
-                                   const int pixel_value);
+                                   const int pixel_value,
+                                   const int overwrap_value=PIXEL_INVALID);
 
     void convert_to_transparent(PyObject *py_targ_tile, const int pixel_value);
 
-    inline int get_stat()
-    {
-        if (m_filledcnt == TILE_SIZE*TILE_SIZE)
-            return (m_statflag | FILLED | HAS_PIXEL);
-        else if (m_areacnt == TILE_SIZE*TILE_SIZE)
-            return (m_statflag | FILLED_AREA | HAS_AREA);
-        else if (m_contourcnt == TILE_SIZE*TILE_SIZE)
-            return (m_statflag | FILLED_CONTOUR | HAS_CONTOUR);
-        else if (m_filledcnt == 0 && m_areacnt == 0 && m_contourcnt == 0)
-            return (m_statflag | EMPTY);
-        
-        int32_t retflag = m_statflag;
-
-        if (m_filledcnt > 0)
-            retflag |= HAS_PIXEL;
-        
-        if (m_contourcnt > 0)
-            retflag |= HAS_CONTOUR;
-
-        if (m_areacnt > 0)
-            retflag |= HAS_AREA;
-
-        return retflag;
-    }
+    inline int get_stat() { return m_statflag; }
 
     inline bool is_filled_with(const uint8_t pix) 
     { 
-        switch(pix) {
-            case PIXEL_AREA:
-                return (m_statflag & FILLED_AREA);
-            case PIXEL_FILLED:
-                return (m_statflag & FILLED);
-            case PIXEL_CONTOUR:
-                return (m_statflag & FILLED_CONTOUR);
-            case PIXEL_EMPTY:
-            case PIXEL_OUTSIDE:
-                return (m_statflag & EMPTY);
-            default:
-                return false;
-        }
+        uint16_t cnt;
+        if (pix == PIXEL_INVALID) 
+            cnt = m_pixcnt[PIXEL_EMPTY] + m_pixcnt[PIXEL_OUTSIDE];
+        else 
+            cnt = m_pixcnt[pix & PIXEL_MASK];
+        return cnt == (TILE_SIZE * TILE_SIZE);
     }
     
     inline int get_pixel_count(const uint8_t pix) {
-        switch(pix) {
-            case PIXEL_AREA:
-                return m_areacnt;
-            case PIXEL_FILLED:
-                return m_filledcnt;
-            case PIXEL_CONTOUR:
-                return m_contourcnt;
-            case PIXEL_EMPTY:
-            case PIXEL_OUTSIDE:
-                return (TILE_SIZE*TILE_SIZE) 
-                            - (m_areacnt+m_filledcnt+m_contourcnt);
-            default:
-                return 0;
-        }
+        if (pix == PIXEL_INVALID) 
+            return m_pixcnt[PIXEL_EMPTY] + m_pixcnt[PIXEL_OUTSIDE];
+        else
+            return m_pixcnt[pix & PIXEL_MASK];
     }
 
     inline void set_dirty() {m_statflag |= DIRTY;}
@@ -222,33 +162,6 @@ public:
     // i.e. this tile should not be deleted. just replace with NULL.
     static const int BORROWED = 0x00000002;
     
-    /// Status flags of below are exclusive.
-    /// We can set only each one of them for status flag.
-    
-    // This tile is not filled entirely but has some valid pixel.
-    static const int HAS_PIXEL = 0x00000100;
-    //
-    // This tile has completely filled with PIXEL_FILLED,
-    // without any contour.
-    // When this flag is set, statflag should also have HAS_PIXEL.
-    static const int FILLED = 0x00000200;
-    
-    // This tile has some contour pixel.
-    static const int HAS_CONTOUR = 0x00000400;
-    // Rarely but possible, a tile has only contour pixel.
-    // When this flag is set, statflag should also have HAS_CONTOUR.
-    static const int FILLED_CONTOUR = 0x00000800;
-
-    // This tile has some vacant pixel.
-    static const int HAS_AREA = 0x00001000;
-
-    // This tile has completely filled with PIXEL_AREA.
-    // When this flag is set, statflag should also have HAS_AREA.
-    static const int FILLED_AREA = 0x00002000;
-    
-    // This tile is empty(i.e. filled with 0)
-    static const int EMPTY = 0x00004000;
-    
 
     // To Expose PIXEL_ values for python
     // without `contaminating` original mypaint namespace.
@@ -257,6 +170,8 @@ public:
     static const int PIXEL_EMPTY_VALUE = PIXEL_EMPTY;
     static const int PIXEL_CONTOUR_VALUE = PIXEL_CONTOUR;
     static const int PIXEL_OUTSIDE_VALUE = PIXEL_OUTSIDE;
+    static const int PIXEL_OVERWRAP_VALUE = PIXEL_OVERWRAP;
+    static const int PIXEL_INVALID_VALUE = PIXEL_INVALID;
 };
 
 /* Flagtile psuedo surface object.
@@ -322,12 +237,12 @@ public:
     // is different from original(progress level 0).
     inline int get_pixel_max_x(const int level) 
     {
-        return m_width * PROGRESS_TILE_SIZE(level);
+        return m_width * PYRAMID_TILE_SIZE(level);
     }
 
     inline int get_pixel_max_y(const int level) 
     {
-        return m_height * PROGRESS_TILE_SIZE(level);
+        return m_height * PYRAMID_TILE_SIZE(level);
     }
 
     inline int get_target_level(){ return m_level;}
@@ -342,7 +257,7 @@ public:
                                          const int sx, const int sy, 
                                          const bool request) 
     { 
-        int tile_size = PROGRESS_TILE_SIZE(level);
+        int tile_size = PYRAMID_TILE_SIZE(level);
         int raw_tx = sx / tile_size;
         int raw_ty = sy / tile_size;
 
@@ -389,7 +304,7 @@ assert(idx < (m_width * m_height));
         if (ct == NULL)
             return 0; 
 
-        const int tile_size = PROGRESS_TILE_SIZE(level);
+        const int tile_size = PYRAMID_TILE_SIZE(level);
         return ct->get(level,
                        POSITIVE_MOD(sx, tile_size), 
                        POSITIVE_MOD(sy, tile_size));
@@ -404,7 +319,7 @@ assert(idx < (m_width * m_height));
 #ifdef HEAVY_DEBUG
 assert(ct != NULL);
 #endif
-        const int tile_size = PROGRESS_TILE_SIZE(level);
+        const int tile_size = PYRAMID_TILE_SIZE(level);
         ct->replace(level,
                     POSITIVE_MOD(sx, tile_size), 
                     POSITIVE_MOD(sy, tile_size), 
@@ -415,7 +330,7 @@ assert(ct != NULL);
     //// Progress methods.
     void build_progress_seed();
     // Actually progress pixels based on progress seeds.
-    void progress_tile(const int level, const bool expand_outside=true);
+    void progress_tile(const int level, const bool expand_outside);
 
     // flood_fill method. 
     // This should not be called from Python codes.
@@ -431,7 +346,7 @@ assert(ct != NULL);
 
     // Utility Methods
     void convert_pixel(const int level, const int targ_pixel, const int new_pixel); 
-    void remove_small_areas(int level, double threshold, int size_threshold=-1);
+    void remove_small_areas(int level, double threshold, int size_threshold=0);
     void dilate(const int pixel, const int dilation_size);
     
     // Finalize related methods.
@@ -487,7 +402,7 @@ private:
                     int ex, int ey,
                     DrawWorker *f);
     
-    // Walk among the eitire nodes.
+    // Walk among the entire nodes.
     void walk_polygon(DrawWorker *w);
 
     bool is_inside_polygon(const int x1, const int x2, const int y);
@@ -524,7 +439,7 @@ public:
     virtual ~ClosefillSurface();
     
     // Decide outside and inside pixels.
-    void decide_area();
+    void decide_area(const int level);
 
 };
 
@@ -533,6 +448,8 @@ public:
  * In progfill.cpp, `Lasso fill` is done as
  * `Mask filled polygon with most-appeared
  * color area, and replace it with foreground color`.
+ *
+ * Almost same as ClosefillSurface. This class is for future expansion.
  */
 class LassofillSurface : public ClosefillSurface 
 {
@@ -545,6 +462,20 @@ public:
     */
     LassofillSurface(PyObject* node_list);
     virtual ~LassofillSurface();
+};
+
+/* CutprotrudeSurface for `Cut protruding pixels` feature.
+ * This class inherits from FloodfillSurface, because this borrows
+ * python dictionary of Flagtiles previously generated/converted
+ * like FloodfillSurface.
+ */
+class CutprotrudeSurface : public FloodfillSurface
+{
+public:
+    CutprotrudeSurface(PyObject* tiledict, const int start_level); 
+    virtual ~CutprotrudeSurface();
+
+    void remove_overwrap_contour();
 };
 
 //// functions

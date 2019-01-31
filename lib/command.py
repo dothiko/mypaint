@@ -2146,6 +2146,7 @@ class ClosedAreaFill (FloodFill):
     PIXEL_FILLED = lib.mypaintlib.Flagtile.PIXEL_FILLED_VALUE
     PIXEL_CONTOUR = lib.mypaintlib.Flagtile.PIXEL_CONTOUR_VALUE
     PIXEL_EMPTY = lib.mypaintlib.Flagtile.PIXEL_EMPTY_VALUE
+    PIXEL_OVERWRAP = lib.mypaintlib.Flagtile.PIXEL_OVERWRAP_VALUE
 
     def __init__(self, doc, 
                  nodes, color, tolerance, 
@@ -2174,9 +2175,9 @@ class ClosedAreaFill (FloodFill):
 
         # Keywords parameters
         self.targ_color_pos = kwds.get('targ_color_pos', None)
-        self.progress_level = int(kwds.get('progress_level', 3))
-        assert self.progress_level >= 0
-        assert self.progress_level <= 6
+        self.pyramid_level = int(kwds.get('pyramid_level', 3))
+        assert self.pyramid_level >= 0
+        assert self.pyramid_level <= 6
         self.alpha_threshold = float(kwds.get('alpha_threshold', 0.2))
         self.fill_all_holes = bool(kwds.get('fill_all_holes', False))
         self.erase_pixel = kwds.get('erase_pixel', False)
@@ -2195,6 +2196,7 @@ class ClosedAreaFill (FloodFill):
         PIXEL_CONTOUR = self.PIXEL_CONTOUR
         PIXEL_AREA = self.PIXEL_AREA
         PIXEL_FILLED = self.PIXEL_FILLED
+        PIXEL_OVERWRAP = self.PIXEL_OVERWRAP
         PIXEL_OUTSIDE = lib.mypaintlib.Flagtile.PIXEL_OUTSIDE_VALUE
         # From lib/progfilldefine.hpp
         FLAG_WORK = 0x10
@@ -2210,6 +2212,7 @@ class ClosedAreaFill (FloodFill):
             PIXEL_CONTOUR : (255, 255, 0),
             PIXEL_EMPTY : (0, 255, 0), # level color
             PIXEL_OUTSIDE : (255, 0, 128),
+            PIXEL_OVERWRAP : (255, 128, 128),
             PIXEL_FILLED | FLAG_WORK: (0, 255, 0),
             FLAG_WORK : (255, 0, 0),
             FLAG_AA : (0, 255, 255)
@@ -2239,6 +2242,8 @@ class ClosedAreaFill (FloodFill):
                 npbuf = create_npbuf(npbuf, level, PIXEL_CONTOUR)
             elif m == 'outside':
                 npbuf = create_npbuf(npbuf, level, PIXEL_OUTSIDE)
+            elif m == 'overwrap':
+                npbuf = create_npbuf(npbuf, level, PIXEL_OVERWRAP)
             elif m == 'level':
                 npbuf = create_npbuf(npbuf, level, PIXEL_AREA)
                 npbuf = create_npbuf(npbuf, level, PIXEL_FILLED)
@@ -2287,7 +2292,7 @@ class ClosedAreaFill (FloodFill):
         if hasattr(self, 'nodes'):
             info['nodes'] = self.nodes
         info['tolerance'] = self.tolerance
-        info['level'] = self.progress_level
+        info['level'] = self.pyramid_level
         info['erase_pixel'] = self.erase_pixel
         info['tilesurf_dimension'] = (ox, oy, tw, th)
         info['fill_all_holes'] = self.fill_all_holes
@@ -2384,7 +2389,7 @@ class ClosedAreaFill (FloodFill):
         else:
             cl = layers.current
         tcpos = self.targ_color_pos
-        level = self.progress_level
+        level = self.pyramid_level
         early_culling_level = 2 # XXX fixed value, early culling for 4x4 pixel level
 
         # XXX Debug/profiling code
@@ -2445,11 +2450,11 @@ class ClosedAreaFill (FloodFill):
         ft.build_progress_seed()
 
         # Deciding filling area
-        ft.decide_area()
+        ft.decide_area(level)
           
         # Then, start progressing tiles.
         for i in range(level, 0, -1):
-            ft.progress_tile(i, False)
+            ft.progress_tile(i, True)
             # For early culling:
             if i == early_culling_level:
                 ft.remove_small_areas(i, 0.3) # 0.3(30%) is practical value.
@@ -2465,7 +2470,7 @@ class ClosedAreaFill (FloodFill):
 
         # Finalize progressive fill.
         if level >= 1:
-            ft.remove_small_areas(0, 0.08) # 0.08(8%) is practical value.
+            ft.remove_small_areas(0, 0.1) # 0.1(10%) is practical value.
             # TODO `percentage` should be remaked as relative to
             # progress level.
 
@@ -2626,6 +2631,7 @@ class CutProtruding(ClosedAreaFill):
 
     display_name = _("Cut Protruding")
 
+
     def __init__(self, doc, 
                  tolerance, 
                  **kwds):
@@ -2654,6 +2660,15 @@ class CutProtruding(ClosedAreaFill):
         import time
         ctm = time.time()
         show_flag = self.show_flag
+       #show_flag = True
+        def dbg_show(title, level=0):
+            if show_flag:
+                self._dbg_show_flag(
+                    ft, 
+                    'contour,area,filled,overwrap', 
+                    title=title,
+                    level=level
+                )
         # XXX Debug code end
 
         # Overwrite current, but snapshot 1st
@@ -2662,11 +2677,12 @@ class CutProtruding(ClosedAreaFill):
 
         # Convert all tiles of current layer as flagtile.
 
-        # PIXEL_ enum constants are defined in lib/progfilldefine.hpp
+        # PIXEL_ constants are defined in lib/progfilldefine.hpp
         PIXEL_EMPTY = self.PIXEL_EMPTY  
         PIXEL_AREA = self.PIXEL_AREA
         PIXEL_CONTOUR = self.PIXEL_CONTOUR
         PIXEL_FILLED = self.PIXEL_FILLED
+        PIXEL_OVERWRAP = self.PIXEL_OVERWRAP
         flagtiles = {}
         cursurf = cl._surface
         curtiles = cl.get_tile_coords()
@@ -2696,11 +2712,11 @@ class CutProtruding(ClosedAreaFill):
                         src_tile,
                         alpha_threshold,
                         PIXEL_CONTOUR, # Placing pixel, same as PIXEL_CONTOUR
+                        PIXEL_OVERWRAP # Place PIXEL_OVERWRAP when there is already non-PIXEL_EMPTY pixel.
                     )
                 flagtiles[(tx, ty)] = flag_tile
 
-        # Utilize FloodfillSurface. 
-        ft = lib.mypaintlib.FloodfillSurface(flagtiles, level)
+        ft = lib.mypaintlib.CutprotrudeSurface(flagtiles, level)
         ox = ft.get_origin_x()
         oy = ft.get_origin_y()
         for tx, ty in flagtiles:
@@ -2708,87 +2724,59 @@ class CutProtruding(ClosedAreaFill):
             fty = ty - oy 
             ft.borrow_tile(ftx, fty, flagtiles[(tx, ty)])
 
-        # XXX Debug/profiling code
-        if show_flag:
-            self._dbg_show_flag(
-                ft, 
-                'contour,area,filled', 
-                title='pre-remove'
-            )
-        #XXX debug code end
+        dbg_show('pre-remove') # XXX Debug/profiling code
 
         # Build pyramid
         ft.build_progress_seed()
 
-        # Just convert all PIXEL_AREA into PIXEL_FILLED at top level. 
-        # With this, we can get a pyramid which has
-        # initialized by PIXEL_AREA, but only top level
-        # pixels are `covered` with PIXEL_FILLED. 
-        ft.convert_pixel(level, PIXEL_AREA, PIXEL_FILLED)
+        dbg_show('post-seed', level=level) # XXX Debug/profiling code
 
-        # Remove (i.e. convert to PIXEL_AREA again) `Protruding` area, 
+        # We need Remove (i.e. convert to PIXEL_AREA again) `Protruding` area, 
         # in top level.
+        # Because, in this level, We can separate some protruding areas
+        # which are actually connected with main pixel area with small holes.
+        # 
         # That area would match all of following conditions,
-        # 1. smaller than largest area.
-        # 2. it is surrounded by many of opened pixel(greater than 40%).
-        ft.remove_small_areas(level, 0.4, 0) # XXX 0.4(40%) is practical value.
+        #  * It is surrounded by many of invalid pixels.
+        ft.remove_small_areas(level, 0.2) # XXX 0.2(20%) is practical value.
 
-        # XXX Debug/profiling code
-        if show_flag:
-            self._dbg_show_flag(
-                ft, 
-                'contour,area,filled', 
-                level=level,
-                title='post-remove'
-            )
-        #XXX debug code end
+        dbg_show('post-remove', level=level) # XXX Debug/profiling code
 
-        # Progress seed pixels into lower levels.
-        # Some pixels convert to FILLED, others remained
-        # as vacant AREA, following to algorithm.
         for i in range(level, 0, -1):
             ft.progress_tile(i, False)
 
-        # XXX Debug/profiling code
-        if show_flag:
-            self._dbg_show_flag(
-                ft, 
-                'contour,area,filled', 
-                level=0,
-                title='progressed'
-            )
-        #XXX debug code end
+        dbg_show('post-progress') # XXX Debug/profiling code
 
-        # Then, remove remained small areas again
-        # at final level.
-        ft.remove_small_areas(0, 0.2, 0) # XXX 0.2(20%) is practical value.
+        # Then, decide filled pixels at final level.
+        # Protruding pixels are remained as PIXEL_AREA.
+        # That PIXEL_AREA areas are erased from mypaint colortile later.
 
-        # XXX Debug/profiling code
-        if show_flag:
-            self._dbg_show_flag(
-                ft, 
-                'contour,area,filled', 
-                level=0,
-                title='finalized'
-            )
-        #XXX debug code end
+        ft.remove_small_areas(0, 0.1, -1) # 0.1(10%) is practical value.
+        # size_threshold -1 means `remove even maximum area`
+        # Because actual maximum area already ensured.
+        # All of opened area should be removed, even if it is largest one.
+
+        # Remove overwrapped and isolated contour area.
+        ft.remove_overwrap_contour() 
+
+        dbg_show('finalized') # XXX Debug/profiling code
 
         # Dilate erasing result(PIXEL_AREA) a bit 
         # and eliminate garbage pixels.
         ft.dilate(PIXEL_AREA, 1)
 
-        # This class reserves layer contents
-        # except for removing protruding pixels.
+        # Just make PIXEL_AREA pixel to transparent(i.e. erase) at the same position of 
+        # Mypaint colortile.
+        # Other pixels are remained.
         for tx, ty in curtiles:
             flag_tile = flagtiles[(tx, ty)]
             with cursurf.tile_request(tx, ty, readonly=False) as dst_tile:
                 flag_tile.convert_to_transparent(
                     dst_tile,
-                    PIXEL_AREA # `remove_small_areas` changes PIXEL_FILLED
-                               # into PIXEL_AREA
+                    PIXEL_AREA 
                 )
 
-        # Restore background visible state
+        # Don't forget to restore background visible state.
         assert hasattr(layers, "background_visible")
         layers.background_visible = True
         cl.visible = True

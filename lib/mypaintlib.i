@@ -33,7 +33,7 @@ typedef struct { int x, y, w, h; } Rect;
 %include "brushsettings.hpp"
 %include "gdkpixbuf2numpy.hpp"
 
-%include "progfill.hpp"
+%include "pyramidfill.hpp"
 %include "opencv_util.hpp"
 
 %init %{

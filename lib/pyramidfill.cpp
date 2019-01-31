@@ -7,8 +7,8 @@
  * (at your option) any later version.
  */
 
-#include "progfill.hpp"
-#include "progfillworkers.hpp"
+#include "pyramidfill.hpp"
+#include "pyramidworkers.hpp"
 #include "common.hpp"
 #include "fix15.hpp"
 
@@ -146,7 +146,7 @@ KernelWorker::set_target_level(const int level)
 {
 #ifdef HEAVY_DEBUG
     assert(level >= 0); 
-    assert(level <= MAX_PROGRESS); 
+    assert(level <= MAX_PYRAMID); 
 #endif
     m_level = level; 
     m_max_x = m_surf->get_pixel_max_x(level);
@@ -307,7 +307,7 @@ WalkingKernel::walk(const int sx, const int sy, const int direction)
     m_oy = sy;
     m_x = sx;
     m_y = sy;
-    m_step = 0;
+    m_step = 1;
     m_right_rotate_cnt = 0;
     m_clockwise_cnt = 0;
     
@@ -330,24 +330,21 @@ WalkingKernel::walk(const int sx, const int sy, const int direction)
 //// Flagtile 
 
 const int 
-Flagtile::m_buf_offsets[MAX_PROGRESS+1] = {
+Flagtile::m_buf_offsets[MAX_PYRAMID+1] = {
     // progress level 0: 64x64(TILE_SIZE * TILE_SIZE), start from 0.
     0,
-    PROGRESS_BUF_SIZE(0),
-    Flagtile::m_buf_offsets[1] + PROGRESS_BUF_SIZE(1),
-    Flagtile::m_buf_offsets[2] + PROGRESS_BUF_SIZE(2),
-    Flagtile::m_buf_offsets[3] + PROGRESS_BUF_SIZE(3),
-    Flagtile::m_buf_offsets[4] + PROGRESS_BUF_SIZE(4),
-    Flagtile::m_buf_offsets[5] + PROGRESS_BUF_SIZE(5)
+    PYRAMID_BUF_SIZE(0),
+    Flagtile::m_buf_offsets[1] + PYRAMID_BUF_SIZE(1),
+    Flagtile::m_buf_offsets[2] + PYRAMID_BUF_SIZE(2),
+    Flagtile::m_buf_offsets[3] + PYRAMID_BUF_SIZE(3),
+    Flagtile::m_buf_offsets[4] + PYRAMID_BUF_SIZE(4),
+    Flagtile::m_buf_offsets[5] + PYRAMID_BUF_SIZE(5)
 };
 
 Flagtile::Flagtile(const int initial_value) 
     : m_statflag(0) 
 {
     m_buf = new uint8_t[BUF_SIZE];
-    m_areacnt = 0;
-    m_filledcnt = 0;
-    m_contourcnt = 0;
     fill(initial_value);
 }
 
@@ -363,7 +360,7 @@ Flagtile::build_progress_level(const int targ_level)
 #ifdef HEAVY_DEBUG
     assert(targ_level >= 1);
 #endif
-    int c_size = PROGRESS_TILE_SIZE(targ_level);
+    int c_size = PYRAMID_TILE_SIZE(targ_level);
     int b_level = targ_level - 1;
 
     for (int y=0; y < c_size; y++) {
@@ -381,6 +378,7 @@ Flagtile::build_progress_level(const int targ_level)
                     uint8_t pix = get(b_level, bbx+bx, bby+by);
                     switch(pix) {
                         case PIXEL_CONTOUR:
+                        case PIXEL_OVERWRAP:
                             new_pixel = PIXEL_CONTOUR;
                             goto exit_pixel_loop;
                         case PIXEL_AREA:
@@ -408,17 +406,22 @@ Flagtile::build_progress_seed(const int max_level)
 {
 #ifdef HEAVY_DEBUG
     assert(max_level >= 1);
-    assert(max_level <= MAX_PROGRESS);
+    assert(max_level <= MAX_PYRAMID);
 #endif
-    if (get_stat() & EMPTY)
+    if (is_filled_with(PIXEL_INVALID))
         return; // There is nothing to do for already filled or empty tile.
 
-    // In this stage, only filled level-0 pixels, still not complete 
-    // full-pixel-fill against tile. so `make flag true`
-    if (get_stat() & FILLED_AREA)
-        fill(PIXEL_AREA);
-    else if (get_stat() & FILLED_AREA)
-        fill(PIXEL_FILLED);
+    // In this stage, when the all of level-0 pixels are filled with same value
+    // , but it might not be filled above level 0. 
+    // So, ensure the filled pixels such case.
+    if (is_filled_with(PIXEL_AREA)) {
+        if (get(max_level, 0, 0) != PIXEL_AREA)
+            fill(PIXEL_AREA);
+    }
+    else if (is_filled_with(PIXEL_CONTOUR)) {
+        if (get(max_level, 0, 0) != PIXEL_CONTOUR)
+            fill(PIXEL_CONTOUR);
+    }
     else {
         for(int i=1;i <= max_level; i++) {
             build_progress_level(i);
@@ -495,8 +498,8 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
                     
                     if (match == 0) { 
                         *tptr = PIXEL_CONTOUR;
-                        m_areacnt--;
-                        m_contourcnt++;
+                        m_pixcnt[PIXEL_AREA]--;
+                        m_pixcnt[PIXEL_CONTOUR]++;
                     }
                 }
             }
@@ -504,8 +507,10 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
                 // Code reaches here when
                 // limit_within_opaque is true and current pixel
                 // is completely transparent.
-                if (*tptr == PIXEL_AREA)
-                    m_areacnt--;
+                if (*tptr == PIXEL_AREA) {
+                    m_pixcnt[PIXEL_AREA]--;
+                    m_pixcnt[PIXEL_EMPTY]++;
+                }
                 *tptr = 0;
             }
             cptr += xstride;
@@ -535,8 +540,8 @@ Flagtile::convert_to_color(PyObject *py_targ_tile,
     assert_tile(array);
 #endif
 
-    if ((get_stat() & Flagtile::FILLED_AREA) 
-            || (get_stat() & Flagtile::EMPTY)) {
+    if (is_filled_with(PIXEL_AREA)
+            || is_filled_with(PIXEL_INVALID)) {
         return;
     }
 
@@ -554,7 +559,7 @@ Flagtile::convert_to_color(PyObject *py_targ_tile,
     cols[3] = fix15_one;
     
     // Completely filled tile can be filled with memcpy.
-    if (get_stat() & Flagtile::FILLED) {
+    if (is_filled_with(PIXEL_FILLED)) {
         fix15_short_t *optr = cptr;
         // Build one line
         for(int x=0; x<TILE_SIZE; x++) {
@@ -604,10 +609,22 @@ Flagtile::convert_to_color(PyObject *py_targ_tile,
     }
 }
 
+/**
+* @convert_from_transparency
+* convert mypaint colortile to Flagtile, only using alpha pixel value.
+*
+* @param pixel_value: Placing pixel value where colortile alpha pixel exceeds alpha_threshold. 
+* @param overwrap_value: If there is already non-PIXEL_EMPTY value, place this value.
+*                        This parameter is ignored when assigned PIXEL_INVALID.
+*
+* @detail 
+* Convert alpha pixels of Mypaint colortile to Flagtile pixel.
+*/
 void 
 Flagtile::convert_from_transparency(PyObject *py_src_tile,
                                     const double alpha_threshold,
-                                    const int pixel_value)
+                                    const int pixel_value,
+                                    const int overwrap_value)
 {
     PyArrayObject *array = (PyArrayObject*)py_src_tile;
 #ifdef HEAVY_DEBUG
@@ -624,7 +641,11 @@ Flagtile::convert_from_transparency(PyObject *py_src_tile,
         fix15_short_t *cptr = cptr_base;
         for(int x=0; x<TILE_SIZE; x++) {
             if (cptr[3] > threshold) {
-                replace(0, x, y, (uint8_t)pixel_value);
+                if (overwrap_value != PIXEL_INVALID 
+                        && get(0, x, y) != PIXEL_EMPTY)
+                    replace(0, x, y, (uint8_t)overwrap_value);
+                else
+                    replace(0, x, y, (uint8_t)pixel_value);
             }
             cptr += xstride;
         }
@@ -632,6 +653,15 @@ Flagtile::convert_from_transparency(PyObject *py_src_tile,
     }
 }
 
+/**
+* @convert_to_transparent
+* Convert Flagtile specific pixels into complete transparent pixels of mypaint colortile.
+*
+* @param target_pixel: Flagtile pixel value to be converted.
+*
+* @detail 
+* `Converting to complete transparent pixel` means actually `erasing pixel`.
+*/
 void 
 Flagtile::convert_to_transparent(PyObject *py_targ_tile,
                                  const int target_pixel)
@@ -702,21 +732,14 @@ Flagtile::convert_to_transparent(PyObject *py_targ_tile,
 void 
 Flagtile::fill(const uint8_t val) 
 {
+#ifdef HEAVY_DEBUG
+    assert((val & PIXEL_MASK) == val); // There is no any flag for pixel, 
+                                       // and also it is not special pixel value.
+#endif
     memset(m_buf, val, BUF_SIZE);
-    m_filledcnt = 0;
-    m_areacnt = 0;
-    m_contourcnt = 0;
-    switch(val & PIXEL_MASK) {
-        case PIXEL_FILLED:
-            m_filledcnt = TILE_SIZE * TILE_SIZE;
-            break;
-        case PIXEL_AREA:
-            m_areacnt = TILE_SIZE * TILE_SIZE;
-            break;
-        case PIXEL_CONTOUR:
-            m_contourcnt = TILE_SIZE * TILE_SIZE;
-            break;
-    }
+    memset(m_pixcnt, 0, sizeof(m_pixcnt));
+
+    m_pixcnt[val] = TILE_SIZE * TILE_SIZE;
 }
 
 //--------------------------------------
@@ -784,8 +807,8 @@ FlagtileSurface::generate_tileptr_buf(const int ox, const int oy,
 * Call DrawWorker.step for each flood-fill point.
 * Algorithm is copied/conveted from fill.cpp, but in this class
 * we do not need to access `real` color pixels of mypaint surface.
-* So we can complete flood-fill operation within this class,
-* no need to return python seed tuples.
+* So we can complete flood-fill operation only in this class,
+* without returning python seed tuples.
 */
 
 void 
@@ -793,7 +816,7 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
                             FillWorker* w)                                
 {
     const int level = w->get_target_level();
-    const int tile_size = PROGRESS_TILE_SIZE(level);
+    const int tile_size = PYRAMID_TILE_SIZE(level);
     int px = sx % tile_size;
     int py = sy % tile_size;
     int otx = sx / tile_size;
@@ -942,7 +965,7 @@ void
 FlagtileSurface::filter_tiles(KernelWorker *w)
 {
     Flagtile *t;
-    int tile_size = PROGRESS_TILE_SIZE(w->get_target_level());
+    int tile_size = PYRAMID_TILE_SIZE(w->get_target_level());
 
     // When targ_flag and new_flag are same,
     // it cause chain reaction within operation and
@@ -1000,7 +1023,7 @@ FlagtileSurface::build_progress_seed()
 {
 #ifdef HEAVY_DEBUG
     assert(m_level >= 1);
-    assert(m_level <= MAX_PROGRESS);
+    assert(m_level <= MAX_PYRAMID);
 #endif
 
     for(int ty=0; ty<m_height; ty++) {
@@ -1031,7 +1054,7 @@ FlagtileSurface::progress_tile(const int level, const bool expand_outside)
 {
 #ifdef HEAVY_DEBUG
     assert(level > 0);
-    assert(level <= MAX_PROGRESS);
+    assert(level <= MAX_PYRAMID);
 #endif
     ProgressKernel k(this, expand_outside); 
     k.set_target_level(level);            
@@ -1068,21 +1091,6 @@ void __foreach_largest_cb(gpointer data, gpointer user_data)
     }
 }
 
-// This callback is to mark the pixel area is 
-// `valid` (i.e. Its hole is small enough against entire
-// area perimeter) or not.
-void __foreach_percentage_cb(gpointer data, gpointer user_data)
-{
-    perimeter_info *info = (perimeter_info*)data;
-    if (info->length > 0 && info->clockwise == true) {
-        double percentage = (double)info->encount / (double)info->total_surround;
-        double *threshold = (double*)user_data;
-        if (percentage > *threshold) { 
-            info->encount = -1; // Invalidate this area.
-        }
-    }
-}
-
 /**
 * @remove_small_areas
 * Remove small areas, and fill all small holes if needed.
@@ -1091,13 +1099,13 @@ void __foreach_percentage_cb(gpointer data, gpointer user_data)
 *                   filled area perimeter.
 *                   This value should be between 0.0 and 1.0.
 *
-* @param size_threshold: To eliminate a glitch-like pixels, which is 
-*                        small but completely surrounded by contour.
-*                        That pixel area is not wrong, but looks like 
-*                        something weird error.
-*                        If assigning -1(the default param) to this, it means
-*                        `use the 1/16 of maximum perimeter length`.
-*                        Also, this threshold can be disabled by assigning 0.
+* @param size_threshold: To keep area from its size.
+*                        If 0 assigned, largest area would be keeped(as filled) 
+*                        even it is too `opened` area.
+*                        If -1 assigned, every area which is `too opened`
+*                        is removed.
+*                        Otherwise, the areas which has same or larger perimeter
+*                        than threshold is keeped.
 * 
 * @detail 
 * This method is to reject small needless areas by counting its perimeter. 
@@ -1119,26 +1127,22 @@ FlagtileSurface::remove_small_areas(int level, double threshold, int size_thresh
     GQueue *queue = g_queue_new();
     CountPerimeterKernel pk(this, queue);
     pk.set_target_level(level);
-    filter_tiles((KernelWorker*)&pk);
+    pk.set_target_pixel(PIXEL_AREA);
+    filter_tiles(&pk);
 
     // Get maximum perimeter, to decide largest main area.
-    int max_length = 0;
-    g_queue_foreach(queue, __foreach_largest_cb, &max_length);
+    if (size_threshold == 0) {
+        int max_length = 0;
+        g_queue_foreach(queue, __foreach_largest_cb, &max_length);
+        size_threshold = max_length;
+    }
 
-    // Calculate the ratio of how many `opened` pixel surround 
-    // each perimeters(pixel areas).
-    // And, when it is greater than threshold, the `encount` member
-    // of that perimeter structure is set to -1(less than 0).
-    g_queue_foreach(queue, __foreach_percentage_cb, &threshold);
-
-    RemoveAreaWorker ra(this);
-    ClearflagWalker cf(this, PIXEL_FILLED);
+    //RemoveAreaWorker ra(this);
+    FloodfillWorker ra(this);
+    ClearflagWalker cf(this);
 
     ra.set_target_level(level);
     cf.set_target_level(level);
-
-    if (size_threshold <= 0)
-        size_threshold = max_length >> 4;
 
     while(g_queue_get_length(queue) > 0) {
         perimeter_info *info = (perimeter_info*)g_queue_pop_head(queue);
@@ -1151,57 +1155,24 @@ FlagtileSurface::remove_small_areas(int level, double threshold, int size_thresh
             // info->clockwise == false: i.e. it is not area, it's hole.
             // It would be filled later,
             // Just erase walking flags for now.
+            cf.set_target_pixel(PIXEL_MASK & get_pixel(level, info->sx, info->sy));
             cf.walk(info->sx, info->sy, cf.get_hand_dir(info->direction));
         }           
         else {
-            if (info->length == 0 && level == 0) {
+            if (info->length == 1 && level == 0) {
                 // Just a dot. Erase it.
-                replace_pixel(0, info->sx, info->sy, PIXEL_AREA); 
+                replace_pixel(level, info->sx, info->sy, PIXEL_AREA); 
             }
-            else if ((info->encount < 0 && info->length < max_length) 
-                        || (info->length < size_threshold)){
-                int sx = info->sx;
-                int sy = info->sy;
-
-                // That area has been surrounded with
-                // relatively too many `invalid` pixels .
-                // or, just too small.
-                // small area would be filled later with `fill-hole` feature.
-                // So erase it.
-                
-                // But, in rare case, if there is a small area above a large filled
-                // area and they are connected with only 1 pixel hole
-                // just below the starting point(info->sx, info->sy),
-                // for example,
-                //
-                //  @ = starting point
-                //  # = pixel area
-                //
-                //       @#### <- Current area, to be erased area.
-                //  ######     <- large area to be remained (filled).
-                //  ########### 
-                //
-                //  Walking of current small area would return to start point immidiately.
-                //  So it it detected as `too small area` 
-                //  But that large area would be also erased by flood-fill
-                //  because they are connected barely one pixel.
-                //
-                if ((get_pixel(level, sx, sy+1) & PIXEL_MASK) == PIXEL_FILLED
-                        && (get_pixel(level, sx+1, sy+1) & PIXEL_MASK) != PIXEL_FILLED) {
-                    // So, place sentinel at starting point
-                    replace_pixel(level, sx, sy, PIXEL_AREA); 
-
-                    if ((get_pixel(level, sx+1, sy) & PIXEL_MASK) == PIXEL_FILLED) 
-                        flood_fill(sx+1, sy, (FillWorker*)&ra);
-                }
-                else {
-                // Normal case. just fill it.
-                    flood_fill(sx, sy, (FillWorker*)&ra);
-                }
+            else if (info->open_ratio > threshold 
+                        && (size_threshold < 0 || info->length < size_threshold)) { 
+                cf.set_target_pixel(PIXEL_AREA);
+                cf.walk(info->sx, info->sy, info->direction);
             }
             else {
-                // Just erase perimeter walking flags.
-                cf.walk(info->sx, info->sy, cf.get_hand_dir(info->direction));
+                // Assign this area as filled area.
+                //printf("assign area %x: %d,%d - length %d, percentage %f\n", info, info->sx, info->sy, info->length, info->open_ratio);
+                ra.set_target_pixel(PIXEL_AREA, PIXEL_FILLED);
+                flood_fill(info->sx, info->sy, &ra);
             }
         }
         delete info;
@@ -1228,13 +1199,14 @@ FlagtileSurface::fill_holes()
     FillHoleKernel fk(this, queue);
     filter_tiles((KernelWorker*)&fk);
 
-    ClearflagWalker cf(this, PIXEL_AREA);
+    ClearflagWalker cf(this);
+    cf.set_target_pixel(PIXEL_AREA);
     FillHoleWorker fh(this);
     while(g_queue_get_length(queue) > 0) {
         perimeter_info *info = (perimeter_info*)g_queue_pop_head(queue);
 
         cf.walk(info->sx, info->sy, cf.get_hand_dir(info->direction));
-        if (info->clockwise && info->encount == 0) {
+        if (info->clockwise && info->open_ratio == 0.0) {
 #ifdef HEAVY_DEBUG
                 // Just 1px hole should be filled at FillHoleworker. 
                 // So info->length cannot be 0 at here.
@@ -1285,8 +1257,8 @@ FloodfillSurface::FloodfillSurface(PyObject* tiledict,
 {
 #ifdef HEAVY_DEBUG
     assert(PyDict_Check(tiledict));
-    assert(m_level <= MAX_PROGRESS);
-    assert(PROGRESS_TILE_SIZE(0) == MYPAINT_TILE_SIZE);
+    assert(m_level <= MAX_PYRAMID);
+    assert(PYRAMID_TILE_SIZE(0) == MYPAINT_TILE_SIZE);
 #endif
     // Build from tiledict.
     // That tiledict would be a dictionary which has 
@@ -1378,8 +1350,8 @@ ClosefillSurface::ClosefillSurface(const int start_level,
     : FlagtileSurface(start_level, 0), m_nodes(NULL) 
 {
 #ifdef HEAVY_DEBUG
-    assert(m_level <= MAX_PROGRESS);
-    assert(PROGRESS_TILE_SIZE(0) == MYPAINT_TILE_SIZE);
+    assert(m_level <= MAX_PYRAMID);
+    assert(PYRAMID_TILE_SIZE(0) == MYPAINT_TILE_SIZE);
     assert(node_list != NULL);
 #endif
     init_nodes(node_list);
@@ -1453,8 +1425,8 @@ ClosefillSurface::init_nodes(PyObject* node_list)
 
     // After generate_tileptr_buf,
     // we can use m_ox, m_oy member.
-    int opx = m_ox * PROGRESS_TILE_SIZE(0);
-    int opy = m_oy * PROGRESS_TILE_SIZE(0);
+    int opx = m_ox * PYRAMID_TILE_SIZE(0);
+    int opy = m_oy * PYRAMID_TILE_SIZE(0);
 
     m_nodes = new progfill_point[actual_cnt];
     m_node_cnt = actual_cnt;
@@ -1711,7 +1683,7 @@ ClosefillSurface::scanline_fill()
     
     // scanline fill operation MUST be done at progress level 0.
     // not m_level.
-    int tile_size = PROGRESS_TILE_SIZE(0); 
+    int tile_size = PYRAMID_TILE_SIZE(0); 
 
     for(int y=0; y<get_pixel_max_y(0); y++) {
         state = SKIPPING;
@@ -1785,21 +1757,38 @@ ClosefillSurface::scanline_fill()
 * and gradually progress(reshape) filled pixels.
 */
 void 
-ClosefillSurface::decide_area() 
+ClosefillSurface::decide_area(const int level) 
 {
-    // Walk around outer rim of closing area polygon,
-    // and trigger flood-fill of PIXEL_OUTSIDE 
-    // when vacant area pixel found.
-    // With this, we fill progress pixel of outside contours with
-    // PIXEL_OUTSIDE.
-    DecideTriggerWorker w(this);   // Worker for trigger flood-fill
-    w.set_target_level(m_level);
-    walk_polygon(&w);
+    // XXX Actually, this is a bit different version of 
+    // FlagtileSurface::remove_small_areas
+    GQueue *queue = g_queue_new();
+    CountPerimeterKernel pk(this, queue);
+    pk.set_target_level(level);
+    pk.set_target_pixel(PIXEL_AREA);
+    filter_tiles(&pk);
 
-    
-    // Then, convert remained vacant PIXEL_AREA into PIXEL_FILLED.
-    // With this, we fill the inside of contour with PIXEL_FILLED.
-    convert_pixel(m_level, PIXEL_AREA, PIXEL_FILLED);
+    FloodfillWorker ra(this);
+    ClearflagWalker cf(this);
+    ra.set_target_level(level);
+    cf.set_target_level(level);
+
+    while(g_queue_get_length(queue) > 0) {
+        perimeter_info *info = (perimeter_info*)g_queue_pop_head(queue);
+
+        if (info->clockwise==true && info->open_ratio > 0.0) {
+            // This should be opened outside area.  
+            ra.set_target_pixel(PIXEL_AREA, PIXEL_OUTSIDE);
+            flood_fill(info->sx, info->sy, &ra);
+        }           
+        else {
+            // This is completely closed area, or just a hole. 
+            // So just clear walked flag.
+            cf.set_target_pixel(PIXEL_AREA);
+            cf.walk(info->sx, info->sy, info->direction);
+        }
+        delete info;
+    }
+    g_queue_free(queue);
 }
 
 //--------------------------------------
@@ -1815,6 +1804,82 @@ LassofillSurface::~LassofillSurface()
 #ifdef HEAVY_DEBUG
     printf("LassofillSurface destructor called.\n");
 #endif
+}
+
+//--------------------------------------
+// Cutprotrude
+CutprotrudeSurface::CutprotrudeSurface(PyObject* tiledict, const int start_level) 
+    :  FloodfillSurface(tiledict, start_level)
+{
+}
+
+CutprotrudeSurface::~CutprotrudeSurface() 
+{
+#ifdef HEAVY_DEBUG
+    printf("CutprotrudeSurface destructor called.\n");
+#endif
+}
+
+/**
+* @remove_overwrap_contour
+* Remove isolated PIXEL_OVERWRAP areas.
+*
+* @detail 
+* This method is simular to FlagtileSurface::remove_small_areas,
+* but just remove isolated (i.e. completely surrounded by invalid pixels)
+* PIXEL_OVERWRAP pixel area.
+*/
+void
+CutprotrudeSurface::remove_overwrap_contour()
+{
+    // Remove annoying small glich-like pixel area.
+    // `Progressive fill` would mistakenly fill some
+    // concaved areas around jagged contour edges as gap.
+    // Theorically, such area cannot be produced when
+    // targeting gap-closing-level(m_level) is less than or equal to 1.
+    GQueue *queue = g_queue_new();
+    CountOverwrapKernel pk(this, queue);
+    pk.set_target_level(0);
+    pk.set_target_pixel(PIXEL_OVERWRAP);
+    filter_tiles(&pk);
+
+    //RemoveAreaWorker ra(this);
+    FloodfillWorker ra(this);
+    //ClearflagWalker cf(this);
+
+    ra.set_target_level(0);
+    //cf.set_target_level(0);
+
+    while(g_queue_get_length(queue) > 0) {
+        perimeter_info *info = (perimeter_info*)g_queue_pop_head(queue);
+        // NOTE: We cannot reject `hole` area at here because
+        // That area might be multiple areas which has a composition 
+        // of diagonally connected. Such areas are needed to be detected
+        // separately - i.e. we need new search for `hole` pixels.
+
+        if (info->clockwise == true) {
+            if (info->length == 1) {
+                // Just a dot. Erase it.
+                replace_pixel(0, info->sx, info->sy, PIXEL_AREA); 
+            }
+            else if (info->open_ratio == 1.0) {
+                // Completely surrounded by `open` pixels.
+                // Convert it into PIXEL_AREA, it would become `removing`
+                // mark for mypaint colortile.
+                ra.set_target_pixel(PIXEL_OVERWRAP, PIXEL_AREA);
+                flood_fill(info->sx, info->sy, &ra);
+            }
+            /* We would not need erasing FLAG_WORK, because that pixels
+             * just ignored
+            else {
+                //
+                cf.walk(info->sx, info->sy, info->direction);
+            }
+            */
+        }
+        delete info;
+    }
+    g_queue_free(queue);
 }
 
 //-----------------------------------------------------------------------------
@@ -1852,10 +1917,10 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
 #endif
 
     // Exit when the tile already filled up.
-    if (tile->get_stat() & Flagtile::FILLED)
+    if (tile->is_filled_with(PIXEL_FILLED))
         Py_RETURN_NONE;
 
-    const int tile_size = PROGRESS_TILE_SIZE(level);
+    const int tile_size = PYRAMID_TILE_SIZE(level);
 
     if (min_x < 0) min_x = 0;
     if (min_y < 0) min_y = 0;
@@ -1895,7 +1960,7 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
     PyObject *result_w = PyList_New(0);
 
     // Instantly fill up when the tile is empty.
-    if (tile->get_stat() & Flagtile::FILLED_AREA) {
+    if (tile->is_filled_with(PIXEL_AREA)) {
         
         tile->fill(PIXEL_FILLED);
         
@@ -2218,4 +2283,3 @@ FlagtileSurface::render_to_numpy(PyObject *npbuf,
     }
     return (PyObject*)array;
 }
-

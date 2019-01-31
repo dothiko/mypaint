@@ -1386,7 +1386,8 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     # XXX DEBUG END
     
     # Progress pixels.
-    ft.progress_tiles() 
+    for i in range(progress_level, 0, -1):
+        ft.progress_tile(i, True)
 
     # Finalize pixels.
     # The processing sequence MUST be : 

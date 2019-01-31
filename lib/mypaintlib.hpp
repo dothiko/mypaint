@@ -26,5 +26,5 @@
 #include "fill.hpp"
 #include "brushsettings.hpp"
 
-#include "progfill.hpp"
+#include "pyramidfill.hpp"
 #include "opencv_util.hpp"

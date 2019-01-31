@@ -8,13 +8,13 @@
  */
 
 
-/* This file is to hide base classes from python interface.
- * Also, all classes in this file are base class, so all
- * uses protected keyword as inner method/members.
- */
+// This file is to avoid polluting mypaintlib namespace, because these
+// worker classes cannot be used from python. 
+// Also, all classes in this file are base class, so all
+// uses protected keyword as inner method/members.
 
-#ifndef PROGFILLDEFINE_HPP
-#define PROGFILLDEFINE_HPP
+#ifndef PYRAMIDDEFINE_HPP
+#define PYRAMIDDEFINE_HPP
 
 /* This File is for utility class definition for
  * close-and-fill functionality.
@@ -24,21 +24,22 @@
 #include <Python.h>
 #include <mypaint-tiled-surface.h>
 
-// Force positive modulo against every number.
+// Force positive modulo against even negative number.
 // C/C++ would produce platform-dependent result
 // with modulo against negative number.
 // This macro is used in progfill.cpp/hpp
 #define POSITIVE_MOD(a, b) (((a) % (b) + (b)) % (b))
 
-#define MAX_PROGRESS 6
+// MAX pyramid level. 6 means maximum 2^6 == 64 pixel.
+#define MAX_PYRAMID 6
 
 // Convert a progress level 0(source or final result) coordinate
 // into each progress level (greater than 0) coordinate.
-#define PROGRESS_PIXEL_COORD(a, l) ((a) >> (l)) 
+#define PYRAMID_PIXEL_COORD(a, l) ((a) >> (l)) 
 
-// XXX CAUTION: PROGRESS_TILE_SIZE(0) MUST BE SAME AS MYPAINT_TILE_SIZE.
-#define PROGRESS_TILE_SIZE(l) (1 << (MAX_PROGRESS - (l)))
-#define PROGRESS_BUF_SIZE(l) (PROGRESS_TILE_SIZE(l) * PROGRESS_TILE_SIZE(l))
+// XXX CAUTION: PYRAMID_TILE_SIZE(0) MUST BE SAME AS MYPAINT_TILE_SIZE.
+#define PYRAMID_TILE_SIZE(l) (1 << (MAX_PYRAMID - (l)))
+#define PYRAMID_BUF_SIZE(l) (PYRAMID_TILE_SIZE(l) * PYRAMID_TILE_SIZE(l))
 
 #define TILE_SIZE MYPAINT_TILE_SIZE
 
@@ -46,7 +47,7 @@
 #define MAX_AA_LEVEL 127
 
 // For Flagtile class. to get progress-level ptr from
-#define BUF_PTR(l, x, y) (m_buf + m_buf_offsets[(l)] + ((y) * PROGRESS_TILE_SIZE((l)) + (x))) 
+#define BUF_PTR(l, x, y) (m_buf + m_buf_offsets[(l)] + ((y) * PYRAMID_TILE_SIZE((l)) + (x))) 
 
 //// PIXEL_ Constants.
 //
@@ -54,7 +55,7 @@
 // The vacant pixel is 0.
 // PIXEL_AREA means 'The pixel is fillable, but not filled(yet)'
 //
-#define PIXEL_MASK 0x0F
+#define PIXEL_MASK 0x07    // PIXEL_* value are from 0 to 7.
 #define PIXEL_EMPTY 0x00   // PIXEL_EMPTY should lower than PIXEL_OUTSIDE
 #define PIXEL_OUTSIDE 0x01 // Thus we can know total outside pixel as <PIXEL_OUTSIDE
 #define PIXEL_AREA 0x02
@@ -62,6 +63,14 @@
 #define PIXEL_CONTOUR 0x04 // PIXEL_CONTOUR is one of a filled pixel.
                            // This should be larger than PIXEL_FILLED
                            // to ease finding `filled(or unchangeable)` pixel.
+#define PIXEL_OVERWRAP 0x05 // Use to eliminate overwrapped pixels for `cut protruding` 
+                            // feature. Without this value, we cannot detect overwrapped
+                            // parts under the contour pixels.
+                           
+#define PIXEL_INVALID 0x08 // Special pixel value. This actually does not exist as pixel.
+                           // This means `PIXEL_EMPTY or PIXEL_OUTSIDE` and use for
+                           // knowing a tile has any of valid pixels(i.e, AREA, FILLED,
+                           // or CONTOUR) or not.
 
 // PIXEL_EMPTY, PIXEL_AREA, PIXEL_FILLED and PIXEL_CONTOUR are redefined as
 // static const of Flagtile class, and you can access them from python
@@ -89,7 +98,8 @@
 #define OFFSET_BOTTOM 2
 #define OFFSET_LEFT 3
 
-// Dummy definition of Flagtile / FlagtileSurface.
+// Forward declaration of Flagtile / FlagtileSurface.
+// Actually they are defined at pyramidfill.hpp
 class Flagtile;
 class FlagtileSurface;
 
@@ -125,7 +135,7 @@ public:
     {
 #ifdef HEAVY_DEBUG
         assert(level >= 0); 
-        assert(level <= MAX_PROGRESS); 
+        assert(level <= MAX_PYRAMID); 
 #endif
         m_level = level; 
     }
@@ -170,7 +180,7 @@ protected:
     // use for a tile which is filled some specific value.
     void process_only_ridge(Flagtile *targ, const int sx, const int sy)
     {
-        int ridge = PROGRESS_TILE_SIZE(m_level);
+        int ridge = PYRAMID_TILE_SIZE(m_level);
 
         for(int y=0;y < ridge;y+=ridge-1){
             for(int x=0;x < ridge;x++){
