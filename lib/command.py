@@ -21,6 +21,7 @@ from warnings import warn
 import lib.mypaintlib
 import lib.surface
 import lib.tiledsurface
+import lib.pyramidfill
 
 from copy import deepcopy
 import weakref
@@ -2142,12 +2143,6 @@ class ClosedAreaFill (FloodFill):
 
     display_name = _("Closed area Fill")
 
-    PIXEL_AREA = lib.mypaintlib.Flagtile.PIXEL_AREA_VALUE
-    PIXEL_FILLED = lib.mypaintlib.Flagtile.PIXEL_FILLED_VALUE
-    PIXEL_CONTOUR = lib.mypaintlib.Flagtile.PIXEL_CONTOUR_VALUE
-    PIXEL_EMPTY = lib.mypaintlib.Flagtile.PIXEL_EMPTY_VALUE
-    PIXEL_OVERWRAP = lib.mypaintlib.Flagtile.PIXEL_OVERWRAP_VALUE
-
     def __init__(self, doc, 
                  nodes, color, tolerance, 
                  sample_merged, make_new_layer, 
@@ -2189,187 +2184,17 @@ class ClosedAreaFill (FloodFill):
         self.tile_output = kwds.get('tile_output', False)
         self.show_flag = kwds.get('show_flag', False)
 
-    def _dbg_show_flag(self, ft, method, level=0, title=None):
-        # XXX debug method
-        
-        PIXEL_EMPTY = self.PIXEL_EMPTY
-        PIXEL_CONTOUR = self.PIXEL_CONTOUR
-        PIXEL_AREA = self.PIXEL_AREA
-        PIXEL_FILLED = self.PIXEL_FILLED
-        PIXEL_OVERWRAP = self.PIXEL_OVERWRAP
-        PIXEL_OUTSIDE = lib.mypaintlib.Flagtile.PIXEL_OUTSIDE_VALUE
-        # From lib/progfilldefine.hpp
-        FLAG_WORK = 0x10
-        FLAG_AA = 0x80
-        npbuf = None
-        if title is None:
-            title = method
-        title = title.decode('UTF-8')
-
-        colors = {
-            PIXEL_FILLED : (255, 160, 0),
-            PIXEL_AREA : (0, 255, 255),
-            PIXEL_CONTOUR : (255, 255, 0),
-            PIXEL_EMPTY : (0, 255, 0), # level color
-            PIXEL_OUTSIDE : (255, 0, 128),
-            PIXEL_OVERWRAP : (255, 128, 128),
-            PIXEL_FILLED | FLAG_WORK: (0, 255, 0),
-            FLAG_WORK : (255, 0, 0),
-            FLAG_AA : (0, 255, 255)
-        }
-
-        def create_npbuf(npbuf, level, pix):
-            r, g, b = colors[pix]
-            return ft.render_to_numpy(
-                npbuf, pix,
-                r, g, b,
-                level
-            )
-            
-        for m in method.split(","):
-            m = m.strip()
-
-            if m == 'filled' or m == 'show_all':
-                npbuf = create_npbuf(npbuf, level, PIXEL_FILLED)
-                npbuf = create_npbuf(npbuf, level, PIXEL_CONTOUR)
-            elif m == 'area':
-                npbuf = create_npbuf(npbuf, level, PIXEL_AREA)
-            elif m == 'close_area':
-                npbuf = create_npbuf(npbuf, 0, PIXEL_AREA)
-            elif m == 'initial_level' or m == 'empty':
-                npbuf = create_npbuf(npbuf, level, 0)
-            elif m == 'contour':
-                npbuf = create_npbuf(npbuf, level, PIXEL_CONTOUR)
-            elif m == 'outside':
-                npbuf = create_npbuf(npbuf, level, PIXEL_OUTSIDE)
-            elif m == 'overwrap':
-                npbuf = create_npbuf(npbuf, level, PIXEL_OVERWRAP)
-            elif m == 'level':
-                npbuf = create_npbuf(npbuf, level, PIXEL_AREA)
-                npbuf = create_npbuf(npbuf, level, PIXEL_FILLED)
-                npbuf = create_npbuf(npbuf, level, PIXEL_CONTOUR)
-                npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED | FLAG_WORK)
-            elif m == 'result':
-                npbuf = create_npbuf(npbuf, 0, PIXEL_OUTSIDE)
-                npbuf = create_npbuf(npbuf, 0, PIXEL_AREA)
-                npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED)
-                npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED | FLAG_WORK)
-            elif m == 'walking':
-                npbuf = create_npbuf(npbuf, -1, FLAG_WORK)
-            elif m == 'alias':
-                npbuf = create_npbuf(npbuf, -1, FLAG_AA)
-            elif show_all:
-                npbuf = create_npbuf(npbuf, 0, PIXEL_AREA)
-                npbuf = create_npbuf(npbuf, 0, PIXEL_FILLED)
-                npbuf = create_npbuf(npbuf, 0, PIXEL_CONTOUR)
-            else:
-                print("[ERROR] there is no case for %s in _dbg_show_flag" % m)        
-
-        from PIL import Image, ImageDraw
-        newimg = Image.fromarray(npbuf)
-        d = ImageDraw.Draw(newimg)
-        d.text((0,0),title, (0, 0, 0))
-        d.text((1,1),title, (255, 255, 255))        
-        newimg.save('/tmp/closefill_check.jpg')
-        newimg.show()
-
-    def _dbg_tile_output(self, ox, oy, tw, th, src):
-        # XXX debug method
-
-        print("# tile writing enabled")
-        import os
-        import numpy as np
-        import json
-        import tempfile
-        import time
-        lt = time.localtime()
-        outputdir = tempfile.mkdtemp(
-            prefix="tiles_%02d-%02d_%02d,%02d,%02d_" % lt[1:6],
-        )
-        info = {}
-        if hasattr(self, 'bbox'):
-            info['bbox'] = self.bbox
-        if hasattr(self, 'nodes'):
-            info['nodes'] = self.nodes
-        info['tolerance'] = self.tolerance
-        info['level'] = self.pyramid_level
-        info['erase_pixel'] = self.erase_pixel
-        info['tilesurf_dimension'] = (ox, oy, tw, th)
-        info['fill_all_holes'] = self.fill_all_holes
-
-        tcpos = self.targ_color_pos
-        if tcpos is not None:
-            info['targ_color_pos'] = self.targ_color_pos
-
-        for ty in range(oy, th+oy):
-            for tx in range(ox, tw+ox):
-                with src.tile_request(tx, ty, readonly=True) as src_tile:
-                    if self.tile_output:
-                        np.save('%s/tile_%d_%d.npy' % (outputdir, tx, ty), src_tile)
-
-        with open("%s/info" % outputdir, 'w') as ofp:
-            json.dump(info, ofp)
-
-    def _draw_result(self, layers, ft):
-        """Draw filled result into the layer.
-        """
-
-        # Create new layer (if needed)
-        if self.make_new_layer:
-            nl = lib.layer.PaintingLayer()
-            path = layers.get_current_path()
-            path = layers.path_above(path, insert=1)
-            layers.deepinsert(path, nl)
-            path = layers.deepindex(nl)
-            layers.set_current_path(path)
-            self.new_layer = nl
-            self.new_layer_path = path
-        else:
-            # Overwrite current, but snapshot 1st
-            assert self.snapshot is None
-            self.snapshot = layers.current.save_snapshot()
-            nl = layers.current
-
-        nl.autosave_dirty = True
-
-        ox = ft.get_origin_x()
-        oy = ft.get_origin_y()
-        tw = ft.get_width()
-        th = ft.get_height()
-        r, g, b = self.color
-        dstsurf = nl._surface
-        filled = {}
-        for fty in range(th):
-            for ftx in range(tw):
-                ct = ft.get_tile(ftx, fty, False)
-                if ct is not None:
-                    tx = ftx + ox
-                    ty = fty + oy
-                    with dstsurf.tile_request(tx, ty, readonly=False) \
-                            as dst_tile:
-                        if self.erase_pixel:
-                            ct.convert_to_transparent(
-                                dst_tile,
-                                self.PIXEL_FILLED
-                            )
-                        else:
-                            ct.convert_to_color(
-                                dst_tile,
-                                r, g, b
-                            )
-                        filled[(tx, ty)] = dst_tile
-
-        # Actual color-tile bbox might be different from FlagtileSurface
-        # Because FlagtileSurface has some reserved empty tiles for dilation.
-        # So we should use `filled` dictionary.
-        tile_bbox = lib.surface.get_tiles_bbox(filled)
-        dstsurf.notify_observers(*tile_bbox)
-    
-    def _get_source_surface(self, cl):
-        """Get source surface from layer object.
+    def _get_source_surface(self):
+        """Get source surface from currently selected layer.
         If the layer is layergroup, use TileRequestWrapper.
         But, temporally hide background to get transparent pixels.
         """
+        layers = self.doc.layer_stack
+        if self.sample_merged:
+            cl = layers
+        else:
+            cl = layers.current
+
         if hasattr(cl, "_surface"):
             return cl._surface
         else:
@@ -2377,127 +2202,74 @@ class ClosedAreaFill (FloodFill):
             self._restore_bg = cl.background_visible
             cl.background_visible = False
             return lib.surface.TileRequestWrapper(cl)
+
+    def _create_debug_info(self):
+        info = {}
+        info['show_flag'] = self.show_flag
+        info['tile_output'] = self.tile_output
+        if hasattr(self, 'bbox'):
+            info['bbox'] = self.bbox
+        if hasattr(self, 'nodes'):
+            info['nodes'] = self.nodes
+        info['tolerance'] = self.tolerance
+        info['level'] = self.pyramid_level
+        info['erase_pixel'] = self.erase_pixel
+        info['fill_all_holes'] = self.fill_all_holes
+        targ_pos = self.targ_color_pos
+        if targ_pos is not None:
+            info['targ_color_pos'] = targ_pos
+        return info
+
+    def _get_target_layer(self):
+        # Create new layer (if needed)
+        layers = self.doc.layer_stack
+        if self.make_new_layer:
+            assert self.new_layer is None
+            assert self.new_layer_path is not None
+            targ = lib.layer.PaintingLayer()
+            path = layers.get_current_path()
+            path = layers.path_above(path, insert=1)
+            layers.deepinsert(path, targ)
+            path = layers.deepindex(targ)
+            layers.set_current_path(path)
+            self.new_layer = targ
+            self.new_layer_path = path
+        else:
+            # Overwrite current, but snapshot 1st
+            assert self.snapshot is None
+            self.snapshot = layers.current.save_snapshot()
+            targ = layers.current
+        return targ
         
     def redo(self):
         # [TODO] Implement 'fill once' option.
 
-        _TILE_SIZE = lib.mypaintlib.TILE_SIZE
-        layers = self.doc.layer_stack
-        saved_bg_state = False
-        if self.sample_merged:
-            cl = layers
+        if self.erase_pixel:
+            color = None
         else:
-            cl = layers.current
-        tcpos = self.targ_color_pos
-        level = self.pyramid_level
-        early_culling_level = 2 # XXX fixed value, early culling for 4x4 pixel level
+            color = self.color
+    
+        lib.pyramidfill.close_fill(
+            self._get_target_layer(),
+            self._get_source_surface(),
+            self.nodes,
+            self.targ_color_pos,
+            self.pyramid_level,
+            color,
 
-        # XXX Debug/profiling code
-        import time
-        ctm = time.time()
-        # XXX Debug code end
-
-        # Create flagtilesurface object
-        ft = lib.mypaintlib.ClosefillSurface(
-                level,
-                self.nodes
+            self.tolerance,
+            self.alpha_threshold,
+            self.dilation_size,
+            self.fill_all_holes,
+            self._create_debug_info()
         )
 
-        ox = ft.get_origin_x()
-        oy = ft.get_origin_y()
-        tw = ft.get_width()
-        th = ft.get_height()
-        
-        src = self._get_source_surface(cl)
-        
-        # XXX Debug code
-        show_flag = self.show_flag
-        if self.tile_output:
-            self._dbg_tile_output(ox, oy, tw, th, src)
-        # XXX Debug code End
-        
-        # Get target color if needed
-        targ_r = targ_g = targ_b = targ_a = 0
-        if tcpos is not None:
-            px, py = tcpos
-            tx = px // _TILE_SIZE 
-            ty = py // _TILE_SIZE 
-            px = int(px % _TILE_SIZE)
-            py = int(py % _TILE_SIZE)
-            with src.tile_request(tx, ty, readonly=True) as sample:
-                targ_r, targ_g, targ_b, targ_a = [int(c) for c in sample[py][px]]
-
-        # Convert contours into flagtile.
-        for fty in range(0, th):
-            for ftx in range(0, tw):
-                with src.tile_request(ftx+ox, fty+oy, readonly=True) as src_tile:
-                    ct = ft.get_tile(ftx, fty, False)
-                    if ct is not None:
-                        ct.convert_from_color(
-                            src_tile,
-                            targ_r, targ_g, targ_b, targ_a,
-                            self.tolerance,
-                            self.alpha_threshold,
-                            False
-                        )
-
-        # XXX Debug/profiling code
-       #if show_flag:
-       #    self._dbg_show_flag(ft, 'contour,filled',title='post-convert tile')
-        #XXX debug code end
-
-        # Build pyramid
-        ft.build_progress_seed()
-
-        # Deciding filling area
-        ft.decide_area(level)
-          
-        # Then, start progressing tiles.
-        for i in range(level, 0, -1):
-            ft.progress_tile(i, True)
-            # For early culling:
-            if i == early_culling_level:
-                ft.remove_small_areas(i, 0.3) # 0.3(30%) is practical value.
-
-        # XXX Debug/profiling code
-        if show_flag:
-            self._dbg_show_flag(
-                ft, 
-                'contour,filled,outside,area', 
-                title='post-progress'
-            )
-        #XXX debug code end
-
-        # Finalize progressive fill.
-        if level >= 1:
-            ft.remove_small_areas(0, 0.1) # 0.1(10%) is practical value.
-            # TODO `percentage` should be remaked as relative to
-            # progress level.
-
-        ft.dilate(self.PIXEL_FILLED, self.dilation_size)
-
-        # After dilation, fill all holes.
-        if self.fill_all_holes:
-            ft.fill_holes()
-
-        ft.draw_antialias()
-        
-        # Convert flagtiles into that new layer.
-        self._draw_result(layers, ft)
-        
-        # Restore background visible state if needed.
         if self._restore_bg:
-            cl.background_visible = True
+            layers = self.doc.layer_stack
+            assert hasattr(layers, "background_visible")
+            assert layers.background_visible == False
+            layers.background_visible = True
 
-        # XXX Debug/profiling code
-        print("processing time %s" % str(time.time()-ctm))
-        if show_flag:
-            self._dbg_show_flag(
-                ft,
-                'result', 
-                title='final result'
-            )
-        #XXX debug code end
 
 class LassoFill(ClosedAreaFill):
     """Doing Lasso fill on the current layer"""
@@ -2519,110 +2291,32 @@ class LassoFill(ClosedAreaFill):
 
     def redo(self):
         # TODO Implement 'fill once' option.
-
-        _TILE_SIZE = lib.mypaintlib.TILE_SIZE
-        layers = self.doc.layer_stack
-        saved_bg_state = False
-        if self.sample_merged:
-            cl = layers
+        if self.erase_pixel:
+            color = None
         else:
-            cl = layers.current
+            color = self.color
 
-        # XXX Debug/profiling code
-        import time
-        ctm = time.time()
-        # XXX Debug code end
+        lib.pyramidfill.lasso_fill(
+            self._get_target_layer(),
+            self._get_source_surface(),
+            self.nodes,
+            self.targ_color_pos,
+            self.pyramid_level,
+            color,
 
-        # Create flagtilesurface object
-        lt = lib.mypaintlib.LassofillSurface(self.nodes)
+            self.tolerance,
+            self.alpha_threshold,
+            self.dilation_size,
+            self.fill_all_holes,
+            self._create_debug_info()
+        )
 
-        ox = lt.get_origin_x()
-        oy = lt.get_origin_y()
-        tw = lt.get_width()
-        th = lt.get_height()
-        
-        # Convert color-pixel tiles into flag tiles.
-        src = self._get_source_surface(cl)
-
-        # XXX Debug code
-        show_flag = self.show_flag
-        if self.tile_output:
-            self._dbg_tile_output(ox, oy, tw, th, src, 'lasso_tiles')
-        # XXX Debug code End
-
-        # Sampling colors from src color tiles around nodes.
-        node_colors = {}
-        # previous node position, in integer precision.
-        px = None
-        py = None
-
-        for cn in self.nodes:
-            cx = int(cn.x) 
-            cy = int(cn.y)
-            tx = cx // _TILE_SIZE
-            ty = cy // _TILE_SIZE
-            if cx != px or cy != py:
-                px = cx
-                py = cy
-                if lt.tile_exists(tx-ox, ty-oy):
-                    with src.tile_request(tx, ty, readonly=True) as src_tile:
-                        cx %= _TILE_SIZE
-                        cy %= _TILE_SIZE
-                        key = tuple([int(c) for c in src_tile[cy][cx]])
-                        # Only opaque color should be count.
-                        if key[3] != 0:
-                            cnt = node_colors.get(key, 0)
-                            node_colors[key] = cnt + 1
-                    
-
-        # get most frequent color
-        targ_item = sorted(
-            node_colors.items(), 
-            key=operator.itemgetter(1)
-        )[-1]      
-        # We sort the dict by value,
-        # but need key(tuple of pixel color), not value(color count). 
-        targ_r, targ_g, targ_b, targ_a = targ_item[0] 
-        
-        # Convert colortiles into flagtiles
-        for fty in range(th):
-            for ftx in range(tw):
-                ct = lt.get_tile(ftx, fty, False)
-                if ct is not None:
-                    with src.tile_request(ftx+ox, fty+oy, readonly=True) as src_tile:
-                        # That tile has vaild polygon area already.
-                        # If not, tile
-                        ct.convert_from_color(
-                            src_tile,
-                            targ_r, targ_g, targ_b, targ_a,
-                            self.tolerance,
-                            self.alpha_threshold,
-                            True
-                        )
-        
-        # Finalize lasso fill, with converting 
-        # PIXEL_CONTOUR into PIXEL_OUTSIDE (need to fill contour holes)
-        # and remained PIXEL_AREA into PIXEL_FILLED.
-        lt.dilate(self.PIXEL_FILLED, self.dilation_size)
-        lt.convert_pixel(0, self.PIXEL_CONTOUR, self.PIXEL_OUTSIDE)
-        lt.convert_pixel(0, self.PIXEL_AREA, self.PIXEL_FILLED)
-
-        if self.fill_all_holes:
-            lt.fill_holes()
-        lt.draw_antialias()
-        
-        # Convert flagtiles into that new layer.
-        self._draw_result(layers, lt)
-
-        # Restore background visible state if needed.
         if self._restore_bg:
-            cl.background_visible = True
-            
-        # XXX Debug/profiling code
-        print("processing time %s" % str(time.time()-ctm))
-        if show_flag:
-            self._dbg_show_flag(lt)
-        #XXX debug code end
+            layers = self.doc.layer_stack
+            assert hasattr(layers, "background_visible")
+            assert layers, background_visible == False
+            layers.background_visible = True
+
 # XXX for `close-and-fill / lasso-fill` feature end.
 
 # XXX for `cut-protruding` feature.
@@ -2645,141 +2339,151 @@ class CutProtruding(ClosedAreaFill):
         )
 
     def redo(self):
-        # TODO Implement 'fill once' option.
-
-        _TILE_SIZE = lib.mypaintlib.TILE_SIZE
         layers = self.doc.layer_stack
-        saved_bg_state = False
-        if self.sample_merged:
-            cl = layers
-        else:
-            cl = layers.current
-        level = 2 # Default progress level as 2(4x4 pixel).
-
-        # XXX Debug/profiling code
-        import time
-        ctm = time.time()
-        show_flag = self.show_flag
-       #show_flag = True
-        def dbg_show(title, level=0):
-            if show_flag:
-                self._dbg_show_flag(
-                    ft, 
-                    'contour,area,filled,overwrap', 
-                    title=title,
-                    level=level
-                )
-        # XXX Debug code end
 
         # Overwrite current, but snapshot 1st
         assert self.snapshot is None
         self.snapshot = layers.current.save_snapshot()
 
-        # Convert all tiles of current layer as flagtile.
+        lib.pyramidfill.cut_protrude(
+            layers,
+            self.alpha_threshold,
+            None
+        )
 
-        # PIXEL_ constants are defined in lib/progfilldefine.hpp
-        PIXEL_EMPTY = self.PIXEL_EMPTY  
-        PIXEL_AREA = self.PIXEL_AREA
-        PIXEL_CONTOUR = self.PIXEL_CONTOUR
-        PIXEL_FILLED = self.PIXEL_FILLED
-        PIXEL_OVERWRAP = self.PIXEL_OVERWRAP
-        flagtiles = {}
-        cursurf = cl._surface
-        curtiles = cl.get_tile_coords()
-        # Get entire visible contents, without background.
-        allsurf = self._get_source_surface(layers)
-        alpha_threshold = self.alpha_threshold
-        alpha_threshold = 0.4 # for test
-
-        # Important: We must reject current layer temporally 
-        # from visible contents.
-        cl.visible = False 
-
-        for tx, ty in curtiles:
-            flag_tile = None
-            with cursurf.tile_request(tx, ty, readonly=True) as src_tile:
-                flag_tile = lib.mypaintlib.Flagtile(PIXEL_EMPTY)
-                # As first, convert current layer as 
-                flag_tile.convert_from_transparency(
-                    src_tile,
-                    alpha_threshold, 
-                    PIXEL_AREA
-                )
-                # Then, overwrite with visible contents 
-                # (except for current layer).
-                with allsurf.tile_request(tx, ty, readonly=True) as src_tile:
-                    flag_tile.convert_from_transparency(
-                        src_tile,
-                        alpha_threshold,
-                        PIXEL_CONTOUR, # Placing pixel, same as PIXEL_CONTOUR
-                        PIXEL_OVERWRAP # Place PIXEL_OVERWRAP when there is already non-PIXEL_EMPTY pixel.
-                    )
-                flagtiles[(tx, ty)] = flag_tile
-
-        ft = lib.mypaintlib.CutprotrudeSurface(flagtiles, level)
-        ox = ft.get_origin_x()
-        oy = ft.get_origin_y()
-        for tx, ty in flagtiles:
-            ftx = tx - ox 
-            fty = ty - oy 
-            ft.borrow_tile(ftx, fty, flagtiles[(tx, ty)])
-
-        dbg_show('pre-remove') # XXX Debug/profiling code
-
-        # Build pyramid
-        ft.build_progress_seed()
-
-        dbg_show('post-seed', level=level) # XXX Debug/profiling code
-
-        # We need Remove (i.e. convert to PIXEL_AREA again) `Protruding` area, 
-        # in top level.
-        # Because, in this level, We can separate some protruding areas
-        # which are actually connected with main pixel area with small holes.
-        # 
-        # That area would match all of following conditions,
-        #  * It is surrounded by many of invalid pixels.
-        ft.remove_small_areas(level, 0.2) # XXX 0.2(20%) is practical value.
-
-        dbg_show('post-remove', level=level) # XXX Debug/profiling code
-
-        for i in range(level, 0, -1):
-            ft.progress_tile(i, False)
-
-        dbg_show('post-progress') # XXX Debug/profiling code
-
-        # Then, decide filled pixels at final level.
-        # Protruding pixels are remained as PIXEL_AREA.
-        # That PIXEL_AREA areas are erased from mypaint colortile later.
-
-        ft.remove_small_areas(0, 0.1, -1) # 0.1(10%) is practical value.
-        # size_threshold -1 means `remove even maximum area`
-        # Because actual maximum area already ensured.
-        # All of opened area should be removed, even if it is largest one.
-
-        # Remove overwrapped and isolated contour area.
-        ft.remove_overwrap_contour() 
-
-        dbg_show('finalized') # XXX Debug/profiling code
-
-        # Dilate erasing result(PIXEL_AREA) a bit 
-        # and eliminate garbage pixels.
-        ft.dilate(PIXEL_AREA, 1)
-
-        # Just make PIXEL_AREA pixel to transparent(i.e. erase) at the same position of 
-        # Mypaint colortile.
-        # Other pixels are remained.
-        for tx, ty in curtiles:
-            flag_tile = flagtiles[(tx, ty)]
-            with cursurf.tile_request(tx, ty, readonly=False) as dst_tile:
-                flag_tile.convert_to_transparent(
-                    dst_tile,
-                    PIXEL_AREA 
-                )
-
-        # Don't forget to restore background visible state.
-        assert hasattr(layers, "background_visible")
-        layers.background_visible = True
-        cl.visible = True
+       #_TILE_SIZE = lib.mypaintlib.TILE_SIZE
+       #layers = self.doc.layer_stack
+       #saved_bg_state = False
+       #if self.sample_merged:
+       #    cl = layers
+       #else:
+       #    cl = layers.current
+       #level = 2 # Default progress level as 2(4x4 pixel).
+       #
+       ## XXX Debug/profiling code
+       #import time
+       #ctm = time.time()
+       #show_flag = self.show_flag
+       #show_flag = True
+       #def dbg_show(title, level=0):
+       #    if show_flag:
+       #        self._dbg_show_flag(
+       #            ft, 
+       #            'contour,area,filled,overwrap', 
+       #            title=title,
+       #            level=level
+       #        )
+       ## XXX Debug code end
+       #
+       ## Overwrite current, but snapshot 1st
+       #assert self.snapshot is None
+       #self.snapshot = layers.current.save_snapshot()
+       #
+       ## Convert all tiles of current layer as flagtile.
+       #
+       ## PIXEL_ constants are defined in lib/progfilldefine.hpp
+       #PIXEL_EMPTY = self.PIXEL_EMPTY  
+       #PIXEL_AREA = self.PIXEL_AREA
+       #PIXEL_CONTOUR = self.PIXEL_CONTOUR
+       #PIXEL_FILLED = self.PIXEL_FILLED
+       #PIXEL_OVERWRAP = self.PIXEL_OVERWRAP
+       #flagtiles = {}
+       #cursurf = cl._surface
+       #curtiles = cl.get_tile_coords()
+       ## Get entire visible contents, without background.
+       #allsurf = self._get_source_surface(layers)
+       #alpha_threshold = self.alpha_threshold
+       #alpha_threshold = 0.4 # for test
+       #
+       ## Important: We must reject current layer temporally 
+       ## from visible contents.
+       #cl.visible = False 
+       #
+       #for tx, ty in curtiles:
+       #    flag_tile = None
+       #    with cursurf.tile_request(tx, ty, readonly=True) as src_tile:
+       #        flag_tile = lib.mypaintlib.Flagtile(PIXEL_EMPTY)
+       #        # As first, convert current layer as 
+       #        flag_tile.convert_from_transparency(
+       #            src_tile,
+       #            alpha_threshold, 
+       #            PIXEL_AREA
+       #        )
+       #        # Then, overwrite with visible contents 
+       #        # (except for current layer).
+       #        with allsurf.tile_request(tx, ty, readonly=True) as src_tile:
+       #            flag_tile.convert_from_transparency(
+       #                src_tile,
+       #                alpha_threshold,
+       #                PIXEL_CONTOUR, # Placing pixel, same as PIXEL_CONTOUR
+       #                PIXEL_OVERWRAP # Place PIXEL_OVERWRAP when there is already non-PIXEL_EMPTY pixel.
+       #            )
+       #        flagtiles[(tx, ty)] = flag_tile
+       #
+       #ft = lib.mypaintlib.CutprotrudeSurface(flagtiles, level)
+       #ox = ft.get_origin_x()
+       #oy = ft.get_origin_y()
+       #for tx, ty in flagtiles:
+       #    ftx = tx - ox 
+       #    fty = ty - oy 
+       #    ft.borrow_tile(ftx, fty, flagtiles[(tx, ty)])
+       #
+       #dbg_show('pre-remove') # XXX Debug/profiling code
+       #
+       ## Build pyramid
+       #ft.build_progress_seed()
+       #
+       #dbg_show('post-seed', level=level) # XXX Debug/profiling code
+       #
+       ## We need Remove (i.e. convert to PIXEL_AREA again) `Protruding` area, 
+       ## in top level.
+       ## Because, in this level, We can separate some protruding areas
+       ## which are actually connected with main pixel area with small holes.
+       ## 
+       ## That area would match all of following conditions,
+       ##  * It is surrounded by many of invalid pixels.
+       #ft.remove_small_areas(level, 0.2) # XXX 0.2(20%) is practical value.
+       #
+       #dbg_show('post-remove', level=level) # XXX Debug/profiling code
+       #
+       #for i in range(level, 0, -1):
+       #    ft.progress_tile(i, False)
+       #
+       #dbg_show('post-progress') # XXX Debug/profiling code
+       #
+       ## Then, decide filled pixels at final level.
+       ## Protruding pixels are remained as PIXEL_AREA.
+       ## That PIXEL_AREA areas are erased from mypaint colortile later.
+       #
+       #ft.remove_small_areas(0, 0.1, -1) # 0.1(10%) is practical value.
+       ## size_threshold -1 means `remove even maximum area`
+       ## Because actual maximum area already ensured.
+       ## All of opened area should be removed, even if it is largest one.
+       #
+       ## Remove overwrapped and isolated contour area.
+       #ft.remove_overwrap_contour() 
+       #
+       #dbg_show('finalized') # XXX Debug/profiling code
+       #
+       ## Dilate erasing result(PIXEL_AREA) a bit 
+       ## and eliminate garbage pixels.
+       #ft.dilate(PIXEL_AREA, 1)
+       #
+       ## Just make PIXEL_AREA pixel to transparent(i.e. erase) at the same position of 
+       ## Mypaint colortile.
+       ## Other pixels are remained.
+       #for tx, ty in curtiles:
+       #    flag_tile = flagtiles[(tx, ty)]
+       #    with cursurf.tile_request(tx, ty, readonly=False) as dst_tile:
+       #        flag_tile.convert_to_transparent(
+       #            dst_tile,
+       #            PIXEL_AREA 
+       #        )
+       #
+       ## Don't forget to restore background visible state.
+       #assert hasattr(layers, "background_visible")
+       #layers.background_visible = True
+       #cl.visible = True
             
 
 # XXX for `cut-protruding` end.
