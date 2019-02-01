@@ -28,7 +28,7 @@
 
 // XXX borrowed from `_floodfill_color_match` of lib/fill.cpp. almost same.
 static inline fix15_t
-progfill_color_match(const fix15_short_t c1_premult[4],
+pyramid_color_match(const fix15_short_t c1_premult[4],
                        const fix15_short_t c2_premult[4],
                        const fix15_t tolerance)
 {
@@ -109,7 +109,7 @@ assert_tile(PyArrayObject* array) {
 //// Class definition
 //
 // FYC, Base worker classes are defined at lib/profilldefine.hpp
-// And most of derived worker classes are defined at lib/progfillworkers.hpp
+// And most of derived worker classes are defined at lib/pyramidworkers.hpp
 
 
 //--------------------------------------
@@ -491,7 +491,7 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
             fix15_t alpha = (fix15_t)cptr[3];
             if (!limit_within_opaque || alpha > 0) {
                 if (pix == PIXEL_AREA && alpha >= f15_threshold) {
-                    fix15_t match = progfill_color_match(
+                    fix15_t match = pyramid_color_match(
                         targ, cptr,
                         f15_tolerance
                     );
@@ -841,8 +841,8 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
 
     // Populate a working queue with seeds
     GQueue *queue = g_queue_new();   /* Of tuples, to be exhausted */
-    progfill_point *seed_pt = (progfill_point*)
-                                  malloc(sizeof(progfill_point));
+    pyramid_point *seed_pt = (pyramid_point*)
+                                  malloc(sizeof(pyramid_point));
     seed_pt->x = sx;
     seed_pt->y = sy;
     g_queue_push_tail(queue, seed_pt);
@@ -853,7 +853,7 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
     const int max_y = tile_size * m_height;
 
     while (! g_queue_is_empty(queue)) {
-        progfill_point *pos = (progfill_point*) g_queue_pop_head(queue);
+        pyramid_point *pos = (pyramid_point*) g_queue_pop_head(queue);
         int x0 = pos->x;
         int y = pos->y;
         free(pos);
@@ -906,8 +906,8 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
                     if(w->match(pix)) {
                         if (look_above) {
                             // Enqueue the pixel to the north
-                            progfill_point *p = (progfill_point *) malloc(
-                                                    sizeof(progfill_point)
+                            pyramid_point *p = (pyramid_point *) malloc(
+                                                    sizeof(pyramid_point)
                                                   );
                             p->x = x;
                             p->y = y-1;
@@ -925,8 +925,8 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
                     if(w->match(pix)) {
                         if (look_below) {
                             // Enqueue the pixel to the South
-                            progfill_point *p = (progfill_point *) malloc(
-                                                    sizeof(progfill_point)
+                            pyramid_point *p = (pyramid_point *) malloc(
+                                                    sizeof(pyramid_point)
                                                   );
                             p->x = x;
                             p->y = y+1;
@@ -1428,7 +1428,7 @@ ClosefillSurface::init_nodes(PyObject* node_list)
     int opx = m_ox * PYRAMID_TILE_SIZE(0);
     int opy = m_oy * PYRAMID_TILE_SIZE(0);
 
-    m_nodes = new progfill_point[actual_cnt];
+    m_nodes = new pyramid_point[actual_cnt];
     m_node_cnt = actual_cnt;
     m_cur_node = 0;
     
@@ -1529,7 +1529,7 @@ ClosefillSurface::walk_line(int sx, int sy,
 *
 * @detail 
 * This method walks around polygon edge, 
-* in PROGRESS LEVEL 0, with assigned DrawWorker.
+* in PYRAMID LEVEL 0, with assigned DrawWorker.
 * So the worker MUST convert coordinates
 * for its own progress level.
 */
@@ -1886,27 +1886,25 @@ CutprotrudeSurface::remove_overwrap_contour()
 // Functions
 
 /**
-* @progfill_flood_fill
-* Doing `progress-fill` into Flagtile.
+* @pyramid_flood_fill
+* Doing `pyramid-gap-closing-floodfill` into Flagtile.
 *
 * @param tile : A flag tile object. 
 *               This object should be already build_progress called
 *               before using this function.
 * @param seeds: A list of tuple, that tuple is (x, y) of floodfill
-*               seed points in PROGRESS coordinate.
-* @param min_x, min_y, max_x, max_y : Surface border within tile, in PROGRESS coordinate.
+*               seed points in PYRAMID coordinate.
+* @param min_x, min_y, max_x, max_y : Surface border within tile, in PYRAMID coordinate.
 * @param level : The target progress level.
 * @return desc_of_return
 * @detail
 * Used for floodfill tool, to implement gap-closing functionality.
-* This is not exactly same as close-and-fill.
-*
 */
 PyObject *
-progfill_flood_fill (Flagtile *tile, /* target flagtile object */
-                     PyObject *seeds, /* List of 2-tuples */
-                     int min_x, int min_y, int max_x, int max_y,
-                     int level)
+pyramid_flood_fill (Flagtile *tile, /* target flagtile object */
+                    PyObject *seeds, /* List of 2-tuples */
+                    int min_x, int min_y, int max_x, int max_y,
+                    int level)
 {
     
     // XXX Code duplication most parts from fill.cpp
@@ -1946,8 +1944,8 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
         y = MAX(0, MIN(y, tile_size-1));
         uint8_t pix = tile->get(level, x, y);
         if (pix == PIXEL_AREA) {
-            progfill_point *seed_pt = (progfill_point*)
-                                          malloc(sizeof(progfill_point));
+            pyramid_point *seed_pt = (pyramid_point*)
+                                          malloc(sizeof(pyramid_point));
             seed_pt->x = x;
             seed_pt->y = y;
             g_queue_push_tail(queue, seed_pt);
@@ -1964,7 +1962,7 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
         
         tile->fill(PIXEL_FILLED);
         
-        progfill_point *pos = (progfill_point*) g_queue_pop_head(queue);
+        pyramid_point *pos = (pyramid_point*) g_queue_pop_head(queue);
         PyObject* result = result_w;
         int dx = tile_size - 1;
 
@@ -2006,7 +2004,7 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
     else {
         // Ordinary flood-fill
         while (! g_queue_is_empty(queue)) {
-            progfill_point *pos = (progfill_point*) g_queue_pop_head(queue);
+            pyramid_point *pos = (pyramid_point*) g_queue_pop_head(queue);
             int x0 = pos->x;
             int y = pos->y;
             free(pos);
@@ -2042,8 +2040,8 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
                         if (pix_above == PIXEL_AREA) {
                             if (look_above) {
                                 // Enqueue the pixel to the north
-                                progfill_point *p = (progfill_point *) malloc(
-                                                        sizeof(progfill_point)
+                                pyramid_point *p = (pyramid_point *) malloc(
+                                                        sizeof(pyramid_point)
                                                       );
                                 p->x = x;
                                 p->y = y-1;
@@ -2070,8 +2068,8 @@ progfill_flood_fill (Flagtile *tile, /* target flagtile object */
                         if (pix_below == PIXEL_AREA) {
                             if (look_below) {
                                 // Enqueue the pixel to the South
-                                progfill_point *p = (progfill_point *) malloc(
-                                                        sizeof(progfill_point)
+                                pyramid_point *p = (pyramid_point *) malloc(
+                                                        sizeof(pyramid_point)
                                                       );
                                 p->x = x;
                                 p->y = y+1;

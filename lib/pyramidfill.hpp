@@ -333,10 +333,11 @@ assert(ct != NULL);
     void progress_tile(const int level, const bool expand_outside);
 
     // flood_fill method. 
-    // This should not be called from Python codes.
+    // This should(or, could) not be called from Python codes.
     // but might be called from other C++ worker classes.
     // So this must be public method.
-    // From python, use progfloodfill function of tiledsurface.py.
+    // To use flood-fill with pyramid-gap-closing feature
+    // from python, use pyramidfloodfill function of tiledsurface.py.
     // XXX We might use C++ friend keyword for this...
     void flood_fill(const int sx, const int sy, FillWorker *w);
     
@@ -394,7 +395,7 @@ class ClosefillSurface : public FlagtileSurface
 private:
 
     //// Line drawing & polygon
-    progfill_point *m_nodes;
+    pyramid_point *m_nodes;
     int m_cur_node;
     int m_node_cnt;
     
@@ -445,7 +446,7 @@ public:
 
 /* LassofillSurface for Lasso fill.
  *
- * In progfill.cpp, `Lasso fill` is done as
+ * In pyramidfill.cpp, `Lasso fill` is done as
  * `Mask filled polygon with most-appeared
  * color area, and replace it with foreground color`.
  *
@@ -480,13 +481,13 @@ public:
 
 //// functions
 
-/* floodfill of Progressive_fill version. 
+/* floodfill of Pyramid_fill version. 
  * This would be used from lib/tiledsurface.py
  */
 PyObject *
-progfill_flood_fill(Flagtile *tile, /* output HxWx4 array of uint16 */
-                    PyObject *seeds, /* List of 2-tuples */
-                    int min_x, int min_y, int max_x, int max_y,
-                    int level);
+pyramid_flood_fill(Flagtile *tile, /* output HxWx4 array of uint16 */
+                   PyObject *seeds, /* List of 2-tuples */
+                   int min_x, int min_y, int max_x, int max_y,
+                   int level);
 
 #endif

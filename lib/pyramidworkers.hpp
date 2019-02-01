@@ -31,7 +31,7 @@ public:
     DilateKernel(FlagtileSurface *surf, const uint8_t targ_pixel)
         : KernelWorker(surf), m_targ_pixel(targ_pixel) { }
 
-    virtual bool start(Flagtile *targ, const int sx, const int sy) 
+    virtual bool start(Flagtile * const targ, const int sx, const int sy) 
     {
         // We cannot use parent class method for DilateKernel.
         // Because this kernel accepts NULL tile.
@@ -49,7 +49,7 @@ public:
         return true;
     }
 
-    virtual void step(Flagtile *targ, 
+    virtual void step(Flagtile * const targ, 
                       const int x, const int y,
                       const int sx, const int sy) 
     {
@@ -72,9 +72,11 @@ public:
                     if (targ == NULL) {
                         // We need to generate(or get) a new tile for NULL target.
                         int tile_size = PYRAMID_TILE_SIZE(0);
-                        targ = m_surf->get_tile(sx/tile_size, sy/tile_size, true);
+                        Flagtile *newtarg = m_surf->get_tile(sx/tile_size, sy/tile_size, true);
+                        newtarg->replace(0, x, y, m_targ_pixel | FLAG_WORK);
                     }
-                    targ->replace(0, x, y, m_targ_pixel | FLAG_WORK);
+                    else 
+                        targ->replace(0, x, y, m_targ_pixel | FLAG_WORK);
                     return;
                 }
             }
@@ -109,11 +111,11 @@ public:
         m_new_pixel = new_pixel;
     }
 
-    virtual bool start(Flagtile *targ, const int sx, const int sy) 
+    virtual bool start(Flagtile * const targ, const int sx, const int sy) 
     {
         if (targ == NULL && m_targ_pixel == PIXEL_EMPTY) {
-            targ = m_surf->get_tile_from_pixel(0, sx, sy, true);
-            targ->fill(m_new_pixel);
+            Flagtile *newtarg = m_surf->get_tile_from_pixel(0, sx, sy, true);
+            newtarg->fill(m_new_pixel);
             return false;
         }
         else if (KernelWorker::start(targ, sx, sy)) {
@@ -126,7 +128,7 @@ public:
         return false;
     }
 
-    virtual void step(Flagtile *targ, 
+    virtual void step(Flagtile * const targ, 
                       const int x, const int y,
                       const int sx, const int sy) 
     {
@@ -159,7 +161,7 @@ public:
     // This kernel does not use FLAG_WORK.
     virtual void finalize() { } 
     
-    virtual bool start(Flagtile *targ, const int sx, const int sy) 
+    virtual bool start(Flagtile * const targ, const int sx, const int sy) 
     {
         if (KernelWorker::start(targ, sx, sy)) {
             // Target tile 
@@ -200,7 +202,7 @@ public:
         return false;
     }
 
-    virtual void step(Flagtile *targ, 
+    virtual void step(Flagtile * const targ, 
                       const int x, const int y,
                       const int sx, const int sy) 
     {
@@ -285,7 +287,7 @@ protected:
     
     // Dedicated wrapper method to get pixel with direction.
     virtual uint8_t get_pixel_with_direction(const int x, const int y, 
-                                     const int direction) 
+                                             const int direction) 
     {
         uint8_t pix = m_surf->get_pixel(m_level,
                                         x + xoffset[direction],
@@ -468,7 +470,7 @@ public:
     // so there is no need to clear (dirty) flags.
     virtual void finalize() { }
 
-    virtual bool start(Flagtile *targ, const int sx, const int sy) 
+    virtual bool start(Flagtile * const targ, const int sx, const int sy) 
     {
         // This kernel accepts NULL tile.
         if(targ == NULL) {
@@ -493,7 +495,7 @@ public:
     
     // Caution: You should call this method with
     // `pyramid level` coordinate.
-    virtual void step(Flagtile *targ, 
+    virtual void step(Flagtile * const targ, 
                       const int x, const int y,
                       const int sx, const int sy) 
     {
@@ -551,7 +553,7 @@ public:
         return (pix & PIXEL_MASK) == m_target;
     }
 
-    virtual void step(Flagtile *tile,
+    virtual void step(Flagtile * const tile,
                       const int x, const int y,
                       const int sx, const int sy) 
     {
@@ -578,7 +580,7 @@ public:
         return (pix & PIXEL_MASK) == PIXEL_FILLED;
     }
 
-    virtual void step(Flagtile *tile,
+    virtual void step(Flagtile * const tile,
                       const int x, const int y,
                       const int sx, const int sy) 
     {
@@ -674,7 +676,7 @@ public:
 
     void set_target_pixel(uint8_t pixel) { m_targ_pixel = pixel; }
 
-    virtual bool start(Flagtile *targ, const int sx, const int sy) 
+    virtual bool start(Flagtile * const targ, const int sx, const int sy) 
     {
 #ifdef HEAVY_DEBUG
             assert(m_queue != NULL);
@@ -690,7 +692,7 @@ public:
         return false;
     }
 
-    virtual void step(Flagtile *targ, 
+    virtual void step(Flagtile * const targ, 
                       const int x, const int y,
                       const int sx, const int sy) 
     {
@@ -797,7 +799,7 @@ public:
         return (pix & PIXEL_MASK) == PIXEL_AREA;
     }
 
-    virtual void step(Flagtile *tile,
+    virtual void step(Flagtile * const tile,
                       const int x, const int y,
                       const int sx, const int sy) 
     {
@@ -864,7 +866,7 @@ public:
         :   CountPerimeterKernel(surf, queue) 
     { }
 
-    virtual bool start(Flagtile *targ, const int sx, const int sy) 
+    virtual bool start(Flagtile * const targ, const int sx, const int sy) 
     {
         // Not baseclass `CountPerimeterKernel::start`,
         // call base-baseclass `KernelWorker::start`.
@@ -885,7 +887,7 @@ public:
         return false;
     }
 
-    virtual void step(Flagtile *targ, 
+    virtual void step(Flagtile * const targ, 
                       const int x, const int y,
                       const int sx, const int sy) 
     {

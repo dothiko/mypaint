@@ -1201,7 +1201,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     Keyword args:
     :param dilate_size: dilation size
     :type dilate_size: int, maximum MYPAINT_TILE_SIZE/2
-    :param progress_level: progress-pixel-level. a.k.a gap closing level. 
+    :param pyramid_level: progress-pixel-level. a.k.a gap closing level. 
     :type gap_level: int [0, 6]
     :param do_antialias: Draw psuedo anti-aliasing pixels around filled area.
     :type do_antialias: boolean
@@ -1244,7 +1244,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
 
     # Setting keyword options here.
     dilation_size = kwargs.get('dilation_size', 0) 
-    progress_level = kwargs.get('progress_level', 0)
+    pyramid_level = kwargs.get('pyramid_level', 0)
     erase_pixel = kwargs.get('erase_pixel', False)
     anti_alias = kwargs.get('anti_alias', True)
     alpha_threshold = kwargs.get('alpha_threshold', 0.2)
@@ -1253,15 +1253,15 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     # All values setup end. 
     # Adjust pixel coordinate into progress-coordinate.
     print("original px/py %s" % str((min_px, min_py, max_px, max_py, px, py)))
-    if (progress_level > 0):
-        min_px >>= progress_level
-        min_py >>= progress_level
-        max_px >>= progress_level
-        max_py >>= progress_level
-        px >>= progress_level
-        py >>= progress_level
+    if (pyramid_level > 0):
+        min_px >>= pyramid_level
+        min_py >>= pyramid_level
+        max_px >>= pyramid_level
+        max_py >>= pyramid_level
+        px >>= pyramid_level
+        py >>= pyramid_level
         MAX_PROGRESS_LEVEL = 6
-        MN = 1 << (MAX_PROGRESS_LEVEL - progress_level) # Mipmap tile-size
+        MN = 1 << (MAX_PROGRESS_LEVEL - pyramid_level) # Mipmap tile-size
     else:
         MN = TILE_SIZE
 
@@ -1273,7 +1273,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     ]
     # XXX DEBUG START
     print("tolerance %.6f" % tolerance)
-    print("progress_level %s" % str(progress_level))
+    print("pyramid_level %s" % str(pyramid_level))
     print("dilation %s" % str(dilation_size))
     print("px/py %s" % str((min_px, min_py, max_px, max_py, px, py)))
     print("tx/ty limits %s" % str((min_tx, min_ty, max_tx, max_ty)))
@@ -1332,15 +1332,15 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
                     alpha_threshold,
                     False
                 )
-                if progress_level > 0:
-                    flag_tile.build_progress_seed(progress_level)
+                if pyramid_level > 0:
+                    flag_tile.build_progress_seed(pyramid_level)
                 filled[(tx, ty)] = flag_tile
                 #print('flagtile %d,%d generated' % (tx, ty))
         if flag_tile is not None:
-            overflows = mypaintlib.progfill_flood_fill(
+            overflows = mypaintlib.pyramid_flood_fill(
                 flag_tile, seeds,
                 min_x, min_y, max_x, max_y,
-                progress_level
+                pyramid_level
             )
             if overflows is not None:
                 seeds_n, seeds_e, seeds_s, seeds_w = overflows
@@ -1362,7 +1362,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     # FloodfillSurface increace reference counter of `filled` dictionary.
     # `filled` dictionary used to just calculate bbox of surface in 
     # constructor.
-    ft = mypaintlib.FloodfillSurface(filled, progress_level)
+    ft = mypaintlib.FloodfillSurface(filled, pyramid_level)
     ox = ft.get_origin_x()
     oy = ft.get_origin_y()
     for tx, ty in filled:
@@ -1377,7 +1377,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
             color,
             tolerance, 
             dilation_size,
-            progress_level, 
+            pyramid_level, 
             x, y,
             srcdict,
             bbox,
@@ -1386,7 +1386,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     # XXX DEBUG END
     
     # Progress pixels.
-    for i in range(progress_level, 0, -1):
+    for i in range(pyramid_level, 0, -1):
         ft.progress_tile(i, True)
 
     # Finalize pixels.
@@ -1402,7 +1402,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     # XXX DEBUG START
     print("end tile")
     if kwargs.get('show_flag', False):
-        _dbg_show_flag(ft, progress_level)
+        _dbg_show_flag(ft, pyramid_level)
     print("--- finalize end ---")
     # XXX DEBUG END
 

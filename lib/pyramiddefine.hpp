@@ -27,7 +27,7 @@
 // Force positive modulo against even negative number.
 // C/C++ would produce platform-dependent result
 // with modulo against negative number.
-// This macro is used in progfill.cpp/hpp
+// This macro is used in pyramid.cpp/hpp
 #define POSITIVE_MOD(a, b) (((a) % (b) + (b)) % (b))
 
 // MAX pyramid level. 6 means maximum 2^6 == 64 pixel.
@@ -178,7 +178,7 @@ protected:
     
     // process only outerrim ridges of a tile.
     // use for a tile which is filled some specific value.
-    void process_only_ridge(Flagtile *targ, const int sx, const int sy)
+    void process_only_ridge(Flagtile * const targ, const int sx, const int sy)
     {
         int ridge = PYRAMID_TILE_SIZE(m_level);
 
@@ -206,7 +206,7 @@ public:
     
     // `start` called at the starting point of tile processing.
     // All processing cancelled when this return false.
-    virtual bool start(Flagtile *tile, const int sx, const int sy) 
+    virtual bool start(Flagtile * const tile, const int sx, const int sy) 
     {
         return true; // As a default, always return true.
     }
@@ -220,7 +220,7 @@ public:
     * @detail 
     * Workers should implement this method.
     */    
-    virtual void step(Flagtile* tile, 
+    virtual void step(Flagtile * const tile, 
                       const int x, const int y,
                       const int sx, const int sy) { }
     
@@ -272,14 +272,14 @@ protected:
     
 
 public:
-    // Defined at lib/progfill.cpp
+    // Defined at lib/pyramid.cpp
     KernelWorker(FlagtileSurface *surf)
         : TileWorker(surf) { }
 
     virtual void set_target_level(const int level);
 
-    virtual bool start(Flagtile *tile, const int sx, const int sy);
-    virtual void end(Flagtile *tile);
+    virtual bool start(Flagtile * const tile, const int sx, const int sy);
+    virtual void end(Flagtile * const tile);
     
     virtual void finalize();
 };
@@ -393,18 +393,18 @@ public:
 };
 
 // XXX Currently almost same as floodfill_point of fill.cpp,
-// But progfill_point member might be changed in future.
+// But pyramid_point member might be changed in future.
 typedef struct {
     int x;
     int y;
-} progfill_point;
+} pyramid_point;
 
-// progfill_tilepoint used for flood-fill operation of FlagtileSurface.
+// pyramid_tilepoint used for flood-fill operation of FlagtileSurface.
 typedef struct {
     int x; // Pixel location of tile 
     int y;
     int tx; // Tile location
     int ty;
-} progfill_tilepoint;
+} pyramid_tilepoint;
 
 #endif
