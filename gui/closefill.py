@@ -739,32 +739,41 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         if self.phase == _Phase.CAPTURE:
             opts = self.get_options_widget()
 
-            if not self.nodes:
-                return
-            node = self._last_event_node
-            # TODO: maybe rewrite the last node here so it's the right
-            # TODO: distance from the end?
-            if self.nodes[-1] is not node:
-                self.nodes.append(node)
+            if opts.fill_method != _FillMethod.FLOOD_FILL: 
+                node = self._last_event_node
+                if self.nodes[-1] is not node:
+                    self.nodes.append(node)
 
-            if (len(self.nodes) > 2
-                    and (opts.fill_immidiately
-                        or opts.fill_method == _FillMethod.LASSO_FILL)):
+                if len(self.nodes) >= 3:
+                    if (opts.fill_immidiately
+                            or opts.fill_method == _FillMethod.LASSO_FILL):
+                        # Fill just now without pressing Accept button.
+                        self.do_fill_operation(
+                            None,
+                            _FillMethod.LASSO_FILL
+                        )
+                        self.nodes = []
+                else:
+                    # If node count is less than 3, we cannot draw
+                    # any polygon, so just discard current nodes.
+                    self.nodes = []
+
+                self._reset_capture_data()
+                self._reset_adjust_data()
+                if len(self.nodes) > 1:
+                    self.phase = _Phase.ADJUST
+                    self._queue_redraw_all_nodes()
+                    self._queue_draw_buttons()
+                else:
+                    self._reset_nodes()
+                    tdw.queue_draw()
+            else:
                 self.do_fill_operation(
                     None,
-                    self.fill_method_option
+                    _FillMethod.FLOOD_FILL
                 )
                 self.nodes = []
 
-            self._reset_capture_data()
-            self._reset_adjust_data()
-            if len(self.nodes) > 1:
-                self.phase = _Phase.ADJUST
-                self._queue_redraw_all_nodes()
-                self._queue_draw_buttons()
-            else:
-                self._reset_nodes()
-                tdw.queue_draw()
         elif self.phase == _Phase.ADJUST:
             self._dragged_node_start_pos = None
             self._queue_draw_buttons()
@@ -840,7 +849,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                 make_new_layer=make_new_layer,
                 # keyword arguments
                 dilation_size=opts.dilation_size,
-                progress_level=opts.gap_level,
+                pyramid_level=opts.gap_level,
                 erase_pixel=erase_pixel,
                 fill_all_holes=opts.fill_all_holes,
                 alpha_threshold=opts.alpha_threshold,
@@ -859,7 +868,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                 opts.dilation_size,
                 # kwds params
                 targ_color_pos=targ_color_pos,
-                progress_level=opts.gap_level,
+                pyramid_level=opts.gap_level,
                 erase_pixel=erase_pixel,
                 fill_all_holes=opts.fill_all_holes,
                 alpha_threshold=opts.alpha_threshold,

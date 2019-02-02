@@ -7,8 +7,8 @@
  * (at your option) any later version.
  */
 
-#ifndef PROGFILL_HPP
-#define PROGFILL_HPP
+#ifndef PYRAMIDFILL_HPP
+#define PYRAMIDFILL_HPP
 
 #include <Python.h>
 #include "pyramiddefine.hpp"
@@ -129,7 +129,7 @@ public:
             cnt = m_pixcnt[PIXEL_EMPTY] + m_pixcnt[PIXEL_OUTSIDE];
         else 
             cnt = m_pixcnt[pix & PIXEL_MASK];
-        return cnt == (TILE_SIZE * TILE_SIZE);
+        return cnt == (MYPAINT_TILE_SIZE * MYPAINT_TILE_SIZE);
     }
     
     inline int get_pixel_count(const uint8_t pix) {
@@ -268,8 +268,10 @@ public:
         // MUST not exceed 64 pixel away(from original tiles).
         // Thus, when sx or sy is lower than zero, it is empty tile.
         if(raw_tx >= m_width || sx < 0 
-                || raw_ty >= m_height || sy < 0)
+                || raw_ty >= m_height || sy < 0) {
+            //printf("MIGHT ERROR:%d, %d / %d, %d - in (%d,%d)\n", sx, sy, raw_tx, raw_ty, m_width, m_height);
             return NULL;
+        }
         
         // above raw_tx/ty is zero-based, 
         // adjusted by origin already. 
@@ -347,7 +349,14 @@ assert(ct != NULL);
 
     // Utility Methods
     void convert_pixel(const int level, const int targ_pixel, const int new_pixel); 
-    void remove_small_areas(int level, double threshold, int size_threshold=0);
+
+    // Identify pixels (and reject or accept) 
+    // by how many pixels touches `outside` pixels.
+    void identify_areas(const int level, const double threshold, 
+                        const int targ_pixel, 
+                        const int accepted_pixel, 
+                        const int rejected_pixel,
+                        int size_threshold=0); // might be rewritten at inside of this method. 
     void dilate(const int pixel, const int dilation_size);
     
     // Finalize related methods.
@@ -382,10 +391,10 @@ private:
 
 public:
 
-    FloodfillSurface(PyObject* tiledict, const int start_level);
+    FloodfillSurface(PyObject *tiledict, const int start_level);
     virtual ~FloodfillSurface();
 
-    void borrow_tile(const int tx, const int ty, Flagtile* tile);
+    void borrow_tile(const int tx, const int ty, Flagtile *tile);
 };
 
 /* ClosefillSurface for close and fill.
@@ -440,7 +449,7 @@ public:
     virtual ~ClosefillSurface();
     
     // Decide outside and inside pixels.
-    void decide_area(const int level);
+    void decide_outside(const int level);
 
 };
 
@@ -461,7 +470,7 @@ public:
     * @param ox, oy: Origin of tiles, in mypaint tiles. not pixels. 
     * @param w, h: Surface width and height, in mypaint tiles. not pixels.
     */
-    LassofillSurface(PyObject* node_list);
+    LassofillSurface(PyObject *node_list);
     virtual ~LassofillSurface();
 };
 
@@ -473,7 +482,7 @@ public:
 class CutprotrudeSurface : public FloodfillSurface
 {
 public:
-    CutprotrudeSurface(PyObject* tiledict, const int start_level); 
+    CutprotrudeSurface(PyObject *tiledict, const int start_level); 
     virtual ~CutprotrudeSurface();
 
     void remove_overwrap_contour();

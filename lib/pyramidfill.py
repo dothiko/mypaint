@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2017 by dothiko <dothiko@gmail.com>
+# Copyright (C) 2019 by dothiko <dothiko@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -7,10 +7,11 @@
 # (at your option) any later version.
 
 import lib.mypaintlib
+import lib.surface
 
 import json
 
-_TILE_SIZE = lib.mypaintlib.TILE_SIZE 
+N = lib.mypaintlib.TILE_SIZE 
 
 class _PIXEL:
     """Enumeration for pixel values.
@@ -19,6 +20,7 @@ class _PIXEL:
     FILLED = lib.mypaintlib.Flagtile.PIXEL_FILLED_VALUE
     CONTOUR = lib.mypaintlib.Flagtile.PIXEL_CONTOUR_VALUE
     EMPTY = lib.mypaintlib.Flagtile.PIXEL_EMPTY_VALUE
+    OUTSIDE = lib.mypaintlib.Flagtile.PIXEL_OUTSIDE_VALUE
     OVERWRAP = lib.mypaintlib.Flagtile.PIXEL_OVERWRAP_VALUE
 
 def _convert_result(layer, ft, color):
@@ -104,10 +106,10 @@ def close_fill(targ, src, nodes, targ_pos, level, color,
     targ_r = targ_g = targ_b = targ_a = 0
     if targ_pos is not None:
         px, py = targ_pos
-        tx = px // _TILE_SIZE 
-        ty = py // _TILE_SIZE 
-        px = int(px % _TILE_SIZE)
-        py = int(py % _TILE_SIZE)
+        tx = px // N 
+        ty = py // N 
+        px = int(px % N)
+        py = int(py % N)
         with src.tile_request(tx, ty, readonly=True) as sample:
             targ_r, targ_g, targ_b, targ_a = [int(c) for c in sample[py][px]]
 
@@ -133,15 +135,20 @@ def close_fill(targ, src, nodes, targ_pos, level, color,
     # Build pyramid
     ft.build_progress_seed()
 
-    # Deciding filling area
-    ft.decide_area(level)
+    # Deciding outside of filling area
+    ft.decide_outside(level)
       
     # Then, start progressing tiles.
     for i in range(level, 0, -1):
         ft.progress_tile(i, True)
         # For early culling:
         if i == early_culling_level:
-            ft.remove_small_areas(i, 0.3) # 0.3(30%) is practical value.
+            ft.identify_areas(
+                i, 0.3, # 0.3(30%) is practical value.
+                _PIXEL.AREA,
+                _PIXEL.AREA,
+                _PIXEL.OUTSIDE
+            )
 
     # XXX Debug/profiling code
     if show_flag:
@@ -152,11 +159,13 @@ def close_fill(targ, src, nodes, targ_pos, level, color,
         )
     #XXX debug code end
 
-    # Finalize progressive fill.
-    if level >= 1:
-        ft.remove_small_areas(0, 0.1) # 0.1(10%) is practical value.
-        # TODO `percentage` should be remaked as relative to
-        # progress level.
+    # Finalize fill result.
+    ft.identify_areas(
+        0, 0.1, # 0.1(10%) is practical value.
+        _PIXEL.AREA,
+        _PIXEL.FILLED,
+        _PIXEL.AREA
+    )
 
     if dilation > 0:
         ft.dilate(_PIXEL.FILLED, dilation)
@@ -220,15 +229,15 @@ def lasso_fill(targ, src, nodes, targ_pos, level, color,
     for cn in self.nodes:
         cx = int(cn.x) 
         cy = int(cn.y)
-        tx = cx // _TILE_SIZE
-        ty = cy // _TILE_SIZE
+        tx = cx // N
+        ty = cy // N
         if cx != px or cy != py:
             px = cx
             py = cy
             if lt.tile_exists(tx-ox, ty-oy):
                 with src.tile_request(tx, ty, readonly=True) as src_tile:
-                    cx %= _TILE_SIZE
-                    cy %= _TILE_SIZE
+                    cx %= N
+                    cy %= N
                     key = tuple([int(c) for c in src_tile[cy][cx]])
                     # Only opaque color should be count.
                     if key[3] != 0:
@@ -360,14 +369,17 @@ def cut_protrude(layers,
 
     dbg_show('post-seed', level=level) # XXX Debug/profiling code
 
-    # We need Remove (i.e. convert to PIXEL_AREA again) `Protruding` area, 
+    # We need decide(i.e. convert to PIXEL_FILLED) `not protruding` area, 
     # in top level.
     # Because, in this level, We can separate some protruding areas
-    # which are actually connected with main pixel area with small holes.
-    # 
-    # That area would match all of following conditions,
-    #  * It is surrounded by many of invalid pixels.
-    ft.remove_small_areas(level, 0.2) # XXX 0.2(20%) is practical value.
+    # which are actually connected with accepted-filled area at 
+    # pyramid level 0.
+    ft.identify_areas(
+        level, 0.2,
+        _PIXEL_AREA,
+        _PIXEL_FILLED,
+        _PIXEL_AREA
+    )
 
     dbg_show('post-remove', level=level) # XXX Debug/profiling code
 
@@ -380,7 +392,13 @@ def cut_protrude(layers,
     # Protruding pixels are remained as PIXEL_AREA.
     # That PIXEL_AREA areas are erased from mypaint colortile later.
 
-    ft.remove_small_areas(0, 0.1, -1) # 0.1(10%) is practical value.
+    ft.identify_areas(
+        0, 0.1,
+        _PIXEL_AREA,
+        _PIXEL_FILLED,
+        _PIXEL_AREA
+    )
+
     # size_threshold -1 means `remove even maximum area`
     # Because actual maximum area already ensured.
     # All of opened area should be removed, even if it is largest one.
@@ -414,7 +432,7 @@ def cut_protrude(layers,
 #--------------------------------------- 
 # XXX For debug 
 
-def _dbg_show_flag(self, ft, method, level=0, title=None):
+def _dbg_show_flag(ft, method, level=0, title=None):
     # XXX debug method
     
     # From lib/progfilldefine.hpp
@@ -492,7 +510,7 @@ def _dbg_show_flag(self, ft, method, level=0, title=None):
     newimg.save('/tmp/closefill_check.jpg')
     newimg.show()
 
-def _dbg_tile_output(info, ox, oy, tw, th, src):
+def _dbg_tile_output(info, ox, oy, tw, th, src, prefix="tiles"):
     # XXX debug method
 
     print("# tile writing enabled")
@@ -502,9 +520,9 @@ def _dbg_tile_output(info, ox, oy, tw, th, src):
     import tempfile
     import time
     lt = time.localtime()
-    outputdir = tempfile.mkdtemp(
-        prefix="tiles_%02d-%02d_%02d,%02d,%02d_" % lt[1:6],
-    )
+    dates = "%02d-%02d_%02d,%02d,%02d_" % lt[1:6],
+    prefix = "%s_%s" % (prefix, dates)
+    outputdir = tempfile.mkdtemp(prefix=prefix)
    #info = {}
    #if hasattr(self, 'bbox'):
    #    info['bbox'] = self.bbox
@@ -513,18 +531,24 @@ def _dbg_tile_output(info, ox, oy, tw, th, src):
    #info['tolerance'] = self.tolerance
    #info['level'] = self.pyramid_level
    #info['erase_pixel'] = self.erase_pixel
-    info['tilesurf_dimension'] = (ox, oy, tw, th) # Add this information
    #info['fill_all_holes'] = self.fill_all_holes
 
    #targ_pos = self.targ_color_pos
    #if targ_pos is not None:
    #    info['targ_color_pos'] = self.targ_color_pos
 
+    info['tilesurf_dimension'] = (ox, oy, tw, th) # Add this information
+
+    # Modify bbox when it is Rect instance.
+    bbox = info.get('bbox', None)
+    import lib.helpers as helpers
+    if bbox and isinstance(bbox, helpers.Rect):
+        info['bbox'] = (bbox.x, bbox.y, bbox.w, bbox.h)
+
     for ty in range(oy, th+oy):
         for tx in range(ox, tw+ox):
             with src.tile_request(tx, ty, readonly=True) as src_tile:
-                if self.tile_output:
-                    np.save('%s/tile_%d_%d.npy' % (outputdir, tx, ty), src_tile)
+                np.save('%s/tile_%d_%d.npy' % (outputdir, tx, ty), src_tile)
 
     with open("%s/info" % outputdir, 'w') as ofp:
         json.dump(info, ofp)

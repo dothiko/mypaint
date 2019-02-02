@@ -41,7 +41,7 @@
 #define PYRAMID_TILE_SIZE(l) (1 << (MAX_PYRAMID - (l)))
 #define PYRAMID_BUF_SIZE(l) (PYRAMID_TILE_SIZE(l) * PYRAMID_TILE_SIZE(l))
 
-#define TILE_SIZE MYPAINT_TILE_SIZE
+//#define TILE_SIZE MYPAINT_TILE_SIZE
 
 // Maximum Anti-Aliasing transparency level.
 #define MAX_AA_LEVEL 127

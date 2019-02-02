@@ -31,6 +31,7 @@ from errors import FileHandlingError
 import lib.fileutils
 import lib.modes
 import lib.feedback
+from lib.pyramidfill import _PIXEL # XXX For pyramid-fill
 
 logger = logging.getLogger(__name__)
 
@@ -1250,6 +1251,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     alpha_threshold = kwargs.get('alpha_threshold', 0.2)
     fill_all_holes = kwargs.get('fill_all_holes', False)
 
+
     # All values setup end. 
     # Adjust pixel coordinate into progress-coordinate.
     print("original px/py %s" % str((min_px, min_py, max_px, max_py, px, py)))
@@ -1279,25 +1281,13 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     print("tx/ty limits %s" % str((min_tx, min_ty, max_tx, max_ty)))
     print("targ color : %s" % str((targ_r, targ_g, targ_b, targ_a)))
     print("fill_all_holes : %s" % str(fill_all_holes))
+    from lib.pyramidfill import _dbg_show_flag, _dbg_tile_output
 
+    show_flag = kwargs.get('show_flag', False)
     tile_output = kwargs.get('tile_output', False)
-    if tile_output:
-        print("*** TILE OUTPUT ENABLED ***")
-        srcdict = {}  
-        # To avoid inner loop error (such error cannot output
-        # all tiles test case needed), We fetch all the tile
-        # of bbox prior to real case.
-        for ty in range(min_ty, max_ty+1):
-            for tx in range(min_tx, max_tx+1):
-                with src.tile_request(tx, ty, readonly=True) as src_tile:
-                    if tile_output:
-                        srcdict[(tx, ty)] = src_tile 
     # XXX DEBUG END
 
-    # Important: Same as PIXEL_AREA, from lib/progfilldefine.hpp
-    PIXEL_AREA = 0x02
-    PIXEL_FILLED = 0x03
-    initial_pixel = PIXEL_AREA
+    initial_pixel = _PIXEL.AREA
     
     while len(tileq) > 0:
         (tx, ty), seeds = tileq.pop(0)
@@ -1370,18 +1360,42 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
         fty = ty - oy 
         ft.borrow_tile(ftx, fty, filled[(tx, ty)])
 
+    # Early rejection of outside pixels.
+    # This is important, because some pixel areas might be
+    # connected at lower level.
+    if pyramid_level > 0:
+        ft.identify_areas(
+            pyramid_level, 0.1,
+            _PIXEL.AREA,
+            _PIXEL.AREA,
+            _PIXEL.OUTSIDE
+        )
+
     # XXX DEBUG START
-    if tile_output:
-        _dbg_tile_output(
+    if show_flag:
+        _dbg_show_flag(
             ft, 
-            color,
-            tolerance, 
-            dilation_size,
+            "area, filled, contour, outside", 
             pyramid_level, 
-            x, y,
-            srcdict,
-            bbox,
-            erase_pixel
+            title="just filled level"
+        )
+
+    if tile_output:
+        info = {}
+        info['color'] = color
+        info['bbox'] = bbox
+        info['tolerance'] = tolerance
+        info['level'] = pyramid_level
+        info['targ_color_pos'] = [x, y]
+        info['erase_pixel'] = erase_pixel
+        info['dilation_size'] = dilation_size
+        _dbg_tile_output(
+            info,
+            ox, oy,
+            ft.get_width(),
+            ft.get_height(),
+            src,
+            prefix="flood_tiles"
         )
     # XXX DEBUG END
     
@@ -1389,11 +1403,23 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     for i in range(pyramid_level, 0, -1):
         ft.progress_tile(i, True)
 
+    if show_flag:
+        _dbg_show_flag(ft, "area, filled, contour", 0, title="progressed")
+
     # Finalize pixels.
     # The processing sequence MUST be : 
     # removing needless areas -> dilation -> finally, draw anti-aliasing pixels.
-    ft.remove_small_areas()
-    ft.dilate(int(dilation_size))
+    if pyramid_level > 0:
+        ft.identify_areas(
+            0, 0.1,
+            _PIXEL.AREA,
+            _PIXEL.FILLED,
+            _PIXEL.AREA
+        )
+
+    if show_flag:
+        _dbg_show_flag(ft, "area, filled, contour", 0, title="removed")
+    ft.dilate(_PIXEL.FILLED, dilation_size)
     if fill_all_holes:
         ft.fill_holes()
     if anti_alias:
@@ -1401,8 +1427,8 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
             
     # XXX DEBUG START
     print("end tile")
-    if kwargs.get('show_flag', False):
-        _dbg_show_flag(ft, pyramid_level)
+    if show_flag:
+        _dbg_show_flag(ft, "filled", 0, title="result")
     print("--- finalize end ---")
     # XXX DEBUG END
 
@@ -1419,7 +1445,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
                 ty = fty + oy
                 with dst.tile_request(tx, ty, readonly=False) as dst_tile:
                     if erase_pixel:
-                        flag_tile.convert_to_transparent(dst_tile, PIXEL_FILLED)
+                        flag_tile.convert_to_transparent(dst_tile, _PIXEL.FILLED)
                     else:
                         flag_tile.convert_to_color(
                             dst_tile,
@@ -1430,64 +1456,6 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
 
     bbox = lib.surface.get_tiles_bbox(filled)
     dst.notify_observers(*bbox)
-
-# XXX DEBUG FUNC
-def _dbg_tile_output(ft, color, tolerance, dilation_size, gap_close_level, x, y, src_dict, bbox, erase_pixel):
-    assert(tolerance >= 0.0)
-    assert(tolerance <= 1.0)
-    assert(gap_close_level >= 0)
-    assert(gap_close_level <= 6)
-    assert(dilation_size >= 0)
-    assert(dilation_size < TILE_SIZE)
-    print("# tile writing enabled")
-    import os
-    import numpy as np
-    import json
-    outputdir = '/tmp/flood_tiles'
-    if os.path.exists(outputdir):
-        import shutil
-        shutil.rmtree(outputdir)
-    if not os.path.exists(outputdir):
-        os.mkdir(outputdir)
-    info = {}
-    ox = ft.get_origin_x()
-    oy = ft.get_origin_y()
-    tw = ft.get_width()
-    th = ft.get_height()
-
-    # Convert bbox(Rect object) into tuple.
-    bbx, bby, bbw, bbh = bbox
-    bbox = (bbx, bby, bbw, bbh)
-
-    info['color'] = color
-    info['bbox'] = bbox
-    info['tolerance'] = tolerance
-    info['level'] = gap_close_level
-    info['targ_color_pos'] = [x, y]
-    info['erase_pixel'] = erase_pixel
-    info['dilation_size'] = dilation_size
-
-    for (tx, ty), src_tile in src_dict.iteritems():
-        np.save('%s/tile_%d_%d.npy' % (outputdir, tx, ty), src_tile)
-
-    with open("%s/info" % outputdir, 'w') as ofp:
-        json.dump(info, ofp)
-
-# XXX DEBUG FUNC
-def _dbg_show_flag(ft, lvl):
-    # From lib/progfilldefine.h
-    PIXEL_FILLED = 0x04
-    PIXEL_CONTOUR = 0x05
-    PIXEL_AREA = 0x01
-    npbuf = None
-    npbuf = ft.render_to_numpy(npbuf, PIXEL_FILLED, 0, 255, 255, lvl) 
-    npbuf = ft.render_to_numpy(npbuf, PIXEL_CONTOUR, 255, 0, 0, lvl) 
-    
-    print('---- rendering tiles completed')
-    from PIL import Image
-    newimg = Image.fromarray(npbuf)
-    newimg.save('/tmp/closefill_check.jpg')
-    newimg.show()
 
 class PNGFileUpdateTask (object):
     """Piecemeal callable: writes to or replaces a PNG file

@@ -20,6 +20,8 @@
 #include <math.h>
 #include <glib.h>
 
+#define TILE_SIZE MYPAINT_TILE_SIZE
+
 //// Struct definition
 
 //-----------------------------------------------------------------------------
@@ -1076,10 +1078,10 @@ FlagtileSurface::convert_pixel(const int level,
     filter_tiles((KernelWorker*)&ck);
 }
 
-//// Callbacks used from remove_small_areas
+//// Callbacks used from identify_areas
 //
 // A callback for `g_queue_foreach` function,
-// used in FlagtileSurface::remove_small_areas.
+// used in FlagtileSurface::identify_areas.
 // This callback is to get the largest pixel area perimeter.
 void __foreach_largest_cb(gpointer data, gpointer user_data)
 {
@@ -1092,26 +1094,51 @@ void __foreach_largest_cb(gpointer data, gpointer user_data)
 }
 
 /**
-* @remove_small_areas
-* Remove small areas, and fill all small holes if needed.
+* @identify_areas
+* Identify pixel areas by how many edge pixels are touching
+* `outside` pixels.
 *
 * @param threshold: The threshold value of `opened` pixels ratio of
 *                   filled area perimeter.
 *                   This value should be between 0.0 and 1.0.
 *
-* @param size_threshold: To keep area from its size.
+* @param targ_pixel: The target pixel value. CountPerimeterKernel walks inside
+*                    this pixel.
+*
+* @param accepted_pixel: When a target pixel area has less `opened` pixel ratio
+*                       than `threshold`, that area recognized as `to be accepted area`.
+*                       If targ_pixel and accepted_pixel is same, nothing happen.
+*                       Otherwise, that accepted area would be filled with
+*                       accepted_pixel value.
+*                       
+* @param rejected_pixel: When a target pixel area has greater or equal 
+*                        `opened` pixel ratio than `threshold`, that area recognized 
+*                        as `to be rejected area`.
+*                        If targ_pixel and rejected_pixel is same, nothing happen.
+*                        Otherwise, that rejected area would be filled with
+*                        rejected_pixel value.
+*
+* @param size_threshold: Optional parameter. To keep area from its size.
 *                        If 0 assigned, largest area would be keeped(as filled) 
 *                        even it is too `opened` area.
+*                        The default is 0.
 *                        If -1 assigned, every area which is `too opened`
 *                        is removed.
 *                        Otherwise, the areas which has same or larger perimeter
 *                        than threshold is keeped.
+*
 * 
 * @detail 
-* This method is to reject small needless areas by counting its perimeter. 
+* This method is to identify pixel areas whether it is useless or usable.
+* Some areas which is neighbored by too many `outside` pixels 
+* (i.e. PIXEL_OUTSIDE or PIXEL_EMPTY) are marked as useless one.
 */
 void
-FlagtileSurface::remove_small_areas(int level, double threshold, int size_threshold)
+FlagtileSurface::identify_areas(const int level, const double threshold, 
+                                const int targ_pixel, 
+                                const int accepted_pixel, 
+                                const int rejected_pixel,
+                                int size_threshold) // not const. might be rewritten. 
 {
 #ifdef HEAVY_DEBUG
     assert(threshold >= 0.0);
@@ -1127,17 +1154,16 @@ FlagtileSurface::remove_small_areas(int level, double threshold, int size_thresh
     GQueue *queue = g_queue_new();
     CountPerimeterKernel pk(this, queue);
     pk.set_target_level(level);
-    pk.set_target_pixel(PIXEL_AREA);
+    pk.set_target_pixel(targ_pixel);
     filter_tiles(&pk);
 
     // Get maximum perimeter, to decide largest main area.
     if (size_threshold == 0) {
         int max_length = 0;
         g_queue_foreach(queue, __foreach_largest_cb, &max_length);
-        size_threshold = max_length;
+        size_threshold = max_length; // Rewrite size_threshold param. so not use const.
     }
 
-    //RemoveAreaWorker ra(this);
     FloodfillWorker ra(this);
     ClearflagWalker cf(this);
 
@@ -1149,11 +1175,11 @@ FlagtileSurface::remove_small_areas(int level, double threshold, int size_thresh
         // NOTE: We cannot reject `hole` area at here because
         // That area might be multiple areas which has a composition 
         // of diagonally connected. Such areas are needed to be detected
-        // separately - i.e. we need new search for `hole` pixels.
+        // separately - i.e. we need to do new search for `hole` pixels later,
+        // in another function.
 
         if (info->clockwise==false) {
             // info->clockwise == false: i.e. it is not area, it's hole.
-            // It would be filled later,
             // Just erase walking flags for now.
             cf.set_target_pixel(PIXEL_MASK & get_pixel(level, info->sx, info->sy));
             cf.walk(info->sx, info->sy, cf.get_hand_dir(info->direction));
@@ -1161,18 +1187,33 @@ FlagtileSurface::remove_small_areas(int level, double threshold, int size_thresh
         else {
             if (info->length == 1 && level == 0) {
                 // Just a dot. Erase it.
-                replace_pixel(level, info->sx, info->sy, PIXEL_AREA); 
+                replace_pixel(level, info->sx, info->sy, rejected_pixel); 
             }
             else if (info->open_ratio > threshold 
                         && (size_threshold < 0 || info->length < size_threshold)) { 
-                cf.set_target_pixel(PIXEL_AREA);
-                cf.walk(info->sx, info->sy, info->direction);
+                // This area should be rejected.
+                if (targ_pixel == rejected_pixel) {
+                    // Just walk.
+                    cf.set_target_pixel(targ_pixel);
+                    cf.walk(info->sx, info->sy, info->direction);
+                }
+                else {
+                    ra.set_target_pixel(targ_pixel, rejected_pixel);
+                    flood_fill(info->sx, info->sy, &ra);
+                }
             }
             else {
-                // Assign this area as filled area.
+                // Assign this area as `to be accepted` area.
                 //printf("assign area %x: %d,%d - length %d, percentage %f\n", info, info->sx, info->sy, info->length, info->open_ratio);
-                ra.set_target_pixel(PIXEL_AREA, PIXEL_FILLED);
-                flood_fill(info->sx, info->sy, &ra);
+                if (targ_pixel == accepted_pixel) {
+                    // Just walk.
+                    cf.set_target_pixel(targ_pixel);
+                    cf.walk(info->sx, info->sy, info->direction);
+                }
+                else {
+                    ra.set_target_pixel(targ_pixel, accepted_pixel);
+                    flood_fill(info->sx, info->sy, &ra);
+                }
             }
         }
         delete info;
@@ -1742,7 +1783,7 @@ ClosefillSurface::scanline_fill()
 }
 
 /**
-* @decide_area
+* @decide_outside
 * Decide outside area
 *
 * @detail 
@@ -1757,10 +1798,10 @@ ClosefillSurface::scanline_fill()
 * and gradually progress(reshape) filled pixels.
 */
 void 
-ClosefillSurface::decide_area(const int level) 
+ClosefillSurface::decide_outside(const int level) 
 {
     // XXX Actually, this is a bit different version of 
-    // FlagtileSurface::remove_small_areas
+    // FlagtileSurface::identify_areas
     GQueue *queue = g_queue_new();
     CountPerimeterKernel pk(this, queue);
     pk.set_target_level(level);
@@ -1825,7 +1866,7 @@ CutprotrudeSurface::~CutprotrudeSurface()
 * Remove isolated PIXEL_OVERWRAP areas.
 *
 * @detail 
-* This method is simular to FlagtileSurface::remove_small_areas,
+* This method is simular to FlagtileSurface::identify_areas,
 * but just remove isolated (i.e. completely surrounded by invalid pixels)
 * PIXEL_OVERWRAP pixel area.
 */
