@@ -546,6 +546,11 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     alpha_threshold = kwargs.get('alpha_threshold', 0.2)
     fill_all_holes = kwargs.get('fill_all_holes', False)
 
+    if erase_pixel:
+        combine_mode = lib.mypaintlib.CombineDestinationOut
+    else:
+        combine_mode = lib.mypaintlib.CombineNormal 
+
     # All values setup end. 
     # Adjust pixel coordinate into progress-coordinate.
     MAX_PROGRESS_LEVEL = 6
@@ -769,7 +774,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
 
     _convert_result(
         dst, ft, (fill_r, fill_g, fill_b), 
-        lib.mypaintlib.CombineNormal 
+        combine_mode
     )
 
     bbox = lib.surface.get_tiles_bbox(filled)
