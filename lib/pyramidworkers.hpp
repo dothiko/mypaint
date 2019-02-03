@@ -171,13 +171,22 @@ public:
             }
             else if(targ->is_filled_with(PIXEL_AREA)) {
                 uint8_t above = targ->get(m_level, 0, 0);
-                // FILLED_AREA means 
-                // `all pixels are same,and undecided at level-0`
-                // But, at pyramiding stage, the highest pixels
-                // already decided either of `outside` or `filled`.
-                // That flag tile should have completely same pixels
-                // through the pyramid.
-                // So, fill it now (if needed).
+                // is_filled_with(PIXEL_AREA) means 
+                // `all pixels are same,and undecided, at level-0`
+                // But, it is only at level-0. 
+                // In other higher pyramid level, things might be 
+                // different.
+                //
+                // With some operations, the highest level pixels
+                // might be decided either of `outside` or `filled`.
+                // That decision cannot be limited to a part of pixels,
+                // because such operation uses flood-fill algorithm,
+                // And filled tile of PIXEL_AREA has no any
+                // border(contour) pixel. 
+                // Therefore, all pixels should be uniformly same pixel value
+                // for flood-filling such tile.
+                //
+                // So, fill it now completely (if needed).
                 switch(above) {
                     case PIXEL_OUTSIDE:
                     case PIXEL_FILLED:
@@ -191,6 +200,11 @@ public:
                         break;
 #endif
                     default:
+                        // No any pixel deciding flood-fill operation reached.
+                        // So, just process ridge. 
+                        // This might change filled state of tile
+                        // because PIXEL_OUTSIDE of neighbor tile might
+                        // erode PIXEL_AREA pixels.
                         process_only_ridge(targ, sx, sy);
                         break;
                 }
@@ -211,54 +225,72 @@ public:
         int by = y << 1;
         int beneath_level = m_level - 1;
 
-        if (above == PIXEL_OUTSIDE || above == PIXEL_FILLED || above == PIXEL_EMPTY) {
-            // Inherit above pixel, Because they cannot be generated
-            // `build pyramid seed` stage. 
-            // When there is PIXEL_CONTOUR or PIXEL_AREA, it indicates
-            // there MIGHT be some of them at level-0 pixel.
-            // But there is either of OUTSIDE,FILLED, or EMPTY,
-            // It means it is sure that there is only such pixels over
-            // level-0.
-            for(int py=by; py < by+2; py++) {
-                for(int px=bx; px < bx+2; px++) {
-                    targ->replace(beneath_level, px, py, above);
-                }
-            }
-        }
-        else {
-            uint8_t top = get_pixel_with_direction(sx, sy, 0);
-            uint8_t right = get_pixel_with_direction(sx, sy, 1);
-            uint8_t bottom = get_pixel_with_direction(sx, sy, 2);
-            uint8_t left = get_pixel_with_direction(sx, sy, 3);
+        switch(above) {
+            case PIXEL_OUTSIDE:
+            case PIXEL_FILLED:
+            case PIXEL_EMPTY:
 
-            // The param x and y is current(above) pyramid coordinate.
-            // The coordinate of level beneath should be double of them.
-            uint8_t pix_v, pix_h;
-
-            pix_v = top;
-            for(int py=by; py < by+2; py++) {
-                pix_h = left;
-                for(int px=bx; px < bx+2; px++) {
-                    uint8_t pix = targ->get(beneath_level, px, py) & PIXEL_MASK;
-                    if (pix == PIXEL_AREA) {
-                        if (pix_h <= PIXEL_OUTSIDE || pix_v <= PIXEL_OUTSIDE) {
-                            if (m_outside_expandable)
-                                targ->replace(beneath_level, px, py, PIXEL_OUTSIDE);
-                        }
-                        /*
-                        else if (pix_h == PIXEL_FILLED || pix_v == PIXEL_FILLED) {
-                            targ->replace(beneath_level, px, py, PIXEL_FILLED);
-                        }
-                        else if ((pix_h == PIXEL_CONTOUR && pix_v == PIXEL_CONTOUR)
-                                    && (pix_ih == PIXEL_FILLED || pix_iv == PIXEL_FILLED)) {
-                            targ->replace(beneath_level, px, py, PIXEL_FILLED);
-                        }
-                        */
+                // Inherit above pixel, Because they cannot be generated
+                // `build pyramid seed` stage. 
+                // When there is PIXEL_CONTOUR or PIXEL_AREA, it indicates
+                // there MIGHT be some of them at level-0 pixel.
+                // But there is either of OUTSIDE,FILLED, or EMPTY,
+                // It means it is sure that there is only such pixels over
+                // level-0.
+                for(int py=by; py < by+2; py++) {
+                    for(int px=bx; px < bx+2; px++) {
+                        targ->replace(beneath_level, px, py, above);
                     }
-                    pix_h = right;
                 }
-                pix_v = bottom;
-            }
+                break;
+
+            default:
+                // Other `undecided` pixels.
+                {
+                    uint8_t top = get_pixel_with_direction(sx, sy, 0);
+                    uint8_t right = get_pixel_with_direction(sx, sy, 1);
+                    uint8_t bottom = get_pixel_with_direction(sx, sy, 2);
+                    uint8_t left = get_pixel_with_direction(sx, sy, 3);
+
+                    // The param x and y is current(above) pyramid coordinate.
+                    // The coordinate of level beneath should be double of them.
+                    uint8_t pix_v, pix_h;
+
+                    pix_v = top;
+                    for(int py=by; py < by+2; py++) {
+                        pix_h = left;
+                        for(int px=bx; px < bx+2; px++) {
+                            uint8_t pix = targ->get(beneath_level, px, py) & PIXEL_MASK;
+                            if (pix == PIXEL_AREA || pix == PIXEL_RESERVE) {
+                                if (pix_h <= PIXEL_OUTSIDE || pix_v <= PIXEL_OUTSIDE) {
+                                    // For `Cut protruding` feature,
+                                    // m_outside_expandable is false.
+                                    if (m_outside_expandable)
+                                        targ->replace(beneath_level, px, py, PIXEL_OUTSIDE);
+                                }
+                                else if (pix == PIXEL_RESERVE) {
+                                    // This pixel is temporary placeholder which is used for 
+                                    // pyramid_flood_fill. 
+                                    // So there is no OUTSIDE pixels around, replace this with
+                                    // PIXEL_AREA.
+                                    targ->replace(beneath_level, px, py, PIXEL_AREA);
+                                }
+                                /*
+                                else if (pix_h == PIXEL_FILLED || pix_v == PIXEL_FILLED) {
+                                    targ->replace(beneath_level, px, py, PIXEL_FILLED);
+                                }
+                                else if ((pix_h == PIXEL_CONTOUR && pix_v == PIXEL_CONTOUR)
+                                            && (pix_ih == PIXEL_FILLED || pix_iv == PIXEL_FILLED)) {
+                                    targ->replace(beneath_level, px, py, PIXEL_FILLED);
+                                }
+                                */
+                            }
+                            pix_h = right;
+                        }
+                        pix_v = bottom;
+                    }
+                }
+                break;
         }
     }   
 };
@@ -595,7 +627,8 @@ typedef struct {
     int sx;
     int sy;
     int length;
-    double open_ratio; // Indicates how open this area is. 
+    double reject_ratio; // Indicates how open this area is. 
+    double accept_ratio; // Indicates how connected this area is. 
     int direction;
     bool clockwise;
 } perimeter_info;
@@ -608,7 +641,8 @@ class CountPerimeterKernel: public WalkingKernel
 {
 protected:
     uint8_t m_targ_pixel; // Target pixel value which we walking within.
-    int m_encount; // A counter, incremented when walker touch `opened wall pixels` 
+    int m_reject; // A reject counter, incremented when walker touch `outside pixels` 
+    int m_accept; // A accept counter, incremented when walker touch `filled pixels` 
     int m_total_surround; // Total surronding pixel count. Used for removing `too opened` area.
     GQueue* m_queue; // Borrowed queue, set at start method.
 
@@ -620,8 +654,10 @@ protected:
         switch(pixel & PIXEL_MASK) {
             case PIXEL_EMPTY:
             case PIXEL_OUTSIDE:
-                m_encount++; 
+                m_reject++; 
                 break;
+            case PIXEL_FILLED:
+                m_accept++;
             default:
                 break;
         }
@@ -663,7 +699,8 @@ protected:
         info->sy = sy;
         info->length = m_step;
         info->direction = direction;
-        info->open_ratio = (double)m_encount / (double)m_total_surround;
+        info->reject_ratio = (double)m_reject / (double)m_total_surround;
+        info->accept_ratio = (double)m_accept / (double)m_total_surround;
         info->clockwise = is_clockwise();
         g_queue_push_tail(m_queue, info);
     }
@@ -707,7 +744,8 @@ public:
             // scanline. 
             uint8_t pix_l = get_pixel_with_direction(sx, sy, OFFSET_LEFT);
             if (is_wall_pixel(pix_l)) {
-                m_encount = 0;
+                m_reject = 0;
+                m_accept = 0;
                 m_total_surround = 0;
                 
                 // Walking always starts from the pixel
@@ -742,9 +780,10 @@ protected:
     virtual void check_opened_pixel(const uint8_t pixel) {
         switch(pixel & PIXEL_MASK) {
             case PIXEL_FILLED:
+                m_accept++; 
                 break;
             default:
-                m_encount++; 
+                m_reject++; 
                 break;
         }
         m_total_surround++;
@@ -820,10 +859,13 @@ protected:
     virtual void check_opened_pixel(const uint8_t pixel) {
         switch(pixel & PIXEL_MASK) {
             case PIXEL_OUTSIDE:
-                m_encount+=10; // Touching outside pixel is very bad thing.
+                m_reject+=10; // Touching outside pixel is very bad thing.
                 break;
             case PIXEL_EMPTY:
-                m_encount++;
+                m_reject++;
+                break;
+            case PIXEL_FILLED:
+                m_accept++;
                 break;
             case PIXEL_AREA:   // Different from CountPerimeterKernel, This
                                // Walker is intended to walk inside PIXEL_AREA.
@@ -832,6 +874,7 @@ protected:
             default:
                 break;
         }
+        m_total_surround++;
     }
 
     virtual bool is_wall_pixel(const uint8_t pixel) 
@@ -899,7 +942,9 @@ public:
                 // (A ridge of already detected area would be a combination of
                 // PIXEL_FILLED | FLAG_DECIDED, so skip it.)
                 if (kpix == PIXEL_FILLED) {
-                    m_encount = 0;
+                    m_reject = 0;
+                    m_accept = 0;
+                    m_total_surround = 0;
                     // We walk into `hole`, so proceed reversed direction.
                     walk(sx, sy, get_reversed_hand_dir(i));
                     if (m_step > 0) {

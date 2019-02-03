@@ -49,29 +49,61 @@
 // For Flagtile class. to get progress-level ptr from
 #define BUF_PTR(l, x, y) (m_buf + m_buf_offsets[(l)] + ((y) * PYRAMID_TILE_SIZE((l)) + (x))) 
 
-//// PIXEL_ Constants.
+// XXX PIXEL_ Constants.
 //
 // PIXEL_ values are not bitwise flag. They are just number.
-// The vacant pixel is 0.
-// PIXEL_AREA means 'The pixel is fillable, but not filled(yet)'
-//
-#define PIXEL_MASK 0x07    // PIXEL_* value are from 0 to 7.
-#define PIXEL_EMPTY 0x00   // PIXEL_EMPTY should lower than PIXEL_OUTSIDE
-#define PIXEL_OUTSIDE 0x01 // Thus we can know total outside pixel as <PIXEL_OUTSIDE
-#define PIXEL_AREA 0x02
-#define PIXEL_FILLED 0x03
-#define PIXEL_CONTOUR 0x04 // PIXEL_CONTOUR is one of a filled pixel.
-                           // This should be larger than PIXEL_FILLED
-                           // to ease finding `filled(or unchangeable)` pixel.
-#define PIXEL_OVERWRAP 0x05 // Use to eliminate overwrapped pixels for `cut protruding` 
-                            // feature. Without this value, we cannot detect overwrapped
-                            // parts under the contour pixels.
-                           
-#define PIXEL_INVALID 0x08 // Special pixel value. This actually does not exist as pixel.
-                           // This means `PIXEL_EMPTY or PIXEL_OUTSIDE` and use for
-                           // knowing a tile has any of valid pixels(i.e, AREA, FILLED,
-                           // or CONTOUR) or not.
+// The vacant pixel is 0 = PIXEL_EMPTY.
 
+#define PIXEL_MASK 0x07    
+// PIXEL_* value are from 0 to maximum 7.
+
+#define PIXEL_EMPTY 0x00   
+// PIXEL_EMPTY should lower than PIXEL_OUTSIDE,
+// and both of them are `invalid pixel`.
+// When using FlagtileSurface.get_pixel method against 
+// NULL-tile position, PIXEL_EMPTY would be returned.
+#define PIXEL_OUTSIDE 0x01 
+// Thus we can know invalid pixel as less than or equal PIXEL_OUTSIDE
+// Also, there is a special pixel value `PIXEL_INVALID`.
+// It is for Flagtile::is_filled_with method.
+
+#define PIXEL_AREA 0x02
+// PIXEL_AREA means `The pixel is fillable, but not filled(yet)`
+
+#define PIXEL_FILLED 0x03
+// PIXEL_FILLED means `The pixel is filled.`
+
+#define PIXEL_CONTOUR 0x04 
+// PIXEL_CONTOUR means `The border of pixels`, typically lineart contour.
+// This should be larger than PIXEL_FILLED
+// to ease finding `unchangeable` pixel.
+
+#define PIXEL_OVERWRAP 0x05 
+// Use to eliminate overwrapped pixels for `cut protruding` 
+// feature. Without this value, we cannot detect overwrapped
+// parts under the contour pixels.
+
+#define PIXEL_RESERVE 0x06 
+// A placeholder pixel, which is Used `2pass flood-fill` 
+// of pyramid-flood-fill.                            
+// Larger pyramid level pixel (gap-closing pixel) would
+// easily stuck flood-fill search queue and flood-fill
+// operation end up incompletely. 
+// So we get `entire fillable` area at lower pyramid level
+// as PIXEL_RESERVE, then fill it with PIXEL_FILLED at higher
+// pyramid level.
+//
+// XXX NOTE: This pixel value should NOT be propergated to
+// lower level in ProgressKernel::step.
+
+#define PIXEL_INVALID 0x08 
+// Special pixel value. This actually does not exist as pixel.
+// This means `PIXEL_EMPTY or PIXEL_OUTSIDE` and use for
+// knowing a tile has any of valid pixels(i.e, AREA, FILLED,
+// or CONTOUR) or not.
+// This is for Flagtile::is_filled_with method.
+
+// XXX NOTE:
 // PIXEL_EMPTY, PIXEL_AREA, PIXEL_FILLED and PIXEL_CONTOUR are redefined as
 // static const of Flagtile class, and you can access them from python
 // as lib.mypaintlib.Flagtile.PIXEL_*.

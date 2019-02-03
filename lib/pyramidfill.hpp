@@ -49,8 +49,6 @@ private:
     // 32bit length would be (too) enough.
     int32_t m_statflag;
 
-    // Build single progress level
-    void build_progress_level(const int targ_level);
 
     // Get antialias value(0.0 - 1.0) from Antialias pixel of flagtile.
     inline double get_aa_double_value(const uint8_t pix)
@@ -144,7 +142,9 @@ public:
     inline void set_borrowed() {m_statflag |= BORROWED;}
 
     // Progress methods
-    void build_progress_seed(const int start_level);
+    void build_progress_seed(const int targ_level);
+    // Build single progress level
+    void build_progress_level(const int targ_level);
 
     //// Tile Status flags.
     // Actually, it is int32_t. but, for SWIG, we need 
@@ -172,6 +172,7 @@ public:
     static const int PIXEL_OUTSIDE_VALUE = PIXEL_OUTSIDE;
     static const int PIXEL_OVERWRAP_VALUE = PIXEL_OVERWRAP;
     static const int PIXEL_INVALID_VALUE = PIXEL_INVALID;
+    static const int PIXEL_RESERVE_VALUE = PIXEL_RESERVE;
 };
 
 /* Flagtile psuedo surface object.
@@ -352,11 +353,14 @@ assert(ct != NULL);
 
     // Identify pixels (and reject or accept) 
     // by how many pixels touches `outside` pixels.
-    void identify_areas(const int level, const double threshold, 
+    void identify_areas(const int level, 
                         const int targ_pixel, 
+                        const double accept_threshold, 
+                        const double reject_threshold, 
                         const int accepted_pixel, 
                         const int rejected_pixel,
-                        int size_threshold=0); // might be rewritten at inside of this method. 
+                        int size_threshold=0); 
+
     void dilate(const int pixel, const int dilation_size);
     
     // Finalize related methods.
@@ -497,6 +501,8 @@ PyObject *
 pyramid_flood_fill(Flagtile *tile, /* output HxWx4 array of uint16 */
                    PyObject *seeds, /* List of 2-tuples */
                    int min_x, int min_y, int max_x, int max_y,
-                   int level);
+                   int level,
+                   int targ_pixel,
+                   int fill_pixel);
 
 #endif

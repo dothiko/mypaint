@@ -8,8 +8,7 @@
 
 import lib.mypaintlib
 import lib.surface
-
-import json
+import lib.helpers
 
 N = lib.mypaintlib.TILE_SIZE 
 
@@ -22,6 +21,7 @@ class _PIXEL:
     EMPTY = lib.mypaintlib.Flagtile.PIXEL_EMPTY_VALUE
     OUTSIDE = lib.mypaintlib.Flagtile.PIXEL_OUTSIDE_VALUE
     OVERWRAP = lib.mypaintlib.Flagtile.PIXEL_OVERWRAP_VALUE
+    RESERVE = lib.mypaintlib.Flagtile.PIXEL_RESERVE_VALUE
 
 def _convert_result(layer, ft, color):
     """Draw filled result of flagtile surface into 
@@ -144,8 +144,10 @@ def close_fill(targ, src, nodes, targ_pos, level, color,
         # For early culling:
         if i == early_culling_level:
             ft.identify_areas(
-                i, 0.3, # 0.3(30%) is practical value.
+                i, 
                 _PIXEL.AREA,
+                0.0, # All unrejected areas are remained.
+                0.3, # 0.3(30%) is practical value.
                 _PIXEL.AREA,
                 _PIXEL.OUTSIDE
             )
@@ -161,8 +163,10 @@ def close_fill(targ, src, nodes, targ_pos, level, color,
 
     # Finalize fill result.
     ft.identify_areas(
-        0, 0.1, # 0.1(10%) is practical value.
+        0, 
         _PIXEL.AREA,
+        -1.0, # All unrejected areas are accepted.
+        0.1, # 0.1(10%) is practical value.
         _PIXEL.FILLED,
         _PIXEL.AREA
     )
@@ -375,8 +379,10 @@ def cut_protrude(layers,
     # which are actually connected with accepted-filled area at 
     # pyramid level 0.
     ft.identify_areas(
-        level, 0.2,
+        level, 
         _PIXEL_AREA,
+        -1.0, # All unrejected areas are accepted.
+        0.2, # 0.2(20%) is practical value for this stage.
         _PIXEL_FILLED,
         _PIXEL_AREA
     )
@@ -388,13 +394,15 @@ def cut_protrude(layers,
 
     dbg_show('post-progress') # XXX Debug/profiling code
 
-    # Then, decide filled pixels at final level.
+    # Then, decide filled pixels at final level again.
     # Protruding pixels are remained as PIXEL_AREA.
     # That PIXEL_AREA areas are erased from mypaint colortile later.
 
     ft.identify_areas(
-        0, 0.1,
+        0, 
         _PIXEL_AREA,
+        -1.0, # All unrejected areas are accepted.
+        0.1, # 0.1(10%) is practical value.
         _PIXEL_FILLED,
         _PIXEL_AREA
     )
@@ -429,6 +437,319 @@ def cut_protrude(layers,
     layers.background_visible = True
     cl.visible = True
 
+def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
+    """Fills connected areas of one surface into another
+
+    :param src: Source surface-like object
+    :type src: Anything supporting readonly tile_request()
+    :param x: Starting point X coordinate
+    :param y: Starting point Y coordinate
+    :param color: an RGB color
+    :type color: tuple
+    :param bbox: Bounding box: limits the fill
+    :type bbox: lib.helpers.Rect or equivalent 4-tuple
+    :param tolerance: how much filled pixels are permitted to vary
+    :type tolerance: float [0.0, 1.0]
+    :param dst: Target surface
+    :type dst: lib.tiledsurface.MyPaintSurface
+
+    Keyword args:
+    :param dilate_size: dilation size
+    :type dilate_size: int, maximum MYPAINT_TILE_SIZE/2
+    :param pyramid_level: progress-pixel-level. a.k.a gap closing level. 
+    :type gap_level: int [0, 6]
+    :param do_antialias: Draw psuedo anti-aliasing pixels around filled area.
+    :type do_antialias: boolean
+
+    See also `lib.layer.Layer.flood_fill()`.
+    """
+    # Color to fill with
+    fill_r, fill_g, fill_b = color
+
+    # Limits
+    tolerance = lib.helpers.clamp(tolerance, 0.0, 1.0)
+
+    # Maximum area to fill: tile and in-tile pixel extents
+    bbx, bby, bbw, bbh = bbox
+    if bbh <= 0 or bbw <= 0:
+        return
+    bbbrx = bbx + bbw - 1
+    bbbry = bby + bbh - 1
+    min_tx = int(bbx // N)
+    min_ty = int(bby // N)
+    max_tx = int(bbbrx // N)
+    max_ty = int(bbbry // N)
+    base_min_px = int(bbx % N)
+    base_min_py = int(bby % N)
+    base_max_px = int(bbbrx % N)
+    base_max_py = int(bbbry % N)
+
+    # Tile and pixel addressing for the seed point
+    btx, bty = int(x // N), int(y // N)
+    bpx, bpy = int(x % N), int(y % N)
+
+    # Sample the pixel color there to obtain the target color
+    with src.tile_request(btx, bty, readonly=True) as start:
+        targ_r, targ_g, targ_b, targ_a = [int(c) for c in start[bpy][bpx]]
+    if targ_a == 0:
+        targ_r = 0
+        targ_g = 0
+        targ_b = 0
+        targ_a = 0
+
+    # Setting keyword options here.
+    dilation_size = kwargs.get('dilation_size', 0) 
+    pyramid_level = kwargs.get('pyramid_level', 0)
+    erase_pixel = kwargs.get('erase_pixel', False)
+    anti_alias = kwargs.get('anti_alias', True)
+    alpha_threshold = kwargs.get('alpha_threshold', 0.2)
+    fill_all_holes = kwargs.get('fill_all_holes', False)
+
+    # All values setup end. 
+    # Adjust pixel coordinate into progress-coordinate.
+    MAX_PROGRESS_LEVEL = 6
+    if pyramid_level == 0:
+        MN = N
+
+    # Flood-fill loop
+    filled = {}
+
+    # XXX DEBUG START
+    print("tolerance %.6f" % tolerance)
+    print("pyramid_level %s" % str(pyramid_level))
+    print("dilation %s" % str(dilation_size))
+   #print("px/py %s" % str((min_px, min_py, max_px, max_py, px, py)))
+    print("tx/ty limits %s" % str((min_tx, min_ty, max_tx, max_ty)))
+    print("targ color : %s" % str((targ_r, targ_g, targ_b, targ_a)))
+    print("fill_all_holes : %s" % str(fill_all_holes))
+
+    show_flag = kwargs.get('show_flag', False)
+    tile_output = kwargs.get('tile_output', False)
+    # XXX DEBUG END
+
+    def do_fill(targ_pixel, fill_pixel, level):
+        min_px = base_min_px >> level
+        min_py = base_min_py >> level
+        max_px = base_max_px >> level
+        max_py = base_max_py >> level
+        tileq = [
+            ((btx, bty),
+             [(bpx>>level, bpy>>level)])
+        ]
+        MN = 1 << (MAX_PROGRESS_LEVEL - level) # Pyramid tile-size
+
+        while len(tileq) > 0:
+            (tx, ty), seeds = tileq.pop(0)
+            # Bbox-derived limits
+            if tx > max_tx or ty > max_ty:
+                continue
+            if tx < min_tx or ty < min_ty:
+                continue
+            # Pixel limits within this tile...
+            min_x = 0
+            min_y = 0
+            max_x = MN-1
+            max_y = MN-1
+            # ... vary at the edges
+            if tx == min_tx:
+                min_x = min_px
+            if ty == min_ty:
+                min_y = min_py
+            if tx == max_tx:
+                max_x = max_px
+            if ty == max_ty:
+                max_y = max_py
+            # Flood-fill one tile
+            flag_tile = filled.get((tx, ty), None)
+            if flag_tile is None:
+                with src.tile_request(tx, ty, readonly=True) as src_tile:
+                    flag_tile = lib.mypaintlib.Flagtile(_PIXEL.AREA)
+                    flag_tile.convert_from_color(
+                        src_tile,
+                        targ_r, targ_g, targ_b, targ_a,
+                        tolerance,
+                        alpha_threshold,
+                        False
+                    )
+                    if level > 0:
+                        flag_tile.build_progress_seed(level)
+                    filled[(tx, ty)] = flag_tile
+                    #print('flagtile %d,%d generated' % (tx, ty))
+            if flag_tile is not None:
+                overflows = lib.mypaintlib.pyramid_flood_fill(
+                    flag_tile, seeds,
+                    min_x, min_y, max_x, max_y,
+                    level,
+                    targ_pixel,
+                    fill_pixel
+                )
+                if overflows is not None:
+                    seeds_n, seeds_e, seeds_s, seeds_w = overflows
+
+                    # Enqueue overflows in each cardinal direction
+                    if seeds_n and ty > min_ty:
+                        tpos = (tx, ty-1)
+                        tileq.append((tpos, seeds_n))
+                    if seeds_w and tx > min_tx:
+                        tpos = (tx-1, ty)
+                        tileq.append((tpos, seeds_w))
+                    if seeds_s and ty < max_ty:
+                        tpos = (tx, ty+1)
+                        tileq.append((tpos, seeds_s))
+                    if seeds_e and tx < max_tx:
+                        tpos = (tx+1, ty)
+                        tileq.append((tpos, seeds_e))
+
+    base_level = 2 # Practically, level 2 is enough for placeholder flood-fill.
+    if pyramid_level > base_level:
+        # 1st stage: 
+        # Do flood-fill in enough low level pyramid.
+        # With this, we can get maximum flood-fillable areas of
+        # _PIXEL.RESERVE.
+        do_fill(_PIXEL.AREA, _PIXEL.RESERVE, base_level)
+
+        # 2nd stage:
+        # Progress all tiles genareted in 1st stage.
+        for t in filled.values():
+            for i in range(base_level+1, pyramid_level+1):
+                t.build_progress_level(i)
+
+        # Then, Fill it with _PIXEL.FILLED at assigned (greater) level.
+        # Some of _PIXEL.RESERVE remained there, but that placeholders
+        # would be converted at later call of FlagtileSurface::progress_tile.
+        do_fill(_PIXEL.RESERVE, _PIXEL.FILLED, pyramid_level)
+
+    else:
+        do_fill(_PIXEL.AREA, _PIXEL.FILLED, pyramid_level)
+
+    # FloodfillSurface increace reference counter of `filled` dictionary.
+    # `filled` dictionary used to just calculate bbox of surface in 
+    # constructor.
+    ft = lib.mypaintlib.FloodfillSurface(filled, pyramid_level)
+    ox = ft.get_origin_x()
+    oy = ft.get_origin_y()
+    for tx, ty in filled:
+        ftx = tx - ox 
+        fty = ty - oy 
+        ft.borrow_tile(ftx, fty, filled[(tx, ty)])
+
+    if show_flag:
+        _dbg_show_flag(
+            ft, 
+            "area, contour, outside, reserve", 
+            base_level-1, 
+            title="1st stage"
+        )
+        _dbg_show_flag(
+            ft, 
+            "area, filled, contour, outside, reserve", 
+            pyramid_level, 
+            title="flood filled level"
+        )
+
+    # Early rejection of outside pixels.
+    # This is important, because some pixel areas might be
+    # connected at lower level.
+    if pyramid_level > 0:
+        ft.identify_areas(
+            pyramid_level, 
+            _PIXEL.AREA,
+            0.0, # All non-rejected areas are left unchanged.
+            0.1,
+            _PIXEL.AREA,
+            _PIXEL.OUTSIDE,
+            -1 # With -1, reject even largest area (Because outside areas might be largest)
+        )
+
+    # XXX DEBUG START
+    if show_flag:
+        _dbg_show_flag(
+            ft, 
+            "area, filled, contour, outside", 
+            pyramid_level, 
+            title="just identifyed level"
+        )
+
+    if tile_output:
+        info = {}
+        info['color'] = color
+        info['bbox'] = bbox
+        info['tolerance'] = tolerance
+        info['level'] = pyramid_level
+        info['targ_color_pos'] = [x, y]
+        info['erase_pixel'] = erase_pixel
+        info['dilation_size'] = dilation_size
+        _dbg_tile_output(
+            info,
+            ox, oy,
+            ft.get_width(),
+            ft.get_height(),
+            src,
+            prefix="flood_tiles"
+        )
+    # XXX DEBUG END
+    
+    # Downward-progress pixels.
+    for i in range(pyramid_level, 0, -1):
+        ft.progress_tile(i, True)
+
+    if show_flag:
+        _dbg_show_flag(ft, "area, outside, filled, contour", 1, title="progressed-level")
+        _dbg_show_flag(ft, "area, outside, filled, contour", 0, title="progressed")
+
+    # Finalize pixels.
+    # Make undecided pixels into filled one, if condition matched.
+    if pyramid_level > 0:
+        ft.identify_areas(
+            0, 
+            _PIXEL.AREA,
+            0.0, # Accept areas which touches the PIXEL_FILLED areas only.
+            0.1, # Reject opened area greater than 0.1
+            _PIXEL.FILLED,
+            _PIXEL.AREA
+        )
+
+    if show_flag:
+        _dbg_show_flag(ft, "area, filled, contour", 0, title="removed")
+    
+    ft.dilate(_PIXEL.FILLED, dilation_size)
+
+    if fill_all_holes:
+        ft.fill_holes()
+    if anti_alias:
+        ft.draw_antialias()
+            
+    # XXX DEBUG START
+    print("end tile")
+    if show_flag:
+        _dbg_show_flag(ft, "filled", 0, title="result")
+    print("--- finalize end ---")
+    # XXX DEBUG END
+
+    # Directly write pixels into color-tiles.
+    # But, some new flagtile might generated with dilation.
+    # Such tiles are not in `filled` dictonary.
+    # So enumerate FlagtileSurface, not that dict.
+    for fty in range(ft.get_height()): 
+        for ftx in range(ft.get_width()): 
+            flag_tile = ft.get_tile(ftx, fty, False)
+            if flag_tile is not None:
+                # convert to surface tile coodinate
+                tx = ftx + ox
+                ty = fty + oy
+                with dst.tile_request(tx, ty, readonly=False) as dst_tile:
+                    if erase_pixel:
+                        flag_tile.convert_to_transparent(dst_tile, _PIXEL.FILLED)
+                    else:
+                        flag_tile.convert_to_color(
+                            dst_tile,
+                            fill_r, fill_g, fill_b
+                        )
+            #else:# XXX DEBUG
+                #print("flagtile %d, %d is empty" % (ftx, fty))
+
+    bbox = lib.surface.get_tiles_bbox(filled)
+    dst.notify_observers(*bbox)
 #--------------------------------------- 
 # XXX For debug 
 
@@ -450,6 +771,7 @@ def _dbg_show_flag(ft, method, level=0, title=None):
         _PIXEL.EMPTY : (0, 255, 0), # level color
         _PIXEL.OUTSIDE : (255, 0, 128),
         _PIXEL.OVERWRAP : (255, 128, 128),
+        _PIXEL.RESERVE : (128, 128, 255),
         _PIXEL.FILLED | FLAG_WORK: (0, 255, 0),
         FLAG_WORK : (255, 0, 0),
         FLAG_AA : (0, 255, 255)
@@ -481,6 +803,8 @@ def _dbg_show_flag(ft, method, level=0, title=None):
             npbuf = create_npbuf(npbuf, level, _PIXEL.OUTSIDE)
         elif m == 'overwrap':
             npbuf = create_npbuf(npbuf, level, _PIXEL.OVERWRAP)
+        elif m == 'reserve':
+            npbuf = create_npbuf(npbuf, level, _PIXEL.RESERVE)
         elif m == 'level':
             npbuf = create_npbuf(npbuf, level, _PIXEL.AREA)
             npbuf = create_npbuf(npbuf, level, _PIXEL.FILLED)
