@@ -159,7 +159,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
 
     # 8 & 3, processing time 0.00526189804077
                         
-    MAX_INTERNODE_DISTANCE_MIDDLE = 5   # display pixels
+    MAX_INTERNODE_DISTANCE_MIDDLE = 3   # display pixels
     MAX_INTERNODE_DISTANCE_ENDS = 2   # display pixels
 
     ## Cursors

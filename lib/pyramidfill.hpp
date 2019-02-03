@@ -109,18 +109,17 @@ public:
     void convert_to_color(PyObject *py_targ_tile,
                           const double r, 
                           const double g, 
-                          const double b);
+                          const double b,
+                          const int pixel);
 
     void convert_from_transparency(PyObject *py_targ_tile,
                                    const double alpha_threshold,
                                    const int pixel_value,
                                    const int overwrap_value=PIXEL_INVALID);
 
-    void convert_to_transparent(PyObject *py_targ_tile, const int pixel_value);
-
     inline int get_stat() { return m_statflag; }
 
-    inline bool is_filled_with(const uint8_t pix) 
+    inline bool is_filled_with(const int pix) 
     { 
         uint16_t cnt;
         if (pix == PIXEL_INVALID) 
@@ -130,7 +129,7 @@ public:
         return cnt == (MYPAINT_TILE_SIZE * MYPAINT_TILE_SIZE);
     }
     
-    inline int get_pixel_count(const uint8_t pix) {
+    inline int get_pixel_count(const int pix) {
         if (pix == PIXEL_INVALID) 
             return m_pixcnt[PIXEL_EMPTY] + m_pixcnt[PIXEL_OUTSIDE];
         else

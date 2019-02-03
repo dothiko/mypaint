@@ -544,17 +544,13 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
 */
 void 
 Flagtile::convert_to_color(PyObject *py_targ_tile,
-                           const double r, const double g, const double b)
+                           const double r, const double g, const double b,
+                           const int pixel)
 {
     PyArrayObject *array = (PyArrayObject*)py_targ_tile;
 #ifdef HEAVY_DEBUG
     assert_tile(array);
 #endif
-
-    if (is_filled_with(PIXEL_AREA)
-            || is_filled_with(PIXEL_INVALID)) {
-        return;
-    }
 
     const unsigned int xstride = PyArray_STRIDE(array, 1) / sizeof(fix15_short_t);
     const unsigned int ystride = PyArray_STRIDE(array, 0) / sizeof(fix15_short_t);
@@ -570,7 +566,7 @@ Flagtile::convert_to_color(PyObject *py_targ_tile,
     cols[3] = fix15_one;
     
     // Completely filled tile can be filled with memcpy.
-    if (is_filled_with(PIXEL_FILLED)) {
+    if (is_filled_with(pixel)) {
         fix15_short_t *optr = cptr;
         // Build one line
         for(int x=0; x<TILE_SIZE; x++) {
@@ -607,7 +603,7 @@ Flagtile::convert_to_color(PyObject *py_targ_tile,
                 cptr[3] = cur_alpha;
                 
             }
-            else if ((pix & PIXEL_MASK) == PIXEL_FILLED) {
+            else if ((pix & PIXEL_MASK) == pixel) {
                 cptr[0] = cols[0];
                 cptr[1] = cols[1];
                 cptr[2] = cols[2];
@@ -659,82 +655,6 @@ Flagtile::convert_from_transparency(PyObject *py_src_tile,
                     replace(0, x, y, (uint8_t)pixel_value);
             }
             cptr += xstride;
-        }
-        cptr_base += ystride;
-    }
-}
-
-/**
-* @convert_to_transparent
-* Convert Flagtile specific pixels into complete transparent pixels of mypaint colortile.
-*
-* @param target_pixel: Flagtile pixel value to be converted.
-*
-* @detail 
-* `Converting to complete transparent pixel` means actually `erasing pixel`.
-*/
-void 
-Flagtile::convert_to_transparent(PyObject *py_targ_tile,
-                                 const int target_pixel)
-{
-    PyArrayObject *array = (PyArrayObject*)py_targ_tile;
-#ifdef HEAVY_DEBUG
-    assert_tile(array);
-#endif
-    if (get_pixel_count(target_pixel) == 0) {
-        return;
-    }
-
-    const unsigned int xstride = PyArray_STRIDE(array, 1) / sizeof(fix15_short_t);
-    const unsigned int ystride = PyArray_STRIDE(array, 0) / sizeof(fix15_short_t);
-    fix15_short_t *cptr_base = (fix15_short_t*)PyArray_BYTES(array);
-
-    // Completely filled tile can be cleared with memset.
-    if (is_filled_with(target_pixel)){
-        for(int y=0; y<TILE_SIZE; y++) {
-            memset(cptr_base, 0, sizeof(fix15_short_t) * 4 * TILE_SIZE);
-            cptr_base += ystride;
-        }
-        return;
-    }
-    
-    uint8_t *sptr = m_buf;// This function just refers flagtile pixels, 
-                          // so do faster direct access.
-    
-    // Converting progress level 0 pixel into color tile.
-    for(int y=0; y<TILE_SIZE; y++) {
-        fix15_short_t *cptr = cptr_base;
-        for(int x=0; x<TILE_SIZE; x++) {
-            uint8_t pix = *sptr;
-            // We need check anti-aliasing pixel first.
-            // anti-aliasing pixel is not compatible
-            // with another PIXEL_* values.
-            // Some of them accidentally misdetected.
-            if ((pix & FLAG_AA) != 0) {
-                pix &= AA_MASK;
-                double cur_alpha = get_aa_double_value(pix);
-                double targ_alpha = (double)cptr[3];
-                // Reverse premult color as original float color(0.0 - 1.0)
-                double targ_r = (double)cptr[0] / targ_alpha; 
-                double targ_g = (double)cptr[1] / targ_alpha; 
-                double targ_b = (double)cptr[2] / targ_alpha; 
-
-                targ_alpha /= fix15_one;
-                fix15_short_t final_alpha = (cur_alpha * targ_alpha) * fix15_one;
-                // Then, make `premult` them again with new alpha value.
-                cptr[0] = fix15_short_clamp(targ_r * final_alpha);
-                cptr[1] = fix15_short_clamp(targ_g * final_alpha);
-                cptr[2] = fix15_short_clamp(targ_b * final_alpha);
-                cptr[3] = (fix15_short_t)final_alpha;
-            }
-            else if ((pix & PIXEL_MASK) == target_pixel) {
-                cptr[0] = 0;
-                cptr[1] = 0;
-                cptr[2] = 0;
-                cptr[3] = 0;
-            }
-            cptr += xstride;
-            sptr++;
         }
         cptr_base += ystride;
     }

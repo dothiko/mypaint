@@ -28,7 +28,6 @@ import weakref
 from gettext import gettext as _
 from logging import getLogger
 logger = getLogger(__name__)
-import operator 
 
 
 ## Command stack and action interface
@@ -2220,7 +2219,7 @@ class ClosedAreaFill (FloodFill):
             info['targ_color_pos'] = targ_pos
         return info
 
-    def _get_target_layer(self):
+    def _get_target_surface(self):
         # Create new layer (if needed)
         layers = self.doc.layer_stack
         if self.make_new_layer:
@@ -2239,23 +2238,27 @@ class ClosedAreaFill (FloodFill):
             assert self.snapshot is None
             self.snapshot = layers.current.save_snapshot()
             targ = layers.current
-        return targ
+
+        targ.autosave_dirty = True
+        assert hasattr(targ, '_surface')
+        return targ._surface
         
     def redo(self):
         # [TODO] Implement 'fill once' option.
 
         if self.erase_pixel:
-            color = None
+            combine_mode = lib.mypaintlib.CombineDestinationOut
         else:
-            color = self.color
+            combine_mode = lib.mypaintlib.CombineNormal
     
         lib.pyramidfill.close_fill(
-            self._get_target_layer(),
+            self._get_target_surface(),
             self._get_source_surface(),
             self.nodes,
             self.targ_color_pos,
             self.pyramid_level,
-            color,
+            self.color,
+            combine_mode,
 
             self.tolerance,
             self.alpha_threshold,
@@ -2292,17 +2295,18 @@ class LassoFill(ClosedAreaFill):
     def redo(self):
         # TODO Implement 'fill once' option.
         if self.erase_pixel:
-            color = None
+            combine_mode = lib.mypaintlib.CombineDestinationOut
         else:
-            color = self.color
+            combine_mode = lib.mypaintlib.CombineSourceAtop
 
         lib.pyramidfill.lasso_fill(
-            self._get_target_layer(),
+            self._get_target_surface(),
             self._get_source_surface(),
             self.nodes,
             self.targ_color_pos,
             self.pyramid_level,
-            color,
+            self.color,
+            combine_mode,
 
             self.tolerance,
             self.alpha_threshold,
@@ -2340,6 +2344,7 @@ class CutProtruding(ClosedAreaFill):
 
     def redo(self):
         layers = self.doc.layer_stack
+        layers.current.autosave_dirty = True
 
         # Overwrite current, but snapshot 1st
         assert self.snapshot is None
@@ -2350,7 +2355,6 @@ class CutProtruding(ClosedAreaFill):
             self.alpha_threshold,
             None
         )
-
 
 # XXX for `cut-protruding` end.
 
