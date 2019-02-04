@@ -1465,9 +1465,9 @@ ClosefillSurface::walk_line(int sx, int sy,
 {
     // draw virtual line of bitwise flag, 
     // by using Bresenham algorithm.
-    int dx = abs(ex - sx) + 1;
-    int dy = abs(ey - sy) + 1;
-    int x, y, error, xs=1, ys=1;
+    int dx = abs(ex - sx);
+    int dy = abs(ey - sy);
+    int x=sx, y=sy, error, xs=1, ys=1;
     if (sx > ex) {
         xs = -1;
     }
@@ -1475,38 +1475,38 @@ ClosefillSurface::walk_line(int sx, int sy,
         ys = -1;
     }
 
+
     if (dx < dy) {
         // steep angled line
-        x = sx;
-        y = sy;
-        error = dy;
-        for (int cy=0; cy < dy; cy++){
+        error = dy >> 1;
+        //for (int cy=0; cy < dy; cy++){
+        while (y != ey) {
             f->step(x, y);
             error -= dx;
             if (error < 0) {
-                x+=xs;
-                error = error + dy;
+                x += xs;
+                error += dy;
             }
-            y+=ys;
+            y += ys;
         }
     }
     else {
-        x = sx;
-        y = sy;
-        error = dx;
-        for (int cx=0; cx < dx; cx++){
+        error = dx >> 1;
+        //for (int cx=0; cx < dx; cx++){
+        while (x != ex) {
             f->step(x, y);
             error -= dy;
             if (error < 0) {
                 y+=ys;
-                error = error + dx;
+                error += dx;
             }
             x += xs;
         }
     }
 
     // Ensure the exact last pixel should be drawn
-    f->step(ex, ey);
+    if (x != ex || y != ey)
+        f->step(ex, ey);
 }
 
 /**
