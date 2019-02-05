@@ -153,14 +153,12 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
    #MAX_INTERNODE_DISTANCE_MIDDLE = 30   # display pixels
    #MAX_INTERNODE_DISTANCE_ENDS = 10   # display pixels
 
-   # with 15 & 5, processing time 0.00678086280823
-   #MAX_INTERNODE_DISTANCE_MIDDLE = 15   # display pixels
-   #MAX_INTERNODE_DISTANCE_ENDS = 5   # display pixels
-
-    # 8 & 3, processing time 0.00526189804077
-                        
+    # We need high granularity nodes, especially for Lasso-fill.
     MAX_INTERNODE_DISTANCE_MIDDLE = 4   # display pixels
     MAX_INTERNODE_DISTANCE_ENDS = 2   # display pixels
+
+    # Editable radius. nodes within this radius would affect ADJUSTing.
+    EDITABLE_RADIUS = 16 # display pixels
 
     ## Cursors
     _cursors = {}
@@ -727,10 +725,10 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
             if self._dragged_node_start_pos:
                 x0, y0 = self._dragged_node_start_pos
                 disp_x, disp_y = tdw.model_to_display(x0, y0)
-                disp_x += event.x - self.start_x
-                disp_y += event.y - self.start_y
-                x, y = tdw.display_to_model(disp_x, disp_y)
-                self.update_node(self.target_node_index, x=x, y=y)
+               #disp_x += event.x - self.start_x
+               #disp_y += event.y - self.start_y
+               #x, y = tdw.display_to_model(disp_x, disp_y)
+                self.update_node(tdw, self.target_node_index, dx, dy)
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -802,15 +800,29 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         """Get the (class singleton) options widget"""
         return self.options_presenter
 
-    def update_node(self, i, **kwargs):
+    def update_node(self, tdw, i, ox, oy):
         """Updates properties of a node, and redraws it"""
-        changing_pos = bool({"x", "y"}.intersection(kwargs))
-        oldnode = self.nodes[i]
-        if changing_pos:
-            self._queue_draw_node(i)
-        self.nodes[i] = oldnode._replace(**kwargs)
-        if changing_pos:
-            self._queue_draw_node(i)
+        # Process downward indexes. 
+        bn = self.nodes[i]
+        bx, by = tdw.model_to_display(bn.x, bn.y)
+        R = self.EDITABLE_RADIUS
+        node_cnt = len(self.nodes)
+        i = 0
+        hp = math.pi / 2
+        while i < node_cnt:
+            cn = self.nodes[i]
+            cx, cy = tdw.model_to_display(cn.x, cn.y)
+            diff = math.hypot(bx-cx, by-cy) 
+            if diff < R:
+                factor = math.sin(((R - diff) / R) * hp)
+                cx += ox * factor
+                cy += oy * factor
+                oldnode = self.nodes[i]
+                self._queue_draw_node(i)
+                mx, my = tdw.display_to_model(cx, cy)
+                self.nodes[i] = oldnode._replace(x=mx, y=my)
+                self._queue_draw_node(i)
+            i+=1
 
     ## Close and fill
     @property
