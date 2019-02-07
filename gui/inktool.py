@@ -29,6 +29,7 @@ import lib.helpers
 import gui.cursor
 import lib.observable
 import gui.mvp
+from lib.pycompat import xrange
 
 
 ## Module constants
@@ -703,17 +704,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             else:
                 self._last_good_raw_ytilt = ytilt
 
-        # Tilt inputs are assumed to be relative to the viewport,
-        # but the canvas may be rotated or mirrored, or both.
-        # Compensate before passing them to the brush engine.
-        # https://gna.org/bugs/?19988
         if tdw.mirrored:
             xtilt *= -1.0
-        if tdw.rotation != 0:
-            tilt_angle = math.atan2(ytilt, xtilt) - tdw.rotation
-            tilt_magnitude = math.sqrt((xtilt**2) + (ytilt**2))
-            xtilt = tilt_magnitude * math.cos(tilt_angle)
-            ytilt = tilt_magnitude * math.sin(tilt_angle)
 
         return (xtilt, ytilt)
 
@@ -767,6 +759,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self.update_node(j, time=new_time)
 
     def can_delete_node(self, i):
+        if i is None:
+            return False
         return 0 < i < len(self.nodes) - 1
 
     def delete_node(self, i):
@@ -779,7 +773,7 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self.nodes.pop(i)
         # Limit the current node
         new_cn = self.current_node_index
-        if new_cn >= len(self.nodes):
+        if (new_cn is not None) and new_cn >= len(self.nodes):
             new_cn = len(self.nodes) - 2
             self.current_node_index = new_cn
             self.current_node_changed(new_cn)
@@ -798,6 +792,8 @@ class InkingMode (gui.mode.ScrollableModeMixin,
             self.target_node_index = None
 
     def can_insert_node(self, i):
+        if i is None:
+            return False
         return 0 <= i < (len(self.nodes) - 1)
 
     def insert_node(self, i):
@@ -877,17 +873,17 @@ class InkingMode (gui.mode.ScrollableModeMixin,
         self.nodes.append(lastnode)
         return curcnt - len(self.nodes)
 
-    def _nodes_deletion_operation(self, callable, args):
+    def _nodes_deletion_operation(self, func, args):
         """Internal method for delete-related operation of multiple nodes."""
         # To ensure redraw entire overlay,avoiding glitches.
         self._queue_redraw_curve()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
-        if callable(*args) > 0:
+        if func(*args) > 0:
 
             new_cn = self.current_node_index
-            if new_cn >= len(self.nodes):
+            if (new_cn is not None) and new_cn >= len(self.nodes):
                 new_cn = len(self.nodes) - 2
                 self.current_node_index = new_cn
                 self.current_node_changed(new_cn)
@@ -1255,7 +1251,7 @@ class OptionsUI (gui.mvp.BuiltUIPresenter, object):
     @gui.mvp.view_updater(default=False)
     def _update_ui_for_current_target(self):
         (inkmode, cn_idx) = self.target
-        if 0 <= cn_idx < len(inkmode.nodes):
+        if (cn_idx is not None) and (0 <= cn_idx < len(inkmode.nodes)):
             cn = inkmode.nodes[cn_idx]
             self.view.pressure_adj.set_value(cn.pressure)
             self.view.xtilt_adj.set_value(cn.xtilt)

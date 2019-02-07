@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2013-2015 by Andrew Chadwick <a.t.chadwick@gmail.com>
+# Copyright (C) 2013-2018 by the MyPaint Development Team
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -13,19 +13,23 @@
 
 
 ## Imports
+
 from __future__ import division, print_function
 
 import re
-import os
 from copy import copy
 import logging
-logger = logging.getLogger(__name__)
 
-from helpers import clamp
+from lib.helpers import clamp
 from lib.observable import event
 from lib.color import RGBColor
 from lib.color import YCbCrColor
+from lib.pycompat import unicode
+from lib.pycompat import xrange
+from lib.pycompat import PY3
+from io import open
 
+logger = logging.getLogger(__name__)
 
 ## Class and function defs
 
@@ -97,7 +101,7 @@ class Palette (object):
         elif filehandle:
             self.load(filehandle, silent=True)
         elif filename:
-            with open(filename, "r") as fp:
+            with open(filename, "r", encoding="utf-8", errors="replace") as fp:
                 self.load(fp, silent=True)
 
     def clear(self, silent=False):
@@ -107,8 +111,8 @@ class Palette (object):
           >>> p = Palette(colors=grey16)
           >>> p.name = "Greyscale"
           >>> p.columns = 3
-          >>> p
-          <Palette colors=16, columns=3, name=u'Greyscale'>
+          >>> p                               # doctest: +ELLIPSIS
+          <Palette colors=16, columns=3, name=...'Greyscale'>
           >>> p.clear()
           >>> p
           <Palette colors=0, columns=0, name=None>
@@ -197,7 +201,11 @@ class Palette (object):
 
         :param filehandle: File-like object (.write suffices)
 
-        >>> from cStringIO import StringIO
+        >>> from lib.pycompat import PY3
+        >>> if PY3:
+        ...     from io import StringIO
+        ... else:
+        ...     from cStringIO import StringIO
         >>> fp = StringIO()
         >>> cols = RGBColor(1,.7,0).interpolate(RGBColor(.1,.1,.5), 16)
         >>> pal = Palette(colors=cols)
@@ -252,7 +260,7 @@ class Palette (object):
         self._name = name
         self.info_changed()
 
-    def __nonzero__(self):
+    def __bool__(self):
         """Palettes never test false, regardless of their length.
 
         >>> p = Palette()
@@ -266,10 +274,14 @@ class Palette (object):
         """Palette length is the number of color slots within it."""
         return len(self._colors)
 
+    ## PY2/PY3 compat
+
+    __nonzero__ = __bool__
+
     ## Match position marker
 
     def get_match_position(self):
-        """Return the position of the current match (int ot None)"""
+        """Return the position of the current match (int or None)"""
         return self._match_position
 
     def set_match_position(self, i):
@@ -388,7 +400,7 @@ class Palette (object):
         return False
 
     def move_match_position(self, direction, refcol):
-        """Move the match position in steps, matching first if neeeded.
+        """Move the match position in steps, matching first if needed.
 
         :param direction: Direction for moving, positive or negative
         :type direction: int:, ``1`` or ``-1``
@@ -613,7 +625,7 @@ class Palette (object):
             if targ is self._EMPTY_SLOT_ITEM:
                 self._colors[targ_i] = self._copy_color_in(col)
                 self.color_changed(targ_i)
-                # Copying from the matched color moves the match postion.
+                # Copying from the matched color moves the match position.
                 # Copying to the match position clears the match.
                 if match_pos == src_i:
                     self.match_position = targ_i
@@ -763,6 +775,11 @@ class Palette (object):
     ## Dumping and cloning
 
     def __unicode__(self):
+        """Py2-era serialization as a Unicode string.
+
+        Used by the Py3 __str__() while we are in transition.
+
+        """
         result = u"GIMP Palette\n"
         if self._name is not None:
             result += u"Name: %s\n" % self._name
@@ -782,6 +799,13 @@ class Palette (object):
                 result += u"%d %d %d    %s\n" % (r, g, b, col_name)
         return result
 
+    def __str__(self):
+        """Py3: serialize as str (=Unicode). Py2: as bytes (lossy!)."""
+        s = self.__unicode__()
+        if not PY3:
+            s = s.encode("utf-8", errors="replace")
+        return s
+
     def __copy__(self):
         clone = Palette()
         clone.set_name(self.get_name())
@@ -797,8 +821,11 @@ class Palette (object):
         return self.__copy__()
 
     def __repr__(self):
-        return (u"<Palette colors=%d, columns=%d, name=%s>"
-                % (len(self._colors), self._columns, repr(self._name)))
+        return "<Palette colors=%d, columns=%d, name=%r>" % (
+            len(self._colors),
+            self._columns,
+            self._name,
+        )
 
     ## Conversion to/from simple dict representation
 
@@ -818,9 +845,9 @@ class Palette (object):
         return simple
 
     @classmethod
-    def new_from_simple_dict(class_, simple):
+    def new_from_simple_dict(cls, simple):
         """Constructs and returns a palette from the simple dict form."""
-        pal = class_()
+        pal = cls()
         pal.set_name(simple.get("name", None))
         pal.set_columns(simple.get("columns", None))
         for entry in simple.get("entries", []):
@@ -860,13 +887,14 @@ def _color_distance(c1, c2):
     Use a geometric YCbCr distance, as recommended by Graphics Programming with
     Perl, chapter 1, Martien Verbruggen. If we want to give the chrominance
     dimensions a different weighting to luma, we can.
+
     """
     c1 = YCbCrColor(color=c1)
     c2 = YCbCrColor(color=c2)
-    d_Cb = c1.Cb - c2.Cb
-    d_Cr = c1.Cr - c2.Cr
-    d_Y = c1.Y - c2.Y
-    return ((d_Cb**2) + (d_Cr**2) + (d_Y)**2) ** (1.0/3)
+    d_cb = c1.Cb - c2.Cb
+    d_cr = c1.Cr - c2.Cr
+    d_y = c1.Y - c2.Y
+    return ((d_cb**2) + (d_cr**2) + (d_y)**2) ** (1.0/3)
 
 
 ## Module testing

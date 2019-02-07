@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2014-2016 by the MyPaint Development Team.
+# Copyright (C) 2014-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -9,8 +9,8 @@
 
 
 ## Imports
-from __future__ import division, print_function
 
+from __future__ import division, print_function
 import logging
 import math
 from gettext import gettext as _
@@ -21,6 +21,10 @@ from gi.repository import GLib
 
 import lib.command
 from lib.observable import event
+from lib.pycompat import add_metaclass
+from lib.pycompat import unicode
+
+import gui.cursor
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +71,8 @@ class Behavior:
     CHANGE_VIEW = 0x08  #: move the viewport around
     PAINT_NOBRUSH = 0x10   #: painting independent of brush (eg. fill)
     # Useful masks
-    PAINT_BRUSH = PAINT_FREEHAND | PAINT_LINE #: painting dependent of brush
-    PAINT_CONSTRAINED = PAINT_LINE | PAINT_NOBRUSH #: non-freehand painting
+    PAINT_BRUSH = PAINT_FREEHAND | PAINT_LINE  #: painting dependent of brush
+    PAINT_CONSTRAINED = PAINT_LINE | PAINT_NOBRUSH  #: non-freehand painting
     NON_PAINTING = EDIT_OBJECTS | CHANGE_VIEW
     ALL_PAINTING = PAINT_FREEHAND | PAINT_CONSTRAINED
     ALL = NON_PAINTING | ALL_PAINTING
@@ -135,6 +139,7 @@ class ModeRegistry (type):
 
 ## Mode base classes
 
+@add_metaclass(ModeRegistry)
 class InteractionMode (object):
     """Required base class for temporary interaction modes.
 
@@ -152,12 +157,12 @@ class InteractionMode (object):
     the class-level variable ``ACTION_NAME``: this should be the name of an
     action defined in `gui.app.Application.builder`'s XML file.
 
+    All InteractionMode subclasses register themselves in ModeRegistry
+    when their class is defined.
+
     """
 
     ## Class configuration
-
-    #: All InteractionMode subclasses register themselves.
-    __metaclass__ = ModeRegistry
 
     #: See the docs for `gui.mode.ModeRegistry`.
     ACTION_NAME = None
@@ -601,6 +606,8 @@ class PaintingModeOptionsWidgetBase (Gtk.Grid):
         # TRANSLATORS:"Tilt offset of y axis" for the options panel. Short.
         ('tilt_offset_y', _("Tilt Y:")),        
         # XXX for 'tilt-offset end'
+        # TRANSLATORS:"Paint Pigment Mode" for the options panel. Short.
+        ('paint_mode', _("Pigment:")),
     ]
  
     # XXX for 'tilt-offset'    
@@ -616,7 +623,7 @@ class PaintingModeOptionsWidgetBase (Gtk.Grid):
         super(PaintingModeOptionsWidgetBase, self).__init__()
         self.set_row_spacing(6)
         self.set_column_spacing(6)
-        from application import get_app
+        from gui.application import get_app
         self.app = get_app()
         self.adjustable_settings = set()  #: What the reset button resets
         row = self.init_common_widgets(0)
@@ -766,7 +773,8 @@ class BrushworkModeMixin (InteractionMode):
             dtime = 0.0
             viewzoom = self.doc.tdw.scale
             viewrotation = self.doc.tdw.rotation
-            cmd.stroke_to(dtime, x, y, pressure, xtilt, ytilt, viewzoom, viewrotation)
+            cmd.stroke_to(dtime, x, y, pressure, xtilt, ytilt,
+                          viewzoom, viewrotation)
         changed = cmd.stop_recording(revert=False)
         if changed:
             model.do(cmd)
@@ -798,7 +806,8 @@ class BrushworkModeMixin (InteractionMode):
         for model in list(self.__active_brushwork.keys()):
             self.brushwork_rollback(model)
 
-    def stroke_to(self, model, dtime, x, y, pressure, xtilt, ytilt, viewzoom, viewrotation,
+    def stroke_to(self, model, dtime, x, y, pressure, xtilt, ytilt,
+                  viewzoom, viewrotation,
                   auto_split=True, layer=None):
         """Feeds an updated stroke position to the brush engine
 
@@ -812,7 +821,7 @@ class BrushworkModeMixin (InteractionMode):
         :param bool auto_split: Split ongoing brushwork if due
         :param gui.layer.data.SimplePaintingLayer layer: explicit target layer
 
-        During normal operation, succesive calls to `stroke_to()` record
+        During normal operation, successive calls to `stroke_to()` record
         an ongoing sequence of `lib.command.Brushwork` commands on the
         undo stack, stopping and committing the currently recording
         command when it becomes due.
@@ -839,7 +848,8 @@ class BrushworkModeMixin (InteractionMode):
                 layer=layer,
             )
             cmd = self.__active_brushwork[model]
-        cmd.stroke_to(dtime, x, y, pressure, xtilt, ytilt, viewzoom, viewrotation)
+        cmd.stroke_to(dtime, x, y, pressure, xtilt, ytilt,
+                      viewzoom, viewrotation)
         cmd.__last_pos = (x, y, xtilt, ytilt, viewzoom, viewrotation)
 
     def leave(self, **kwds):
@@ -890,8 +900,7 @@ class SingleClickMode (InteractionMode):
     """Base class for non-drag (single click) modes"""
 
     #: The cursor to use when entering the mode
-    # FIXME: Use Gdk.Cursor.new_for_display; read-only property
-    cursor = Gdk.Cursor.new(Gdk.CursorType.ARROW)
+    cursor = None
 
     def __init__(self, ignore_modifiers=False, **kwds):
         super(SingleClickMode, self).__init__(**kwds)
@@ -901,6 +910,9 @@ class SingleClickMode (InteractionMode):
         super(SingleClickMode, self).enter(doc, **kwds)
         assert self.doc is not None
         self.doc.tdw.set_override_cursor(self.cursor)
+        if self.cursor is None:
+            self.cursor = self.doc.app.cursors.get_action_cursor(
+                    self.ACTION_NAME, gui.cursor.Name.ARROW)
 
     def leave(self, **kwds):
         if self.doc is not None:
@@ -939,8 +951,7 @@ class DragMode (InteractionMode):
 
     """
 
-    # FIXME: Use Gdk.Cursor.new_for_display; read-only property
-    inactive_cursor = Gdk.Cursor.new(Gdk.CursorType.ARROW)
+    inactive_cursor = None
     active_cursor = None
 
     #: If true, exit mode when initial modifiers are released
@@ -1076,7 +1087,7 @@ class DragMode (InteractionMode):
         Modes on top of the one requesting bailout will also be ejected.
 
         """
-        from application import get_app
+        from gui.application import get_app
         app = get_app()
         if self not in app.doc.modes:
             logger.debug(
@@ -1121,6 +1132,14 @@ class DragMode (InteractionMode):
         """
         super(DragMode, self).enter(doc, **kwds)
         assert self.doc is not None
+        if self.inactive_cursor is None:
+            # some children might override self.inactive_cursor as read-only
+            try:
+                self.inactive_cursor = self.doc.app.cursors. \
+                        get_action_cursor(self.ACTION_NAME,
+                                          gui.cursor.Name.ARROW)
+            except AttributeError:
+                pass
         self.doc.tdw.set_override_cursor(self.inactive_cursor)
 
         if self.SPRING_LOADED:

@@ -74,6 +74,58 @@ class BuildTranslations (Command):
         return [(install_dir, [targ])]
 
 
+class BuildConfig (Command):
+    """Builds configuration file config.py.
+
+    This will allow python files to know where to find data when it is
+    provided as a separate package, i.e. the brushes.
+
+    """
+
+    description = "build config.py"
+    user_options = []
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        try:
+            cmd = ['pkg-config', '--variable=brushesdir', 'mypaint-brushes-2.0']
+            mypaint_brushdir = subprocess.check_output(cmd).decode()
+        except subprocess.CalledProcessError:
+            sys.stderr.write('pkg-config could not find package mypaint-brushes-2.0')
+            sys.exit(os.EX_CANTCREAT)
+        mypaint_brushdir = mypaint_brushdir.strip()
+        files = {
+            'config.py.in': 'lib/config.py',
+        }
+        replacements = {
+            '@MYPAINT_BRUSHDIR@': mypaint_brushdir,
+        }
+        self.replace(files, replacements)
+
+    def replace(self, files, replacements):
+        for f in files:
+            try:
+                shutil.copyfile(f, files[f])
+                fd = open(files[f], 'r+')
+                contents = fd.read()
+                # Make the necessary replacements.
+                for r in replacements:
+                    contents = contents.replace(r, replacements[r])
+                fd.truncate(0)
+                fd.seek(0)
+                fd.write(contents)
+                fd.flush()
+                fd.close()
+            except IOError:
+                sys.stderr.write('The script {} failed to update. Check your permissions.'.format(f))
+                sys.exit(os.EX_CANTCREAT)
+
+
 class Build (build):
     """Custom build (build_ext 1st for swig, run build_translations)
 
@@ -90,7 +142,7 @@ class Build (build):
     sub_commands = (
         [(a, b) for (a, b) in build.sub_commands if a == 'build_ext'] +
         [(a, b) for (a, b) in build.sub_commands if a != 'build_ext'] +
-        [("build_translations", None)]
+        [("build_translations", None)] + [("build_config", None)]
     )
 
 
@@ -198,7 +250,7 @@ class Demo (Command):
 
             self.announce("Demo: running %r..." % (demo_cmd,), level=2)
             subprocess.check_call(demo_cmd)
-        except:
+        except Exception:
             raise
         finally:
             self.announce("Demo: cleaning up %r..." % (temp_dir,), level=2)
@@ -296,8 +348,8 @@ class _ManagedInstBase (Command):
     def is_installed(self):
         """True if an installation is present at the prefix."""
         inst = self.distribution.get_command_obj("install", 1)
-        inst.root = "/"
-        inst.prefix = self.prefix
+        inst.root = self.prefix
+        inst.prefix = "."
         inst.ensure_finalized()
         inst.record = os.path.join(inst.install_lib, self.MANAGED_FILES_LIST)
         return os.path.isfile(inst.record)
@@ -310,8 +362,8 @@ class _ManagedInstBase (Command):
         )
 
         inst = self.distribution.get_command_obj("install", 1)
-        inst.root = "/"
-        inst.prefix = self.prefix
+        inst.root = self.prefix
+        inst.prefix = "."
         inst.ensure_finalized()
         inst.record = os.path.join(inst.install_lib, self.MANAGED_FILES_LIST)
 
@@ -363,7 +415,7 @@ class ManagedInstall (_ManagedInstBase):
     """Simplified "install" with a list of installed files.
 
     This command and ManagedUninstall are temporary hacks which we have
-    to use because `pip {install,uninstall}` doen't work yet. Once we
+    to use because `pip {install,uninstall}` doesn't work yet. Once we
     have proper namespacing (prefixed `mypaint.{lib,gui}` modules), we
     may be able to drop these commands and use standard ones.
 
@@ -383,8 +435,8 @@ class ManagedInstall (_ManagedInstBase):
         )
 
         inst = self.distribution.get_command_obj("install", 1)
-        inst.root = "/"
-        inst.prefix = self.prefix
+        inst.root = self.prefix
+        inst.prefix = "."
         inst.ensure_finalized()
         inst.record = os.path.join(inst.install_lib, self.MANAGED_FILES_LIST)
         self.announce(
@@ -446,7 +498,11 @@ def pkgconfig(packages, **kwopts):
     }
     for (pc_arg, extras_key) in extra_args_map.items():
         cmd = ["pkg-config", pc_arg] + list(packages)
-        for conf_arg in subprocess.check_output(cmd).split():
+        cmd_output = subprocess.check_output(
+            cmd,
+            universal_newlines=True,
+        )
+        for conf_arg in cmd_output.split():
             flag = conf_arg[:2]
             flag_value = conf_arg[2:]
             flag_key = flag_map.get(flag)
@@ -500,6 +556,7 @@ def get_ext_modules():
             "lcms2",
             "gtk+-3.0",
             "libmypaint-2.0",
+            "mypaint-brushes-2.0"
         ],
         include_dirs=[
             numpy.get_include(),
@@ -543,7 +600,6 @@ def get_data_files():
         ("appdata", ["desktop/mypaint.appdata.xml"]),
         ("applications", ["desktop/mypaint.desktop"]),
         ("thumbnailers", ["desktop/mypaint-ora.thumbnailer"]),
-        ("mypaint/brushes", ["brushes/order.conf"]),
     ]
 
     # Paths which can only derived from globbing the source tree.
@@ -552,7 +608,6 @@ def get_data_files():
         ("desktop/icons", "hicolor/*/*/*", "icons"),
         ("backgrounds", "*.*", "mypaint/backgrounds"),
         ("backgrounds", "*/*.*", "mypaint/backgrounds"),
-        ("brushes", "*/*.*", "mypaint/brushes"),
         ("palettes", "*.gpl", "mypaint/palettes"),
         ("pixmaps", "*.png", "mypaint/pixmaps"),
     ]
@@ -569,7 +624,7 @@ def get_data_files():
 
 setup(
     name='MyPaint',
-    version='1.3.0a0',
+    version='2.0.0a0',
     description='Simple painting program for use with graphics tablets.',
     author='Andrew Chadwick',
     author_email='a.t.chadwick@gmail.com',
@@ -585,6 +640,7 @@ setup(
         "build": Build,
         "build_ext": BuildExt,
         "build_translations": BuildTranslations,
+        "build_config": BuildConfig,
         "demo": Demo,
         "managed_install": ManagedInstall,
         "managed_uninstall": ManagedUninstall,

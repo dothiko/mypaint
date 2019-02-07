@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of MyPaint.
+# Copyright (C) 2007-2018 by the MyPaint Development Team.
 # Copyright (C) 2007-2014 by Martin Renold <martinxyz@gmx.ch>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -14,49 +15,39 @@ Painting is done in tileddrawwidget.py.
 """
 
 ## Imports
+
 from __future__ import division, print_function
 
 import os
 import os.path
-import time
 import webbrowser
 from warnings import warn
 import logging
-logger = logging.getLogger(__name__)
 import math
-import functools
-
-from gi.repository import Gtk
-from gi.repository import GObject
-from gi.repository import Gdk
-
-import historypopup
-import stategroup
-import colorpicker
-import windowing
-import toolbar
-import dialogs
-import layermodes
-import quickchoice
-from lib import helpers
-from lib import fileutils
-import gui.viewmanip   # registration
-import gui.layermanip  # registration
-from lib.color import RGBColor, HSVColor
-import uicolor
-import gui.picker
-import gui.footer
-import brushselectionwindow
-import sizechangepopup # XXX for `sizechange` popup
-import toolpalettepopup # XXX for `toolpalette` popup
-import brushhistorypopup # XXX for `brushhistory` popup
-
 import xml.etree.ElementTree as ET
 
-from overlays import LastPaintPosOverlay, ScaleOverlay
-from framewindow import FrameOverlay
-from symmetry import SymmetryOverlay
+from gi.repository import Gtk
+from gi.repository import Gdk
 
+from . import historypopup
+from . import stategroup
+from . import colorpicker  # noqa: F401 (registration of GObject classes)
+from . import windowing  # noqa: F401 (registration of GObject classes)
+from . import toolbar
+from . import dialogs
+from . import layermodes  # noqa: F401 (registration of GObject classes)
+from . import quickchoice
+import gui.viewmanip  # noqa: F401 (registration of GObject classes)
+import gui.layermanip  # noqa: F401 (registration of GObject classes)
+from lib.color import HSVColor
+from . import uicolor
+import gui.picker
+import gui.footer
+from . import brushselectionwindow  # noqa: F401 (registration)
+from .overlays import LastPaintPosOverlay
+from .overlays import ScaleOverlay
+from .framewindow import FrameOverlay
+from .symmetry import SymmetryOverlay
 import gui.tileddrawwidget
 import gui.displayfilter
 import gui.meta
@@ -64,7 +55,12 @@ import lib.xml
 import lib.glib
 from lib.gettext import gettext as _
 from lib.gettext import C_
-import gui.projectsave_progress
+import gui.projectsave_progress # XXX for `project-save`
+import sizechangepopup # XXX for `sizechange` popup
+import toolpalettepopup # XXX for `toolpalette` popup
+import brushhistorypopup # XXX for `brushhistory` popup
+
+logger = logging.getLogger(__name__)
 
 
 ## Module constants
@@ -72,36 +68,7 @@ import gui.projectsave_progress
 BRUSHPACK_URI = 'https://github.com/mypaint/mypaint/wiki/Brush-Packages'
 
 
-## Helpers
-
-def with_wait_cursor(func):
-    """python decorator that adds a wait cursor around a function"""
-    # TODO: put in a helper file?
-    @functools.wraps(func)
-    def wrapper(self, *args, **kwargs):
-        wait_cursor = Gdk.Cursor.new(Gdk.CursorType.WATCH)
-        toplevels = Gtk.Window.list_toplevels()
-        toplevels = [t for t in toplevels if t.get_window() is not None]
-        for toplevel in toplevels:
-            toplevel_win = toplevel.get_window()
-            if toplevel_win is not None:
-                toplevel_win.set_cursor(wait_cursor)
-            toplevel.set_sensitive(False)
-        try:
-            return func(self, *args, **kwargs)
-            # gtk main loop may be called in here...
-        finally:
-            for toplevel in toplevels:
-                toplevel.set_sensitive(True)
-                # ... which is why we need this check:
-                toplevel_win = toplevel.get_window()
-                if toplevel_win is not None:
-                    toplevel_win.set_cursor(None)
-    return wrapper
-
-
 ## Class definitions
-
 
 class DrawWindow (Gtk.Window):
     """Main drawing window"""
@@ -146,8 +113,8 @@ class DrawWindow (Gtk.Window):
     def __init__(self):
         super(DrawWindow, self).__init__()
 
-        import application
-        app = application.get_app()
+        import gui.application
+        app = gui.application.get_app()
         self.app = app
         self.app.kbm.add_window(self)
 
@@ -184,9 +151,9 @@ class DrawWindow (Gtk.Window):
         # Park the focus on the main tdw rather than on the toolbar. Default
         # activation doesn't really mean much for MyPaint's main window, so
         # it's safe to do this and it looks better.
-        #self.main_widget.set_can_default(True)
-        #self.main_widget.set_can_focus(True)
-        #self.main_widget.grab_focus()
+        #   self.main_widget.set_can_default(True)
+        #   self.main_widget.set_can_focus(True)
+        #   self.main_widget.grab_focus()
 
     def _realize_cb(self, drawwindow):
         # Deferred setup: anything that needs to be done when self.app is fully
@@ -236,8 +203,8 @@ class DrawWindow (Gtk.Window):
         layerstack.layer_deleted += self._update_layer_pick_action
 
     def _init_actions(self):
-        # Actions are defined in resources.xml: all we need to do here is connect
-        # some extra state management.
+        # Actions are defined in resources.xml.
+        # all we need to do here is connect some extra state management.
 
         ag = self.action_group = self.app.builder.get_object("WindowActions")
         self.update_fullscreen_action()
@@ -259,12 +226,12 @@ class DrawWindow (Gtk.Window):
 
         self.popup_states = {
             'ColorHistoryPopup': hist,
-            }
+        }
 
         hist.autoleave_timeout = 0.600
         self.history_popup_state = hist
 
-        for action_name, popup_state in self.popup_states.iteritems():
+        for action_name, popup_state in self.popup_states.items():
             label = self.app.find_action(action_name).get_label()
             popup_state.label = label
 
@@ -275,7 +242,11 @@ class DrawWindow (Gtk.Window):
         with open(menupath) as fp:
             menubar_xml = fp.read()
         self.app.ui_manager.add_ui_from_string(menubar_xml)
-        self.popupmenu = self._clone_menu(menubar_xml, 'PopupMenu', self.app.doc.tdw)
+        self.popupmenu = self._clone_menu(
+            menubar_xml,
+            'PopupMenu',
+            self.app.doc.tdw,
+        )
         self.menubar = self.app.ui_manager.get_widget('/Menubar')
 
     def _init_toolbars(self):
@@ -295,6 +266,7 @@ class DrawWindow (Gtk.Window):
         rootmenu_elt = ui_elt.find("menubar")
         rootmenu_elt.attrib["name"] = name
         xml = ET.tostring(ui_elt)
+        xml = xml.decode("utf-8")
         self.app.ui_manager.add_ui_from_string(xml)
         tmp_menubar = self.app.ui_manager.get_widget('/' + name)
         popupmenu = Gtk.Menu()
@@ -312,10 +284,10 @@ class DrawWindow (Gtk.Window):
 
     def update_title(self, filename):
         if filename:
-            #TRANSLATORS: window title for use with a filename
+            # TRANSLATORS: window title for use with a filename
             self.set_title(_("%s - MyPaint") % os.path.basename(filename))
         else:
-            #TRANSLATORS: window title for use without a filename
+            # TRANSLATORS: window title for use without a filename
             self.set_title(_("MyPaint"))
 
     def _drag_data_received_cb(self, widget, context, x, y, data, info, time):
@@ -457,7 +429,7 @@ class DrawWindow (Gtk.Window):
         disp_overlays = [
             ('ui.feedback.scale', ScaleOverlay),
             ('ui.feedback.last_pos', LastPaintPosOverlay),
-            ]
+        ]
         overlays_changed = False
         for key, class_ in disp_overlays:
             current_instance = None
@@ -585,7 +557,9 @@ class DrawWindow (Gtk.Window):
         # Respond to changes of the fullscreen state only
         if not event.changed_mask & Gdk.WindowState.FULLSCREEN:
             return
-        self.is_fullscreen = event.new_window_state & Gdk.WindowState.FULLSCREEN
+        self.is_fullscreen = (
+            event.new_window_state & Gdk.WindowState.FULLSCREEN
+        )
         self.update_fullscreen_action()
         # Reset all state for the top mode on the stack. Mainly for
         # freehand modes: https://github.com/mypaint/mypaint/issues/39
@@ -641,7 +615,10 @@ class DrawWindow (Gtk.Window):
     ## Scratchpad menu options
 
     def save_scratchpad_as_default_cb(self, action):
-        self.app.filehandler.save_scratchpad(self.app.filehandler.get_scratchpad_default(), export=True)
+        self.app.filehandler.save_scratchpad(
+            self.app.filehandler.get_scratchpad_default(),
+            export=True,
+        )
 
     def clear_default_scratchpad_cb(self, action):
         self.app.filehandler.delete_default_scratchpad()
@@ -666,10 +643,16 @@ class DrawWindow (Gtk.Window):
         else:
             current_pad = self.app.filehandler.get_scratchpad_autosave()
         self.app.filehandler.open_scratchpad_dialog()
-        # Check to see if a file has been opened outside of the scratchpad directory
-        if not os.path.abspath(self.app.scratchpad_filename).startswith(os.path.abspath(self.app.filehandler.get_scratchpad_prefix())):
-            # file is NOT within the scratchpad directory - load copy as current scratchpad
-            self.app.scratchpad_filename = self.app.preferences['scratchpad.last_opened'] = current_pad
+
+        # Check to see if a file has been opened
+        # outside of the scratchpad directory
+        path_abs = os.path.abspath(self.app.scratchpad_filename)
+        pfx_abs = os.path.abspath(self.app.filehandler.get_scratchpad_prefix())
+        if not path_abs.startswith(pfx_abs):
+            # file is NOT within the scratchpad directory -
+            # load copy as current scratchpad
+            self.app.preferences['scratchpad.last_opened'] = current_pad
+            self.app.scratchpad_filename = current_pad
 
     def save_as_scratchpad_cb(self, action):
         self.app.filehandler.save_scratchpad_as_dialog()
@@ -776,7 +759,7 @@ class DrawWindow (Gtk.Window):
         )
         if not filename:
             return
-        imported = self.app.brushmanager.import_brushpack(filename,  self)
+        imported = self.app.brushmanager.import_brushpack(filename, self)
         logger.info("Imported brush groups %r", imported)
         workspace = self.app.workspace
         for groupname in imported:
@@ -953,4 +936,3 @@ class DrawWindow (Gtk.Window):
             logger.debug("Updating display_filter on %r to %r", tdw, newfilter)
             tdw.renderer.display_filter = newfilter
             tdw.queue_draw()
-

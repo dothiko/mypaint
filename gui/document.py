@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
-#
 # This file is part of MyPaint.
-# Copyright (C) 2010-2016 by the MyPaint Development Team.
+# Copyright (C) 2010-2018 by the MyPaint Development Team.
 # Copyright (C) 2007-2013 by Martin Renold <martinxyz@gmx.ch>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -37,7 +36,7 @@ import lib.layer
 import lib.helpers
 from lib.helpers import clamp
 import lib.observable
-import stategroup
+from . import stategroup
 import gui.mode
 import gui.colorpicker   # purely for registration
 import gui.symmetry   # registration only
@@ -48,10 +47,12 @@ import gui.buttonmap
 import gui.externalapp
 import gui.device
 import gui.backgroundwindow
-import gui.exinktool   # registration only
+from gui.widgets import with_wait_cursor
 from lib.gettext import gettext as _
 from lib.gettext import C_
+from lib.modes import PASS_THROUGH_MODE
 import gui.tileddrawwidget # XXX for `align layer`
+import gui.exinktool   # XXX for exinktool, registration only
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ class CanvasController (object):
 
     """
 
-    # NOTE: If muliple, editable, views of a single model are required,
+    # NOTE: If multiple, editable, views of a single model are required,
     # NOTE: then this interface will have to be revised.
 
     ## Initialization
@@ -184,7 +185,7 @@ class CanvasController (object):
         :param event: The button release event which ended the input stroke
 
         Observer functions and methods are called with the originating Document
-        Controler and the GTK event as arguments. This is a good place to
+        Controller and the GTK event as arguments. This is a good place to
         listen for "just painted something" events in some cases; ``app.brush``
         will contain everything needed about the input stroke which is ending.
         """
@@ -426,6 +427,9 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
                 layerstack.layer_deleted,
             ],
             self._update_trim_layer_action: [
+                layerstack.current_path_updated,
+            ],
+            self._update_layer_slice_actions: [
                 layerstack.current_path_updated,
             ],
             self._update_show_background_toggle: [
@@ -920,7 +924,10 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             ))
             return
         rootstack = self.model.layer_stack
-        pixbuf = rootstack.current.render_as_pixbuf(*bbox, alpha=True)
+        pixbuf = rootstack.render_layer_as_pixbuf(
+            rootstack.current, bbox,
+            alpha=True,
+        )
         cb = self._get_clipboard()
         cb.set_image(pixbuf)
         self.app.show_transient_message(C_(
@@ -986,6 +993,53 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         current = rootstack.current
         can_trim = current is not rootstack and current.get_trimmable()
         app.find_action("TrimLayer").set_sensitive(can_trim)
+
+    ## Layer tile manipulation commands
+
+    @with_wait_cursor
+    def uniq_layer_tiles_cb(self, action):
+        """Discard tiles that don't change the backdrop"""
+        self.model.uniq_current_layer(pixels=False)
+
+    @with_wait_cursor
+    def uniq_layer_pixels_cb(self, action):
+        """Discard tiles and pixels that don't change the backdrop"""
+        self.model.uniq_current_layer(pixels=True)
+
+    @with_wait_cursor
+    def refactor_layer_group_tiles_cb(self, action):
+        """Extract common tiles to a new sublayer & delete from all others."""
+        self.model.refactor_current_layer_group(pixels=False)
+
+    @with_wait_cursor
+    def refactor_layer_group_pixels_cb(self, action):
+        """Extract common pixels to a new sublayer & delete from all others."""
+        self.model.refactor_current_layer_group(pixels=True)
+
+    def _update_layer_slice_actions(self, *_ignored):
+        """Updates the layer-slice actions' sensitivities."""
+        app = self.app
+        rootstack = self.model.layer_stack
+        current = rootstack.current
+
+        can_uniq = (current is not None)
+        can_uniq &= isinstance(current, lib.layer.PaintingLayer)
+        uniq_acts = [
+            "UniqLayerTiles",
+            "UniqLayerPixels",
+        ]
+        for act in uniq_acts:
+            app.find_action(act).set_sensitive(can_uniq)
+
+        can_refactor = (current is not None)
+        can_refactor &= isinstance(current, lib.layer.LayerStack)
+        can_refactor &= (current.mode != PASS_THROUGH_MODE)
+        refactor_acts = [
+            "RefactorLayerGroupTiles",
+            "RefactorLayerGroupPixels",
+        ]
+        for act in refactor_acts:
+            app.find_action(act).set_sensitive(can_refactor)
 
     def toggle_frame_cb(self, action):
         """Frame Enabled toggle callback"""
@@ -1902,7 +1956,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             self.reset_view(rotation, zoom, mirror)
 
     def reset_view(self, rotation=False, zoom=False, mirror=False):
-        """Programatically resets the view to the defaults.
+        """Programmatically resets the view to the defaults.
 
         :param rotation: Reset rotation to zero.
         :param zoom: Reset rotation to the prefs default zoom.
@@ -1941,7 +1995,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             self.notify_view_changed(immediate=True)
 
     def fit_view(self):
-        """Programatically fits the view to the document"""
+        """Programmatically fits the view to the document"""
         bbox = tuple(self.tdw.doc.get_effective_bbox())
         w, h = bbox[2:4]
         if w == 0:
@@ -1967,7 +2021,7 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
         wsin = w * sin
         hcos = h * cos
         # We only need to calculate the positions of two corners of the
-        # bbox since it is centered and symetrical, but take the max
+        # bbox since it is centered and symmetrical, but take the max
         # value since during rotation one corner's distance along the
         # x axis shortens while the other lengthens. Same for the y axis.
         x = max(abs(wcos - hsin), abs(wcos + hsin))

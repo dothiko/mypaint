@@ -1,4 +1,5 @@
 # This file is part of MyPaint.
+# -*- coding: utf-8 -*-
 # Copyright (C) 2011-2017 by Andrew Chadwick <a.t.chadwick@gmail.com>
 # Copyright (C) 2007-2012 by Martin Renold <martinxyz@gmx.ch>
 #
@@ -16,7 +17,6 @@ from __future__ import division, print_function
 import zlib
 import logging
 import os
-from cStringIO import StringIO
 import time
 import tempfile
 import shutil
@@ -34,15 +34,22 @@ import lib.helpers as helpers
 import lib.fileutils
 import lib.pixbuf
 import lib.modes
-import core
+from . import core
 import lib.layer.error
 import lib.autosave
 import lib.projectsave
 import lib.xml
 import lib.feedback
-import gui.pickable as pickable
+from . import rendering
+from lib.pycompat import PY3
+from lib.pycompat import unicode
 
-import numpy as np
+if PY3:
+    from io import StringIO
+    from io import BytesIO
+else:
+    from cStringIO import StringIO
+
 
 logger = logging.getLogger(__name__)
 
@@ -318,7 +325,6 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
     @property
     def effective_opacity(self):
         """The opacity used when compositing a layer: zero if invisible"""
-        # Mirror what composite_tile does.
         if self.visible:
             return self.opacity
         else:
@@ -358,74 +364,44 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
     def get_tile_coords(self):
         return self._surface.get_tiles().keys()
 
-    def blit_tile_into(self, dst, dst_has_alpha, tx, ty, mipmap_level=0,
-                       **kwargs):
-        """Unconditionally copy one tile's data into an array.
+    def get_render_ops(self, spec):
+        """Get rendering instructions."""
 
-        The minimal surface-based implementation copies one tile of the
-        backing surface over the array dst, modifying only dst.
-
-        """
-        self._surface.blit_tile_into(
-            dst, dst_has_alpha,
-            tx, ty,
-            mipmap_level=mipmap_level,
-        )
-
-    def composite_tile(self, dst, dst_has_alpha, tx, ty, mipmap_level=0,
-                       layers=None, previewing=None, solo=None,
-                       current_layer=None, current_layer_overlay=None,
-                       **kwargs):
-        """Composite a tile's data into an array, with options.
-
-        The minimal surface-based implementation composites one tile of the
-        backing surface over the array dst, modifying only dst.
-
-        The overlay for the current_layer is intended as a generic place
-        to hang special effects and previews of work being captured. It
-        is only used during rendering for the screen.
-
-        """
+        visible = self.visible
         mode = self.mode
         opacity = self.opacity
-        if layers is not None:
-            if self not in layers:
-                return
-        elif not self.visible:
-            return
-        if self is previewing:  # not solo though - we show the effect of that
-            mode = lib.modes.DEFAULT_MODE
+
+        if spec.layers is not None:
+            if self not in spec.layers:
+                return []
+
+        mode_default = lib.modes.DEFAULT_MODE
+        if spec.previewing:
+            mode = mode_default
             opacity = 1.0
+            visible = True
+        elif spec.solo:
+            if self is spec.current:
+                visible = True
 
-        # Most of the time, surface-backed layers render directly onto
-        # the backdrop.
+        if not visible:
+            return []
 
-        if (self is not current_layer) or (current_layer_overlay is None):
-            self._surface.composite_tile(
-                dst, dst_has_alpha, tx, ty,
-                mipmap_level=mipmap_level,
-                opacity=opacity,
-                mode=mode,
-            )
-            return
-
-        # This is the current layer and it has an overlay.
-        # Render them like an isolated group.
-
-        tiledims = (tiledsurface.N, tiledsurface.N, 4)
-        tmp = np.zeros(tiledims, dtype='uint16')
-
-        self.blit_tile_into(tmp, True, tx, ty, mipmap_level=mipmap_level)
-        current_layer_overlay.composite_tile(
-            tmp, True, tx, ty,
-            mipmap_level=mipmap_level,
-        )
-
-        lib.mypaintlib.tile_combine(mode, tmp, dst, dst_has_alpha, opacity)
-
-    def render_as_pixbuf(self, *rect, **kwargs):
-        """Renders this layer as a pixbuf"""
-        return self._surface.render_as_pixbuf(*rect, **kwargs)
+        ops = []
+        if (spec.current_overlay is not None) and (self is spec.current):
+            # Temporary special effects, e.g. layer blink.
+            ops.append((rendering.Opcode.PUSH, None, None, None))
+            ops.append((
+                rendering.Opcode.COMPOSITE, self._surface, mode_default, 1.0,
+            ))
+            ops.extend(spec.current_overlay.get_render_ops(spec))
+            ops.append(rendering.Opcode.POP, None, mode, opacity)
+        else:
+            # The 99%+ case☺
+            ops.append((
+                rendering.Opcode.COMPOSITE, self._surface, mode, opacity,
+            ))
+        return ops
 
     ## Translating
 
@@ -790,7 +766,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
     def write_blank_backing_file(self, file, **kwargs):
         """Write out the zeroth backing file revision.
 
-        :param file: file-like object to write
+        :param file: open file-like object to write bytes into.
         :param **kwargs: all construction params, including x and y.
 
         This operation is deferred until the file is needed.
@@ -1139,7 +1115,13 @@ class _ManagedFile (object):
         return new_unique_path
 
     def __str__(self):
-        raise NotImplementedError("Under Python 2.x, use unicode()")
+        if PY3:
+            return self.__unicode__()
+        else:
+            return self.__bytes__()  # Always an error under Py2
+
+    def __bytes__(self):
+        raise NotImplementedError("Use unicode strings for file names.")
 
     def __unicode__(self):
         file_path = os.path.join(self._dir, self._basename)
@@ -1152,9 +1134,9 @@ class _ManagedFile (object):
     def __del__(self):
         try:
             file_path = unicode(self)
-        except:
-            logger.warning("_ManagedFile: cleanup of incomplete object, file "
-                           "may still exist on disk")
+        except Exception:
+            logger.exception("_ManagedFile: cleanup of incomplete object. "
+                             "File may still exist on disk.")
             return
         if os.path.exists(file_path):
             logger.debug("_ManagedFile: %r is no longer referenced, deleting",
@@ -1424,6 +1406,9 @@ class VectorLayer (FileBackedLayer):
             'stroke-dasharray:9, 9;stroke-dashoffset:0" />'
             '</svg>'
         ).format(col=col)
+
+        if not isinstance(svg, bytes):
+            svg = svg.encode("utf-8")
         file.write(svg)
 
 
@@ -1646,7 +1631,6 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
     # until v2.0.0.
 
     _ORA_STROKEMAP_ATTR = "{%s}strokemap" % (lib.xml.OPENRASTER_MYPAINT_NS,)
-    _ORA_STROKEMAP_LEGACY_ATTR = "mypaint_strokemap_v2"
 
     ## Initializing & resetting
 
@@ -1702,7 +1686,6 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         y += int(attrs.get('y', 0))
         supported_strokemap_attrs = [
             self._ORA_STROKEMAP_ATTR,
-            self._ORA_STROKEMAP_LEGACY_ATTR,
         ]
         strokemap_name = None
         for attr_qname in supported_strokemap_attrs:
@@ -1718,7 +1701,11 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         if strokemap_name is None:
             return
         if orazip:
-            sio = StringIO(orazip.read(strokemap_name))
+            if PY3:
+                ioclass = BytesIO
+            else:
+                ioclass = StringIO
+            sio = ioclass(orazip.read(strokemap_name))
             self._load_strokemap_from_file(sio, x, y)
             sio.close()
         elif oradir:
@@ -1893,68 +1880,27 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
             if (dx, dy) != (0, 0):
                 stroke.translate(dx, dy)
             return stroke
-        # XXX for `node pick` end
         while True:
             t = f.read(1)
-            # XXX for `node pick
-            if t == 'b':
-                __read_brush_from_stream(f, brushes)
-            elif t == 's':
-                stroke = __read_stroke_from_stream(
-                    f, lib.strokemap.StrokeShape()
-                )
+            if t == b"b":
+                length, = struct.unpack('>I', f.read(4))
+                tmp = f.read(length)
+                brushes.append(zlib.decompress(tmp))
+            elif t == b"s":
+                brush_id, length = struct.unpack('>II', f.read(2 * 4))
+                stroke = lib.strokemap.StrokeShape()
+                tmp = f.read(length)
+                stroke.init_from_string(tmp, x, y)
+                stroke.brush_string = brushes[brush_id]
+                # Translate non-aligned strokes
+                if (dx, dy) != (0, 0):
+                    stroke.translate(dx, dy)
                 self.strokes.append(stroke)
-            elif t == 'i':
-                strokeinfo = __read_stroke_from_stream(
-                    f, lib.strokemap.StrokeInfo()
-                )
-                # Read additional node informations.
-                strokeinfo.init_info_from_string(
-                    *pickable.load_from_filestream(f)
-                )
-                self.strokes.append(strokeinfo)
-            elif t == '}':
-                # For Backward compatiblity of wrong codes.
-                # TODO This block should be removed as soon as possible.
-                block_cnt = 0
-                while True:
-                    t = f.read(1)
-                    if t == 'b':
-                        __read_brush_from_stream(f, brushes)
-                    elif t == 'i':
-                        strokeinfo = __read_stroke_from_stream(
-                            f, lib.strokemap.StrokeInfo()
-                        )
-                        # Read additional node informations.
-                        strokeinfo.init_info_from_string(
-                            *pickable.load_from_filestream(f)
-                        )
-                        self.strokes.append(strokeinfo)
-                        block_cnt += 1
-                    elif t == '}':
-                        # The second end signature.
-                        # i.e. end of expanded portion.
-                        break
-                    elif t == '':
-                        if block_cnt > 0:
-                            # There are expanded portion 
-                            # but we met end of file unexpectedly
-                            # before end signature.
-                            assert False, 'unexpected EOF'
-                        else:
-                            # There is no expanded portion.
-                            # Just exit.
-                            break
-                    else:
-                        logger.warning(
-                            "Strokemap file contains unknown signature: %s", t
-                        )
-                        # Just exit without assertion, for further expansion.
-                        break 
-            # XXX for `node pick` end
+            elif t == b"}":
                 break
             else:
-                assert False, 'invalid strokemap'
+                errmsg = "Invalid strokemap (initial char=%r)" % (t,)
+                raise ValueError(errmsg)
 
     ## Strokemap querying
 
@@ -1983,7 +1929,10 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         )
         # Store stroke shape data too
         x, y, w, h = self.get_bbox()
-        sio = StringIO()
+        if PY3:
+            sio = BytesIO()
+        else:
+            sio = StringIO()
         t0 = time.time()
         _write_strokemap(sio, self.strokes, -x, -y)
         t1 = time.time()
@@ -1996,7 +1945,6 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         # Add strokemap XML attrs and return.
         # See comment above for compatibility strategy.
         elem.attrib[self._ORA_STROKEMAP_ATTR] = storepath
-        elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = storepath
         return elem
 
     def save_to_project(self, projdir, path,
@@ -2060,7 +2008,6 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         # Add strokemap XML attrs and return.
         # See comment above for compatibility strategy.
         elem.attrib[self._ORA_STROKEMAP_ATTR] = dat_relpath
-        elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = dat_relpath
         manifest.add(dat_relpath)
         return elem
 
@@ -2135,25 +2082,23 @@ def _write_strokemap(f, strokes, dx, dy):
     brush2id = {}
     for stroke in strokes:
         _write_strokemap_stroke(f, stroke, brush2id, dx, dy)
-    f.write('}')
+    f.write(b'}')
 
 def _write_strokemap_stroke(f, stroke, brush2id, dx, dy):
-    s = stroke.brush_string
-    if isinstance(stroke, lib.strokemap.StrokeInfo):
-        signature = 'i'
-    else:
-        signature = 's'
+    # save brush (if not already recorderd)
+    b = stroke.brush_string
+    if b not in brush2id:
+        brush2id[b] = len(brush2id)
+        if isinstance(b, unicode):
+            b = b.encode("utf-8")
+        b = zlib.compress(b)
+        f.write(b'b')
+        f.write(struct.pack('>I', len(b)))
+        f.write(b)
 
-    # save brush (if not already known)
-    if s not in brush2id:
-        brush2id[s] = len(brush2id)
-        s = zlib.compress(s)
-        f.write('b')
-        f.write(struct.pack('>I', len(s)))
-        f.write(s)
     # save stroke
     s = stroke.save_to_string(dx, dy)
-    f.write(signature)
+    f.write(b's')
     f.write(struct.pack('>II', brush2id[stroke.brush_string], len(s)))
     f.write(s)
 
@@ -2197,7 +2142,7 @@ class _StrokemapFileUpdateTask (object):
             self._strokes_i += 1
             return True
         else:
-            self._tmp.write('}')
+            self._tmp.write(b'}')
             self._tmp.close()
             lib.fileutils.replace(self._tmp.name, self._final_name)
             logger.debug("autosave: updated %r", self._final_name)

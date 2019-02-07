@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2012-2016 by the MyPaint Development Team.
+# Copyright (C) 2012-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -26,15 +26,18 @@ from gi.repository import Gtk
 from gi.repository import GdkPixbuf
 import cairo
 
-from util import clamp, add_distance_fade_stops, draw_marker_circle
+from .util import clamp
+from .util import add_distance_fade_stops
+from .util import draw_marker_circle
 from lib.color import RGBColor, HCYColor
-from bases import CachedBgDrawingArea
-from bases import IconRenderable
-import uimisc
+from .bases import CachedBgDrawingArea
+from .bases import IconRenderable
+from . import uimisc
 from lib.palette import Palette
 from lib.observable import event
 import gui.dialogs
 import gui.uicolor
+from lib.pycompat import xrange
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +76,7 @@ class ColorManager (GObject.GObject):
 
     ## Behavioural constants
 
-    _DEFAULT_HIST = ['#ee3333', '#336699', '#44aa66', '#aa6633', '#292929']
+    _DEFAULT_HIST = ['#ee3333', '#336699', '#44aa66', '#aa6633', '#003153']
     _HIST_LEN = 5
     _HUE_DISTORTION_TABLES = {
         # {"PREFS_KEY_WHEEL_TYPE-name": table-of-ranges}
@@ -372,7 +375,7 @@ class ColorAdjuster(object):
 
     ## Constants
 
-    _DEFAULT_COLOR = RGBColor(0.55, 0.55, 0.55)
+    _DEFAULT_COLOR = RGBColor(0.0, 0.19, 0.33)
 
     ## Central ColorManager instance (accessors)
 
@@ -652,7 +655,7 @@ class ColorAdjusterWidget (CachedBgDrawingArea, ColorAdjuster):
 
         This implementation of `CachedBgWidgetMixin.get_background_validity()`
         uses the full string representation of the managed color, but can be
-        overriden to return a smaller subset of its channels or quantize it
+        overridden to return a smaller subset of its channels or quantize it
         for fewer redraws.
 
         This implementation also respects the IS_IMMEDIATE flag:
@@ -712,7 +715,7 @@ class ColorAdjusterWidget (CachedBgDrawingArea, ColorAdjuster):
     def __motion_notify_cb(self, widget, event):
         """Button1 motion handler."""
         pos = event.x, event.y
-        if self.__button_down == 1:
+        if (self.__button_down is not None) and self.__button_down == 1:
             if self.IS_DRAG_SOURCE:
                 if not self.__drag_start_color:
                     return False
@@ -745,7 +748,8 @@ class ColorAdjusterWidget (CachedBgDrawingArea, ColorAdjuster):
                 self.set_managed_color(color)
 
         # Relative chroma/luma/hue bending with other buttons.
-        elif self.ALLOW_HCY_TWEAKING and self.__button_down > 1:
+        elif ((self.__button_down is not None) and self.ALLOW_HCY_TWEAKING
+              and self.__button_down > 1):
             if self.__drag_start_color is None:
                 return False
             col = HCYColor(color=self.__drag_start_color)

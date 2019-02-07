@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2013 by Andrew Chadwick <a.t.chadwick@gmail.com>
+# Copyright (C) 2013-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -11,23 +11,20 @@
 
 from __future__ import division, print_function
 
-import gi
 from gi.repository import Gtk
 
 from lib.gettext import C_
 
-import workspace
-import widgets
-
-from colors.hcywheel import HCYAdjusterPage
-from colors.hsvwheel import HSVAdjusterPage
-from colors.paletteview import PalettePage
-from colors.hsvcube import HSVCubePage
-from colors.hsvsquare import HSVSquarePage
-from colors.sliders import ComponentSlidersAdjusterPage
-import colors.changers
-from colors import ColorAdjuster
-from colors.uimisc import borderless_button
+from . import workspace
+from . import widgets
+from gui.colors.hcywheel import HCYAdjusterPage
+from gui.colors.hsvwheel import HSVAdjusterPage
+from gui.colors.paletteview import PalettePage
+from gui.colors.hsvcube import HSVCubePage
+from gui.colors.hsvsquare import HSVSquarePage
+from gui.colors.sliders import ComponentSlidersAdjusterPage
+import gui.colors.changers
+from gui.colors import ColorAdjuster
 
 
 ## Adapter classes for old-style "Page" ColorAdjuster classes
@@ -59,10 +56,10 @@ class _PageToolAdapter (Gtk.VBox, ColorAdjuster):
         # Properties button
         properties_desc = self.PAGE_CLASS.get_properties_description()
         if properties_desc is not None:
-            show_props = lambda *a: page.show_properties()
+            show_props = lambda *a: page.show_properties()  # noqa: E731
             self.tool_widget_properties = show_props
         # Adjuster setup
-        from application import get_app
+        from gui.application import get_app
         self._app = get_app()
         self.set_color_manager(self._app.brush_color_manager)
         # Sizing.
@@ -94,9 +91,11 @@ class HSVCubeTool (_PageToolAdapter):
     __gtype_name__ = 'MyPaintHSVCubeTool'
     PAGE_CLASS = HSVCubePage
 
+
 class HSVSquareTool (_PageToolAdapter):
     __gtype_name__ = 'MyPaintHSVSquareTool'
     PAGE_CLASS = HSVSquarePage
+
 
 class ComponentSlidersTool (_PageToolAdapter):
     __gtype_name__ = 'MyPaintComponentSlidersTool'
@@ -123,7 +122,7 @@ class _SimpleAdjusterAdapter (Gtk.VBox):
     def __init__(self):
         super(_SimpleAdjusterAdapter, self).__init__()
         adjuster = self.ADJUSTER_CLASS()
-        from application import get_app
+        from gui.application import get_app
         self._app = get_app()
         adjuster.set_color_manager(self._app.brush_color_manager)
         self.pack_start(adjuster, True, True, 0)
@@ -135,7 +134,7 @@ class _SimpleAdjusterAdapter (Gtk.VBox):
 
 class WashColorChangerTool (_SimpleAdjusterAdapter):
     __gtype_name__ = "MyPaintWashColorChangerTool"
-    ADJUSTER_CLASS = colors.changers.Wash
+    ADJUSTER_CLASS = gui.colors.changers.Wash
     tool_widget_icon_name = "mypaint-tool-wash-color-changer"
     tool_widget_title = C_(
         "color changer dock panels: tab tooltip title",
@@ -149,7 +148,7 @@ class WashColorChangerTool (_SimpleAdjusterAdapter):
 
 class RingsColorChangerTool (_SimpleAdjusterAdapter):
     __gtype_name__ = "MyPaintRingsColorChangerTool"
-    ADJUSTER_CLASS = colors.changers.Rings
+    ADJUSTER_CLASS = gui.colors.changers.Rings
     tool_widget_icon_name = "mypaint-tool-rings-color-changer"
     tool_widget_title = C_(
         "color changer dock panels: tab tooltip title",
@@ -163,7 +162,7 @@ class RingsColorChangerTool (_SimpleAdjusterAdapter):
 
 class CrossedBowlColorChangerTool (_SimpleAdjusterAdapter):
     __gtype_name__ = "MyPaintCrossedBowlColorChangerTool"
-    ADJUSTER_CLASS = colors.changers.CrossedBowl
+    ADJUSTER_CLASS = gui.colors.changers.CrossedBowl
     tool_widget_icon_name = "mypaint-tool-crossed-bowl-color-changer"
     tool_widget_title = C_(
         "color changer dock panels: tab tooltip title",
@@ -176,7 +175,7 @@ class CrossedBowlColorChangerTool (_SimpleAdjusterAdapter):
 
 
 def _new_color_adjusters_menu():
-    from application import get_app
+    from gui.application import get_app
     app = get_app()
     menu = Gtk.Menu()
     action_names = [

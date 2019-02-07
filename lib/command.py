@@ -1,6 +1,7 @@
 # This file is part of MyPaint.
 # -*- coding: utf-8 -*-
-# Copyright (C) 2007-2008 by Martin Renold <martinxyz@gmx.ch>
+# Copyright (C) 2010-2018 by the MyPaint Development Team.
+# Copyright (C) 2007-2012 by Martin Renold <martinxyz@gmx.ch>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -8,7 +9,6 @@
 # (at your option) any later version.
 
 ## Imports
-from __future__ import division, print_function
 
 from gi.repository import Gtk
 import numpy as np # XXX for `adjust-layer`
@@ -23,10 +23,20 @@ import lib.surface
 import lib.tiledsurface
 import lib.pyramidfill
 
+from __future__ import division, print_function
+from warnings import warn
 from copy import deepcopy
 import weakref
 from gettext import gettext as _
 from logging import getLogger
+
+import lib.layer
+from . import helpers
+from lib.observable import event
+import lib.stroke
+from lib.pycompat import unicode
+
+
 logger = getLogger(__name__)
 
 
@@ -862,6 +872,52 @@ class TrimLayer (Command):
     def undo(self):
         layer = self.doc.layer_stack.current
         layer.load_snapshot(self.before)
+
+
+class UniqLayer (Command):
+    """Remove areas from the current layer that don't alter the backdrop."""
+
+    display_name = _(u"Uniquify Layer Pixels")
+
+    def __init__(self, doc, pixels=False, **kwds):
+        super(UniqLayer, self).__init__(doc, **kwds)
+        self._before = None
+        self._pixels = pixels
+
+    def redo(self):
+        root = self.doc.layer_stack
+        layer = root.current
+        self._before = layer.save_snapshot()
+        path = root.current_path
+        root.uniq_layer(path, pixels=self._pixels)
+
+    def undo(self):
+        root = self.doc.layer_stack
+        layer = root.current
+        layer.load_snapshot(self._before)
+
+
+class RefactorGroup (Command):
+    """Extract common parts of sublayers to a new layer, then delete them."""
+
+    display_name = _(u"Refactor Group")
+
+    def __init__(self, doc, pixels=False, **kwds):
+        super(RefactorGroup, self).__init__(doc, **kwds)
+        self._before = None
+        self._pixels = pixels
+
+    def redo(self):
+        root = self.doc.layer_stack
+        layer = root.current
+        self._before = layer.save_snapshot()
+        path = root.current_path
+        root.refactor_layer_group(path, pixels=self._pixels)
+
+    def undo(self):
+        root = self.doc.layer_stack
+        layer = root.current
+        layer.load_snapshot(self._before)
 
 
 class ClearLayer (Command):

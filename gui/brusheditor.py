@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # This file is part of MyPaint.
-# Copyright (C) 2014-2017 by the MyPaint Develoment Team.
+# Copyright (C) 2014-2018 by the MyPaint Development Team.
 # Copyright (C) 2007-2013 by Martin Renold <martinxyz@gmx.ch>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -26,10 +26,10 @@ from gi.repository import GdkPixbuf
 from lib import brushsettings
 
 import lib.brush
-import dialogs
-import brushmanager
-from builderhacks import add_objects_from_template_string
-from windowing import SubWindow
+from . import dialogs
+from . import brushmanager
+from .builderhacks import add_objects_from_template_string
+from .windowing import SubWindow
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class BrushEditorWindow (SubWindow):
     def __init__(self):
         app = None
         if __name__ != '__main__':
-            from application import get_app
+            from gui.application import get_app
             app = get_app()
             self._brush = app.brush
             bm = app.brushmanager
@@ -99,6 +99,7 @@ class BrushEditorWindow (SubWindow):
         self._brush.observers.append(self.brush_modified_cb)
         self._live_update_idle_cb_id = None
         self._updating_metadata_ui = False
+        self.set_default_size(1000, 800)
 
     def _init_adjustments(self):
         """Initializes adjustments for the scales used internally
@@ -345,6 +346,24 @@ class BrushEditorWindow (SubWindow):
                     'offset_by_speed_slowness',
                 ],
             }, {
+                'id': 'offsets',
+                'title': C_(
+                    'brush settings list: setting group',
+                    'Directional Offsets',
+                ),
+                'settings': [
+                    'offset_multiplier',
+                    'offset_angle_adj',
+                    'offset_x',
+                    'offset_y',
+                    'offset_angle',
+                    'offset_angle_2',
+                    'offset_angle_asc',
+                    'offset_angle_2_asc',
+                    'offset_angle_view',
+                    'offset_angle_2_view',
+                ],
+            }, {
                 'id': 'tracking',
                 'title': C_(
                     'brush settings list: setting group',
@@ -380,6 +399,17 @@ class BrushEditorWindow (SubWindow):
                     'change_color_hsv_s',
                     'restore_color',
                     'colorize',
+                ],
+            }, {
+                'id': 'gridmap',
+                'title': C_(
+                    'brush settings list: setting group',
+                    'GridMap',
+                ),
+                'settings': [
+                    'gridmap_scale',
+                    'gridmap_scale_x',
+                    'gridmap_scale_y',
                 ],
             }, {
                 'id': 'custom',
@@ -709,7 +739,7 @@ class BrushEditorWindow (SubWindow):
 
     def _mark_all_settings_unmodified_in_treeview(self):
         """Updates the TreeView to show no settings modified"""
-        paths = self._setting_treepath.values()
+        paths = list(self._setting_treepath.values())
         paths.extend(self._group_treepath.values())
         for row_path in paths:
             row_iter = self._treestore.get_iter(row_path)

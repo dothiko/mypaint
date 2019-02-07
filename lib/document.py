@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # This file is part of MyPaint.
+# Copyright (C) 2010-2018 by the MyPaint Development Team
 # Copyright (C) 2007-2013 by Martin Renold <martinxyz@gmx.ch>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -32,8 +33,6 @@ from gi.repository import GObject
 from gi.repository import GLib
 from gi.repository import Gtk # XXX for project-save
 
-import numpy as np
-
 import lib.helpers as helpers
 import lib.fileutils as fileutils
 import lib.tiledsurface as tiledsurface
@@ -51,6 +50,7 @@ import lib.xml
 import lib.glib
 import lib.feedback
 import lib.layervis
+from lib.pycompat import unicode
 import lib.autosave
 import lib.projectsave as projectsave
 import lib.surface
@@ -334,12 +334,9 @@ class Document (object):
         self._xres = None
         self._yres = None
 
-        # Backgrounds for rendering
-        blank_arr = np.zeros((N, N, 4), dtype='uint16')
-        self._blank_bg_surface = tiledsurface.Background(blank_arr)
-
         #: Document-specific settings, serialized as JSON when saving ORA.
         self._settings = ObservableDict()
+        self.sync_pending_changes += self._settings_sync_pending_changes_cb
 
         #: Sets of layer-views, identified by name.
         self._layer_view_manager = lib.layervis.LayerViewManager(self)
@@ -455,15 +452,22 @@ class Document (object):
         >>> doc1.settings[u"T.1"] = [1, 2]
         >>> doc1.settings[u"T.2"] = u"simple"
         >>> doc1.settings[u"T.3"] = {u"4": 5}
-        >>> sorted([i for i in doc1.settings.items() if i[0].startswith("T.")])
-        [(u'T.1', [1, 2]), (u'T.2', u'simple'), (u'T.3', {u'4': 5})]
+        >>> expected = [
+        ...     (u'T.1', [1, 2]),
+        ...     (u'T.2', u'simple'),
+        ...     (u'T.3', {u'4': 5}),
+        ... ]
+        >>> sorted([i for i in doc1.settings.items()
+        ...         if i[0].startswith("T.")]) == expected
+        True
         >>> file1 = os.path.join(tmpdir, "file1.ora")
         >>> thumb1 = doc1.save(file1)
         >>> doc1.cleanup()
         >>> doc2 = Document(painting_only=True)
         >>> doc2.load(file1)
-        >>> sorted([i for i in doc1.settings.items() if i[0].startswith("T.")])
-        [(u'T.1', [1, 2]), (u'T.2', u'simple'), (u'T.3', {u'4': 5})]
+        >>> sorted([i for i in doc1.settings.items()
+        ...         if i[0].startswith("T.")]) == expected
+        True
         >>> doc2.settings == doc1.settings
         True
         >>> doc2.cleanup()
@@ -575,7 +579,9 @@ class Document (object):
     def _autosave_countdown_cb(self):
         """Payload: start autosave writes and terminate"""
         assert not self._painting_only
-        self.sync_pending_changes(flush=True)
+        # Sync settings so they get saved, but not the whole doc.
+        # See https://github.com/mypaint/mypaint/issues/893
+        self._settings.sync_pending_changes(flush=True)
         self._queue_autosave_writes()
        #self._autosave_countdown_id = None # XXX I comment out this. Why clear id?
         return False
@@ -587,7 +593,7 @@ class Document (object):
 
         These tasks consist of nicely chunked writes for all layers
         whose data has changed, plus a few extra structural and
-        bookeeping ones.
+        bookkeeping ones.
 
         """
         if not self._cache_dir:
@@ -726,10 +732,16 @@ class Document (object):
     def _autosave_settings_cb(self, settings, filename):
         """Autosaved backup task: save the doc-specific settings dict"""
         assert not self._painting_only
+
+        # Py2/Py3: always feed print() a UTF-8 encoded byte string.
         json_data = json.dumps(settings, indent=2)
+        if isinstance(json_data, unicode):
+            json_data = json_data.encode("utf-8")
+        assert isinstance(json_data, bytes)
+
         tmpname = filename + u".TMP"
         with open(tmpname, 'wb') as fp:
-            print(json_data, file=fp)
+            fp.write(json_data)
         lib.fileutils.replace(tmpname, filename)
 
     def _autosave_cleanup_cb(self, oradir, manifest):
@@ -891,6 +903,14 @@ class Document (object):
         if not self._frame_enabled:
             return
         self.do(command.TrimLayer(self))
+
+    def uniq_current_layer(self, pixels=False):
+        """Udoably remove non-unique tiles or pixels from the current layer."""
+        self.do(command.UniqLayer(self, pixels=pixels))
+
+    def refactor_current_layer_group(self, pixels=False):
+        """Undoably factor out common parts of child layers to a new child."""
+        self.do(command.RefactorGroup(self, pixels=pixels))
 
     @event
     def effective_bbox_changed(self):
@@ -1119,6 +1139,15 @@ class Document (object):
 
         """
 
+    def _settings_sync_pending_changes_cb(self, doc, flush=True, **kwargs):
+        """Make sure the settings get synced when the doc is synced.
+
+        In addition to this, there are times when the doc settings need
+        syncing by themselves, e.g. autosave.
+
+        """
+        self._settings.sync_pending_changes(flush=flush, **kwargs)
+
     def undo(self):
         """Undo the most recently done command"""
         self.sync_pending_changes()
@@ -1243,16 +1272,6 @@ class Document (object):
         assert bbox.h % bg_bbox.h == 0
 
         return bbox
-
-    ## Rendering tiles
-
-    def blit_tile_into(self, dst, dst_has_alpha, tx, ty, mipmap_level=0,
-                       layers=None, render_background=None):
-        """Blit composited tiles into a destination surface"""
-        self.layer_stack.blit_tile_into(
-            dst, dst_has_alpha, tx, ty,
-            mipmap_level, layers=layers
-        )
 
     ## More layer stack commands
 
@@ -1804,8 +1823,6 @@ class Document (object):
         """Renders a thumbnail for the user bbox"""
         t0 = time.time()
         bbox = self.get_user_bbox()
-        if kwargs.get("alpha", None) is None:
-            kwargs["alpha"] = not self.layer_stack.background_visible
         pixbuf = self.layer_stack.render_thumbnail(bbox, **kwargs)
         logger.info('Rendered thumbnail in %d seconds.',
                     time.time() - t0)
@@ -1921,11 +1938,10 @@ class Document (object):
 
     @fileutils.via_tempfile
     def save_jpg(self, filename, quality=90, **kwargs):
-        x, y, w, h = self.get_user_bbox()
-        if w == 0 or h == 0:
-            x, y, w, h = 0, 0, N, N  # allow to save empty documents
+        bbox = self.get_user_bbox()
+        root = self.layer_stack
         try:
-            pixbuf = self.layer_stack.render_as_pixbuf(x, y, w, h, **kwargs)
+            pixbuf = root.render_layer_as_pixbuf(root, bbox, **kwargs)
         except (AllocationError, MemoryError) as e:
             hint_tmpl = C_(
                 "Document IO: hint templates for user-facing exceptions",
@@ -2013,8 +2029,15 @@ class Document (object):
         if json_entry is not None:
             new_settings = {}
             try:
-                json_data = orazip.read(json_entry)
-                new_settings = json.loads(json_data)
+                # Py3: on our Travis-CI, they're using Ubuntu Trusty's
+                # ancient Python 3.4.0, and that has a regression. Need
+                # to always feed that version unicode strings.
+                # Normally json.loads() doesn't care, provided that any
+                # bytes it sees are UTF-8. Which they always have been.
+                json_str = orazip.read(json_entry)
+                if isinstance(json_str, bytes):
+                    json_str = json_str.decode("utf-8")
+                new_settings = json.loads(json_str)
             except Exception:
                 logger.exception(
                     "Failed to load JSON settings from zipfile's %r entry",
@@ -2183,6 +2206,8 @@ class Document (object):
             try:
                 with open(json_path, 'rb') as fp:
                     json_data = fp.read()
+                    json_data = json_data.decode("utf-8")
+                    # Py3: see note in load_ora().
                     new_settings = json.loads(json_data)
             except Exception:
                 logger.exception(
@@ -2607,7 +2632,13 @@ def _save_layers_to_new_orazip(root_stack, filename, bbox=None,
 
     # Document-specific settings dict.
     if settings is not None:
+
+        # Py2/Py3: always feed writestr() a UTF-8 encoded byte string.
         json_data = json.dumps(dict(settings), indent=2)
+        if isinstance(json_data, unicode):
+            json_data = json_data.encode("utf-8")
+        assert isinstance(json_data, bytes)
+
         zip_path = _ORA_JSON_SETTINGS_ZIP_PATH
         helpers.zipfile_writestr(orazip, zip_path, json_data)
         image.attrib[_ORA_JSON_SETTINGS_ATTR] = zip_path

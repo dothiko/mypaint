@@ -1,6 +1,6 @@
 # This file is part of MyPaint.
 # -*- coding: utf-8 -*-
-# Copyright (C) 2017 by the MyPaint Development Team.
+# Copyright (C) 2017-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -32,6 +32,7 @@ from lib.gettext import C_
 import lib.naming
 from lib.observable import event
 from lib.command import Command
+from lib.pycompat import unicode
 
 
 # Module vars:
@@ -112,6 +113,9 @@ class _View (object):
 
         """
         return self is other
+
+    def __hash__(self):
+        return id(self)
 
     def __bool__(self):
         return True
@@ -200,17 +204,18 @@ class LayerViewManager (object):
         self.current_view_changed += self._current_view_changed_cb
 
         # Save and load.
-        docmodel.sync_pending_changes += self._doc_sync_pending_changes_cb
+        docmodel.settings.sync_pending_changes \
+            += self._doc_settings_sync_pending_changes_cb
         docmodel.settings.modified += self._doc_settings_modified_cb
 
     # Loading and saving via the doc settings dictionary:
 
-    def _doc_sync_pending_changes_cb(self, doc, flush=False):
+    def _doc_settings_sync_pending_changes_cb(self, settings, flush=False):
         """Save to the doc settings when needed (e.g. before ORA save)
 
         This is called before the document is saved (and at many other
-        times), so use it to store a serializable copy of the running
-        state into the settings dict.
+        times, including autosave), so use it to store a serializable
+        copy of the running state into the settings dict.
 
         See also: _doc_settings_modified_cb().
 
@@ -233,12 +238,12 @@ class LayerViewManager (object):
 
         # Each layer's views
         by_path = []
-        for path, layer in doc.layer_stack.walk():
+        for path, layer in self._docmodel.layer_stack.walk():
             vset = self._get_vset_for_layer(layer)
             names = [v.name for v in vset if v in self._views.objs]
             by_path.append([list(path), names])
 
-        doc.settings[self._SETTINGS_KEY] = {
+        self._docmodel.settings[self._SETTINGS_KEY] = {
             self._SETTINGS_VIEWS_SUBKEY: views_list,
             self._SETTINGS_ACTIVE_VIEW_SUBKEY: current,
             self._SETTINGS_LAYER_VIEWS_SUBKEY: by_path,
@@ -256,7 +261,7 @@ class LayerViewManager (object):
 
         """
         # Don't run when storing.
-        if self._docmodel.sync_pending_changes.calling_observers:
+        if self._docmodel.settings.sync_pending_changes.calling_observers:
             return
         # Only when the settings key changes.
         if self._SETTINGS_KEY not in oldvalues:
@@ -355,7 +360,7 @@ class LayerViewManager (object):
     @property
     def view_names(self):
         """RO property: list of the current set of managed view names."""
-        return list(self._views.names.iterkeys())
+        return list(self._views.names.keys())
 
     # Public events:
 

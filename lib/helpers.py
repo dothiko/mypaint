@@ -1,6 +1,6 @@
 # This file is part of MyPaint.
+# Copyright (C) 2012-2018 by the MyPaint Development Team.
 # Copyright (C) 2007-2012 by Martin Renold <martinxyz@gmx.ch>
-# Copyright (C) 2012-2016 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -9,7 +9,7 @@
 
 from __future__ import division, print_function
 
-from itertools import izip_longest
+import itertools
 from math import floor, isnan
 import os
 import hashlib
@@ -17,16 +17,17 @@ import zipfile
 import colorsys
 import gc
 import logging
-import json
-from warnings import warn
+import sys
 
 import lib.gichecks
 from gi.repository import GdkPixbuf
 from lib.gettext import C_
 
-import mypaintlib
+from . import mypaintlib
 import lib.pixbuf
 import lib.glib
+from lib.pycompat import PY2
+from lib.pycompat import unicode
 
 logger = logging.getLogger(__name__)
 
@@ -173,31 +174,6 @@ class Rect (object):
     expandToIncludeRect = expand_to_include_rect
 
 
-def json_dumps(obj):
-    """Dump JSON to a string, pretty-printing it.
-
-    >>> h = {"apples": 42, "pears": 98}
-    >>> s = json_dumps(h)
-    >>> json_loads(s) == h
-    True
-
-    This is deprecated in new code. Use json.dumps(indent=2) directly.
-
-    """
-    warn("Use json.dumps() directly.", DeprecationWarning, stacklevel=2)
-    return json.dumps(obj, indent=2)
-
-
-def json_loads(*a):
-    """Load a JSON string into Python.
-
-    This is deprecated in new code.
-
-    """
-    warn("Use json.loads() directly.", DeprecationWarning, stacklevel=2)
-    return json.loads(*a)
-
-
 def rotated_rectangle_bbox(corners):
     list_y = [y for (x, y) in corners]
     list_x = [x for (x, y) in corners]
@@ -230,7 +206,7 @@ def gdkpixbuf2numpy(pixbuf):
     # return arr
 
 
-def freedesktop_thumbnail(filename, pixbuf=None):
+def freedesktop_thumbnail(filename, pixbuf=None, force=False):
     """Fetch or (re-)generate the thumbnail in $XDG_CACHE_HOME/thumbnails.
 
     If there is no thumbnail for the specified filename, a new
@@ -239,6 +215,7 @@ def freedesktop_thumbnail(filename, pixbuf=None):
     of thumbnail and original image do not match.
 
     :param GdkPixbuf.Pixbuf pixbuf: Thumbnail to save, optional.
+    :param bool force: Force rengeneration (skip mtime checks).
     :returns: the large (256x256) thumbnail, or None.
     :rtype: GdkPixbuf.Pixbuf
 
@@ -247,22 +224,36 @@ def freedesktop_thumbnail(filename, pixbuf=None):
     accessed to get its mtime, so this method must not be called if
     the file is still open.
 
+    >>> icon = "desktop/icons/hicolor/512x512/apps/mypaint.png"
+    >>> p1 = freedesktop_thumbnail(icon, force=True)
+    >>> isinstance(p1, GdkPixbuf.Pixbuf)
+    True
+    >>> p2 = freedesktop_thumbnail(icon)
+    >>> isinstance(p2, GdkPixbuf.Pixbuf)
+    True
+    >>> p2.to_string() == p1.to_string()
+    True
+    >>> p2.get_width() == p2.get_height() == 256
+    True
+
     """
 
     uri = lib.glib.filename_to_uri(os.path.abspath(filename))
     logger.debug("thumb: uri=%r", uri)
+    if not isinstance(uri, bytes):
+        uri = uri.encode("utf-8")
     file_hash = hashlib.md5(uri).hexdigest()
 
     cache_dir = lib.glib.get_user_cache_dir()
-    base_directory = os.path.join(cache_dir, 'thumbnails')
+    base_directory = os.path.join(cache_dir, u'thumbnails')
 
-    directory = os.path.join(base_directory, 'normal')
-    tb_filename_normal = os.path.join(directory, file_hash) + '.png'
+    directory = os.path.join(base_directory, u'normal')
+    tb_filename_normal = os.path.join(directory, file_hash) + u'.png'
 
     if not os.path.exists(directory):
         os.makedirs(directory, 0o700)
-    directory = os.path.join(base_directory, 'large')
-    tb_filename_large = os.path.join(directory, file_hash) + '.png'
+    directory = os.path.join(base_directory, u'large')
+    tb_filename_large = os.path.join(directory, file_hash) + u'.png'
     if not os.path.exists(directory):
         os.makedirs(directory, 0o700)
 
@@ -270,7 +261,7 @@ def freedesktop_thumbnail(filename, pixbuf=None):
 
     save_thumbnail = True
 
-    if filename.lower().endswith('.ora'):
+    if filename.lower().endswith(u'.ora'):
         # don't bother with normal (128x128) thumbnails when we can
         # get a large one (256x256) from the file in an instant
         acceptable_tb_filenames = [tb_filename_large]
@@ -279,11 +270,13 @@ def freedesktop_thumbnail(filename, pixbuf=None):
         # available, for the sake of performance
         acceptable_tb_filenames = [tb_filename_large, tb_filename_normal]
 
+    # Use the largest stored thumbnail that isn't obsolete,
+    # Unless one was passed in,
+    # or regeneration is being forced.
     for fn in acceptable_tb_filenames:
-        if pixbuf or not os.path.isfile(fn):
+        if pixbuf or force or (not os.path.isfile(fn)):
             continue
         try:
-            # use the largest stored thumbnail that isn't obsolete
             pixbuf = lib.pixbuf.load_from_file(fn)
         except Exception as e:
             logger.warning(
@@ -300,10 +293,11 @@ def freedesktop_thumbnail(filename, pixbuf=None):
             else:
                 pixbuf = None
 
+    # Try to load a pixbuf from the file, if we still need one.
     if not pixbuf:
-        # try to load a pixbuf from the file
         pixbuf = get_pixbuf(filename)
 
+    # Update the fd.o thumbs cache.
     if pixbuf:
         pixbuf = scale_proportionally(pixbuf, 256, 256)
         if save_thumbnail:
@@ -329,6 +323,8 @@ def freedesktop_thumbnail(filename, pixbuf=None):
             )
             logger.debug("thumb: saved normal (128x128) thumbnail to %r",
                          tb_filename_normal)
+
+    # Return the 256x256 scaled version.
     return pixbuf
 
 
@@ -514,8 +510,8 @@ def fmt_time_period_abbr(t):
     hours = int(t - days * 24 * 60 * 60) // (60 * 60)
     minutes = int(t - hours * 60 * 60) // 60
     seconds = int(t - minutes * 60)
-    # TRANSLATORS: I'm assuming that time periods in places where
-    # TRANSLATORS: abbreviations make sense don't need ngettext()
+    # TRANSLATORS: I'm assuming that abbreviated time periods
+    # TRANSLATORS: don't need ngettext()
     if t > 24 * 60 * 60:
         template = C_("Time period abbreviations", u"{days}d{hours}h")
     elif t > 60 * 60:
@@ -547,7 +543,10 @@ def grouper(iterable, n, fillvalue=None):
     [True, True, True]
     """
     args = [iter(iterable)] * n
-    return izip_longest(*args, fillvalue=fillvalue)
+    if PY2:
+        return itertools.izip_longest(*args, fillvalue=fillvalue)
+    else:
+        return itertools.zip_longest(*args, fillvalue=fillvalue)
 
 
 def casefold(s):
@@ -556,19 +555,20 @@ def casefold(s):
     Forward-compat marker for things that should be .casefold() in
     Python 3, but which need to be .lower() in Python2.
 
-    :param unicode s: The string to convert.
-    :rtype: unicode
+    :param str s: The string to convert.
+    :rtype: str
     :returns: The converted string.
 
-    >>> casefold("Xyz")
-    u'xyz'
+    >>> casefold("Xyz") == u'xyz'
+    True
 
     """
-    s = unicode(s)
-    if hasattr(s, "casefold"):
-        return s.casefold()
-    else:
+    if sys.version_info <= (3, 0, 0):
+        s = unicode(s)
         return s.lower()
+    else:
+        s = str(s)
+        return s.casefold()
 
 
 def _test():

@@ -262,8 +262,16 @@
       <menuitem action='ClearLayer'/>
       <menuitem action='RemoveLayer'/>
       <separator/>
-      <menuitem action='TrimLayer'/>
-      <menuitem action='CutProtrudingPixels'/><!-- XXX Added for `cut protruding pixels` -->
+      <menu action="LayerSliceMenu">
+        <menuitem action='TrimLayer'/>
+         <menuitem action='CutProtrudingPixels'/><!-- XXX Added for `cut protruding pixels` -->
+        <separator/>
+        <menuitem action='UniqLayerPixels'/>
+        <menuitem action='UniqLayerTiles'/>
+        <separator/>
+        <menuitem action='RefactorLayerGroupPixels'/>
+        <menuitem action='RefactorLayerGroupTiles'/>
+      </menu>
       <!-- Current layer: Splitting and merging -->
       <separator/>
       <menuitem action='DuplicateLayer'/>

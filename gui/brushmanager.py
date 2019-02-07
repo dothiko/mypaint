@@ -1,7 +1,7 @@
 # This file is part of MyPaint.
 # -*- coding: utf-8 -*-
 # Copyright (C) 2009-2013 by Martin Renold <martinxyz@gmx.ch>
-# Copyright (C) 2010-2016 by the MyPaint Development Team.
+# Copyright (C) 2010-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -11,16 +11,17 @@
 """File management for brushes and brush groups."""
 
 ## Imports
+
 from __future__ import division, print_function
 
 import os
 import zipfile
 from os.path import basename
-import urllib
 from warnings import warn
 import logging
 import shutil
 import uuid
+import contextlib
 
 from lib.gettext import gettext as _
 from lib.gettext import C_
@@ -28,13 +29,20 @@ from lib.gettext import C_
 from gi.repository import Gtk
 from gi.repository import GdkPixbuf
 
-import dialogs
+from . import dialogs
 from lib.brush import BrushInfo
 from lib.observable import event
 import lib.pixbuf
-import drawutils
-
+from . import drawutils
 import gui.mode
+from lib.pycompat import unicode
+from lib.pycompat import xrange
+from lib.pycompat import PY3
+
+if PY3:
+    import urllib.parse
+else:
+    import urllib
 
 
 ## Public module constants
@@ -50,7 +58,7 @@ NEW_BRUSH_GROUP = 'new'  #: Home for newly created brushes
 ## Internal module constants
 
 _DEFAULT_STARTUP_GROUP = 'set#2'  # Suggestion only (FIXME: no effect?)
-_DEFAULT_BRUSH = 'deevad/2B_pencil'  # TODO: phase out and use heuristics?
+_DEFAULT_BRUSH = 'Dieterle/Fan#1'  # TODO: phase out and use heuristics?
 _DEFAULT_ERASER = 'deevad/kneaded_eraser_large'  # TODO: -----------"---------
 _DEVBRUSH_NAME_PREFIX = "devbrush_"
 _BRUSH_HISTORY_NAME_PREFIX = "history_"
@@ -62,21 +70,26 @@ _BRUSHPACK_ORDERCONF = "order.conf"
 
 _DEVICE_NAME_NAMESPACE = uuid.UUID('169eaf8a-554e-45b8-8295-fc09b10031cc')
 
+_TEST_BRUSHPACK_PY27 = u"tests/brushpacks/saved-with-py2.7.zip"
 
 logger = logging.getLogger(__name__)
 
 
 ## Helper functions
 
-
 def _device_name_uuid(device_name):
     """Return UUID5 string for a given device name
 
-    >>> _device_name_uuid('Wacom Intuos5 touch S Pen stylus')
-    'e97830e9-f9f9-50a5-8fff-68bead1a7021'
+    >>> result = _device_name_uuid(u'Wacom Intuos5 touch S Pen stylus')
+    >>> result == u'e97830e9-f9f9-50a5-8fff-68bead1a7021'
+    True
+    >>> type(result) == type(u'')
+    True
+
     """
-    u8bytes = unicode(device_name).encode('utf-8')
-    return str(uuid.uuid5(_DEVICE_NAME_NAMESPACE, u8bytes))
+    if not PY3:
+        device_name = unicode(device_name).encode('utf-8')
+    return unicode(uuid.uuid5(_DEVICE_NAME_NAMESPACE, device_name))
 
 
 def _quote_device_name(device_name):
@@ -85,17 +98,29 @@ def _quote_device_name(device_name):
     Quotes an arbitrary device name for use as the basename of a
     device-specific brush.
 
-        >>> _quote_device_name(u'Heavy Metal Umlaut D\u00ebvice')
-        'Heavy+Metal+Umlaut+D%C3%ABvice'
-        >>> _quote_device_name(u'unsafe/device\u005Cname') # U+005C == backslash
-        'unsafe%2Fdevice%5Cname'
+    >>> result = _quote_device_name(u'Heavy Metal Umlaut D\u00ebvice')
+    >>> result == 'Heavy+Metal+Umlaut+D%C3%ABvice'
+    True
+    >>> type(result) == type(u'')
+    True
+    >>> result = _quote_device_name(u'unsafe/device\\\\name')
+    >>> result == 'unsafe%2Fdevice%5Cname'
+    True
+    >>> type(result) == type(u'')
+    True
 
     Hopefully this is OK for Windows, UNIX and Mac OS X names.
     """
     device_name = unicode(device_name)
-    u8bytes = device_name.encode("utf-8")
-    quoted = urllib.quote_plus(u8bytes, safe='')
-    return quoted
+    if PY3:
+        quoted = urllib.parse.quote_plus(
+            device_name, safe='',
+            encoding="utf-8",
+        )
+    else:
+        u8bytes = device_name.encode("utf-8")
+        quoted = urllib.quote_plus(u8bytes, safe='')
+    return unicode(quoted)
 
 
 def translate_group_name(name):
@@ -119,18 +144,22 @@ def translate_group_name(name):
 def _parse_order_conf(file_content):
     """Parse order.conf file data.
 
-    Returns a dict of the form ``{'group1' : ['brush1', 'brush2'],
-    'group2' : ['brush3']}``.
+    :param bytes file_content: data from an order.conf (encoded UTF-8)
+    :returns: a group dict
+
+    The returned dict is of the form "{u'group1' : [u'brush1',
+    u'brush2'], u'group2' : [u'brush3']}".
 
     """
     groups = {}
+    file_content = file_content.decode("utf-8")
     curr_group = FOUND_BRUSHES_GROUP
-    lines = file_content.replace('\r', '\n').split('\n')
+    lines = file_content.replace(u'\r', u'\n').split(u'\n')
     for line in lines:
-        name = line.strip().decode('utf-8')
-        if name.startswith('#') or not name:
+        name = line.strip()
+        if name.startswith(u'#') or not name:
             continue
-        if name.startswith('Group: '):
+        if name.startswith(u'Group: '):
             curr_group = name[7:]
             if curr_group not in groups:
                 groups[curr_group] = []
@@ -154,8 +183,28 @@ class BrushManager (object):
 
     ## Initialization
 
-    def __init__(self, stock_brushpath, user_brushpath, app):
-        """Initialize, with paths and a ref to the main app."""
+    def __init__(self, stock_brushpath, user_brushpath, app=None):
+        """Initialize, with paths and a ref to the main app.
+
+        :param unicode/str stock_brushpath: MyPaint install's RO brushes.
+        :param unicode/str user_brushpath: User-writable brush library.
+        :param gui.application.Application app: Main app (use None for test).
+
+        The user_brushpath folder will be created if it does not yet exist.
+
+        >>> from tempfile import mkdtemp
+        >>> from shutil import rmtree
+        >>> tmpdir = mkdtemp(u".brushes")
+        >>> bm = BrushManager(lib.config.mypaint_brushdir, tmpdir, app=None)
+        >>> len(bm.groups) > 0
+        True
+        >>> all([isinstance(k, unicode) for k in bm.groups.keys()])
+        True
+        >>> all([isinstance(v, list) for v in bm.groups.values()])
+        True
+        >>> rmtree(tmpdir)
+
+        """
         super(BrushManager, self).__init__()
         self.stock_brushpath = stock_brushpath
         self.user_brushpath = user_brushpath
@@ -166,7 +215,7 @@ class BrushManager (object):
         #: it changes.
         self.selected_brush = None
 
-        self.groups = {}  # Lists of ManagedBrushes, keyed by group name
+        self.groups = {}  #: Lists of ManagedBrushes, keyed by group name
         self.contexts = []  # Brush keys, indexed by keycap digit number
         self._brush_by_device = {}  # Device name to brush mapping.
 
@@ -182,11 +231,39 @@ class BrushManager (object):
         self.brushes_changed += self._brushes_modified_cb
 
         # Update the history at the end of each definite input stroke.
-        self.app.doc.input_stroke_ended += self._input_stroke_ended_cb
+        if app is not None:
+            app.doc.input_stroke_ended += self._input_stroke_ended_cb
 
         # Make sure the user always gets a brush tool when they pick a brush
         # preset.
         self.brush_selected += self._brush_selected_cb
+
+    @classmethod
+    @contextlib.contextmanager
+    def _mock(cls):
+        """Context-managed mock BrushManager object for tests.
+
+        Brushes are imported from the shipped brushes subfolder,
+        and the user temp area is a temporary directory that's
+        cleaned up by the context manager.
+
+        Body yields (BrushManager_instance, tmp_dir_path).
+
+        Please ensure that there are no open files in the tmpdir after
+        use to that it can be rmtree()d. On Windows, that means closing
+        any zipfile.Zipfile()s you open, even for read.
+
+        """
+        from tempfile import mkdtemp
+        from shutil import rmtree
+
+        dist_brushes = lib.config.mypaint_brushdir
+        tmp_user_brushes = mkdtemp(suffix=u"_brushes")
+        try:
+            bm = cls(dist_brushes, tmp_user_brushes, app=None)
+            yield (bm, tmp_user_brushes)
+        finally:
+            rmtree(tmp_user_brushes)
 
     def _load_brush(self, brush_cache, name, **kwargs):
         """Load a ManagedBrush from disk by name, via a cache."""
@@ -199,10 +276,10 @@ class BrushManager (object):
         """Load a groups dict from an order.conf file."""
         groups = {}
         if os.path.exists(filename):
-            with open(filename) as fp:
+            with open(filename, "rb") as fp:
                 groups = _parse_order_conf(fp.read())
             # replace brush names with ManagedBrush instances
-            for group, names in groups.items():
+            for group, names in list(groups.items()):
                 brushes = []
                 for name in names:
                     try:
@@ -276,16 +353,16 @@ class BrushManager (object):
 
         """
         path += '/'
-        l = []
+        result = []
         assert isinstance(path, unicode)  # make sure we get unicode filenames
         for name in os.listdir(path):
             assert isinstance(name, unicode)
             if name.endswith('.myb'):
-                l.append(name[:-4])
+                result.append(name[:-4])
             elif os.path.isdir(path + name):
                 for name2 in self._list_brushes(path + name):
-                    l.append(name + '/' + name2)
-        return l
+                    result.append(name + '/' + name2)
+        return result
 
     def _init_unordered_groups(self, brush_cache):
         """Initialize the unordered subset of available brushes+groups.
@@ -423,13 +500,15 @@ class BrushManager (object):
         # that most of the time the user will continue to work with the same
         # brush and its settings.
         app = self.app
-        last_used_devbrush = app.preferences.get('devbrush.last_used', None)
-        initial_brush = self.fetch_brush_for_device(last_used_devbrush)
-        # Otherwise, initialise from the old selected_brush setting
-        if initial_brush is None:
-            last_active_name = app.preferences['brushmanager.selected_brush']
-            if last_active_name is not None:
-                initial_brush = self.get_brush_by_name(last_active_name)
+        if app is not None:
+            prefs = app.preferences
+            last_used_devbrush = prefs.get('devbrush.last_used')
+            initial_brush = self.fetch_brush_for_device(last_used_devbrush)
+            # Otherwise, initialise from the old selected_brush setting
+            if initial_brush is None:
+                last_active_name = prefs.get('brushmanager.selected_brush')
+                if last_active_name is not None:
+                    initial_brush = self.get_brush_by_name(last_active_name)
         # Fallback
         if initial_brush is None:
             initial_brush = self.get_default_brush()
@@ -480,23 +559,42 @@ class BrushManager (object):
 
     ## Brushpack import and export
 
-    def import_brushpack(self, path, window):
+    def import_brushpack(self, path, window=None):
         """Import a brushpack from a zipfile, with confirmation dialogs.
 
         :param path: Brush pack zipfile path
         :type path: str
         :param window: Parent window, for dialogs to set.
-        :type window: GtkWindow
+        :type window: GtkWindow or None
         :returns: Set of imported group names
         :rtype: set
+
+        Confirmation dialogs are only shown if "window" is a suitable
+        toplevel to attach the dialogs to.
+
+        >>> with BrushManager._mock() as (bm, tmpdir):
+        ...     imp = bm.import_brushpack(_TEST_BRUSHPACK_PY27, window=None)
+        ...     py27_g = bm.groups.get(list(imp)[0])
+        >>> py27_g[0]  # doctest: +ELLIPSIS
+        <ManagedBrush...>
+        >>> g_names = set(b.name for b in py27_g)
+        >>> u'brushlib-test/basic' in g_names
+        True
+        >>> u'brushlib-test/fancy_\U0001f308\U0001f984\u2728' in g_names
+        True
 
         """
 
         with zipfile.ZipFile(path) as zf:
-            names = zf.namelist()
-            # zipfile does utf-8 decoding on its own; this is just to make
-            # sure we have only unicode objects as brush names.
-            names = [s.decode('utf-8') for s in names]
+
+            # In Py2, when the entry was saved without the 0x800 flag
+            # namelist() will return it as bytes, not unicode.  We only
+            # want Unicode strings.
+            names = []
+            for name in zf.namelist():
+                if isinstance(name, bytes):
+                    name = name.decode("utf-8")
+                names.append(name)
 
             readme = None
             if _BRUSHPACK_README in names:
@@ -513,7 +611,7 @@ class BrushManager (object):
             groups = _parse_order_conf(zf.read(_BRUSHPACK_ORDERCONF))
 
             new_brushes = []
-            for brushes in groups.itervalues():
+            for brushes in groups.values():
                 for brush in brushes:
                     if brush not in new_brushes:
                         new_brushes.append(brush)
@@ -549,7 +647,7 @@ class BrushManager (object):
                             brush_name = brush,
                             order_conf_file = _BRUSHPACK_ORDERCONF,
                         ))
-            if readme:
+            if readme and window:
                 answer = dialogs.confirm_brushpack_import(
                     basename(path), window, readme,
                 )
@@ -560,12 +658,15 @@ class BrushManager (object):
             do_ask = True
             renamed_brushes = {}
             imported_groups = set()
-            for groupname, brushes in groups.iteritems():
+            for groupname, brushes in groups.items():
                 managed_brushes = self.get_group_brushes(groupname)
                 if managed_brushes:
-                    answer = dialogs.confirm_rewrite_group(
-                        window, translate_group_name(groupname),
-                        translate_group_name(DELETED_BRUSH_GROUP))
+                    answer = dialogs.DONT_OVERWRITE_THIS
+                    if window:
+                        answer = dialogs.confirm_rewrite_group(
+                            window, translate_group_name(groupname),
+                            translate_group_name(DELETED_BRUSH_GROUP),
+                        )
                     if answer == dialogs.CANCEL:
                         return set()
                     elif answer == dialogs.OVERWRITE_THIS:
@@ -586,13 +687,13 @@ class BrushManager (object):
                     # the utf-8 bit set.
                     brushname_utf8 = brushname.encode('utf-8')
                     try:
-                        myb_data = zf.read(brushname + '.myb')
+                        myb_data = zf.read(brushname + u'.myb')
                     except KeyError:
-                        myb_data = zf.read(brushname_utf8 + '.myb')
+                        myb_data = zf.read(brushname_utf8 + b'.myb')
                     try:
-                        preview_data = zf.read(brushname + '_prev.png')
+                        preview_data = zf.read(brushname + u'_prev.png')
                     except KeyError:
-                        preview_data = zf.read(brushname_utf8 + '_prev.png')
+                        preview_data = zf.read(brushname_utf8 + b'_prev.png')
                     # in case we have imported that brush already in a
                     # previous group, but decided to rename it
                     if brushname in renamed_brushes:
@@ -604,7 +705,7 @@ class BrushManager (object):
                         new_brushes.remove(brushname)
                         if b:
                             existing_preview_pixbuf = b.preview
-                            if do_ask:
+                            if do_ask and window:
                                 answer = dialogs.confirm_rewrite_brush(
                                     window, brushname, existing_preview_pixbuf,
                                     preview_data,
@@ -628,7 +729,7 @@ class BrushManager (object):
                             i = 0
                             while not do_overwrite and b:
                                 i += 1
-                                brushname = brushname_old + '#%d' % i
+                                brushname = brushname_old + u'#%d' % i
                                 renamed_brushes[brushname_old] = brushname
                                 b = self.get_brush_by_name(brushname)
 
@@ -637,7 +738,7 @@ class BrushManager (object):
 
                         # write to disk and reload brush (if overwritten)
                         prefix = b._get_fileprefix(saving=True)
-                        with open(prefix + '.myb', 'w') as myb_f:
+                        with open(prefix + '.myb', 'wb') as myb_f:
                             myb_f.write(myb_data)
                         with open(prefix + '_prev.png', 'wb') as preview_f:
                             preview_f.write(preview_data)
@@ -653,16 +754,29 @@ class BrushManager (object):
         return imported_groups
 
     def export_group(self, group, filename):
-        """Exports a group to a brushpack zipfile."""
+        """Exports a group to a brushpack zipfile.
+
+        :param unicode/str group: Name of the group to save.
+        :param unicode/str filename: Path to a .zip file to create.
+
+        >>> with BrushManager._mock() as (bm, tmpdir):
+        ...     group = list(bm.groups)[0]
+        ...     zipname = os.path.join(tmpdir, group + u"zip")
+        ...     bm.export_group(group, zipname)
+        ...     with zipfile.ZipFile(zipname, mode="r") as zf:
+        ...         assert len(zf.namelist()) > 0
+        ...         assert u"order.conf" in zf.namelist()
+
+        """
         brushes = self.get_group_brushes(group)
-        order_conf = 'Group: %s\n' % group.encode('utf-8')
+        order_conf = b'Group: %s\n' % group.encode('utf-8')
         with zipfile.ZipFile(filename, mode='w') as zf:
             for brush in brushes:
                 prefix = brush._get_fileprefix()
-                zf.write(prefix + '.myb', brush.name + '.myb')
-                zf.write(prefix + '_prev.png', brush.name + '_prev.png')
-                order_conf += brush.name.encode('utf-8') + '\n'
-            zf.writestr('order.conf', order_conf)
+                zf.write(prefix + u'.myb', brush.name + u'.myb')
+                zf.write(prefix + u'_prev.png', brush.name + u'_prev.png')
+                order_conf += brush.name.encode('utf-8') + b'\n'
+            zf.writestr(u'order.conf', order_conf)
 
     ## Brush lookup / access
 
@@ -671,16 +785,21 @@ class BrushManager (object):
 
         Slow method, should not be called too often.
 
+        >>> with BrushManager._mock() as (bm, tmpdir):
+        ...     brush1 = bm.get_brush_by_name(u"classic/pen")
+        >>> brush1 # doctest: +ELLIPSIS
+        <ManagedBrush...>
+
         """
         # FIXME: speed up, use a dict.
-        for group, brushes in self.groups.iteritems():
+        for group, brushes in self.groups.items():
             for b in brushes:
                 if b.name == name:
                     return b
 
     def is_in_brushlist(self, brush):
         """Returns whether this brush is in some brush group's list."""
-        for group, brushes in self.groups.iteritems():
+        for group, brushes in self.groups.items():
             if brush in brushes:
                 return True
         return False
@@ -708,14 +827,20 @@ class BrushManager (object):
         self.save_brushorder()
 
     def save_brushorder(self):
-        """Save the user's chosen brush order to disk."""
+        """Save the user's chosen brush order to disk.
 
-        with open(os.path.join(self.user_brushpath, 'order.conf'), 'w') as f:
-            f.write('# this file saves brush groups and order\n')
-            for group, brushes in self.groups.iteritems():
-                f.write('Group: %s\n' % group.encode('utf-8'))
+        >>> with BrushManager._mock() as (bm, tmpdir):
+        ...     bm.save_brushorder()
+
+        """
+
+        path = os.path.join(self.user_brushpath, u'order.conf')
+        with open(path, 'w') as f:
+            f.write(u'# this file saves brush groups and order\n')
+            for group, brushes in self.groups.items():
+                f.write(u'Group: {}\n'.format(group))
                 for b in brushes:
-                    f.write(b.name.encode('utf-8') + '\n')
+                    f.write(b.name + u'\n')
 
     ## The selected brush
 
@@ -737,7 +862,9 @@ class BrushManager (object):
                 brush = parent
 
         self.selected_brush = brush
-        self.app.preferences['brushmanager.selected_brush'] = brush.name
+        if self.app is not None:
+            self.app.preferences['brushmanager.selected_brush'] = brush.name
+
         # Notify subscribers. Takes care of updating the live
         # brush, amongst other things
         self.brush_selected(brush, brushinfo)
@@ -751,6 +878,8 @@ class BrushManager (object):
         BrushInfo.
 
         """
+        if self.app is None:
+            raise ValueError("No app. BrushManager in test mode?")
         clone = ManagedBrush(self, name, persistent=False)
         clone.brushinfo = self.app.brush.clone()
         clone.preview = self.selected_brush.preview
@@ -759,9 +888,16 @@ class BrushManager (object):
         return clone
 
     def _brush_selected_cb(self, bm, brush, brushinfo):
-        """Internal callback: User just picked a brush preset somehow (eg. from
-        a shortcut or the brush panel), so make sure a brush-dependant tool
-        (eg. Freehand, Connected Lines, etc.) is selected."""
+        """Internal callback: User just picked a brush preset.
+
+        Called when the user changes to a brush preset somehow (e.g.
+        from a shortcut or the brush panel). Makes sure a
+        brush-dependant tool (e.g. Freehand, Connected Lines, etc.) is
+        selected.
+
+        """
+        if not self.app:
+            return
         self.app.doc.modes.pop_to_behaviour(gui.mode.Behavior.PAINT_BRUSH)
 
     ## Device-specific brushes
@@ -794,11 +930,11 @@ class BrushManager (object):
         if device_name not in self._brush_by_device:
             self._brush_by_device[device_name] = None
 
-            for name in (
-                    _device_name_uuid(device_name),
-                    # For backward compatibility
-                    _quote_device_name(device_name)
-                    ):
+            names = (
+                _device_name_uuid(device_name),
+                _quote_device_name(device_name),  # for backward compatibility
+            )
+            for name in names:
                 path = os.path.join(
                     self.user_brushpath, _DEVBRUSH_NAME_PREFIX + name + '.myb')
                 if not os.path.isfile(path):
@@ -820,7 +956,7 @@ class BrushManager (object):
 
     def save_brushes_for_devices(self):
         """Saves the device/brush associations to disk."""
-        for devbrush in self._brush_by_device.itervalues():
+        for devbrush in self._brush_by_device.values():
             if devbrush is not None:
                 devbrush.save()
 
@@ -828,6 +964,8 @@ class BrushManager (object):
 
     def _input_stroke_ended_cb(self, doc, event):
         """Update brush usage history at the end of an input stroke."""
+        if self.app is None:
+            raise ValueError("No app. BrushManager in test mode?")
         wb_info = self.app.brush
         wb_parent_name = wb_info.settings.get("parent_brush_name")
         # Remove the to-be-added brush from the history if it's already in it
@@ -928,7 +1066,7 @@ class BrushManager (object):
         homeless_brushes = self.groups[group]
         del self.groups[group]
 
-        for brushes in self.groups.itervalues():
+        for brushes in self.groups.values():
             for b2 in brushes:
                 if b2 in homeless_brushes:
                     homeless_brushes.remove(b2)
@@ -953,7 +1091,22 @@ class ManagedBrush(object):
     see `Brushmanager.select_brush()`.
 
     """
+
     def __init__(self, brushmanager, name=None, persistent=False):
+        """Construct, with a ref back to its BrushManager.
+
+        Normally clients won't construct ManagedBrushes directly.
+        Instead, use the groups dict in the BrushManager for access to
+        all the brushes loaded from the user and stock brush folders.
+
+        >>> with BrushManager._mock() as (bm, tmpdir):
+        ...     for gname, gbrushes in bm.groups.items():
+        ...         for b in gbrushes:
+        ...             assert isinstance(b, ManagedBrush)
+        ...             b.load()
+
+        """
+
         super(ManagedBrush, self).__init__()
         self.bm = brushmanager
         self._preview = None
@@ -984,8 +1137,35 @@ class ManagedBrush(object):
         """Gets a preview image for the brush
 
         For persistent brushes, this loads the disk preview; otherwise a
-        fairly slow automated brush preview is used. The results are
-        cached in RAM.
+        fairly slow automated brush preview is used.
+
+        >>> with BrushManager._mock() as (bm, tmpdir):
+        ...     b = ManagedBrush(bm, name=None, persistent=False)
+        ...     b.get_preview()   # doctest: +ELLIPSIS
+        <GdkPixbuf.Pixbuf...>
+
+        The results are cached in RAM.
+
+        >>> with BrushManager._mock() as (bm, tmpdir):
+        ...     imported = bm.import_brushpack(_TEST_BRUSHPACK_PY27)
+        ...     assert(imported)
+        ...     pixbufs1 = []
+        ...     for gn in sorted(bm.groups.keys()):
+        ...         gbs = bm.groups[gn]
+        ...         for b in gbs:
+        ...             pixbufs1.append(b)
+        ...     pixbufs2 = []
+        ...     for gn in sorted(bm.groups.keys()):
+        ...         gbs = bm.groups[gn]
+        ...         for b in gbs:
+        ...             pixbufs2.append(b)
+        >>> len(pixbufs1) == len(pixbufs2)
+        True
+        >>> all([p1 is p2 for (p1, p2) in zip(pixbufs1, pixbufs2)])
+        True
+        >>> pixbufs1 == pixbufs2
+        True
+
         """
         if self._preview is None and self.name:
             self._load_preview()
@@ -1003,7 +1183,17 @@ class ManagedBrush(object):
 
     @property
     def description(self):
-        """Short, user-facing tooltip description for the brush"""
+        """Short, user-facing tooltip description for the brush.
+
+        >>> with BrushManager._mock() as (bm, tmpdir):
+        ...     for gn, gbs in bm.groups.items():
+        ...         for b in gbs:
+        ...             assert isinstance(b.description, unicode)
+        ...             b.description = u"junk"
+        ...             assert isinstance(b.description, unicode)
+        ...             b.save()
+
+        """
         return self.brushinfo.get_string_property("description")
 
     @description.setter
@@ -1012,7 +1202,18 @@ class ManagedBrush(object):
 
     @property
     def notes(self):
-        """Longer, brush developer's notes field for a brush"""
+        """Longer, brush developer's notes field for a brush.
+
+        >>> with BrushManager._mock() as (bm, tmpdir):
+        ...     imp = bm.import_brushpack(_TEST_BRUSHPACK_PY27)
+        ...     imp_g = list(imp)[0]
+        ...     for b in bm.groups[imp_g]:
+        ...         assert isinstance(b.notes, unicode)
+        ...         b.notes = u"junk note"
+        ...         assert isinstance(b.notes, unicode)
+        ...         b.save()
+
+        """
         return self.brushinfo.get_string_property("notes")
 
     @notes.setter
@@ -1097,20 +1298,20 @@ class ManagedBrush(object):
         See also `delete_from_disk()`.
 
         """
-        prefix = 'b'
+        prefix = u'b'
         user_bp = os.path.realpath(self.bm.user_brushpath)
         stock_bp = os.path.realpath(self.bm.stock_brushpath)
         if user_bp == stock_bp:
             # working directly on brush collection, use different prefix
-            prefix = 's'
+            prefix = u's'
 
         # Construct a new, unique name if the brush is not yet named
         if not self.name:
             i = 0
             while True:
                 self.name = u'%s%03d' % (prefix, i)
-                a = os.path.join(self.bm.user_brushpath, self.name + '.myb')
-                b = os.path.join(self.bm.stock_brushpath, self.name + '.myb')
+                a = os.path.join(self.bm.user_brushpath, self.name + u'.myb')
+                b = os.path.join(self.bm.stock_brushpath, self.name + u'.myb')
                 if not os.path.isfile(a) and not os.path.isfile(b):
                     break
                 i += 1
@@ -1119,16 +1320,16 @@ class ManagedBrush(object):
         # Always save to the user brush path.
         prefix = os.path.join(self.bm.user_brushpath, self.name)
         if saving:
-            if '/' in self.name:
+            if u'/' in self.name:
                 d = os.path.dirname(prefix)
                 if not os.path.isdir(d):
                     os.makedirs(d)
             return prefix
 
         # Loading: try user first, then stock
-        if not os.path.isfile(prefix + '.myb'):
+        if not os.path.isfile(prefix + u'.myb'):
             prefix = os.path.join(self.bm.stock_brushpath, self.name)
-        if not os.path.isfile(prefix + '.myb'):
+        if not os.path.isfile(prefix + u'.myb'):
             raise IOError('brush "%s" not found' % self.name)
         return prefix
 
@@ -1152,9 +1353,9 @@ class ManagedBrush(object):
     def save(self):
         """Saves the brush's settings and its preview"""
         prefix = self._get_fileprefix(saving=True)
-        # Save preview:
+        # Save preview
         if self.preview.get_has_alpha():
-            # Remove alpha:
+            # Remove alpha
             # Previous mypaint versions would display an empty image
             w, h = PREVIEW_W, PREVIEW_H
             tmp = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, False,
@@ -1223,7 +1424,7 @@ class ManagedBrush(object):
         filename = prefix + '_prev.png'
         try:
             pixbuf = GdkPixbuf.Pixbuf.new_from_file(filename)
-        except:
+        except Exception:
             logger.exception("Failed to load preview pixbuf, will fall back "
                              "to default")
             pixbuf = None
@@ -1280,6 +1481,8 @@ class ManagedBrush(object):
 class InvalidBrushpack (Exception):
     """Raised when brushpacks cannot be imported."""
 
+
+## Module testing
 
 if __name__ == '__main__':
     import doctest

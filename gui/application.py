@@ -1,7 +1,7 @@
 # This file is part of MyPaint.
 # -*- coding: utf-8 -*-
 # Copyright (C) 2007-2013 by Martin Renold <martinxyz@gmx.ch>
-# Copyright (C) 2013-2016 by the MyPaint Development Team.
+# Copyright (C) 2013-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -35,6 +35,7 @@ import sys
 from os.path import join
 from collections import namedtuple
 import logging
+import json
 
 from gi.repository import GObject
 from gi.repository import Gtk
@@ -50,37 +51,38 @@ from lib import helpers
 from lib import mypaintlib
 from lib import brushsettings
 import gui.device
-import filehandling
-import keyboard
-import brushmanager
-import windowing
-import document
-import tileddrawwidget
-import workspace
-import topbar
-import drawwindow
-import backgroundwindow
-import preferenceswindow
-import brusheditor
-import layerswindow
-import previewwindow
-import optionspanel
-import framewindow
-import scratchwindow
-import inputtestwindow
-import brushiconeditor
-import history
-import colortools
-import brushmodifier
-import toolbar
-import linemode
-import colors
-import colorpreview
-import fill
-from brushcolor import BrushColorManager
-from overlays import LastPaintPosOverlay
-from overlays import ScaleOverlay
-from buttonmap import ButtonMapping
+from . import filehandling
+from . import keyboard
+from . import brushmanager
+from . import document
+from . import tileddrawwidget
+from . import workspace  # noqa: F401
+from . import topbar  # noqa: F401
+from . import drawwindow  # noqa: F401
+from . import backgroundwindow
+from . import preferenceswindow
+from . import brusheditor
+from . import layerswindow  # noqa: F401
+from . import previewwindow  # noqa: F401
+from . import optionspanel  # noqa: F401
+from . import framewindow  # noqa: F401
+from . import scratchwindow  # noqa: F401
+from . import inputtestwindow
+from . import brushiconeditor
+from . import history  # noqa: F401
+from . import colortools  # noqa: F401
+from . import brushmodifier
+from . import toolbar  # noqa: F401
+from . import linemode
+from . import colors  # noqa: F401
+from . import colorpreview  # noqa: F401
+from . import fill  # noqa: F401
+from . import accelmap  # noqa: F401
+from .brushcolor import BrushColorManager
+from .overlays import LastPaintPosOverlay  # noqa: F401
+from .overlays import ScaleOverlay  # noqa: F401
+from .buttonmap import ButtonMapping
+import lib.config
 import lib.glib
 import gui.cursor
 import lib.fileutils
@@ -89,13 +91,12 @@ import gui.factoryaction  # registration only
 import gui.autorecover
 import lib.xml
 import gui.profiling
+from lib.pycompat import unicode
 # XXX Added experimental modules (and needed from them)
 import sizechangemode
 import beziertool
 import inktool
-import stamptool
 import selectionmode
-import stampeditor
 import exinktool
 import projectmanager
 from lib.observable import event
@@ -109,7 +110,6 @@ import adjustmode # XXX for adjustlayer
 # XXX Added experimental modules (and needed from them) end
 
 logger = logging.getLogger(__name__)
-
 
 ## Utility methods
 
@@ -142,8 +142,8 @@ def _init_icons(icon_path, default_icon='mypaint'):
     ]
     for icon_name, missing_msg in icon_tests:
         try:
-            pixbuf = icon_theme.load_icon(icon_name, 32, 0)
-        except:
+            icon_theme.load_icon(icon_name, 32, 0)
+        except Exception:
             logger.exception("Missing icon %r: %s", icon_name, missing_msg)
             icons_missing = True
     if icons_missing:
@@ -180,7 +180,7 @@ class StateDirs (namedtuple("StateDirs", _STATEDIRS_FIELDS)):
     :ivar unicode app_data:
         App-specific read-only data area.
         Path used for UI definition XML, and the default sets of
-        backgrounds, palettes, and brush defintions.
+        backgrounds, palettes, and brush definitions.
         Often $PREFIX/share/.
     :ivar unicode app_icons:
         Extra search path for read-only themeable UI icons.
@@ -287,8 +287,9 @@ class Application (object):
         )
         self.cursors = gui.cursor.CustomCursorMaker(self)
 
-        # unmanaged main brush; always the same instance (we can attach settings_observers)
-        # this brush is where temporary changes (color, size...) happen
+        # Unmanaged main brush.
+        # Always the same instance (we can attach settings_observers).
+        # This brush is where temporary changes (color, size...) happen.
         self.brush = brush.BrushInfo()
         self.brush.load_defaults()
 
@@ -324,12 +325,12 @@ class Application (object):
 
         # Workspace widget. Manages layout of toolwindows, and autohide in
         # fullscreen.
-        workspace = self.builder.get_object("app_workspace")
-        workspace.build_from_layout(self.preferences["workspace.layout"])
-        workspace.floating_window_created += self._floating_window_created_cb
+        wkspace = self.builder.get_object("app_workspace")
+        wkspace.build_from_layout(self.preferences["workspace.layout"])
+        wkspace.floating_window_created += self._floating_window_created_cb
         fs_autohide_action = self.builder.get_object("FullscreenAutohide")
-        fs_autohide_action.set_active(workspace.autohide_enabled)
-        self.workspace = workspace
+        fs_autohide_action.set_active(wkspace.autohide_enabled)
+        self.workspace = wkspace
 
         # Working document: viewer widget
         app_canvas = self.builder.get_object("app_canvas")
@@ -344,14 +345,15 @@ class Application (object):
         signal_callback_objs.append(self.doc.modes)
 
         self.scratchpad_filename = ""
-        scratchpad_model = lib.document.Document(self.brush, painting_only=True)
+        scratchpad_model = lib.document.Document(self.brush,
+                                                 painting_only=True)
         scratchpad_tdw = tileddrawwidget.TiledDrawWidget()
         scratchpad_tdw.scroll_on_allocate = False
         scratchpad_tdw.set_model(scratchpad_model)
         self.scratchpad_doc = document.Document(self, scratchpad_tdw,
                                                 scratchpad_model)
         self.brushmanager = brushmanager.BrushManager(
-            join(self.state_dirs.app_data, 'brushes'),
+            lib.config.mypaint_brushdir,
             join(self.state_dirs.user_data, 'brushes'),
             self,
         )
@@ -372,8 +374,10 @@ class Application (object):
         self.device_monitor = gui.device.Monitor(self)
 
         if not self.preferences.get("scratchpad.last_opened_scratchpad", None):
-            self.preferences["scratchpad.last_opened_scratchpad"] = self.filehandler.get_scratchpad_autosave()
-        self.scratchpad_filename = self.preferences["scratchpad.last_opened_scratchpad"]
+            self.preferences["scratchpad.last_opened_scratchpad"] \
+                = self.filehandler.get_scratchpad_autosave()
+        self.scratchpad_filename \
+            = self.preferences["scratchpad.last_opened_scratchpad"]
 
         self.brush_color_manager = BrushColorManager(self)
         self.brush_color_manager.set_picker_cursor(self.cursor_color_picker)
@@ -405,9 +409,9 @@ class Application (object):
             "PreferencesWindow": preferenceswindow.PreferencesWindow,
             "InputTestWindow": inputtestwindow.InputTestWindow,
             "BrushIconEditorWindow": brushiconeditor.BrushIconEditorWindow,
-            "StampEditorWindow": stampeditor.StampEditorWindow,
             "ProjectManagerWindow": projectmanager.ProjectManagerWindow,
             }
+        }
         self._subwindows = {}
 
         # Statusbar init
@@ -515,11 +519,17 @@ class Application (object):
         self.brushmanager.save_brushes_for_devices()
         self.brushmanager.save_brush_history()
         self.filehandler.save_scratchpad(self.scratchpad_filename)
-        self.stroke_pressure_settings.finalize()
-        settingspath = join(self.user_confpath, 'settings.json')
-        jsonstr = helpers.json_dumps(self.preferences)
-        with open(settingspath, 'w') as f:
-            f.write(jsonstr)
+        self.stroke_pressure_settings.finalize() # XXX for custom pressure mapping
+        settingspath = join(self.user_confpath, u'settings.json')
+        logger.debug("Writing app settings to %r", settingspath)
+        json_data = json.dumps(self.preferences, indent=2)
+        if isinstance(json_data, unicode):
+            # Py3. Let's write UTF-8 bytes, just like the stuff Py2's
+            # json.dumps() with a default encoding arg does.
+            json_data = json_data.encode("utf-8")
+        assert isinstance(json_data, bytes)
+        with open(settingspath, 'wb') as f:
+            f.write(json_data)
 
     def apply_settings(self):
         """Applies the current settings.
@@ -539,11 +549,18 @@ class Application (object):
 
         """
         def get_json_config():
-            settingspath = join(self.user_confpath, 'settings.json')
-            with open(settingspath) as fp:
+            settingspath = join(self.user_confpath, u'settings.json')
+            logger.debug("Reading app settings from %r", settingspath)
+            with open(settingspath, "rb") as fp:
                 jsonstr = fp.read()
             try:
-                return helpers.json_loads(jsonstr)
+                # Py3: settings.json has always been UTF-8 even in Py2.
+                #
+                # The Travis-CI json.loads() from Python 3.4.0 needs
+                # unicode strings, always. Later and earlier versions,
+                # including Py2 do not need that, if bytes are UTF-8.
+                jsonstr = jsonstr.decode("utf-8")
+                return json.loads(jsonstr)
             except Exception as e:
                 logger.warning("settings.json: %s", str(e))
                 logger.warning("Failed to load settings: using defaults")
@@ -551,11 +568,11 @@ class Application (object):
         if sys.platform == 'win32':
             ud_docs = lib.glib.get_user_special_dir(
                 GLib.UserDirectory.DIRECTORY_DOCUMENTS,
-            ).decode("utf-8")
+            )
             scrappre = os.path.join(ud_docs, u'MyPaint', u'scrap')
         else:
             scrappre = u'~/MyPaint/scrap'
-        DEFAULT_CONFIG = {
+        default_config = {
             'saving.scrap_prefix': scrappre,
             'input.device_mode': 'screen',
             'input.global_pressure_mapping': [(0.0, 1.0), (1.0, 0.0)],
@@ -579,6 +596,7 @@ class Application (object):
             ),
             'ui.toolbar_icon_size': 'large',
             'ui.dark_theme_variant': True,
+            'ui.rendered_tile_cache_size': 16384,
             'saving.default_format': 'openraster',
             'brushmanager.selected_brush': None,
             'brushmanager.selected_groups': [],
@@ -606,16 +624,16 @@ class Application (object):
             # so provide a Ctrl-based equivalent for all alt actions.
             'input.button_mapping': {
                 # Note that space is treated as a fake Button2
-                '<Shift>Button1':          'StraightMode',
-                '<Control>Button1':        'ColorPickMode',
-                '<Alt>Button1':            'ColorPickMode',
-                'Button2':                 'PanViewMode',
-                '<Shift>Button2':          'RotateViewMode',
-                '<Control>Button2':        'ZoomViewMode',
-                '<Alt>Button2':            'ZoomViewMode',
+                '<Shift>Button1': 'StraightMode',
+                '<Control>Button1': 'ColorPickMode',
+                '<Alt>Button1': 'ColorPickMode',
+                'Button2': 'PanViewMode',
+                '<Shift>Button2': 'RotateViewMode',
+                '<Control>Button2': 'ZoomViewMode',
+                '<Alt>Button2': 'ZoomViewMode',
                 '<Control><Shift>Button2': 'FrameEditMode',
-                '<Alt><Shift>Button2':     'FrameEditMode',
-                'Button3':                 'ShowPopupMenu',
+                '<Alt><Shift>Button2': 'FrameEditMode',
+                'Button3': 'ShowPopupMenu',
             },
         }
         if sys.platform == 'win32':
@@ -624,25 +642,26 @@ class Application (object):
             # action on Linux. However one of the two buttons is often
             # accidentally hit with the thumb while painting. We want
             # to assign panning to this button by default.
-            linux_mapping = DEFAULT_CONFIG["input.button_mapping"]
-            DEFAULT_CONFIG["input.button_mapping"] = {}
-            for bp, actname in linux_mapping.iteritems():
+            linux_mapping = default_config["input.button_mapping"]
+            default_config["input.button_mapping"] = {}
+            for bp, actname in linux_mapping.items():
                 bp = bp.replace("Button2", "ButtonTMP")
                 bp = bp.replace("Button3", "Button2")
                 bp = bp.replace("ButtonTMP", "Button3")
-                DEFAULT_CONFIG["input.button_mapping"][bp] = actname
+                default_config["input.button_mapping"][bp] = actname
 
         self.preferences.clear()
-        self.preferences.update(DEFAULT_CONFIG.copy())
+        self.preferences.update(default_config.copy())
         try:
             user_config = get_json_config()
         except IOError:
             user_config = {}
         self.preferences.update(user_config)
-        if 'ColorPickerPopup' in self.preferences["input.button_mapping"].values():
+        key = "input.button_mapping"
+        if 'ColorPickerPopup' in self.preferences[key].values():
             # old config file; users who never assigned any buttons would
             # end up with Ctrl-Click color picker broken after upgrade
-            self.preferences["input.button_mapping"] = DEFAULT_CONFIG["input.button_mapping"]
+            self.preferences[key] = default_config[key]
 
 
     def add_action_group(self, ag):
@@ -757,8 +776,8 @@ class Application (object):
 
     def save_gui_config(self):
         Gtk.AccelMap.save(join(self.user_confpath, 'accelmap.conf'))
-        workspace = self.workspace
-        self.preferences["workspace.layout"] = workspace.get_layout()
+        wkspace = self.workspace
+        self.preferences["workspace.layout"] = wkspace.get_layout()
         self.save_settings()
         # XXX My adhoc code for project recent list
         self.filehandler.write_recent_project_info()
@@ -822,7 +841,7 @@ class Application (object):
         timeout_id = GLib.timeout_add_seconds(
             interval=seconds,
             function=self._transient_msg_remove_timer_cb,
-            )
+        )
         self._transient_msg_remove_timeout_id = timeout_id
 
     def _transient_msg_remove_timer_cb(self, *_ignored):
@@ -849,7 +868,7 @@ class Application (object):
         return self.get_subwindow("BrushIconEditorWindow")
 
     @property
-    def brush_icon_editor_window(self):
+    def brush_editor_window(self):
         """The brush editor subwindow."""
         return self.get_subwindow("BrushEditorWindow")
 
@@ -884,7 +903,7 @@ class Application (object):
             window.connect("hide", self._subwindow_hide_cb)
             self._subwindows[name] = window
         else:
-            raise ValueError("Unkown subwindow %r" % name)
+            raise ValueError("Unknown subwindow %r" % name)
         return window
 
     def has_subwindow(self, name):
@@ -903,10 +922,9 @@ class Application (object):
 
     ## Workspace callbacks
 
-    def _floating_window_created_cb(self, workspace, floatwin):
+    def _floating_window_created_cb(self, wkspace, floatwin):
         """Adds newly created `workspace.ToolStackWindow`s to the kbm."""
         self.kbm.add_window(floatwin)
-
 
     ## Stroke loading support
 
@@ -989,8 +1007,9 @@ class PixbufDirectory (object):
 
     def __getattr__(self, name):
         if name not in self.cache:
+            pixbuf_file = join(self.dirname, name + '.png')
             try:
-                pixbuf = GdkPixbuf.Pixbuf.new_from_file(join(self.dirname, name + '.png'))
+                pixbuf = GdkPixbuf.Pixbuf.new_from_file(pixbuf_file)
             except GObject.GError as e:
                 raise AttributeError(str(e))
             self.cache[name] = pixbuf

@@ -1,7 +1,7 @@
 # This file is part of MyPaint.
 # -*- coding: utf-8 -*-
 # Copyright (C) 2007-2013 by Martin Renold <martinxyz@gmx.ch>
-# Copyright (C) 2009-2016 by the MyPaint Development Team.
+# Copyright (C) 2009-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@ They are responsible for ordering, loading and saving brush lists.
 """
 
 ## Imports
-from __future__ import division, print_function
 
+from __future__ import division, print_function
 import logging
 
 from gi.repository import Gtk
@@ -27,11 +27,11 @@ from gi.repository import GLib
 from lib.gettext import C_
 from lib.gettext import ngettext
 
-import pixbuflist
-import dialogs
-import brushmanager
-from workspace import SizedVBoxToolWidget
-import widgets
+from . import pixbuflist
+from . import dialogs
+from . import brushmanager
+from .workspace import SizedVBoxToolWidget
+from . import widgets
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,7 @@ def managedbrush_namefunc(managedbrush):
         name = managedbrush.get_display_name(),
         description = managedbrush.description,
     )
+
 
 def managedbrush_pixbuffunc(managedbrush):
     """Returns pixbuf preview of a ManagedBrush."""
@@ -186,7 +187,7 @@ class BrushList (pixbuflist.PixbufList):
     def _item_selected_cb(self, self_, brush):
         # brush changed on harddisk?
         if brush.reload_if_changed():
-            for brushes in self.bm.groups.itervalues():
+            for brushes in self.bm.groups.values():
                 self.bm.brushes_changed(brushes)
         self.bm.select_brush(brush)
 
@@ -346,7 +347,7 @@ class BrushGroupTool (SizedVBoxToolWidget):
         self._scrolls = Gtk.ScrolledWindow()
         self._dialog = None
         self._brush_list = None
-        from application import get_app
+        from gui.application import get_app
         self._app = get_app()
         if group not in self._app.brushmanager.groups:
             raise ValueError("No group named %r" % group)
@@ -525,7 +526,7 @@ class BrushGroupsMenu (Gtk.Menu):
 
     def __init__(self):
         super(BrushGroupsMenu, self).__init__()
-        from application import get_app
+        from gui.application import get_app
         self.app = get_app()
         # Static items
         item = Gtk.SeparatorMenuItem()
@@ -562,7 +563,7 @@ class BrushGroupsMenu (Gtk.Menu):
 
     def _update(self, bm):
         """Update dynamic items in response to the groups list changing"""
-        for item in self._items.itervalues():
+        for item in self._items.values():
             if item not in self:
                 continue
             self.remove(item)
@@ -577,7 +578,7 @@ class BrushGroupsMenu (Gtk.Menu):
                 item.connect("activate", activate_cb, name)
                 self._items[name] = item
             self.prepend(item)
-        for name, item in list(self._items.iteritems()):
+        for name, item in list(self._items.items()):
             if item in self:
                 continue
             self._items.pop(name)

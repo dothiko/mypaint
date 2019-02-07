@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # This file is part of MyPaint.
-# Copyright (C) 2009-2017 by the MyPaint Development Team
+# Copyright (C) 2009-2018 by the MyPaint Development Team
 # Copyright (C) 2007-2014 by Martin Renold <martinxyz@gmx.ch>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -12,6 +12,7 @@
 
 
 ## Imports
+
 from __future__ import division, print_function
 
 import os
@@ -29,13 +30,15 @@ from lib import helpers
 from lib import fileutils
 from lib.errors import FileHandlingError
 from lib.errors import AllocationError
-import drawwindow
+from gui.widgets import with_wait_cursor
 from lib import mypaintlib
 from lib.gettext import ngettext
 from lib.gettext import C_
 import lib.glib
+from lib.glib import filename_to_unicode
 import lib.xml
 import lib.feedback
+from lib.pycompat import unicode
 
 logger = logging.getLogger(__name__)
 
@@ -201,7 +204,7 @@ class _IOProgressUI:
 
         :param f: A list of filenames, or a single filename.
         :returns: A files_summary value for the constructor.
-        :rtype: unicode
+        :rtype: unicode/str
 
         """
         # TRANSLATORS: formatting for the {files_summary} used below.
@@ -210,7 +213,9 @@ class _IOProgressUI:
             return ngettext(u"{n} file", u"{n} files", nfiles).format(
                 n=nfiles,
             )
-        elif isinstance(f, str) or isinstance(f, unicode):
+        elif isinstance(f, bytes) or isinstance(f, unicode):
+            if isinstance(f, bytes):
+                f = f.decode("utf-8")
             return C_(
                 "Document I/O: the {files_summary} for a single file",
                 u"“{basename}”",
@@ -272,7 +277,7 @@ class _IOProgressUI:
         self._start_time = None
         self._last_pulse = None
 
-    @drawwindow.with_wait_cursor
+    @with_wait_cursor
     def call(self, func, *args, **kwargs):
         """Call a save or load callable and watch its progress.
 
@@ -593,7 +598,7 @@ class FileHandler (object):
         dialog.set_do_overwrite_confirmation(True)
 
         # Add widget for selecting save format
-        if not project:
+        if not project: # XXX for project-save, below block is same as original.
             box = Gtk.HBox()
             box.set_spacing(12)
             label = Gtk.Label(C_(
@@ -611,8 +616,8 @@ class FileHandler (object):
             box.pack_start(label, True, True, 0)
             box.pack_start(combo, False, True, 0)
             dialog.set_extra_widget(box)
-        else:
-            self.saveformat_combo = None
+        else: # XXX for `project-save` 
+            self.saveformat_combo = None  # XXX for `project-save`
 
         dialog.show_all()
         return dialog
@@ -623,7 +628,7 @@ class FileHandler (object):
         dialog = self.save_dialog
         filename = dialog.get_filename()
         if filename:
-            filename = filename.decode('utf-8')
+            filename = filename_to_unicode(filename)
             filename, ext = os.path.splitext(filename)
             if ext:
                 saveformat = self.saveformat_combo.get_active()
@@ -671,7 +676,7 @@ class FileHandler (object):
                 "Really Continue?"
             )
 
-        # Get an accurate assesment of how much change is unsaved.
+        # Get an accurate assessment of how much change is unsaved.
         self.doc.model.sync_pending_changes()
         t = self.doc.model.unsaved_painting_time
 
@@ -936,7 +941,9 @@ class FileHandler (object):
             uri = lib.glib.filename_to_uri(self.filename)
             recent_data = Gtk.RecentData()
             recent_data.app_name = "mypaint"
-            recent_data.app_exec = sys.argv_unicode[0].encode("utf-8")
+            app_exec = sys.argv_unicode[0]
+            assert isinstance(app_exec, unicode)
+            recent_data.app_exec = app_exec
             mime_default = "application/octet-stream"
             fmt, mime_type = self.ext2saveformat.get(ext, (None, mime_default))
             recent_data.mime_type = mime_type
@@ -946,7 +953,7 @@ class FileHandler (object):
             thumbnail_pixbuf = self.doc.model.render_thumbnail(**options)
         helpers.freedesktop_thumbnail(filename, thumbnail_pixbuf)
 
-    @drawwindow.with_wait_cursor
+    @with_wait_cursor
     def save_scratchpad(self, filename, export=False, **options):
         save_needed = (
             self.app.scratchpad_doc.model.unsaved_painting_time
@@ -998,7 +1005,7 @@ class FileHandler (object):
     def update_preview_cb(self, file_chooser, preview):
         filename = file_chooser.get_preview_filename()
         if filename:
-            filename = filename.decode('utf-8')
+            filename = filename_to_unicode(filename)
             pixbuf = helpers.freedesktop_thumbnail(filename)
             if pixbuf:
                 # if pixbuf is smaller than 256px in width, copy it onto
@@ -1072,7 +1079,9 @@ class FileHandler (object):
         try:
             if dialog.run() == Gtk.ResponseType.OK:
                 dialog.hide()
-                self.open_file(dialog.get_filename().decode('utf-8'))
+                filename = dialog.get_filename()
+                filename = filename_to_unicode(filename)
+                self.open_file(filename)
         finally:
             dialog.destroy()
 
@@ -1111,9 +1120,10 @@ class FileHandler (object):
         try:
             if dialog.run() == Gtk.ResponseType.OK:
                 dialog.hide()
-                self.app.scratchpad_filename = dialog.get_filename() \
-                    .decode('utf-8')
-                self.open_scratchpad(self.app.scratchpad_filename)
+                filename = dialog.get_filename()
+                filename = filename_to_unicode(filename)
+                self.app.scratchpad_filename = filename
+                self.open_scratchpad(filename)
         finally:
             dialog.destroy()
 
@@ -1161,7 +1171,7 @@ class FileHandler (object):
             dialog.destroy()
 
         if filenames:
-            filenames = [f.decode('utf-8') for f in filenames]
+            filenames = [filename_to_unicode(f) for f in filenames]
             self.import_layers(filenames)
 
     def save_cb(self, action):
@@ -1241,7 +1251,7 @@ class FileHandler (object):
                 filename = dialog.get_filename()
                 if filename is None:
                     continue
-                filename = filename.decode('utf-8')
+                filename = filename_to_unicode(filename)
                 name, ext = os.path.splitext(filename)
                 
                 if is_project:

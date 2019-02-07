@@ -1,7 +1,7 @@
 #!/usr/bin/env python2
 # This file is part of MyPaint.
 # Copyright (C) 2007-2013 by Martin Renold <martinxyz@gmx.ch>
-# Copyright (C) 2013-2015 by the MyPaint Develoment Team.
+# Copyright (C) 2013-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -24,7 +24,11 @@ import sys
 import os
 import re
 import logging
+
 logger = logging.getLogger('mypaint')
+if sys.version_info >= (3,):
+    xrange = range
+    unicode = str
 
 
 ## Logging classes
@@ -51,24 +55,22 @@ class ColorFormatter (logging.Formatter):
     UNDERLINEOFF = "\033[24m"
     RESET = "\033[0m"
 
-    # Replace tokens in message format strings to highlight interpolations
-    REPLACE_BOLD = lambda m: (ColorFormatter.BOLD +
-                              m.group(0) +
-                              ColorFormatter.BOLDOFF)
-    REPLACE_UNDERLINE = lambda m: (ColorFormatter.UNDERLINE +
-                                   m.group(0) +
-                                   ColorFormatter.UNDERLINEOFF)
-    TOKEN_FORMATTING = [
-        (re.compile(r'%r'), REPLACE_BOLD),
-        (re.compile(r'%s'), REPLACE_BOLD),
-        (re.compile(r'%\+?[0-9.]*d'), REPLACE_BOLD),
-        (re.compile(r'%\+?[0-9.]*f'), REPLACE_BOLD),
-    ]
+    def _replace_bold(self, m):
+        return self.BOLD + m.group(0) + self.BOLDOFF
+
+    def _replace_underline(self, m):
+        return self.UNDERLINE + m.group(0) + self.UNDERLINEOFF
 
     def format(self, record):
         record = logging.makeLogRecord(record.__dict__)
         msg = record.msg
-        for token_re, repl in self.TOKEN_FORMATTING:
+        token_formatting = [
+            (re.compile(r'%r'), self._replace_bold),
+            (re.compile(r'%s'), self._replace_bold),
+            (re.compile(r'%\+?[0-9.]*d'), self._replace_bold),
+            (re.compile(r'%\+?[0-9.]*f'), self._replace_bold),
+        ]
+        for token_re, repl in token_formatting:
             msg = token_re.sub(repl, msg)
         record.msg = msg
         record.reset = self.RESET
@@ -101,16 +103,16 @@ def win32_unicode_argv():
         from ctypes import POINTER, byref, cdll, c_int, windll
         from ctypes.wintypes import LPCWSTR, LPWSTR
 
-        GetCommandLineW = cdll.kernel32.GetCommandLineW
-        GetCommandLineW.argtypes = []
-        GetCommandLineW.restype = LPCWSTR
-        CommandLineToArgvW = windll.shell32.CommandLineToArgvW
-        CommandLineToArgvW.argtypes = [LPCWSTR, POINTER(c_int)]
+        get_cmd = cdll.kernel32.GetCommandLineW
+        get_cmd.argtypes = []
+        get_cmd.restype = LPCWSTR
+        get_argv = windll.shell32.CommandLineToArgvW
+        get_argv.argtypes = [LPCWSTR, POINTER(c_int)]
 
-        CommandLineToArgvW.restype = POINTER(LPWSTR)
-        cmd = GetCommandLineW()
+        get_argv.restype = POINTER(LPWSTR)
+        cmd = get_cmd()
         argc = c_int(0)
-        argv = CommandLineToArgvW(cmd, byref(argc))
+        argv = get_argv(cmd, byref(argc))
         if argc.value > 0:
             # Remove Python executable if present
             if argc.value - len(sys.argv) == 1:
@@ -118,14 +120,13 @@ def win32_unicode_argv():
             else:
                 start = 0
             return [argv[i] for i in xrange(start, argc.value)]
-    except:
+    except Exception:
         logger.exception(
             "Specialized Win32 argument handling failed. Please "
             "help us determine if this code is still needed, "
             "and submit patches if it's not."
         )
         logger.warning("Falling back to POSIX-style argument handling")
-        return [s.decode(sys.getfilesystemencoding()) for s in sys.argv]
 
 
 def get_paths():
@@ -133,11 +134,20 @@ def get_paths():
 
     # Convert sys.argv to a list of unicode objects
     # (actually converting sys.argv confuses gtk, thus we add a new variable)
+    # Post-Py3: almost certainly not needed, but check *all* platforms
+    # before removing this stuff.
+
+    sys.argv_unicode = None
     if sys.platform == 'win32':
         sys.argv_unicode = win32_unicode_argv()
-    else:
-        sys.argv_unicode = [s.decode(sys.getfilesystemencoding())
-                            for s in sys.argv]
+
+    if sys.argv_unicode is None:
+        argv_unicode = []
+        for s in sys.argv:
+            if hasattr(s, "decode"):
+                s = s.decode(sys.getfilesystemencoding())
+            argv_unicode.append(s)
+        sys.argv_unicode = argv_unicode
 
     # Script and its location, in canonical absolute form
     scriptfile = os.path.realpath(sys.argv_unicode[0])
@@ -192,9 +202,13 @@ def get_paths():
     assert isinstance(libpath, unicode)
 
     datapath = libpath
-    if not os.path.isdir(join(datapath, 'brushes')):
+
+    # There is no need to return the datadir of mypaint-data.
+    # It will be set at build time. I still check brushes presence.
+    import lib.config
+    if not os.path.isdir(lib.config.mypaint_brushdir):
         logger.critical('Default brush collection not found!')
-        logger.critical('It should have been here: %r', datapath)
+        logger.critical('It should have been here: %r', lib.config.mypaint_brushdir)
         sys.exit(1)
 
     # Old style config file and user data locations.
@@ -224,7 +238,7 @@ def get_paths():
 
 
 def init_gettext(localepath):
-    """Intialize locales and gettext.
+    """Initialize locales and gettext.
 
     This must be done before importing any translated python modules
     (to get global strings translated, especially brushsettings.py).
@@ -299,11 +313,12 @@ def init_gettext(localepath):
         if sys.platform == 'win32':
             libintl = None
             import ctypes
-            for libname in [
-                    'libintl-8.dll',  # native for MSYS2'sMINGW32
-                    'libintl.dll',  # no known cases, but a potential fallback
-                    'intl.dll',  # some old recipes off the internet
-                ]:
+            libnames = [
+                'libintl-8.dll',  # native for MSYS2's MINGW32
+                'libintl.dll',  # no known cases, but a potential fallback
+                'intl.dll',  # some old recipes off the internet
+            ]
+            for libname in libnames:
                 try:
                     libintl = ctypes.cdll.LoadLibrary(libname)
                     bindtextdomain = libintl.bindtextdomain
@@ -323,7 +338,7 @@ def init_gettext(localepath):
                         ctypes.c_char_p,
                     )
                     textdomain.restype = ctypes.c_char_p
-                except:
+                except Exception:
                     logger.exception(
                         "Windows: attempt to load bindtextdomain funcs "
                         "from %r failed (ctypes)",
@@ -369,8 +384,12 @@ def init_gettext(localepath):
         if bindtextdomain and bind_textdomain_codeset and textdomain:
             assert os.path.exists(path)
             assert os.path.isdir(path)
-            p = bindtextdomain(dom, path)
-            c = bind_textdomain_codeset(dom, codeset)
+            if sys.platform == 'win32':
+                p = bindtextdomain(dom.encode('utf-8'), path.encode('utf-8'))
+                c = bind_textdomain_codeset(dom.encode('utf-8'), codeset.encode('utf-8'))
+            else:
+                p = bindtextdomain(dom, path)
+                c = bind_textdomain_codeset(dom, codeset)
             logger.debug("C bindtextdomain(%r, %r): %r", dom, path, p)
             logger.debug(
                 "C bind_textdomain_codeset(%r, %r): %r",
@@ -389,7 +408,10 @@ def init_gettext(localepath):
             dom, codeset, c,
         )
     if bindtextdomain and bind_textdomain_codeset and textdomain:
-        d = textdomain(defaultdom)
+        if sys.platform == 'win32':
+            d = textdomain(defaultdom.encode('utf-8'))
+        else:
+            d = textdomain(defaultdom)
         logger.debug("C textdomain(%r): %r", defaultdom, d)
     d = gettext.textdomain(defaultdom)
     logger.debug("Python textdomain(%r): %r", defaultdom, d)
@@ -401,26 +423,21 @@ def init_gettext(localepath):
 if __name__ == '__main__':
     # Console logging
     log_format = "%(levelname)s: %(name)s: %(message)s"
-    if sys.platform == 'win32':
-        # Windows doesn't understand ANSI by default.
-        console_handler = logging.StreamHandler(stream=sys.stderr)
-        console_formatter = logging.Formatter(log_format)
+    console_handler = logging.StreamHandler(stream=sys.stderr)
+    no_ansi_platforms = ["win32"]
+    can_use_ansi_formatting = (
+        (sys.platform not in no_ansi_platforms)
+        and sys.stderr.isatty()
+    )
+    if can_use_ansi_formatting:
+        log_format = (
+            "%(levelCol)s%(levelname)s: "
+            "%(bold)s%(name)s%(reset)s%(levelCol)s: "
+            "%(message)s%(reset)s"
+        )
+        console_formatter = ColorFormatter(log_format)
     else:
-        # Assume POSIX.
-        # Clone stderr so that later reassignment of sys.stderr won't affect
-        # logger if --logfile is used.
-        stderr_fd = os.dup(sys.stderr.fileno())
-        stderr_fp = os.fdopen(stderr_fd, 'ab', 0)
-        # Pretty colors.
-        console_handler = logging.StreamHandler(stream=stderr_fp)
-        if stderr_fp.isatty():
-            log_format = (
-                "%(levelCol)s%(levelname)s: "
-                "%(bold)s%(name)s%(reset)s%(levelCol)s: "
-                "%(message)s%(reset)s")
-            console_formatter = ColorFormatter(log_format)
-        else:
-            console_formatter = logging.Formatter(log_format)
+        console_formatter = logging.Formatter(log_format)
     console_handler.setFormatter(console_formatter)
     logging_level = logging.INFO
     if os.environ.get("MYPAINT_DEBUG", False):

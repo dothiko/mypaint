@@ -1,7 +1,6 @@
 # coding=utf-8
-
 # This file is part of MyPaint.
-# Copyright (C) 2012-2015 by Andrew Chadwick <a.t.chadwick@gmail.com>
+# Copyright (C) 2012-2018 by the MyPaint Development Team
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,16 +20,15 @@ with an adjuster does its type change to match the control's color space.
 """
 
 ## Imports
-from __future__ import division, print_function
 
+from __future__ import division, print_function
 import re
 import colorsys
-import struct
 
-import gi
 from gi.repository import GdkPixbuf
 
-from lib.helpers import clamp
+from lib.pycompat import xrange
+from lib.pycompat import PY3
 
 
 ## Lightweight color objects
@@ -77,8 +75,8 @@ class UIColor (object):
         return colorsys.rgb_to_hsv(*self.get_rgb())
 
     ## Read-only properties (at this level)
-    #rgb = property(get_rgb)
-    #hsv = property(get_hsv)
+    # rgb = property(get_rgb)
+    # hsv = property(get_hsv)
 
     # RGB read-only
     @property
@@ -174,9 +172,9 @@ class UIColor (object):
             return False
         return rgb1 == rgb2
         # colorhistory.py uses
-        #a_ = np.array(helpers.hsv_to_rgb(*a))
-        #b_ = np.array(helpers.hsv_to_rgb(*b))
-        #return ((a_ - b_)**2).sum() < (3*1.0/256)**2
+        #   a_ = np.array(helpers.hsv_to_rgb(*a))
+        #   b_ = np.array(helpers.hsv_to_rgb(*b))
+        #   return ((a_ - b_)**2).sum() < (3*1.0/256)**2
 
     def __copy__(self):
         """Clones the object using its own constructor; see `copy.copy()`.
@@ -228,7 +226,14 @@ class UIColor (object):
 
     @classmethod
     def new_from_pixbuf_average(class_, pixbuf):
-        """Returns the the average of all colors in a pixbuf."""
+        """Returns the the average of all colors in a pixbuf.
+
+        >>> p = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 5, 5)
+        >>> p.fill(0x880088ff)
+        >>> UIColor.new_from_pixbuf_average(p).to_hex_str()
+        '#880088'
+
+        """
         assert pixbuf.get_colorspace() == GdkPixbuf.Colorspace.RGB
         assert pixbuf.get_bits_per_sample() == 8
         n_channels = pixbuf.get_n_channels()
@@ -238,6 +243,7 @@ class UIColor (object):
         else:
             assert pixbuf.get_has_alpha()
         data = pixbuf.get_pixels()
+        assert isinstance(data, bytes)
         w, h = pixbuf.get_width(), pixbuf.get_height()
         rowstride = pixbuf.get_rowstride()
         n_pixels = w*h
@@ -245,9 +251,16 @@ class UIColor (object):
         for y in xrange(h):
             for x in xrange(w):
                 offs = y*rowstride + x*n_channels
-                r += ord(data[offs])
-                g += ord(data[offs+1])
-                b += ord(data[offs+2])
+                if PY3:
+                    # bytes=bytes. Indexing produces ints.
+                    r += data[offs]
+                    g += data[offs+1]
+                    b += data[offs+2]
+                else:
+                    # bytes=str. Indexing of produces a str of len 1.
+                    r += ord(data[offs])
+                    g += ord(data[offs+1])
+                    b += ord(data[offs+2])
         r = r / n_pixels
         g = g / n_pixels
         b = b / n_pixels
@@ -473,7 +486,7 @@ class HCYColor (UIColor):
     Not an especially common color space. Sometimes referred to as HSY, HSI,
     or (occasionally and wrongly) as HSL. The Hue `h` term is identical to that
     used by `HSVColor`. Luma `y`, however, is a perceptually-weighted
-    representation of the brightness. This ordinarily would make an assymetric
+    representation of the brightness. This ordinarily would make an asymmetric
     colorspace solid not unlike the Y'CbCr one because the red, green and blue
     primaries underlying it do not contribute equally to the human perception
     of brightness. Therefore the Chroma `c` term is the fraction of the maximum
@@ -613,6 +626,7 @@ class HCYColor (UIColor):
             if t1[-1] == t2[-1] == 1:
                 return True
             return t1 == t2
+
 
 class YCbCrColor (UIColor):
     """YUV-type color, using the BT601 definition.
@@ -841,27 +855,27 @@ def HCY_to_RGB(hcy):
     h %= 1.0
     h *= 6.0
     if h < 1:
-        #implies (p==r and h==(g-b)/d and g>=b)
+        # implies (p==r and h==(g-b)/d and g>=b)
         th = h
         tm = _HCY_RED_LUMA + _HCY_GREEN_LUMA * th
     elif h < 2:
-        #implies (p==g and h==((b-r)/d)+2.0 and b<r)
+        # implies (p==g and h==((b-r)/d)+2.0 and b<r)
         th = 2.0 - h
         tm = _HCY_GREEN_LUMA + _HCY_RED_LUMA * th
     elif h < 3:
-        #implies (p==g and h==((b-r)/d)+2.0 and b>=g)
+        # implies (p==g and h==((b-r)/d)+2.0 and b>=g)
         th = h - 2.0
         tm = _HCY_GREEN_LUMA + _HCY_BLUE_LUMA * th
     elif h < 4:
-        #implies (p==b and h==((r-g)/d)+4.0 and r<g)
+        # implies (p==b and h==((r-g)/d)+4.0 and r<g)
         th = 4.0 - h
         tm = _HCY_BLUE_LUMA + _HCY_GREEN_LUMA * th
     elif h < 5:
-        #implies (p==b and h==((r-g)/d)+4.0 and r>=g)
+        # implies (p==b and h==((r-g)/d)+4.0 and r>=g)
         th = h - 4.0
         tm = _HCY_BLUE_LUMA + _HCY_RED_LUMA * th
     else:
-        #implies (p==r and h==(g-b)/d and g<b)
+        # implies (p==r and h==(g-b)/d and g<b)
         th = 6.0 - h
         tm = _HCY_RED_LUMA + _HCY_BLUE_LUMA * th
 

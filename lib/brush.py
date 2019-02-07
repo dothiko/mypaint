@@ -1,4 +1,5 @@
 # This file is part of MyPaint.
+# Copyright (C) 2007-2018 by the MyPaint Development Team
 # Copyright (C) 2007 by Martin Renold <martinxyz@gmx.ch>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -7,16 +8,25 @@
 # (at your option) any later version.
 
 from __future__ import division, print_function
-
-import mypaintlib
-import helpers
-
-import urllib
+import logging
 import copy
 import math
 import json
 
+from lib import mypaintlib
+from lib import helpers
 from lib import brushsettings
+from lib.pycompat import unicode
+from lib.pycompat import PY3
+
+if PY3:
+    from urllib.parse import quote_from_bytes as url_quote
+    from urllib.parse import unquote_to_bytes as url_unquote
+else:
+    from urllib import quote as url_quote
+    from urllib import unquote as url_unquote
+
+logger = logging.getLogger(__name__)
 
 
 # Module constants:
@@ -44,31 +54,35 @@ _BRUSHINFO_MATCH_IGNORES = [
 def brushinfo_quote(string):
     """Quote a string for serialisation of brushes.
 
-    >>> brushinfo_quote(u'foo')
-    'foo'
-    >>> brushinfo_quote(u'foo/bar blah')
-    'foo%2Fbar%20blah'
-    >>> brushinfo_quote(u'Have a nice day \u263A')
-    'Have%20a%20nice%20day%20%E2%98%BA'
+    >>> brushinfo_quote(u'foo') == b'foo'
+    True
+    >>> brushinfo_quote(u'foo/bar blah') == b'foo%2Fbar%20blah'
+    True
+    >>> expected = b'Have%20a%20nice%20day%20%E2%98%BA'
+    >>> brushinfo_quote(u'Have a nice day \u263A') == expected
+    True
+
     """
     string = unicode(string)
     u8bytes = string.encode("utf-8")
-    return str(urllib.quote(u8bytes, safe=''))
+    return url_quote(u8bytes, safe='').encode("ascii")
 
 
 def brushinfo_unquote(quoted):
     """Unquote a serialised string value from a brush field.
 
-    >>> brushinfo_unquote("foo")
-    u'foo'
-    >>> brushinfo_unquote("foo%2fbar%20blah")
-    u'foo/bar blah'
-    >>> expected = u'Have a nice day \u263A'
-    >>> brushinfo_unquote('Have%20a%20nice%20day%20%E2%98%BA') == expected
+    >>> brushinfo_unquote(b"foo") == u'foo'
     True
+    >>> brushinfo_unquote(b"foo%2fbar%20blah") == u'foo/bar blah'
+    True
+    >>> expected = u'Have a nice day \u263A'
+    >>> brushinfo_unquote(b'Have%20a%20nice%20day%20%E2%98%BA') == expected
+    True
+
     """
-    quoted = str(quoted)
-    u8bytes = urllib.unquote(quoted)
+    if not isinstance(quoted, bytes):
+        raise ValueError("Cann")
+    u8bytes = url_unquote(quoted)
     return unicode(u8bytes.decode("utf-8"))
 
 
@@ -87,7 +101,7 @@ class Obsolete (ParseError):
 def _oldfmt_parse_value(rawvalue, cname, version):
     """Parses a raw setting value.
 
-    This code handles a format that cnahged over time, so the
+    This code handles a format that changed over time, so the
     parse is for a given setting name and brushfile version.
 
     """
@@ -154,11 +168,7 @@ def _oldfmt_parse_points_v2(rawpoints):
         if not (s.startswith('(') and s.endswith(')') and ' ' in s):
             return '(x y) expected, got "%s"' % s
         s = s[1:-1]
-        try:
-            x, y = [float(ss) for ss in s.split(' ')]
-        except:
-            print(s)
-            raise
+        x, y = [float(ss) for ss in s.split(' ')]
         points.append((x, y))
     return points
 
@@ -168,7 +178,7 @@ def _oldfmt_transform_y(valuepair, func):
     basevalue, input_points = valuepair
     basevalue = func(basevalue)
     input_points_new = {}
-    for inputname, points in input_points.iteritems():
+    for inputname, points in input_points.items():
         points_new = [(x, func(y)) for x, y in points]
         input_points_new[inputname] = points_new
     return [basevalue, input_points_new]
@@ -258,6 +268,32 @@ class BrushInfo (object):
         return json.dumps(document, sort_keys=True, indent=4)
 
     def from_json(self, json_string):
+        """Loads settings from a JSON string.
+
+        >>> from glob import glob
+        >>> for p in glob("tests/brushes/v3/*.myb"):
+        ...     with open(p, "rb") as fp:
+        ...         bstr = fp.read()
+        ...         ustr = bstr.decode("utf-8")
+        ...     b1 = BrushInfo()
+        ...     b1.from_json(bstr)
+        ...     b1 = BrushInfo()
+        ...     b1.from_json(ustr)
+
+        See also load_from_string(), which can handle the old v2 format.
+
+        Accepts both unicode and byte strings. Byte strings are assumed
+        to be encoded as UTF-8 when any decoding's needed.
+
+        """
+
+        # Py3: Ubuntu Trusty's 3.4.3 json.loads() requires unicode strs.
+        # Layer Py3, and Py2 is OK with either.
+        if not isinstance(json_string, unicode):
+            if not isinstance(json_string, bytes):
+                raise ValueError("Need either a str or a bytes object")
+            json_string = json_string.decode("utf-8")
+
         brush_def = json.loads(json_string)
         if brush_def.get('version', 0) < 3:
             raise BrushInfo.ParseError(
@@ -273,7 +309,7 @@ class BrushInfo (object):
         for k, v in brush_def['settings'].items():
             base_value, inputs = v['base_value'], v['inputs']
             if k not in self.settings:
-                print('ignoring unknown brush setting %r' % k)
+                logger.warning('ignoring unknown brush setting %r', k)
                 continue
             self.settings[k] = [base_value, inputs]
 
@@ -287,10 +323,16 @@ class BrushInfo (object):
     def load_from_string(self, settings_str):
         """Load a setting string, overwriting all current settings."""
 
-        if settings_str.startswith('{'):
+        settings_unicode = settings_str
+        if not isinstance(settings_unicode, unicode):
+            if not isinstance(settings_unicode, bytes):
+                raise ValueError("Need either a str or a bytes object")
+            settings_unicode = settings_unicode.decode("utf-8")
+
+        if settings_unicode.startswith(u'{'):
             # new json-based brush format
             self.from_json(settings_str)
-        elif settings_str.startswith('#'):
+        elif settings_unicode.startswith(u'#'):
             # old brush format
             self._load_old_format(settings_str)
         else:
@@ -301,6 +343,34 @@ class BrushInfo (object):
         self.cache_str = settings_str
 
     def _load_old_format(self, settings_str):
+        """Loads brush settings in the old (v2) format.
+
+        >>> from glob import glob
+        >>> for p in glob("tests/brushes/v2/*.myb"):
+        ...     with open(p, "rb") as fp:
+        ...         bstr = fp.read()
+        ...         ustr = bstr.decode("utf-8")
+        ...     b1 = BrushInfo()
+        ...     b1._load_old_format(bstr)
+        ...     b2 = BrushInfo()
+        ...     b2._load_old_format(ustr)
+
+        Accepts both unicode and byte strings. Byte strings are assumed
+        to be encoded as UTF-8 when any decoding's needed.
+
+        """
+
+        # Py2 is happy natively comparing unicode with str, no encode
+        # needed. For Py3, need to parse as str so that updated dict
+        # keys can be compared sensibly with stuff written by other
+        # code.
+
+        if not isinstance(settings_str, unicode):
+            if not isinstance(settings_str, bytes):
+                raise ValueError("Need either a str or a bytes object")
+            if PY3:
+                settings_str = settings_str.decode("utf-8")
+
         # Split out the raw settings and grab the version we're dealing with
         rawsettings = []
         errors = []
@@ -350,7 +420,7 @@ class BrushInfo (object):
                 errors.append((line, str(e)))
         if errors:
             for error in errors:
-                print(error)
+                logger.warning(error)
         if num_parsed == 0:
             raise BrushInfo.ParseError(
                 "old brush file format parser did not find "
@@ -365,28 +435,6 @@ class BrushInfo (object):
         res = self.to_json()
 
         self.cache_str = res
-        return res
-
-    def _save_old_format(self):
-        res = '# mypaint brush file\n'
-        res += '# you can edit this file and then '
-        res += 'select the brush in mypaint (again) to reload\n'
-        res += 'version %d\n' % OLDFORMAT_BRUSHFILE_VERSION
-
-        for cname, data in self.settings.iteritems():
-            if cname in STRING_VALUE_SETTINGS:
-                if data is not None:
-                    res += cname + " " + brushinfo_quote(data)
-            else:
-                res += cname + " "
-                basevalue, input_points = data
-                res += str(basevalue)
-                if input_points:
-                    for inputname, points in input_points.iteritems():
-                        res += " | " + inputname + ' '
-                        res += ', '.join(['(%f %f)' % xy for xy in points])
-            res += "\n"
-
         return res
 
     def get_base_value(self, cname):
@@ -481,6 +529,10 @@ class BrushInfo (object):
         h = self.get_base_value('color_h')
         s = self.get_base_value('color_s')
         v = self.get_base_value('color_v')
+        rgb = helpers.hsv_to_rgb(h, s, v)
+        rgb = rgb[0]**(1 / 2.4), rgb[1]**(1 / 2.4), rgb[2]**(1 / 2.4)
+        hsv = helpers.rgb_to_hsv(*rgb)
+        h, s, v = hsv
         assert not math.isnan(h)
         return (h, s, v)
 
@@ -489,6 +541,9 @@ class BrushInfo (object):
             return
         self.begin_atomic()
         try:
+            rgb = helpers.hsv_to_rgb(*hsv)
+            rgb = rgb[0]**2.4, rgb[1]**2.4, rgb[2]**2.4
+            hsv = helpers.rgb_to_hsv(*rgb)
             h, s, v = hsv
             self.set_base_value('color_h', h)
             self.set_base_value('color_s', s)

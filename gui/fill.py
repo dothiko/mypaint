@@ -54,7 +54,7 @@ class FloodFillMode (gui.mode.ScrollableModeMixin,
     @property
     def cursor(self):
         name = self._current_cursor
-        from application import get_app
+        from gui.application import get_app
         app = get_app()
         return app.cursors.get_action_cursor(self.ACTION_NAME, name)
 
@@ -101,7 +101,9 @@ class FloodFillMode (gui.mode.ScrollableModeMixin,
         rootstack = tdw.doc.layer_stack
         if not rootstack.current.get_fillable():
             make_new_layer = True
-        tdw.doc.flood_fill(x, y, color.get_rgb(),
+        rgb = color.get_rgb()
+        rgb = (rgb[0]**2.4, rgb[1]**2.4, rgb[2]**2.4)
+        tdw.doc.flood_fill(x, y, rgb,
                            tolerance=opts.tolerance,
                            sample_merged=opts.sample_merged,
                            make_new_layer=make_new_layer,
@@ -181,7 +183,7 @@ class FloodFillOptionsWidget (Gtk.Grid):
 
         self.set_row_spacing(6)
         self.set_column_spacing(6)
-        from application import get_app
+        from gui.application import get_app
         self.app = get_app()
         prefs = self.app.preferences
 

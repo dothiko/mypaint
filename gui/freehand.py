@@ -1,6 +1,6 @@
 # This file is part of MyPaint.
 # Copyright (C) 2008-2013 by Martin Renold <martinxyz@gmx.ch>
-# Copyright (C) 2013-2016 by the MyPaint Development Team.
+# Copyright (C) 2013-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -9,23 +9,21 @@
 """Freehand drawing modes"""
 
 ## Imports
-from __future__ import division, print_function
 
+from __future__ import division, print_function
 import math
-from lib.helpers import clamp
 import logging
 from collections import deque
-
 from gettext import gettext as _
 
 from gi.repository import Gtk
 from gi.repository import Gdk
 from gi.repository import GLib
-
 import numpy as np
 
+from lib.helpers import clamp
 import gui.mode
-from drawutils import spline_4p
+from .drawutils import spline_4p
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +131,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             # Time of the last-processed event
             self.last_handled_event_time = 0
 
-            # Debugging: number of events procesed each second,
+            # Debugging: number of events processed each second,
             # average times.
             self.avgtime = None
 
@@ -165,7 +163,9 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             Zero-dtime events are detected and cleaned up here.
 
             """
-            time, x, y, pressure, xtilt, ytilt, viewzoom, viewrotation = event_data
+            (time, x, y, pressure,
+             xtilt, ytilt,
+             viewzoom, viewrotation) = event_data
             if time < self._last_queued_event_time:
                 logger.warning('Time is running backwards! Corrected.')
                 time = self._last_queued_event_time
@@ -190,7 +190,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
                         zt = self._last_queued_event_time
                         interval = dtime
                     step = interval / (len(self._zero_dtime_motions) + 1)
-                    for zx, zy, zp, zxt, zyt, zvz, zvr in self._zero_dtime_motions:
+                    for (zx, zy, zp,
+                         zxt, zyt, zvz, zvr) in self._zero_dtime_motions:
                         zt += step
                         zevent_data = (zt, zx, zy, zp, zxt, zyt, zvz, zvr)
                         self.motion_queue.append(zevent_data)
@@ -350,7 +351,7 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         # If the device has changed and the last pressure value from the
         # previous device is not equal to 0.0, this can leave a visible
         # stroke on the layer even if the 'new' device is not pressed on
-        # the tablet and has a pressure axis == 0.0.  Reseting the brush
+        # the tablet and has a pressure axis == 0.0.  Resetting the brush
         # when the device changes fixes this issue, but there may be a
         # much more elegant solution that only resets the brush on this
         # edge-case.
@@ -437,25 +438,8 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
             else:
                 drawstate.last_good_raw_ytilt = ytilt
 
-        # Tilt inputs are assumed to be relative to the viewport,
-        # but the canvas may be rotated or mirrored, or both.
-        # Compensate before passing them to the brush engine.
-        # https://gna.org/bugs/?19988
         if tdw.mirrored:
             xtilt *= -1.0
-        if tdw.rotation != 0:
-            tilt_angle = math.atan2(ytilt, xtilt) - tdw.rotation
-            tilt_magnitude = math.sqrt((xtilt**2) + (ytilt**2))
-            xtilt = tilt_magnitude * math.cos(tilt_angle)
-            ytilt = tilt_magnitude * math.sin(tilt_angle)
-
-        # HACK: color picking, do not paint
-        # TEST: Does this ever happen now?
-        if (state & Gdk.ModifierType.CONTROL_MASK or
-                state & Gdk.ModifierType.MOD1_MASK):
-            # Don't simply return; this is a workaround for unwanted
-            # lines in https://gna.org/bugs/?16169
-            pressure = 0.0
 
         # Apply pressure mapping if we're running as part of a full
         # MyPaint application (and if there's one defined).
@@ -468,14 +452,11 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         else:
             self._reinstate_drawing_cursor(tdw)
 
-        # HACK: straight line mode?
-        # TEST: Does this ever happen?
-        if state & Gdk.ModifierType.SHIFT_MASK:
-            pressure = 0.0
-
         # Queue this event
         x, y = tdw.display_to_model(x, y)
-        event_data = (time, x, y, pressure, xtilt, ytilt, viewzoom, viewrotation)
+        event_data = (time, x, y, pressure,
+                      xtilt, ytilt,
+                      viewzoom, viewrotation)
         drawstate.queue_motion(event_data)
         # Start the motion event processor, if it isn't already running
         if not drawstate.motion_processing_cbid:
@@ -547,7 +528,9 @@ class FreehandMode (gui.mode.BrushworkModeMixin,
         pressure = clamp(pressure, 0.0, 1.0)
         xtilt = clamp(xtilt, -1.0, 1.0)
         ytilt = clamp(ytilt, -1.0, 1.0)
-        self.stroke_to(model, dtime, x, y, pressure, xtilt, ytilt, viewzoom, viewrotation)
+        self.stroke_to(model, dtime, x, y, pressure,
+                       xtilt, ytilt,
+                       viewzoom, viewrotation)
 
         # Update the TDW's idea of where we last painted
         # FIXME: this should live in the model, not the view
@@ -609,7 +592,7 @@ class PressureAndTiltInterpolator (object):
     nice tailoff for mouse users. The interpolator is sensitive to
     transitions between nonzero and zero effective pressure in both
     directions. These transitions clear out just enough history to avoid
-    hook-off and lead-in artefacts.
+    hook-off and lead-in artifacts.
 
     >>> interp = PressureAndTiltInterpolator()
     >>> raw_data = interp._TEST_DATA
@@ -751,7 +734,7 @@ class PressureAndTiltInterpolator (object):
                 (self._pt1 is not None) and
                 (self._pt1[3] <= 0.0)):
             # Transitions from zero to nonzero pressure
-            # Clear history to avoid artefacts
+            # Clear history to avoid artifacts
             self._pt0_prev = None   # ignore the current pt0
             self._pt0 = self._pt1
             self._pt1 = self._pt1_next
@@ -793,9 +776,11 @@ class PressureAndTiltInterpolator (object):
         VIEWZOOM, VIEWROTATION).
         """
         if None in (pressure, xtilt, ytilt, viewzoom, viewrotation):
-            self._np_next.append((time, x, y, pressure, xtilt, ytilt, viewzoom, viewrotation))
+            self._np_next.append((time, x, y, pressure,
+                                  xtilt, ytilt, viewzoom, viewrotation))
         else:
-            self._pt1_next = (time, x, y, pressure, xtilt, ytilt, viewzoom, viewrotation)
+            self._pt1_next = (time, x, y, pressure, xtilt, ytilt,
+                              viewzoom, viewrotation)
             for t, x, y, p, xt, yt, vz, vr in self._interpolate_and_step():
                 yield (t, x, y, p, xt, yt, vz, vr)
 

@@ -1,6 +1,6 @@
 # This file is part of MyPaint.
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014-2017 by the MyPaint Development Team
+# Copyright (C) 2014-2018 by the MyPaint Development Team
 # Copyright (C) 2009 by Ilya Portnov <portnov@bk.ru>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -24,10 +24,10 @@ from gi.repository import GObject
 
 import lib.layer
 import lib.xml
-import widgets
-from widgets import inline_toolbar
-from workspace import SizedVBoxToolWidget
-import layers
+from . import widgets
+from .widgets import inline_toolbar
+from .workspace import SizedVBoxToolWidget
+from . import layers
 from lib.modes import STACK_MODES
 from lib.modes import STANDARD_MODES
 from lib.modes import MODE_STRINGS
@@ -56,6 +56,9 @@ LAYER_CLASS_UI = [
             </placeholder>
             <placeholder name='AdvancedLayerActions'>
                 <menuitem action='TrimLayer'/>
+                <separator/>
+                <menuitem action='UniqLayerPixels'/>
+                <menuitem action='UniqLayerTiles'/>
             </placeholder>
         </popup>
         """),
@@ -66,6 +69,14 @@ LAYER_CLASS_UI = [
                 <menuitem action='BeginExternalLayerEdit'/>
                 <menuitem action='CommitExternalLayerEdit'/>
                 <separator/>
+            </placeholder>
+        </popup>
+        """),
+    (lib.layer.LayerStack, """
+        <popup name='LayersWindowPopup'>
+            <placeholder name='AdvancedLayerActions'>
+                <menuitem action='RefactorLayerGroupPixels'/>
+                <menuitem action='RefactorLayerGroupTiles'/>
             </placeholder>
         </popup>
         """),
@@ -103,7 +114,7 @@ class LayersTool (SizedVBoxToolWidget):
 
     def __init__(self):
         GObject.GObject.__init__(self)
-        from application import get_app
+        from gui.application import get_app
         app = get_app()
         self.app = app
         self.set_spacing(widgets.SPACING_CRAMPED)

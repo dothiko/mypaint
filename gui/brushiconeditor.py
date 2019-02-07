@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 # This file is part of MyPaint.
 # Copyright (C) 2009-2013 by Martin Renold <martinxyz@gmx.ch>
-# Copyright (C) 2013-2016 by the MyPaint Development Team.
+# Copyright (C) 2013-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -9,21 +9,20 @@
 # (at your option) any later version.
 
 from __future__ import division, print_function
-
 import logging
 from gettext import gettext as _
 
 from gi.repository import Gtk
 from gi.repository import GLib
 
-import tileddrawwidget
-import windowing
+from . import tileddrawwidget
+from . import windowing
 import lib.document
-from document import CanvasController
-from freehand import FreehandMode
-import brushmanager
+from gui.document import CanvasController
+from .freehand import FreehandMode
+from . import brushmanager
 from lib.observable import event
-import drawutils
+from . import drawutils
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +37,7 @@ class BrushIconEditorWindow (windowing.SubWindow):
     _TITLE_EDITING = _('Brush Icon (editing)')
 
     def __init__(self):
-        from application import get_app
+        from gui.application import get_app
         app = get_app()
         self._app = app
         windowing.SubWindow.__init__(self, app)
@@ -92,7 +91,7 @@ class BrushIconEditor (Gtk.Grid):
         Gtk.Grid.__init__(self)
         self.set_row_spacing(6)
         self.set_column_spacing(12)
-        from application import get_app
+        from gui.application import get_app
         app = get_app()
         self._app = app
         self._bm = app.brushmanager
@@ -276,7 +275,7 @@ class BrushIconEditor (Gtk.Grid):
         except IOError as err:
             logger.warning("Failed to save brush: %r (recoverable!)", err)
         else:
-            for brushes in self._bm.groups.itervalues():
+            for brushes in self._bm.groups.values():
                 if b in brushes:
                     self._bm.brushes_changed(brushes)
             logger.info("Saved %r", b)
@@ -360,4 +359,5 @@ class BrushIconEditor (Gtk.Grid):
     def _get_preview_pixbuf(self):
         w, h = brushmanager.PREVIEW_W, brushmanager.PREVIEW_H
         rootstack = self._tdw.doc.layer_stack
-        return rootstack.render_as_pixbuf(0, 0, w, h, alpha=False)
+        bbox = (0, 0, w, h)
+        return rootstack.render_layer_as_pixbuf(rootstack, bbox, alpha=False)

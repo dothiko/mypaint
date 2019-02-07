@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2012-2016 by the MyPaint Development Team.
+# Copyright (C) 2012-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -9,7 +9,7 @@
 
 """Viewer and editor widgets for palettes."""
 
-# Editor ideas:
+# Editor ideas
 #   - "Insert lighter/darker copy of row".
 #   - repack palette (remove duplicates and blanks)
 #   - sort palette by approx. hue+chroma binning, then luma variations
@@ -22,6 +22,7 @@ import math
 import os
 import re
 import logging
+from io import open
 
 from gi.repository import Gdk
 from gi.repository import Gtk
@@ -29,23 +30,25 @@ from gi.repository import GLib
 import cairo
 from lib.gettext import C_
 
-from util import clamp
+from .util import clamp
 from lib.palette import Palette
 from lib.color import RGBColor
 from lib.color import HCYColor
 from lib.color import HSVColor
 import gui.uicolor
+from .adjbases import ColorAdjuster
+from .adjbases import ColorAdjusterWidget
+from .adjbases import ColorManager
+from .adjbases import DATAPATH_PALETTES_SUBDIR
+from .combined import CombinedAdjusterPage
 
-from adjbases import ColorAdjuster
-from adjbases import ColorAdjusterWidget
-from adjbases import ColorManager
-from adjbases import DATAPATH_PALETTES_SUBDIR
-from combined import CombinedAdjusterPage
+from lib.pycompat import unicode
+
 
 logger = logging.getLogger(__name__)
 
-## Class defs
 
+## Class defs
 
 class PalettePage (CombinedAdjusterPage):
     """User-editable palette, as a `CombinedAdjuster` element."""
@@ -411,7 +414,7 @@ class PaletteView (ColorAdjuster, Gtk.ScrolledWindow):
 
     """
 
-    ## Sizing contraint constants
+    ## Sizing constraint constants
     _MIN_HEIGHT = 32
     _MIN_WIDTH = 150
     _MAX_NATURAL_HEIGHT = 300
@@ -1339,7 +1342,7 @@ def palette_save_via_dialog(palette, title, parent=None, preview=None):
         # FIXME: this can overwrite files without prompting the user, if
         # the name hacking above changed the filename.  Should do the name
         # tweak within the dialog somehow and get that to confirm.
-        with open(filename, 'w') as fp:
+        with open(filename, 'w', encoding="utf-8", errors="replace") as fp:
             palette.save(fp)
             fp.flush()
         result = True

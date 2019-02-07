@@ -1,5 +1,6 @@
 # This file is part of MyPaint.
-# Copyright (C) 2012 by Ali Lown <ali@lown.me.uk>
+# Copyright (C) 2012-2018 by the MyPaint Development Team
+# Copyright (C) 2012-2013 by Ali Lown <ali@lown.me.uk>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -7,8 +8,8 @@
 # (at your option) any later version.
 
 ## Imports
-from __future__ import division, print_function
 
+from __future__ import division, print_function
 import math
 import bisect
 
@@ -20,12 +21,10 @@ from gi.repository import GLib
 import cairo
 
 import gui.mode
-import document
-import dialogs
-import overlays
-import tileddrawwidget
-from workspace import SizedVBoxToolWidget
-from workspace import TOOL_WIDGET_NATURAL_HEIGHT_SHORT
+from . import overlays
+from . import tileddrawwidget
+from .workspace import SizedVBoxToolWidget
+from .workspace import TOOL_WIDGET_NATURAL_HEIGHT_SHORT
 import lib.alg as geom
 import gui.cursor
 import gui.drawutils
@@ -199,7 +198,7 @@ class PreviewTool (SizedVBoxToolWidget):
 
     tool_widget_icon_name = "mypaint-view-symbolic"
 
-    #TRANSLATORS: title of panel showing an overview of the whole canvas
+    # TRANSLATORS: title of panel showing an overview of the whole canvas
     tool_widget_title = _("Preview")
 
     tool_widget_description = _("Show preview of the whole drawing area")
@@ -222,7 +221,7 @@ class PreviewTool (SizedVBoxToolWidget):
 
     def __init__(self):
         super(SizedVBoxToolWidget, self).__init__()
-        from application import get_app
+        from gui.application import get_app
         app = get_app()
         self.app = app
         self._main_tdw = app.doc.tdw
@@ -261,8 +260,8 @@ class PreviewTool (SizedVBoxToolWidget):
         self.viewport_is_rotated = False
         self.viewport_is_mirrored = False
 
-        #TRANSLATORS: The preview panel shows where the "camera" of the
-        #TRANSLATORS: main view is pointing.
+        # TRANSLATORS: The preview panel shows where the "camera" of the
+        # TRANSLATORS: main view is pointing.
         checkbtn = Gtk.CheckButton(label=_("Show Viewfinder"))
         checkbtn.set_active(self.show_viewfinder)
         self.pack_start(checkbtn, False, False, 0)
@@ -626,7 +625,7 @@ class PreviewTool (SizedVBoxToolWidget):
             defining_points = []
         model_bbox = tuple(self._model.get_effective_bbox())  # Axis aligned...
         x, y, w, h = model_bbox
-        defining_points.extend([(x, y), (x+w, y+h)])          # ...so two suffice
+        defining_points.extend([(x, y), (x+w, y+h)])        # ...so two suffice
 
         # Convert to an axis-aligned bounding box.
         # Don't resize unless this has actually changed.
@@ -645,13 +644,13 @@ class PreviewTool (SizedVBoxToolWidget):
 
         # Tracking vars may have been reset.
         # The bbox is a pretty good seed value for them...
-        if x < self._x_min:
+        if (self._x_min is None) or (x < self._x_min):
             self._x_min = x
-        if x+w > self._x_max:
+        if (self._x_max is None) or (x+w > self._x_max):
             self._x_max = x+w
-        if y < self._y_min:
+        if (self._y_min is None) or (y < self._y_min):
             self._y_min = y
-        if y+h > self._y_max:
+        if (self._y_max is None) or (y+h > self._y_max):
             self._y_max = y+h
 
         # Scale to fit within a rectangle slightly smaller than the widget.

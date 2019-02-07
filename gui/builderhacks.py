@@ -1,6 +1,6 @@
 # -*- encoding: utf-8 -*-
 # This file is part of MyPaint.
-# Copyright (C) 2013-2015 by Andrew Chadwick <a.t.chadwick@gmail.com>
+# Copyright (C) 2013-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -13,7 +13,6 @@
 ## Imports
 from __future__ import division, print_function
 
-import gi
 from gi.repository import Gtk
 
 import lib.xml
@@ -39,7 +38,7 @@ def add_objects_from_template_string(builder, buffer_, object_ids, params):
     The constructed objects are returned in a Python list if this wrapped
     method call is successful.
 
-    When templatizing the XML fragment, paramater values will be escaped using
+    When templatizing the XML fragment, parameter values will be escaped using
     `lib.xml.escape()`. Therefore `params` is limited to fairly simple
     dicts.
 
@@ -52,7 +51,7 @@ def add_objects_from_template_string(builder, buffer_, object_ids, params):
                              % oid)
         object_ids2.append(oid2)
     params_esc = {}
-    for p, v in params.iteritems():
+    for p, v in params.items():
         params_esc[p] = lib.xml.escape(v)
     buffer_2 = buffer_.format(**params_esc)
     if buffer_2 == buffer_:
@@ -94,9 +93,12 @@ def _test():
     # up private attributes in the instantiation loop.
 
     def _test_button_clicked_cb(widget):
-        id_ = Gtk.Buildable.get_name(widget).decode("utf-8")
+        id_ = Gtk.Buildable.get_name(widget)
+        if isinstance(id_, bytes):
+            id_ = id_.decode("utf-8")
         print("Clicked: id=%r" % (id_, ))
         print("          i=%r" % (widget._i, ))
+
     # Unicode is supported in IDs and template values.
     # The XML template may be plain ASCII since escape() is used when
     # filling it.

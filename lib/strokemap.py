@@ -1,6 +1,6 @@
 # This file is part of MyPaint.
+# Copyright (C) 2011-2018 by the MyPaint Development Team.
 # Copyright (C) 2009-2011 by Martin Renold <martinxyz@gmx.ch>
-# Copyright (C) 2011-2015 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -8,24 +8,24 @@
 # (at your option) any later version.
 
 ## Imports
-from __future__ import division, print_function
 
-import time
+from __future__ import division, print_function
 import struct
 import zlib
 import math
 from logging import getLogger
-logger = getLogger(__name__)
+from warnings import warn
 import contextlib
 
 import numpy as np
 
-import mypaintlib
-
-import tiledsurface
-import idletask
+from . import mypaintlib
+from . import tiledsurface
+from . import idletask
+from lib.pycompat import PY3
 import gui.pickable as pickable
 
+logger = getLogger(__name__)
 TILE_SIZE = N = mypaintlib.TILE_SIZE
 
 
@@ -47,6 +47,14 @@ class StrokeShape (object):
         self.brush_string = None
 
     @classmethod
+    def _mock(cls):
+        surf = tiledsurface.MyPaintSurface._mock()
+        snap2 = surf.save_snapshot()
+        surf.clear()
+        snap1 = surf.save_snapshot()
+        return StrokeShape.new_from_snapshots(snap1, snap2)
+
+    @classmethod
     def new_from_snapshots(cls, before, after):
         """Build a new StrokeShape from before+after pair of snapshots.
 
@@ -62,8 +70,8 @@ class StrokeShape (object):
         """
         before_dict = before.tiledict
         after_dict = after.tiledict
-        before_tiles = set(before_dict.iteritems())
-        after_tiles = set(after_dict.iteritems())
+        before_tiles = set(before_dict.items())
+        after_tiles = set(after_dict.items())
         changed_idxs = set(
             pos for pos, data
             in before_tiles.symmetric_difference(after_tiles)
@@ -81,12 +89,14 @@ class StrokeShape (object):
         return shape
 
     def init_from_string(self, data, translate_x, translate_y):
-        """Initialize from a saved compressed string.
+        """Initialize from a saved compressed byte string.
 
         See lib.layer.data.PaintingLayer.load_from_openraster().
         Format: "v2" strokemap format.
 
         """
+        if not isinstance(data, bytes):
+            raise ValueError("data: expected bytes, not %r" % (type(data),))
         assert not self.strokemap
         assert translate_x % N == 0
         assert translate_y % N == 0
@@ -100,9 +110,13 @@ class StrokeShape (object):
             data = data[size+3*4:]
 
     def save_to_string(self, translate_x, translate_y):
-        """Return a compressed string representing the stroke shape.
+        """Return a compressed bytes string representing the stroke shape.
 
         This can be used with init_from_string on subsequent file loads.
+        >>> shape = StrokeShape._mock()
+        >>> bstr = shape.save_to_string(-N, 2*N)
+        >>> isinstance(bstr, bytes)
+        True
 
         See lib.layer.data.PaintingLayer.save_to_openraster().
         Format: "v2" strokemap format.
@@ -110,13 +124,18 @@ class StrokeShape (object):
         """
         assert translate_x % N == 0
         assert translate_y % N == 0
-        translate_x /= N
-        translate_y /= N
+        translate_x = int(translate_x // N)
+        translate_y = int(translate_y // N)
         self.tasks.finish_all()
-        data = ''
-        for (tx, ty), tile in self.strokemap.iteritems():
-            compressed_bitmap = tile.to_string()
-            tx, ty = tx + translate_x, ty + translate_y
+        data = b''
+        if PY3:
+            sm_iter = self.strokemap.items()
+        else:
+            sm_iter = self.strokemap.iteritems()
+        for (tx, ty), tile in sm_iter:
+            compressed_bitmap = tile.to_bytes()
+            tx = int(tx + translate_x)
+            ty = int(ty + translate_y)
             data += struct.pack('>iiI', tx, ty, len(compressed_bitmap))
             data += compressed_bitmap
         return data
@@ -158,8 +177,7 @@ class StrokeShape (object):
         x = int(x)
         y = int(y)
         pixel_ti = (x // N, y // N)
-        pred = lambda ti: (ti == pixel_ti)
-        self._complete_tile_tasks(pred)
+        self._complete_tile_tasks(lambda ti: (ti == pixel_ti))
         tile = self.strokemap.get(pixel_ti)
         if tile:
             array = tile.to_array()
@@ -178,9 +196,9 @@ class StrokeShape (object):
         """
         pred = _TileIndexPredicate(
             bbox = bbox,
-            #center = center,
-            #radius = 20*N,   # pixels
-            #maxhits = 2000,   # tiles
+            # center = center,
+            # radius = 20*N,   # pixels
+            # maxhits = 2000,   # tiles
         )
         self._complete_tile_tasks(pred)
         tile_idxs = list(pred.hits) + [
@@ -192,7 +210,6 @@ class StrokeShape (object):
             if not pred((tx, ty)):
                 continue
             diff_tile = self.strokemap[(tx, ty)]
-            diff_arr = diff_tile.to_array()
             with surf.tile_request(tx, ty, readonly=False) as surf_arr:
                 diff_tile.write_to_surface_tile_array(surf_arr)
 
@@ -512,7 +529,11 @@ class _TileRecompressTask:
     def process_tile_subset(self, pred):
         """Compress & store a subset of queued tiles' data now."""
         processed = []
-        for ti in self._src_dict.iterkeys():
+        if PY3:
+            ti_iter = self._src_dict.keys()
+        else:
+            ti_iter = self._src_dict.iterkeys()
+        for ti in ti_iter:
             if not pred(ti):
                 continue
             self._compress_tile(ti, self._src_dict[ti])
@@ -549,6 +570,19 @@ class _Tile:
         self._all = True
 
     @classmethod
+    def _mocks(cls):
+        """Return mockup tiles for testing."""
+        ar = np.ones((N, N), 'uint8')
+        m = int(N//2)
+        ar[0:m, 0:m] = 0
+        ar[m+1:N, m+1:N] = 0
+        checks = cls.new_from_array(ar)
+        ones = cls.new_from_compressed_bitmap(cls._ZDATA_ONES)
+        ar = np.zeros((N, N), 'uint8')
+        zeros = cls.new_from_array(ar)
+        return (ones, checks, zeros)
+
+    @classmethod
     def new_from_diff(cls, before, after):
         """Initialize from a diff or two RGBA arrays."""
         differences = np.empty((N, N), 'uint8')
@@ -573,7 +607,13 @@ class _Tile:
 
     @classmethod
     def new_from_compressed_bitmap(cls, zdata):
-        """Initialize from raw compressed zlib bitmap data."""
+        """Initialize from raw compressed zlib bitmap data.
+
+        >>> for i, m in enumerate(_Tile._mocks()):
+        ...     logger.debug("Restoring from to_bytes() of mock tile %d", i)
+        ...     t = _Tile.new_from_compressed_bitmap(m.to_bytes())
+
+        """
         tile = cls()
         if zdata == cls._ZDATA_ONES:
             # ASSUMPTION: this representation of these bytes never changes.
@@ -597,14 +637,27 @@ class _Tile:
         # Can this result always be treated as read-only?
         return array
 
-    def to_string(self):
-        """Convert to a string which is storable in "v2" strokemaps."""
+    def to_bytes(self):
+        """Convert to a bytestring which is storable in "v2" strokemaps.
+
+        >>> for i, m in enumerate(_Tile._mocks()):
+        ...     s = m.to_bytes()
+        ...     assert isinstance(s, bytes), \\
+        ...         "item i=%r to_bytes() is %r, not bytes" % (i, type(s))
+
+        """
         if self._all:
             return self._ZDATA_ONES
         else:
             return self._zdata
 
-    def write_to_surface_tile_array(self, rgba, _c=(1<<15)/4, _a=(1<<15)/2):
+    def to_string(self):
+        """Deprecated alias for to_bytes()."""
+        warn("Please use to_bytes() instead here.", DeprecationWarning)
+        return self.to_bytes()
+
+    def write_to_surface_tile_array(self, rgba,
+                                    _c=(1 << 15) / 4, _a=(1 << 15) / 2):
         """Write to a surface's RGBA tile."""
         # neutral gray, 50% opaque
         if self._all:
@@ -627,7 +680,16 @@ class _Tile:
     # XXX for `node pick` end
 
     def __str__(self):
-        return self.to_string()
+        """Deprecated stringification. Do not use.
+
+        Do not use this method, because in Py3 you get unicode strings.
+        In Py2, the returned value is a bytes string.
+
+        """
+        warn("Do not use str(). Use to_bytes() instead.", DeprecationWarning)
+        bstr = self.to_bytes()
+        if PY3:
+            return bstr.decode("utf-8")
 
     def __repr__(self):
         """String representation (summary only)
@@ -733,14 +795,14 @@ class _TileIndexPredicate (object):
             if td > 8*self._max_tile_dist:
                 return False
             elif td > 4*self._max_tile_dist:
-                if not (((tx%4)==1 and (ty%4)==1)
-                        or ((tx%4)==3 and (ty%4)==3)):
+                if not (((tx % 4) == 1 and (ty % 4) == 1)
+                        or ((tx % 4) == 3 and (ty % 4) == 3)):
                     return False
             elif td > 2*self._max_tile_dist:
-                if not ((tx%2)==1 and (ty%2)==1):
+                if not ((tx % 2) == 1 and (ty % 2) == 1):
                     return False
             elif td > self._max_tile_dist:
-                if not (tx+ty)%2==0:
+                if not (tx + ty) % 2 == 0:
                     return False
             if self._maxhits:
                 if td > self._max_tile_dist:

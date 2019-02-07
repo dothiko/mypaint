@@ -23,8 +23,13 @@ a stable version of MyPaint.
 
 MyPaint depends on its brushstroke rendering library,
 [libmypaint](https://github.com/mypaint/libmypaint),
-at version 2.0.0-alpha or later.
+at version 2.0.0-alpha or later, as well as [mypaint-brushes](https://github.com/mypaint/mypaint-brushes)
 This has to be built from scratch for most systems.
+
+MyPaint and libmypaint benefit dramatically from autovectorization and other compiler optimizations.
+You may want to set your CFLAGS before compiling (for gcc):
+
+    $ export CFLAGS='-Ofast -ftree-vectorize -fopt-info-vec-optimized -march=native -mtune=native -funsafe-math-optimizations -funsafe-loop-optimizations'
 
 * [Debian-style package builder for libmypaint][LIBDEB]
 * [Generic libmypaint build instructions][LIB]
@@ -95,7 +100,8 @@ For 32-bit targets, use "i686" in place of the "x86_64".
       mingw-w64-x86_64-librsvg           \
       mingw-w64-x86_64-hicolor-icon-theme \
       mingw-w64-x86_64-python2-cairo      \
-      mingw-w64-x86_64-python2-gobject
+      mingw-w64-x86_64-python2-gobject    \
+      mingw-w64-x86_64-mypaint-brushes2
 
 ### OSX MacPorts
 
@@ -162,7 +168,7 @@ way of working.
     python setup.py managed_install
     python setup.py managed_uninstall
 
-See below if you want to install MyPaint or use `pip`. This isn't a
+See above if you want to install MyPaint or use `pip`. This isn't a
 conventional installation scheme.
 
 ### Demo mode

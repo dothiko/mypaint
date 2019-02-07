@@ -10,8 +10,8 @@
 """Global AccelMap editor, for backwards compatibility"""
 
 ## Imports
-from __future__ import division, print_function
 
+from __future__ import division, print_function
 import logging
 
 from gi.repository import Gtk
@@ -20,11 +20,12 @@ from gi.repository import Pango
 from lib.gettext import gettext as _
 
 import lib.xml
+from lib.pycompat import unicode
 
 logger = logging.getLogger(__name__)
 
 
-## Class defs
+## Class defs and funcs
 
 class AccelMapEditor (Gtk.Grid):
     """Ugly properties list for editing the global accel map
@@ -129,8 +130,8 @@ class AccelMapEditor (Gtk.Grid):
     def _init_from_accel_map(self):
         """Initializes from the app UIManager and the global AccelMap"""
         if self.ui_manager is None:
-            import application
-            app = application.get_app()
+            import gui.application
+            app = gui.application.get_app()
             self.ui_manager = app.ui_manager
         assert self.ui_manager is not None
         self._action_labels.clear()
@@ -141,18 +142,21 @@ class AccelMapEditor (Gtk.Grid):
         for group in self.ui_manager.get_action_groups():
             group_name = group.get_name()
             for action in group.list_actions():
-                action_name = action.get_name()
-                path = "<Actions>/%s/%s" % (group_name, action_name)
+
+                action_name = _udecode(action.get_name())
+                path = u"<Actions>/%s/%s" % (group_name, action_name)
                 if isinstance(action, Gtk.RecentAction):
                     logger.debug("Skipping %r: GtkRecentAction", path)
                     continue
                 if action.__class__.__name__.endswith("FactoryAction"):
                     logger.debug("Skipping %r: MyPaintFactoryAction", path)
                     continue
-                action_label = action.get_label()
+
+                action_label = _udecode(action.get_label())
                 if not action_label:
                     continue
-                action_desc = action.get_tooltip()
+
+                action_desc = _udecode(action.get_tooltip())
                 if action_name.endswith("Mode"):
                     if isinstance(action, Gtk.RadioAction):
                         logger.debug(
@@ -180,11 +184,14 @@ class AccelMapEditor (Gtk.Grid):
                             path,
                         )
                     continue
+                action_desc = _udecode(action_desc)
+
                 self._action_labels[path] = action_label
                 accel_label = accel_labels.get(path, "")
                 assert accel_label is not None
                 self._accel_labels[path] = accel_label
                 row = [None for t in self._COLUMN_TYPES]
+
                 self._populate_row(row, path, action_label,
                                    action_desc, accel_label)
                 self._store.append(row)
@@ -193,9 +200,9 @@ class AccelMapEditor (Gtk.Grid):
         """Write correctly formatted row data into a list-like obj."""
         assert len(row) == len(self._COLUMN_TYPES)
         nonmarkup_substs = {
-            "action_label": action_label.decode("utf-8"),
-            "action_desc": action_desc.decode("utf-8"),
-            "accel_label": accel_label.decode("utf-8"),
+            "action_label": action_label,
+            "action_desc": action_desc,
+            "accel_label": accel_label,
         }
         markup_substs = {
             k: lib.xml.escape(v)
@@ -219,10 +226,10 @@ class AccelMapEditor (Gtk.Grid):
     def _fmt_accel_label(self, label):
         if label:
             markup = self._ACCEL_LABEL_COLUMN_TEMPLATE.format(
-                accel_label = lib.xml.escape(label.decode("utf-8")),
+                accel_label = lib.xml.escape(label),
             )
             sort = self._ACCEL_LABEL_SORT_COLUMN_TEMPLATE.format(
-                accel_label = label.decode("utf-8"),
+                accel_label = label,
             )
         else:
             markup = ""
@@ -260,8 +267,8 @@ class AccelMapEditor (Gtk.Grid):
 
     def _view_search_equal_cb(self, model, col, key, it):
         store = self._store
-        key = key.decode("utf-8")
-        search_text = store.get_value(it, col).decode("utf-8")
+        key = _udecode("utf-8")
+        search_text = _udecode(store.get_value(it, col))
         matches = (
             key in search_text
             or key.lower() in search_text.lower()
@@ -423,18 +430,18 @@ class AccelMapEditor (Gtk.Grid):
 
         # This is rejecting some legit key combinations such as the
         # arrowkeys, so I had to remove it...
-        #if not Gtk.accelerator_valid(keyval, mods):
-        #    return True
+        #   if not Gtk.accelerator_valid(keyval, mods)
+        #       return True
 
         clash_accel_path = None
         clash_action_label = None
         for path, kv, m, changed in self._get_accel_map_entries():
             if (kv, m) == (keyval, mods):
                 clash_accel_path = path
-                clash_action_label = self._action_labels.get(
+                clash_action_label = _udecode(self._action_labels.get(
                     clash_accel_path,
-                    _("Unknown Action"),
-                )
+                    _(u"Unknown Action"),
+                ))
                 break
         if clash_accel_path == dialog.accel_path:  # no change
             self._edit_dialog_set_standard_hint(dialog)
@@ -442,12 +449,12 @@ class AccelMapEditor (Gtk.Grid):
             dialog.accel_label_widget.set_text(label)
         elif clash_accel_path:
             markup_tmpl = _(
-                "<b>{accel} is already in use for '{action}'. "
-                "The existing assignment will be replaced.</b>"
+                u"<b>{accel} is already in use for '{action}'. "
+                u"The existing assignment will be replaced.</b>"
             )
             markup = markup_tmpl.format(
-                accel=lib.xml.escape(accel_label.decode("utf-8")),
-                action=lib.xml.escape(clash_action_label.decode("utf-8")),
+                accel=lib.xml.escape(accel_label),
+                action=lib.xml.escape(clash_action_label),
             )
             self._edit_dialog_set_hint(dialog, markup)
             label = u"%s (replace)" % (accel_label,)
@@ -505,6 +512,20 @@ class AccelMapEditor (Gtk.Grid):
         assert entry_exists
 
 
+def _udecode(s, enc="utf-8"):
+    """The APIs sometimes return Unicode strings as bytes objects.
+
+    This is more often a Python2 thing, and is sometimes OK back then,
+    but for porting to Py3 we need to be more explicit about everything.
+
+    """
+    if s is None:
+        return None
+    if not isinstance(s, unicode):
+        s = s.decode(enc)
+    return s
+
+
 ## Testing
 
 def _test():
@@ -512,7 +533,7 @@ def _test():
     win.set_title("accelmap.py")
     win.connect("destroy", Gtk.main_quit)
     builder = Gtk.Builder()
-    import gui.factoryaction   # for side effects only
+    import gui.factoryaction   # noqa F401: for side effects only
     builder.add_from_file("gui/resources.xml")
     uimgr = builder.get_object("app_ui_manager")
     editor = AccelMapEditor()

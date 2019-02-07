@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2013 by Andrew Chadwick <a.t.chadwick@gmail.com>
+# Copyright (C) 2013-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -9,18 +9,17 @@
 
 
 ## Imports
+
 from __future__ import division, print_function
-
-import os
-import math
 import logging
-logger = logging.getLogger(__name__)
 
+import lib.gichecks  # noqa: F401
 from gi.repository import GObject
 from gi.repository import Gtk
 from gi.repository import Gdk
-import cairo
 from gettext import gettext as _
+
+logger = logging.getLogger(__name__)
 
 
 ## Class definitions
@@ -52,30 +51,30 @@ class TopBar (Gtk.Grid):
         "LayerMenu": "mypaint-layers-symbolic",
         "ScratchMenu": "mypaint-scratchpad-symbolic",
         "HelpMenu": "mypaint-help-symbolic",
-        }
+    }
 
     ## GObject properties, for Builder-style construction
 
     #: The toolbar to present in position 1.
-    toolbar1 = GObject.property(
+    toolbar1 = GObject.Property(
         type=Gtk.Toolbar,
-        flags=GObject.PARAM_READWRITE,
+        flags=GObject.ParamFlags.READABLE | GObject.ParamFlags.WRITABLE,
         nick='Toolbar-1 widget',
         blurb="First GtkToolbar to show. This must be set at realize time."
     )
 
     #: The toolbar to present in position 2.
-    toolbar1 = GObject.property(
+    toolbar1 = GObject.Property(
         type=Gtk.Toolbar,
-        flags=GObject.PARAM_READWRITE,
+        flags=GObject.ParamFlags.READABLE | GObject.ParamFlags.WRITABLE,
         nick='Toolbar-2 widget',
         blurb="Second GtkToolbar to show. This must be set at realize time."
     )
 
     #: The menubar to present.
-    menubar = GObject.property(
+    menubar = GObject.Property(
         type=Gtk.MenuBar,
-        flags=GObject.PARAM_READWRITE,
+        flags=GObject.ParamFlags.READABLE | GObject.ParamFlags.WRITABLE,
         nick='Menu Bar widget',
         blurb="The GtkMenuBar to show. This must be set at realize time."
     )
@@ -104,12 +103,10 @@ class TopBar (Gtk.Grid):
         self._fs_menubutton.set_hexpand(False)
         # Specialized styles
         prov = Gtk.CssProvider()
-        prov.load_from_data("""
+        prov.load_from_data(b"""
                 .topbar {
                     padding: 0px; /* required by toolbars */
                     margin: 0px;  /* required by menubar */
-                    -GtkMenuBar-internal-padding: 0px;
-                    -GtkToolBar-internal-padding: 0px;
                 }
             """)
         bars = [self.toolbar1, self.toolbar2, self.menubar]
@@ -151,12 +148,16 @@ class TopBar (Gtk.Grid):
                 if hasattr(menuitem, "set_image"):
                     if icon_name:
                         icon_image = Gtk.Image()
-                        icon_image.set_from_icon_name(icon_name,
-                                                      Gtk.IconSize.MENU)
+                        icon_image.set_from_icon_name(
+                            icon_name,
+                            Gtk.IconSize.MENU,
+                        )
                         menuitem.set_image(icon_image)
                     else:
-                        logger.warning("No icon for %r in the fullscreen state",
-                                       item_name)
+                        logger.warning(
+                            "No icon for %r in the fullscreen state",
+                            item_name,
+                        )
                 menuitem.show_all()
             toolbar1.hide()
             self.remove(toolbar1)

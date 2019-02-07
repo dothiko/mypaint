@@ -1,17 +1,18 @@
 # This file is part of MyPaint.
-# Copyright (C) 2011-2013 by Andrew Chadwick <andrewc-git@piffle.org>
+# Copyright (C) 2011-2018 by the MyPaint Development Team
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 
-"""Layout constants and constructor functions for common widgets."""
+"""Layout constants and helper functions for common widgets."""
 
 from __future__ import division, print_function
+import functools
 
-import gi
 from gi.repository import Gtk
+from gi.repository import Gdk
 
 
 # Exact icon sizes
@@ -30,6 +31,12 @@ SPACING_LOOSE = 3*SPACING_TIGHT
 
 def borderless_button(stock_id=None, icon_name=None, size=ICON_SIZE_SMALL,
                       tooltip=None, action=None):
+    """Create a button styled to be borderless.
+
+    >>> borderless_button(icon_name="mypaint")  # doctest: +ELLIPSIS
+    <Gtk.Button...>
+
+    """
     button = Gtk.Button()
     if stock_id is not None:
         image = Gtk.Image()
@@ -58,7 +65,7 @@ def borderless_button(stock_id=None, icon_name=None, size=ICON_SIZE_SMALL,
     elif action is not None:
         button.set_tooltip_text(action.get_tooltip())
     cssprov = Gtk.CssProvider()
-    cssprov.load_from_data("GtkButton { padding: 0px; margin: 0px; }")
+    cssprov.load_from_data(b"GtkButton { padding: 0px; margin: 0px; }")
     style = button.get_style_context()
     style.add_provider(cssprov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
     button.set_has_tooltip(tooltip is not None)
@@ -66,15 +73,31 @@ def borderless_button(stock_id=None, icon_name=None, size=ICON_SIZE_SMALL,
 
 
 def set_margins(widget, all_=0, tb=None, lr=None,
-                t=None, b=None, l=None, r=None):
+                t=None, b=None, l=None, r=None):  # noqa: E741
+    """Set margins compatibly on a widget.
+
+    >>> w = Gtk.Label("i have wide margins")
+    >>> set_margins(w, 42)
+
+    Works around Gtk's deprecation of gtk_widget_set_margin_{left,right}
+    in version 3.12.
+
+    """
     top = bot = left = right = 0
-    if all_ is not None: top = bot = left = right = int(all_)
-    if tb is not None: top = bot = int(tb)
-    if lr is not None: left = right = int(lr)
-    if t is not None: top = int(t)
-    if b is not None: bot = int(b)
-    if l is not None: left = int(l)
-    if r is not None: right = int(r)
+    if all_ is not None:
+        top = bot = left = right = int(all_)
+    if tb is not None:
+        top = bot = int(tb)
+    if lr is not None:
+        left = right = int(lr)
+    if t is not None:
+        top = int(t)
+    if b is not None:
+        bot = int(b)
+    if l is not None:
+        left = int(l)
+    if r is not None:
+        right = int(r)
     try:
         widget.set_margin_start(left)
         widget.set_margin_end(right)
@@ -83,31 +106,6 @@ def set_margins(widget, all_=0, tb=None, lr=None,
         widget.set_margin_right(right)
     widget.set_margin_top(top)
     widget.set_margin_bottom(bot)
-
-
-def section_frame(label_text):
-    frame = Gtk.Frame()
-    label_markup = "<b>%s</b>" % label_text
-    label = Gtk.Label(label_markup)
-    label.set_use_markup(True)
-    frame.set_label_widget(label)
-    frame.set_shadow_type(Gtk.ShadowType.NONE)
-    return frame
-
-
-def find_widgets(widget, predicate):
-    """Finds widgets in a container's tree by predicate.
-    """
-    queue = [widget]
-    found = []
-    while len(queue) > 0:
-        w = queue.pop(0)
-        if predicate(w):
-            found.append(w)
-        if hasattr(w, "get_children"):
-            for w2 in w.get_children():
-                queue.append(w2)
-    return found
 
 
 def inline_toolbar(app, tool_defs):
@@ -184,7 +182,7 @@ class MenuButtonToolItem (Gtk.ToolItem):
 
 
 def get_toolbar_icon_size():
-    from application import get_app
+    from gui.application import get_app
     app = get_app()
     size = str(app.preferences.get("ui.toolbar_icon_size", "large"))
     if size.lower() == 'small':
@@ -192,3 +190,27 @@ def get_toolbar_icon_size():
     else:
         return ICON_SIZE_LARGE
 
+
+def with_wait_cursor(func):
+    """python decorator that adds a wait cursor around a function"""
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        wait_cursor = Gdk.Cursor.new(Gdk.CursorType.WATCH)
+        toplevels = Gtk.Window.list_toplevels()
+        toplevels = [t for t in toplevels if t.get_window() is not None]
+        for toplevel in toplevels:
+            toplevel_win = toplevel.get_window()
+            if toplevel_win is not None:
+                toplevel_win.set_cursor(wait_cursor)
+            toplevel.set_sensitive(False)
+        try:
+            return func(self, *args, **kwargs)
+            # gtk main loop may be called in here...
+        finally:
+            for toplevel in toplevels:
+                toplevel.set_sensitive(True)
+                # ... which is why we need this check
+                toplevel_win = toplevel.get_window()
+                if toplevel_win is not None:
+                    toplevel_win.set_cursor(None)
+    return wrapper

@@ -3,7 +3,6 @@
 # Imports:
 
 from __future__ import division, print_function
-
 from os.path import join
 import sys
 import time
@@ -12,10 +11,11 @@ import cairo
 from collections import namedtuple
 import unittest
 
-import paths
+from . import paths
 import lib.gichecks
 from lib import mypaintlib
 from lib.document import Document
+from lib.pycompat import xrange
 
 
 TEST_BIGIMAGE = "bigimage.ora"
@@ -286,7 +286,7 @@ class Scroll (unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # The tdw import below just segfaults on my system right now, if
-        # there's no X11 display available. Be careful about proceding.
+        # there's no X11 display available. Be careful about proceeding.
 
         cls._tdw = None
         cls._model = None
@@ -297,7 +297,7 @@ class Scroll (unittest.TestCase):
 
         try:
             import gui.tileddrawwidget
-        except:
+        except Exception:
             return
 
         class TiledDrawWidget (gui.tileddrawwidget.TiledDrawWidget):

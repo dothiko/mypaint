@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2014-2016 by the MyPaint Development Team.
+# Copyright (C) 2014-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -9,15 +9,12 @@
 """Workspaces with a central canvas, sidebars and saved layouts"""
 
 ## Imports
-from __future__ import division, print_function
 
-import os
+from __future__ import division, print_function
 from warnings import warn
-import math
 import sys
 import logging
 
-import cairo
 from gi.repository import GObject
 from gi.repository import Gtk
 from gi.repository import Gdk
@@ -26,9 +23,11 @@ from gi.repository import GLib
 from lib.observable import event
 import lib.xml
 import lib.helpers
-import objfactory
-from widgets import borderless_button
+from . import objfactory
+from .widgets import borderless_button
 from lib.gettext import C_
+from lib.pycompat import xrange
+from lib.pycompat import unicode
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +65,7 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
     initial size and position of their own toplevel window.
 
     Instances of tool widget classes can be constructed, then shown and hdden
-    by the workspace programatically using their GType name and an optional
+    by the workspace programmatically using their GType name and an optional
     sequence of construction parameters as a key.  They should support the
     following Python properties:
 
@@ -106,7 +105,11 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
 
     #: How near the pointer needs to be to a window edge or a hidden window to
     #: automatically reveal it when autohide is enabled in fullscreen.
-    AUTOHIDE_REVEAL_BORDER = 12
+    AUTOHIDE_REVEAL_BORDER = 50
+
+    #: Time in milliseconds to wait before revealing UI elements when pointer
+    #: is near a window edge.  Does not affect floating hidden windows.
+    AUTOHIDE_REVEAL_TIMEOUT = 500
 
     #: Time in milliseconds to wait before hiding UI elements when autohide is
     #: enabled in fullscreen.
@@ -230,6 +233,7 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
         # Autohide
         self._autohide_enabled = True
         self._autohide_timeout = None
+        self._autoreveal_timeout = []
         # Window tracking
         self._floating = set()
         self._toplevel_pos = dict()
@@ -364,7 +368,8 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
                 GLib.idle_add(win.show_all)
             else:
                 logger.warning(
-                    "Floating window %d is initially unpopulated. Destroying it.",
+                    "Floating window %d is initially unpopulated. "
+                    "Destroying it.",
                     fi,
                 )
                 win.stack.workspace = None
@@ -491,7 +496,7 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
                         break
                 maxpages += 1
             if not added:
-                logger.error("Cant find space for %r in any stack", widget)
+                logger.error("Can't find space for %r in any stack", widget)
                 return
         # Reveal the widget's ToolStack
         assert stack and isinstance(stack, ToolStack)
@@ -560,8 +565,8 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
         See also `update_tool_widget_ui()`.
 
         """
-        # If it doesn't exist yet, updating what is effectively a cache key used
-        # for accesing it makes no sense.
+        # If it doesn't exist yet, updating what is effectively
+        # a cache key used for accessing it makes no sense.
         if not self._tool_widgets.cache_has(tool_gtypename, *old_params):
             return
         # Update the params of an existing object.
@@ -596,7 +601,7 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
 
     @event
     def tool_widget_removed(self, widget):
-        """Event: tool widget removed, either by the user or programatically"""
+        """Event: tool widget removed either by the user or programmatically"""
 
     @event
     def floating_window_created(self, toplevel):
@@ -841,6 +846,38 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
         self._hide_autohide_widgets()
         return False
 
+    # Autohide mode: auto-reveal timer
+
+    def _start_autoreveal_timeout(self, widget):
+        """Start a timer to reveal the widget after a brief period
+        of edge contact
+        """
+        if not self._autoreveal_timeout:
+            logger.debug("Starting autoreveal timeout (%d milliseconds)",
+                         self.AUTOHIDE_REVEAL_TIMEOUT)
+        else:
+            self._cancel_autoreveal_timeout()
+        srcid = GLib.timeout_add(
+            self.AUTOHIDE_REVEAL_TIMEOUT,
+            self._autoreveal_timeout_cb,
+            widget,
+        )
+        self._autoreveal_timeout.append(srcid)
+
+    def _cancel_autoreveal_timeout(self):
+        """Cancels any pending auto-reveal"""
+        if not self._autoreveal_timeout:
+            return
+        for timer in self._autoreveal_timeout:
+            GLib.source_remove(timer)
+        self._autoreveal_timeout = []
+
+    def _autoreveal_timeout_cb(self, widget):
+        """Show widgets when the auto-reveal timer finishes"""
+        widget.show_all()
+        self._autoreveal_timeout = []
+        return False
+
     ## Autohide mode: event handling on the canvas widget
 
     def _connect_autohide_events(self):
@@ -904,6 +941,7 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
         # Firstly, if the user appears to be drawing, be as stable as we can.
         if event.state & self._ALL_BUTTONS_MASK:
             self._cancel_autohide_timeout()
+            self._cancel_autoreveal_timeout()
             return False
         # Floating window rollovers
         show_floating = False
@@ -925,15 +963,16 @@ class Workspace (Gtk.VBox, Gtk.Buildable):
         edges = self._get_bumped_edges(widget, event)
         if not edges:
             self._start_autohide_timeout()
+            self._cancel_autoreveal_timeout()
             return False
         if edges & self._EDGE_TOP and self.header_bar:
-            self.header_bar.show_all()
+            self._start_autoreveal_timeout(self.header_bar)
         if edges & self._EDGE_BOTTOM and self.footer_bar:
-            self.footer_bar.show_all()
+            self._start_autoreveal_timeout(self.footer_bar)
         if edges & self._EDGE_LEFT and not self._lstack.is_empty():
-            self._lscrolls.show_all()
+            self._start_autoreveal_timeout(self._lscrolls)
         if edges & self._EDGE_RIGHT and not self._rstack.is_empty():
-            self._rscrolls.show_all()
+            self._start_autoreveal_timeout(self._rscrolls)
 
     @classmethod
     def _get_bumped_edges(cls, widget, event):
@@ -992,7 +1031,7 @@ class ToolStack (Gtk.EventBox):
 
     The layout has movable dividers between groups of tool widgets, and an
     empty group on the end which accepts tabs dragged to it. The groups are
-    implmented as `Gtk.Notebook`s, but that interface is not exposed.
+    implemented as `Gtk.Notebook`s, but that interface is not exposed.
     ToolStacks are built up from layout definitions represented by simple
     types: see `Workspace` and `build_from_layout()` for details.
 
@@ -1031,10 +1070,11 @@ class ToolStack (Gtk.EventBox):
               a ToolStack.
             :type placeholder: GtkNotebook
 
-            The old placeholder will be removed from its parent, and re-packed as
-            the child1 of the new paned. A new placeholder is created as the new
-            paned's child2. The new paned is then packed to replace the old
-            placeholder in its former parent.
+            The old placeholder will be removed from its parent,
+            and re-packed as the child1 of the new paned.
+            A new placeholder is created as the new paned's child2.
+            The new paned is then packed to replace the old placeholder
+            in its former parent.
 
             """
             super(ToolStack._Paned, self).__init__()
@@ -1073,7 +1113,7 @@ class ToolStack (Gtk.EventBox):
         ## Custom widget packing
 
         def pack1_tool_widget_notebook(self, notebook):
-            """Pack a notebook indended for tool widgets as child1.
+            """Pack a notebook intended for tool widgets as child1.
             """
             assert isinstance(notebook, ToolStack._Notebook)
             self.pack1(notebook, False, False)
@@ -1147,7 +1187,7 @@ class ToolStack (Gtk.EventBox):
         NOTEBOOK_GROUP_NAME = 'mypaint-workspace-layout-group'
         PLACEHOLDER_HEIGHT = 8
         PLACEHOLDER_WIDTH = 16
-        TAB_ICON_SIZE = Gtk.IconSize.MENU  # FIXME: should use a central setting
+        TAB_ICON_SIZE = Gtk.IconSize.MENU  # FIXME: use a central setting
         ACTION_BUTTON_ICON_SIZE = TAB_ICON_SIZE
         TAB_TOOLTIP_ICON_SIZE = Gtk.IconSize.DIALOG
 
@@ -1242,8 +1282,7 @@ class ToolStack (Gtk.EventBox):
             # The size-setting must be done outside the event handler
             # for it to take effect.
             w, h = size
-            cb = lambda: stack._set_first_paned_position(h) and False
-            GLib.idle_add(cb)
+            GLib.idle_add(stack._set_first_paned_position, h)
 
         def _page_removed_cb(self, notebook, child, page_num):
             GLib.idle_add(self._toolstack._update_structure)
@@ -1265,7 +1304,8 @@ class ToolStack (Gtk.EventBox):
             assert self.get_n_pages() > 0
             toolstack = self._toolstack
             toolstack_was_empty = self.get_parent() is toolstack
-            assert toolstack_was_empty or self is self.get_parent().get_child2()
+            assert toolstack_was_empty \
+                or self is self.get_parent().get_child2()
             # Reparenting dance
             parent_paned = ToolStack._Paned(toolstack, self)
             assert self is parent_paned.get_child1()
@@ -1490,13 +1530,13 @@ class ToolStack (Gtk.EventBox):
 
         * w: integer width (ignored here)
         * h: integer height (ignored here)
-        * groups: list of group defintions - see below
+        * groups: list of group definitions - see below
 
         Width and height may be of relevance to the parent widget, but are not
         consumed by this method. `get_layout()` writes them, however.  Each
         group definition is a dict with the following keys and values.
 
-        * tools: a list of tool defintions - see below
+        * tools: a list of tool definitions - see below
         * h: integer height: used here to set the height of the group
         * w: integer width (ignored here)
 
@@ -1619,7 +1659,7 @@ class ToolStack (Gtk.EventBox):
         :return: whether space was found for the widget
         :rtype: bool
 
-        The idea is to try repeatedly with gradually relaxing contraint
+        The idea is to try repeatedly with gradually relaxing constraint
         parameters across all stacks in the system until space is found
         somewhere.
 
@@ -1753,6 +1793,7 @@ class ToolStack (Gtk.EventBox):
         widget = self.get_child()
         if isinstance(widget, Gtk.Paned):
             widget.set_position(size)
+        return GLib.SOURCE_REMOVE
 
     ## Group size management (somewhat dubious)
 
@@ -2041,13 +2082,11 @@ class ToolStackWindow (Gtk.Window):
 
         Window managers don't always get it right when the window is initially
         positioned, and some don't keep window positions always when a window
-        is hidden and later re-shown. Doing a move() in a map hander improves
+        is hidden and later re-shown. Doing a move() in a map handler improves
         the user experience vastly in these WMs.
 
         """
         if self._onmap_position:
-            #logger.debug("FORCEPOS id=%d xy=%r reset=%r",
-            #             id(self), self._onmap_position, reset)
             self.move(*self._onmap_position)
             if reset:
                 self._onmap_position = None
@@ -2060,7 +2099,6 @@ class ToolStackWindow (Gtk.Window):
         y = max(0, frame.y)
         # The content size, and upper-left frame position; will be saved
         self._layout_position = dict(x=x, y=y, w=event.width, h=event.height)
-        #logger.debug("configure %d %r", id(self), self._layout_position)
         # Frame extents, used internally for rollover accuracy; not saved
         self._frame_size = frame.width, frame.height
 
@@ -2233,7 +2271,7 @@ def set_initial_window_position(win, pos):
 
     """
 
-    MIN_USABLE_SIZE = 100
+    min_usable_size = 100
 
     # Final calculated positions
     final_x, final_y = None, None
@@ -2266,8 +2304,8 @@ def set_initial_window_position(win, pos):
         )
     screen_w = screen.get_width()
     screen_h = screen.get_height()
-    assert screen_w > MIN_USABLE_SIZE
-    assert screen_h > MIN_USABLE_SIZE
+    assert screen_w > min_usable_size
+    assert screen_h > min_usable_size
 
     # The target area is ideally the current monitor.
     targ_mon_num = screen.get_monitor_at_point(ptr_x, ptr_y)
@@ -2287,9 +2325,9 @@ def set_initial_window_position(win, pos):
             assert h is not None
             assert h > 0
             final_y = targ_geom.y + (targ_geom.h - h - abs(y))
-        if final_x < 0 or final_x > screen_w - MIN_USABLE_SIZE:
+        if final_x < 0 or final_x > screen_w - min_usable_size:
             final_x = None
-        if final_y < 0 or final_y > screen_h - MIN_USABLE_SIZE:
+        if final_y < 0 or final_y > screen_h - min_usable_size:
             final_y = None
 
     # And a sensible, positive width and height
@@ -2307,9 +2345,9 @@ def set_initial_window_position(win, pos):
                     final_h = max(0, targ_geom.h - abs(y) - abs(h))
                 else:
                     final_h = max(0, targ_geom.h - 2*abs(h))
-        if final_w > screen_w or final_w < MIN_USABLE_SIZE:
+        if final_w > screen_w or final_w < min_usable_size:
             final_w = None
-        if final_h > screen_h or final_h < MIN_USABLE_SIZE:
+        if final_h > screen_h or final_h < min_usable_size:
             final_h = None
 
     # If the window is positioned, make sure it's on a monitor which still
@@ -2338,8 +2376,7 @@ def set_initial_window_position(win, pos):
     # xfwm (at least), possibly because the right window hints will be set.
     if None not in (final_w, final_h, final_x, final_y):
         geom_str = "%dx%d+%d+%d" % (final_w, final_h, final_x, final_y)
-        realize_cb = lambda *a: win.parse_geometry(geom_str)
-        win.connect("realize", realize_cb)
+        win.connect("realize", lambda *a: win.parse_geometry(geom_str))
 
     # Set what we can now.
     if None not in (final_w, final_h):
@@ -2356,7 +2393,7 @@ def _get_target_area_geometry(screen, mon_num):
 
     :param Gdk.Screen screen: Target screen.
     :param int mon_num: Monitor number, e.g. that of the pointer.
-    :returns: A hopefully useable target area.
+    :returns: A hopefully usable target area.
     :rtype: lib.helpers.Rect
 
     This function operates like gdk_screen_get_monitor_geometry(), but
@@ -2436,15 +2473,21 @@ def _test():
         'floating': [{
             'position': {'y': -100, 'h': 189, 'w': 152, 'x': -200},
             'contents': {
-                'groups': [{'tools': [('TestLabel', "1"), ('TestLabel', "2")]}],
+                'groups': [{
+                    'tools': [('TestLabel', "1"), ('TestLabel', "2")],
+                }],
             }}],
         'right_sidebar': {
             'w': 400,
-            'groups': [{'tools': [('TestSpinner',), ("TestLabel", "3")]}],
+            'groups': [{
+                'tools': [('TestSpinner',), ("TestLabel", "3")],
+            }],
         },
         'left_sidebar': {
             'w': 250,
-            'groups': [{'tools': [('TestLabel', "4"), ('TestLabel', "5")]}],
+            'groups': [{
+                'tools': [('TestLabel', "4"), ('TestLabel', "5")],
+            }],
         },
         'maximized': False,
         'fullscreen': True,

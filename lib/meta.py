@@ -89,7 +89,7 @@ Some build suffixes and their meanings:
 
 This build information is always present in the long about box version
 number, but is never present in tarball names or other released
-artefacts.
+artifacts.
 
 .. _Semantic Versioning: http://semver.org/
 
@@ -107,7 +107,7 @@ MYPAINT_PROGRAM_NAME = "MyPaint"
 #: This is required to match a tag in git for formal releases. However
 #: for pre-release (hyphenated) base versions, the formal version will
 #: be further decorated with the number of commits following the tag.
-MYPAINT_VERSION = '1.3.0-alpha'
+MYPAINT_VERSION = '2.0.0-alpha'
 
 
 ## Release building magic
@@ -128,7 +128,7 @@ def _get_versions(gitprefix="gitexport"):
     release.sh (when a `release_info` file exists), or a working git
     repository (when a `.git` directory exists).
 
-    The `gitprefix` is only used when examining the local git reporitory
+    The `gitprefix` is only used when examining the local git repository
     to derive the additional information.
 
     """
@@ -164,13 +164,13 @@ def _get_versions(gitprefix="gitexport"):
         if os.path.isdir(".git"):
             cmd = ["git", "rev-parse", "--short", "HEAD"]
             try:
-                objsha = str(subprocess.check_output(cmd)).strip()
+                objsha = subprocess.check_output(cmd, universal_newlines=True)
             except:
                 print("ERROR: Failed to invoke %r. Build will be marked as "
                       "unsupported." % (" ".join(cmd), ),
                       file=sys.stderr)
             else:
-                build_ids = [gitprefix, objsha]
+                build_ids = [gitprefix, objsha.strip()]
                 build_metadata = ".".join(build_ids)
                 ceremonial_version = "{}+{}".format(
                     formal_version,
@@ -180,12 +180,13 @@ def _get_versions(gitprefix="gitexport"):
         # Pull the additional info from git.
         cmd = ["git", "describe", "--tags", "--long", "--dirty", "--always"]
         try:
-            git_desc = str(subprocess.check_output(cmd)).strip()
+            git_desc = subprocess.check_output(cmd, universal_newlines=True)
         except:
             print("ERROR: Failed to invoke %r. Build will be marked as "
                   "unsupported." % (" ".join(cmd), ),
                   file=sys.stderr)
         else:
+            git_desc = git_desc.strip()
             # If MYPAINT_VERSION matches the most recent tag in git,
             # then use the extra information from `git describe`.
             parse_pattern = r'''
@@ -219,11 +220,14 @@ def _get_versions(gitprefix="gitexport"):
                         cmd=" ".join(cmd)),
                     file=sys.stderr)
                 try:
-                    cmdout = str(subprocess.check_output(cmd)).strip()
+                    cmdout = subprocess.check_output(cmd,
+                                                     universal_newlines=True)
                 except:
                     print("ERROR: Failed to invoke %r. Build will be marked "
                           "as unsupported." % (" ".join(cmd), ),
                           file=sys.stderr)
+                else:
+                    cmdout = cmdout.strip()
                 if re.match(r'^([0-9a-f]{7,})$', cmdout, re.I):
                     objsha = cmdout
                 else:

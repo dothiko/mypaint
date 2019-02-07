@@ -13,7 +13,7 @@ import shutil
 
 import numpy as np
 
-import paths
+from . import paths
 from lib import mypaintlib
 from lib import tiledsurface
 from lib import brush
@@ -77,7 +77,7 @@ class Painting (unittest.TestCase):
     def test_brush_paint(self):
         """30s of painting at 4x with a charcoal brush"""
         s = tiledsurface.Surface()
-        myb_path = join(paths.TESTS_DIR, 'brushes/charcoal.myb')
+        myb_path = join(paths.TESTS_DIR, 'brushes/v2/charcoal.myb')
         with open(myb_path, "r") as fp:
             bi = brush.BrushInfo(fp.read())
         b = brush.Brush(bi)
@@ -165,27 +165,27 @@ class DocPaint (unittest.TestCase):
             res = np.mean(np.mean(diff, 0), 0)
             # dithering should make this value nearly zero...
             avgdiff = np.mean(res)
-            if avgdiff > 0.01:
+            if avgdiff > 0.07:
                 msg = ("The average difference with premultiplied alpha "
-                       "is too great: %r > 0.01 [255=white]." % (avgdiff,))
+                       "is too great: %r > 0.07 [255=white]." % (avgdiff,))
                 equal_enough = False
 
         if equal_enough:
             res = np.amax(np.amax(abs(diff), 0), 0)
             maxdiff = max(abs(res))
-            if maxdiff > 1.1:
+            if maxdiff > 8.0:
                 # This error will be visible
                 # - smaller errors are hidden by the weak alpha
                 #   but we should pay attention not to accumulate such
                 #   errors at each load/save cycle.
                 msg = ("The maximum abs difference with premultiplied alpha "
-                       "is too great: %r > 1.1 [255=white]." % (maxdiff,))
+                       "is too great: %r > 8.0 [255=white]." % (maxdiff,))
                 equal_enough = False
+
+        self.assertTrue(equal_enough, msg=msg)
 
         if equal_enough:
             return True
-
-        self.assertTrue(equal_enough, msg=msg)
 
         if False:
             print('Not equal enough! Visualizing error...')
@@ -223,12 +223,12 @@ class DocPaint (unittest.TestCase):
     def test_docpaint(self):
         """Saved and reloaded documents look identical"""
 
-        # TODO: brushes should be re-saved in the new JSON format
-        with open(join(paths.TESTS_DIR, 'brushes/s008.myb')) as fp:
+        # TODO: brushes should be tested in the new JSON (v3) format
+        with open(join(paths.TESTS_DIR, 'brushes/v2/s008.myb')) as fp:
             b1 = brush.BrushInfo(fp.read())
-        with open(join(paths.TESTS_DIR, 'brushes/redbrush.myb')) as fp:
+        with open(join(paths.TESTS_DIR, 'brushes/v2/redbrush.myb')) as fp:
             b2 = brush.BrushInfo(fp.read())
-        with open(join(paths.TESTS_DIR, 'brushes/watercolor.myb')) as fp:
+        with open(join(paths.TESTS_DIR, 'brushes/v2/watercolor.myb')) as fp:
             b3 = brush.BrushInfo(fp.read())
 
         b = brush.BrushInfo()
@@ -290,7 +290,7 @@ class DocPaint (unittest.TestCase):
         # erasing tiles that are empty. Those tile get memory allocated
         # and affect the bounding box of the layer. This shouldn't be a
         # big issue, but they get dropped when loading a document, which
-        # makes a comparision of the PNG files fail. The hack below is
+        # makes a comparison of the PNG files fail. The hack below is
         # to avoid that.
         for i, (path, layer) in enumerate(doc.layer_stack.walk()):
             layer._surface.remove_empty_tiles()

@@ -62,7 +62,7 @@ SRC_PROJECT="mingw"
 SRC_DIR="${SRC_ROOT}/${SRC_PROJECT}"
 SRC_CLONEURI="https://github.com/Alexpux/MINGW-packages.git"
 
-# Output location for build artefacts.
+# Output location for build artifacts.
 OUTPUT_ROOT="${OUTPUT_ROOT:-$TOPDIR/out}"
 
 
@@ -71,7 +71,10 @@ install_dependencies() {
     pacman --remove --noconfirm ${PKG_PREFIX}-mypaint-git || true
     pacman --remove --noconfirm ${PKG_PREFIX}-mypaint || true
     pacman --remove --noconfirm ${PKG_PREFIX}-libmypaint-git || true
-    pacman --remove --noconfirm ${PKG_PREFIX}-libmypaint || true
+    pacman --remove --noconfirm ${PKG_PREFIX}-mypaint-brushes2 || true
+
+    #loginfo "Upgrading MSYS2 environment"
+    #pacman -Syu --noconfirm
 
     loginfo "Installing pre-built dependencies for MyPaint"
     pacman -S --noconfirm --needed --noprogressbar \
@@ -214,7 +217,7 @@ build_pkg() {
 bundle_mypaint() {
     # Convert local and repository *.pkg.tar.xz into nice bundles
     # for users to install.
-    # Needs the libmypaint-git and mypaint-git .pkg.tar.xz artefacts.
+    # Needs the libmypaint-git and mypaint-git .pkg.tar.xz artifacts.
     styrene_path=`which styrene||true`
     if [ "x$styrene_path" = "x" ]; then
         mkdir -vp "$SRC_ROOT"
@@ -306,7 +309,10 @@ case "$1" in
     installdeps)
         install_dependencies
         update_mingw_src
+    	src="${SRC_DIR}/mingw-w64-libmypaint-git"
+    	cp ./windows/PKGBUILD-libmypaint $src
         build_pkg "libmypaint-git" true
+        build_pkg "mypaint-brushes2" true
         ;;
     build)
         build_for_testing
@@ -324,6 +330,8 @@ case "$1" in
     bundle)
         update_mingw_src
         seed_mingw_src_mypaint_repo
+    	src="${SRC_DIR}/mingw-w64-mypaint-git"
+    	cp ./windows/PKGBUILD-mypaint $src
         build_pkg "mypaint-git" false
         bundle_mypaint
         ;;

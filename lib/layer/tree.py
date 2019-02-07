@@ -1,5 +1,6 @@
 # This file is part of MyPaint.
-# Copyright (C) 2011-2017 by the MyPaint Development Team.
+# -*- encoding: utf-8 -*-
+# Copyright (C) 2011-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,8 +17,11 @@ from __future__ import division, print_function
 
 import re
 import logging
+from copy import copy
 from copy import deepcopy
 import os.path
+from warnings import warn
+import contextlib
 
 from gi.repository import GdkPixbuf
 from gi.repository import GLib
@@ -26,6 +30,8 @@ import numpy as np
 from lib.gettext import C_
 import lib.mypaintlib
 import lib.tiledsurface as tiledsurface
+from lib.tiledsurface import TileAccessible
+from lib.tiledsurface import TileBlittable
 import lib.helpers as helpers
 from lib.observable import event
 import lib.pixbuf
@@ -36,9 +42,11 @@ from lib.modes import MODES_DECREASING_BACKDROP_ALPHA
 from . import data
 from . import group
 from . import core
+from . import rendering
 import lib.feedback
 import lib.naming
 from lib.projectsave import Projectsaveable
+from lib.pycompat import xrange
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +121,13 @@ class RootLayerStack (group.LayerStack):
         """
         super(RootLayerStack, self).__init__(**kwargs)
         self.doc = doc
-        self._render_cache = lib.cache.LRUCache()
+        from gui.application import get_app
+        self.app = get_app()
+        try:
+            cachesize = self.app.preferences['ui.rendered_tile_cache_size']
+        except: 
+            cachesize = 16384
+        self._render_cache = lib.cache.LRUCache(capacity=cachesize)
         # Background
         default_bg = (255, 255, 255)
         self._default_background = default_bg
@@ -134,24 +148,66 @@ class RootLayerStack (group.LayerStack):
         # Temporary overlay for the current layer
         self._current_layer_overlay = None
         # Self-observation
-        self.layer_content_changed += self._clear_render_cache
-        self.layer_properties_changed += self._clear_render_cache
-        self.layer_deleted += self._clear_render_cache
-        self.layer_inserted += self._clear_render_cache
+        self.layer_content_changed += self._render_cache_clear_area
+        self.layer_properties_changed += self._render_cache_clear
+        self.layer_deleted += self._render_cache_clear
+        self.layer_inserted += self._render_cache_clear
         # Layer thumbnail updates
         self.layer_content_changed += self._mark_layer_for_rethumb
         self._rethumb_layers = []
         self._rethumb_layers_timer_id = None
 
-    def _clear_render_cache(self, *_ignored):
+    # Render cache management:
+
+    def _render_cache_get(self, key1, key2):
+        try:
+            cache2 = self._render_cache[key1]
+            return cache2[key2]
+        except KeyError:
+            pass
+        return None
+
+    def _render_cache_set(self, key1, key2, data):
+        try:
+            cache2 = self._render_cache[key1]
+        except KeyError:
+            cache2 = dict()  # it'll have ~MAX_MIPMAP_LEVEL items
+            self._render_cache[key1] = cache2
+        cache2[key2] = data
+
+    def _render_cache_clear_area(self, root, layer, x, y, w, h):
+        """Clears rendered tiles from the cache in a specific area."""
+
+        if (w <= 0) or (h <= 0):  # update all notifications
+            self._render_cache_clear()
+            return
+
+        n = lib.mypaintlib.TILE_SIZE
+        tx_min = x // n
+        tx_max = ((x + w) // n)
+        ty_min = y // n
+        ty_max = ((y + h) // n)
+        mipmap_level_max = lib.mypaintlib.MAX_MIPMAP_LEVEL
+
+        for tx in range(tx_min, tx_max + 1):
+            for ty in range(ty_min, ty_max + 1):
+                for level in range(0, mipmap_level_max + 1):
+                    fac = 2 ** level
+                    key = ((tx // fac), (ty // fac), level)
+                    self._render_cache.pop(key, None)
+
+    def _render_cache_clear(self, *_ignored):
+        """Clears all rendered tiles from the cache."""
         self._render_cache.clear()
+
+    # Global ops:
 
     def clear(self):
         """Clear the layer and set the default background"""
         super(RootLayerStack, self).clear()
         self.set_background(self._default_background)
         self.current_path = ()
-        self._clear_render_cache()
+        self._render_cache_clear()
 
     def ensure_populated(self, layer_class=None):
         """Ensures that the stack is non-empty by making a new layer if needed
@@ -226,8 +282,8 @@ class RootLayerStack (group.LayerStack):
 
     ## Rendering: root stack API
 
-    def _get_render_background(self):
-        """True if render_into should render the internal background
+    def _get_render_background(self, spec):
+        """True if render() should render the internal background
 
         :rtype: bool
 
@@ -236,27 +292,41 @@ class RootLayerStack (group.LayerStack):
         This has the effect of making the current layer
         blink very appreciably when changing layers.
 
+        Solo mode never shows the background, currently.
+        If this changes, layer normalization and thumbnails will break.
+
         See also: background_visible, current_layer_previewing.
 
         """
-        if self._current_layer_previewing:
+        if spec.background is not None:
+            return spec.background
+        if spec.previewing:
             return not self._background_visible
+        elif spec.solo:
+            return False
         else:
             return self._background_visible
 
-    def get_render_is_opaque(self):
+    def get_render_is_opaque(self, spec=None):
         """True if the rendering is known to be 100% opaque
 
         :rtype: bool
 
         The UI should draw its own checquered background if this is
-        false, and expect `render_into()` to write RGBA data with lots
+        false, and expect `render()` to write RGBA data with lots
         of transparent areas.
 
-        Even if the background is enabled, it may be knocked out by
-        certain compositing modes of layers above onto it.
+        Even if the special background layer is enabled, it may be
+        knocked out by certain compositing modes of layers above it.
+
         """
-        if not self._get_render_background():
+        if spec is None:
+            spec = rendering.Spec(
+                current=self.current,
+                previewing=self._current_layer_previewing,
+                solo=self._current_layer_solo,
+            )
+        if not self._get_render_background(spec):
             return False
         for path, layer in self.walk(bghit=True, visible=True):
             if layer.mode in MODES_DECREASING_BACKDROP_ALPHA:
@@ -278,188 +348,424 @@ class RootLayerStack (group.LayerStack):
             layer = layer[idx]
             yield layer
 
-    def render_into(self, surface, tiles, mipmap_level, overlay=None,
-                    opaque_base_tile=None, filter=None):
-        """Tiled rendering: used for display only
+    def layers_along_or_under_path(self, path):
+        """All parents, and all descendents of a path."""
+        path = tuple(path)
+        for p, layer in self.walk():
+            if not (path[0:len(p)] == p or    # ancestor of p, or p itself
+                    p[0:len(path)] == path):  # descendent of p
+                continue
+            yield layer
 
-        :param surface: target rgba8 surface
-        :type surface: lib.pixbufsurface.Surface
-        :param tiles: tile coords, (tx, ty), to render
-        :type tiles: list
-        :param mipmap_level: layer and surface mipmap level to use
-        :type mipmap_level: int
-        :param overlay: overlay layer to render (stroke highlighting)
-        :type overlay: SurfaceBackedLayer
-        :param array opaque_base_tile: optional fallback base tile
-        :param callable filter: display filter
+    def _get_render_spec(self, respect_solo=True, respect_previewing=True):
+        """Get a specification object for rendering the current state.
 
-        Rendering for the display may write non-opaque tiles
-        to the target surface.
-        This is determined by the combined effect of
-        layer modes, rendering flags,
-        and the background layer's visibility.
-        See `get_render_is_opaque()` for an external test.
-        Rendering non-opaque data is noticably slower in Cairo:
-        see https://github.com/mypaint/mypaint/issues/21.
+        The returned spec object captures the current layer and all the
+        fiddly bits about layer preview and solo state, and exactly what
+        layers to render when one of those modes is active.
 
-        As a workaround for the slowdown,
-        an opaque base tile can be used as a fallback
-        for all tiles rendered in the workflow,
-        to be used when non-opaque rendering happens.
-        This can contain an alpha check image,
-        though the results won't look as nice as
-        using a real background checquerboard pattern.
-        Using the fallback guarantees that output is opaque,
-        assuming it really does contain opaque RGBA data.
-
-        * IN FLUX: the opaque base may change to a surface or a layer
         """
-        # Decide a rendering mode
-        render_background = self._get_render_background()
-        dst_has_alpha = not self.get_render_is_opaque()
-        layers = None
-        if self._current_layer_previewing or self._current_layer_solo:
-            path = self.get_current_path()
-            layers = set(self.layers_along_path(path))
-        previewing = None
-        solo = None
-        current_layer = self.current
-        if self._current_layer_previewing:
-            previewing = current_layer
-        if self._current_layer_solo:
-            solo = current_layer
+        spec = rendering.Spec(current=self.current)
 
-        # Blit loop. Could this be done in C++?
+        if respect_solo:
+            spec.solo = self._current_layer_solo
+        if respect_previewing:
+            spec.previewing = self._current_layer_previewing
+        if spec.solo or spec.previewing:
+            path = self.get_current_path()
+            spec.layers = set(self.layers_along_or_under_path(path))
+
+        return spec
+
+    def _get_backdrop_render_spec_for_layer(self, path):
+        """Get a render spec for the backdrop of a layer.
+
+        This method returns a spec object expressing the natural
+        rendering of the backdrop to a specific layer path. This is used
+        for extracts and subtractions.
+
+        The backdrop consists of all layers underneath the layer in
+        question, plus all of their parents.
+
+        """
+        seen_srclayer = False
+        backdrop_layers = set()
+        for p, layer in self.walk():
+            if path_startswith(p, path):
+                seen_srclayer = True
+            elif seen_srclayer or isinstance(layer, group.LayerStack):
+                backdrop_layers.add(layer)
+        # For the backdrop, use a default rendering, respecting
+        # all but transient effects.
+        bd_spec = self._get_render_spec(respect_previewing=False)
+        if bd_spec.layers is not None:
+            backdrop_layers.intersection_update(bd_spec.layers)
+        bd_spec.layers = backdrop_layers
+        return bd_spec
+
+    def render(self, surface, tiles, mipmap_level, overlay=None,
+               opaque_base_tile=None, filter=None, spec=None,
+               progress=None, background=None, alpha=None, **kwargs):
+        """Render a batch of tiles into a tile-addressable surface.
+
+        :param TileAccesible surface: The target surface.
+        :param iterable tiles: The tile indices to render into "surface".
+        :param int mipmap_level: downscale degree. Ensure tile indices match.
+        :param lib.layer.core.LayerBase overlay: A global overlay layer.
+        :param callable filter: Display filter (8bpc tile array mangler).
+        :param lib.layer.rendering.Spec spec: Explicit rendering spec.
+        :param lib.feedback.Progress progress: Feedback object.
+        :param bool background: Render the background? (None means natural).
+        :param bool alpha: Deprecated alias for "background" (reverse sense).
+        :param **kwargs: Extensibility.
+
+        This API may evolve to use only the "spec" argument rather than
+        the explicit overlay etc.
+
+        """
+        if progress is None:
+            progress = lib.feedback.Progress()
+        tiles = list(tiles)
+        progress.items = len(tiles)
+        if len(tiles) == 0:
+            progress.close()
+            return
+
+        if background is None and alpha is not None:
+            warn("Use 'background' instead of 'alpha'", DeprecationWarning)
+            background = not alpha
+
+        if spec is None:
+            spec = self._get_render_spec()
+        if overlay is not None:
+            spec.global_overlay = overlay
+        if background is not None:
+            spec.background = bool(background)
+
+        dst_has_alpha = not self.get_render_is_opaque(spec=spec)
+        ops = self.get_render_ops(spec)
+
+        target_surface_is_8bpc = False
+        use_cache = False
+        tx, ty = tiles[0]
+        with surface.tile_request(tx, ty, readonly=True) as sample_tile:
+            target_surface_is_8bpc = (sample_tile.dtype == 'uint8')
+            if target_surface_is_8bpc:
+                use_cache = spec.cacheable()
+        key2 = (id(opaque_base_tile), dst_has_alpha)
+
+        # Rendering loop.
+        # Keep this as tight as possible, and consider C++ parallelization.
+        tiledims = (tiledsurface.N, tiledsurface.N, 4)
+        dst_has_alpha_orig = dst_has_alpha
         for tx, ty in tiles:
+            dst_8bpc_orig = None
+            dst_has_alpha = dst_has_alpha_orig
+            key1 = (tx, ty, mipmap_level)
+            cache_hit = False
+
             with surface.tile_request(tx, ty, readonly=False) as dst:
-                self.composite_tile(
-                    dst, dst_has_alpha, tx, ty,
-                    mipmap_level,
-                    layers=layers,
-                    render_background=render_background,
-                    overlay=overlay,
-                    previewing=previewing,
-                    solo=solo,
-                    opaque_base_tile=opaque_base_tile,
-                    current_layer=current_layer,
-                    current_layer_overlay=self._current_layer_overlay,
-                )
-                if filter:
+
+                # Twirl out any 8bpc target here,
+                # if the render cache is empty for this tile.
+                if target_surface_is_8bpc:
+                    dst_8bpc_orig = dst
+                    dst = None
+                    if use_cache:
+                        dst = self._render_cache_get(key1, key2)
+
+                    if dst is None:
+                        dst = np.zeros(tiledims, dtype='uint16')
+                    else:
+                        cache_hit = True  # note: dtype is now uint8
+
+                if not cache_hit:
+                    # Render to dst.
+                    # dst is a fix15 rgba tile
+
+                    dst_over_opaque_base = None
+                    if dst_has_alpha and opaque_base_tile is not None:
+                        dst_over_opaque_base = dst
+                        lib.mypaintlib.tile_copy_rgba16_into_rgba16(
+                            opaque_base_tile,
+                            dst_over_opaque_base,
+                        )
+                        dst = np.zeros(tiledims, dtype='uint16')
+
+                    # Process the ops list.
+                    self._process_ops_list(
+                        ops,
+                        dst, dst_has_alpha,
+                        tx, ty, mipmap_level,
+                    )
+
+                    if dst_over_opaque_base is not None:
+                        dst_has_alpha = False
+                        lib.mypaintlib.tile_combine(
+                            lib.mypaintlib.CombineNormal,
+                            dst, dst_over_opaque_base,
+                            False, 1.0,
+                        )
+                        dst = dst_over_opaque_base
+
+                # If the target tile is fix15 already, we're done.
+                if dst_8bpc_orig is None:
+                    continue
+
+                # Untwirl into the target 8bpc tile.
+                if not cache_hit:
+                    # Rendering just happened.
+                    # Convert to 8bpc, and maybe store.
+                    if dst_has_alpha:
+                        conv = lib.mypaintlib.tile_convert_rgba16_to_rgba8
+                    else:
+                        conv = lib.mypaintlib.tile_convert_rgbu16_to_rgbu8
+                    conv(dst, dst_8bpc_orig)
+
+                    if use_cache:
+                        self._render_cache_set(key1, key2, dst_8bpc_orig)
+                else:
+                    # An already 8pbc dst was loaded from the cache.
+                    # It will match dst_has_alpha already.
+                    dst_8bpc_orig[:] = dst
+
+                dst = dst_8bpc_orig
+
+                # Display filtering only happens when rendering
+                # 8bpc for the screen.
+                if filter is not None:
                     filter(dst)
 
-    ## Rendering: common layer API
+            # end tile_request
+            progress += 1
+        progress.close()
 
-    def blit_tile_into(self, dst, dst_has_alpha, tx, ty, mipmap_level=0,
-                       **kwargs):
-        """Unconditionally copy one tile's data into an array
+    def render_layer_preview(self, layer, size=256, bbox=None, **options):
+        """Render a standardized thumbnail/preview of a specific layer.
 
-        The root layer stack implementation just uses `composite_tile()`
-        due to its lack of conditionality.
+        :param lib.layer.core.LayerBase layer: The layer to preview.
+        :param int size: Size of the output pixbuf.
+        :param tuple bbox: Rectangle to render (x, y, w, h).
+        :param **options: Passed to render().
+        :rtype: GdkPixbuf.Pixbuf
+
         """
-        self.composite_tile(dst, dst_has_alpha, tx, ty,
-                            mipmap_level=mipmap_level, **kwargs)
+        x, y, w, h = self._validate_layer_bbox_arg(layer, bbox)
 
-    def composite_tile(self, dst, dst_has_alpha, tx, ty, mipmap_level=0,
-                       layers=None, render_background=None, overlay=None,
-                       opaque_base_tile=None,
-                       **kwargs):
-        """Composite a tile's data, respecting flags/layers list
+        mipmap_level = 0
+        while mipmap_level < lib.tiledsurface.MAX_MIPMAP_LEVEL:
+            if max(w, h) <= size:
+                break
+            mipmap_level += 1
+            x //= 2
+            y //= 2
+            w //= 2
+            h //= 2
+        w = max(1, w)
+        h = max(1, h)
 
-        The root layer stack implementation accepts the parameters
-        documented in `BaseLayer.composite_tile()`, and also consumes:
+        spec = self._get_render_spec_for_layer(layer)
 
-        :param bool render_background: Render the internal bg layer
-        :param BaseLayer overlay: Global overlay layer
-        :param array opaque_base_tile: Fallback base tile
+        surface = lib.pixbufsurface.Surface(x, y, w, h)
+        surface.pixbuf.fill(0x00000000)
+        tiles = list(surface.get_tiles())
+        self.render(surface, tiles, mipmap_level, spec=spec, **options)
 
-        The root layer has flags which ensure it is always visible, so the
-        result is generally indistinguishable from `blit_tile_into()`.
-        However the rendering loop, `render_into()`, calls this method
-        an as
+        pixbuf = surface.pixbuf
+        assert pixbuf.get_width() == w
+        assert pixbuf.get_height() == h
+        if not ((w == size) or (h == size)):
+            pixbuf = helpers.scale_proportionally(pixbuf, size, size)
+        return pixbuf
 
-        The global overlay layer is optional. If present, it is drawn on
-        top. Global overlay layers must support 15-bit scaled-int tile
-        compositing.
+    def render_layer_as_pixbuf(self, layer, bbox=None, **options):
+        """Render a layer as a GdkPixbuf.
 
-        The base tile is used under the results of rendering, with the
-        results drawn over it with simple alpha compositing.
+        :param lib.layer.core.LayerBase layer: The layer to preview.
+        :param tuple bbox: Rectangle to render (x, y, w, h).
+        :param **options: Passed to render().
+        :rtype: GdkPixbuf.Pixbuf
 
-        As a further extension to the base API, `dst` may be an 8bpp
-        array. A temporary 15-bit scaled int array is used for
-        compositing in this case, and the output is converted to 8bpp.
+        The "layer" param must be a descendent layer or the root layer
+        stack itself.
+
+        The "bbox" parameter defaults to the natural data bounding box
+        of "layer", and has a minimum size of one tile.
+
         """
-        if render_background is None:
-            render_background = self._get_render_background()
-        if render_background:
-            background_surface = self._background_layer._surface
-        else:
-            background_surface = self._blank_bg_surface
-        assert dst.shape[-1] == 4
+        x, y, w, h = self._validate_layer_bbox_arg(layer, bbox)
+        spec = self._get_render_spec_for_layer(layer)
 
-        tiledims = (tiledsurface.N, tiledsurface.N, 4)
+        surface = lib.pixbufsurface.Surface(x, y, w, h)
+        surface.pixbuf.fill(0x00000000)
+        tiles = list(surface.get_tiles())
+        self.render(surface, tiles, 0, spec=spec, **options)
 
-        cache_key = None
-        cache_hit = False
-        if dst.dtype == 'uint8':
-            dst_8bit = dst
-            dst = None
-            using_cache = (
-                layers is None
-                and overlay is None
-                and not (kwargs.get("solo") or kwargs.get("previewing"))
-            )
-            if using_cache:
-                cache_key = (tx, ty, dst_has_alpha, mipmap_level,
-                             render_background, id(opaque_base_tile))
-                dst = self._render_cache.get(cache_key)
-            if dst is None:
-                dst = np.empty(tiledims, dtype='uint16')
-            else:
-                cache_hit = True
-        else:
-            dst_8bit = None
+        pixbuf = surface.pixbuf
+        assert pixbuf.get_width() == w
+        assert pixbuf.get_height() == h
+        return pixbuf
 
-        if not cache_hit:
-            dst_over_opaque_base = None
-            if dst_has_alpha and opaque_base_tile is not None:
-                dst_over_opaque_base = dst
-                lib.mypaintlib.tile_copy_rgba16_into_rgba16(
-                    opaque_base_tile,
-                    dst_over_opaque_base,
+    def render_layer_to_png_file(self, layer, filename, bbox=None, **options):
+        """Render out to a PNG file. Used by LayerGroup.save_as_png()."""
+        bbox = self._validate_layer_bbox_arg(layer, bbox)
+        spec = self._get_render_spec_for_layer(layer)
+        spec.background = options.get("render_background")
+        rendering = _TileRenderWrapper(self, spec, use_cache=False)
+        if "alpha" not in options:
+            options["alpha"] = True
+        lib.surface.save_as_png(rendering, filename, *bbox, **options)
+
+    def get_tile_accessible_layer_rendering(self, layer):
+        """Get a TileAccessible temporary rendering of a sublayer.
+
+        :returns: A temporary rendering object with inbuilt tile cache.
+
+        The result is used to implement flood_fill for layer types
+        which don't contain their own tile-accessible data.
+
+        """
+        spec = self._get_render_spec_for_layer(layer)
+        rendering = _TileRenderWrapper(self, spec)
+        return rendering
+
+    def _get_render_spec_for_layer(self, layer):
+        """Get a standardized rendering spec for a single layer.
+
+        :param layer: The layer to render, can be the RootLayerStack.
+        :rtype: lib.layer.rendering.Spec
+
+        This method prepares a standardized rendering spec that shows a
+        specific sublayer by itself, or the root stack complete with
+        background. The spec returned does not introduce any special
+        effects, and ignores any special viewing modes. It is suitable
+        for the standardized "render_layer_*()" methods.
+
+        """
+        spec = self._get_render_spec(
+            respect_solo=False,
+            respect_previewing=False,
+        )
+        if layer is not self:
+            layer_path = self.deepindex(layer)
+            if layer_path is None:
+                raise ValueError(
+                    "Layer is not a descendent of this RootLayerStack.",
                 )
-                dst = np.empty(tiledims, dtype='uint16')
+            layers = set(self.layers_along_or_under_path(layer_path))
+            spec.layers = layers
+            spec.current = layer
+            spec.solo = True
+        return spec
 
-            background_surface.blit_tile_into(dst, dst_has_alpha, tx, ty,
-                                              mipmap_level)
+    def render_single_tile(self, dst, dst_has_alpha,
+                           tx, ty, mipmap_level=0,
+                           layer=None, spec=None, ops=None):
+        """Render one tile in a standardized way (by default).
 
-            # Recursively composite the user-accessible layers
-            for layer in reversed(self):
-                layer.composite_tile(dst, dst_has_alpha, tx, ty,
-                                     mipmap_level, layers=layers, **kwargs)
+        It's used in fix15 mode for enabling flood fill when the source
+        is a group, or when sample_merged is turned on.
 
-            # Apply the global render overlay
-            if overlay:
-                overlay.composite_tile(dst, dst_has_alpha, tx, ty,
-                                       mipmap_level, layers=set([overlay]),
-                                       **kwargs)
+        """
+        if ops is None:
+            if spec is None:
+                if layer is None:
+                    layer = self.current
+                spec = self._get_render_spec_for_layer(layer)
+            ops = self.get_render_ops(spec)
 
-            if dst_over_opaque_base is not None:
-                dst_has_alpha = False
-                lib.mypaintlib.tile_combine(
-                    lib.mypaintlib.CombineNormal,
-                    dst, dst_over_opaque_base,
-                    dst_has_alpha, 1.0,
-                )
-                dst = dst_over_opaque_base
+        dst_is_8bpc = (dst.dtype == 'uint8')
+        if dst_is_8bpc:
+            dst_8bpc_orig = dst
+            tiledims = (tiledsurface.N, tiledsurface.N, 4)
+            dst = np.zeros(tiledims, dtype='uint16')
 
-            if cache_key is not None:
-                self._render_cache[cache_key] = dst
+        self._process_ops_list(ops, dst, dst_has_alpha, tx, ty, mipmap_level)
 
-        if dst_8bit is not None:
+        if dst_is_8bpc:
             if dst_has_alpha:
-                lib.mypaintlib.tile_convert_rgba16_to_rgba8(dst, dst_8bit)
+                conv = lib.mypaintlib.tile_convert_rgba16_to_rgba8
             else:
-                lib.mypaintlib.tile_convert_rgbu16_to_rgbu8(dst, dst_8bit)
+                conv = lib.mypaintlib.tile_convert_rgbu16_to_rgbu8
+            conv(dst, dst_8bpc_orig)
+            dst = dst_8bpc_orig
+
+    def _validate_layer_bbox_arg(self, layer, bbox,
+                                 min_size=lib.tiledsurface.TILE_SIZE):
+        """Check a bbox arg, defaulting it to the data size of a layer."""
+        min_size = int(min_size)
+        if bbox is not None:
+            x, y, w, h = (int(n) for n in bbox)
+        else:
+            x, y, w, h = layer.get_bbox()
+        if w == 0 or h == 0:
+            x = 0
+            y = 0
+            w = 1
+            h = 1
+        w = max(min_size, w)
+        h = max(min_size, h)
+        return (x, y, w, h)
+
+    @staticmethod
+    def _process_ops_list(ops, dst, dst_has_alpha, tx, ty, mipmap_level):
+        """Process a list of ops to render a tile. fix15 data only!"""
+        # FIXME: should this be expanded to cover caching and 8bpc
+        # targets? It would save on some code duplication elsewhere.
+        # On the other hand, this is sort of what a parallelized,
+        # GIL-holding C++ loop body might look like.
+
+        stack = []
+        for (opcode, opdata, mode, opacity) in ops:
+            if opcode == rendering.Opcode.COMPOSITE:
+                opdata.composite_tile(
+                    dst, dst_has_alpha, tx, ty,
+                    mipmap_level=mipmap_level,
+                    mode=mode, opacity=opacity,
+                )
+            elif opcode == rendering.Opcode.BLIT:
+                opdata.blit_tile_into(
+                    dst, dst_has_alpha, tx, ty,
+                    mipmap_level,
+                )
+            elif opcode == rendering.Opcode.PUSH:
+                stack.append((dst, dst_has_alpha))
+                tiledims = (tiledsurface.N, tiledsurface.N, 4)
+                dst = np.zeros(tiledims, dtype='uint16')
+                dst_has_alpha = True
+            elif opcode == rendering.Opcode.POP:
+                src = dst
+                (dst, dst_has_alpha) = stack.pop(-1)
+                lib.mypaintlib.tile_combine(
+                    mode,
+                    src, dst, dst_has_alpha,
+                    opacity,
+                )
+            else:
+                raise RuntimeError(
+                    "Unknown lib.layer.rendering.Opcode: %r",
+                    opcode,
+                )
+        if len(stack) > 0:
+            raise ValueError(
+                "Ops list contains more PUSH operations "
+                "than POPs. Rendering is incomplete."
+            )
+
+    ## Renderable implementation
+
+    def get_render_ops(self, spec):
+        """Get rendering instructions."""
+        ops = []
+        if self._get_render_background(spec):
+            bg_opcode = rendering.Opcode.BLIT
+            bg_surf = self._background_layer._surface
+            ops.append((bg_opcode, bg_surf, None, None))
+        for child_layer in reversed(self):
+            ops.extend(child_layer.get_render_ops(spec))
+        if spec.global_overlay is not None:
+            ops.extend(spec.global_overlay.get_render_ops(spec))
+        return ops
 
     ## Symmetry axis
 
@@ -1260,7 +1566,7 @@ class RootLayerStack (group.LayerStack):
         Layer substacks are listed before their contents, but the root
         of the walk is always excluded::
 
-            >>> import data
+            >>> from . import data
             >>> root = RootLayerStack(doc=None)
             >>> for p, l in [([0], data.PaintingLayer()),
             ...              ([1], group.LayerStack(name="A")),
@@ -1271,10 +1577,10 @@ class RootLayerStack (group.LayerStack):
             >>> walk = list(root.walk())
             >>> root in {l for p, l in walk}
             False
-            >>> walk[1]
-            ((1,), <LayerStack len=2 u'A'>)
-            >>> walk[2]
-            ((1, 0), <PaintingLayer u'B'>)
+            >>> walk[1]  # doctest: +ELLIPSIS
+            ((1,), <LayerStack len=2 ...'A'>)
+            >>> walk[2]  # doctest: +ELLIPSIS
+            ((1, 0), <PaintingLayer ...'B'>)
 
         The default behaviour is to return all layers.  If `visible`
         is true, hidden layers are excluded.  This excludes child layers
@@ -1283,8 +1589,8 @@ class RootLayerStack (group.LayerStack):
 
             >>> root.deepget([0]).visible = False
             >>> root.deepget([1]).visible = False
-            >>> list(root.walk(visible=True))
-            [((2,), <PaintingLayer u'C'>)]
+            >>> list(root.walk(visible=True))  # doctest: +ELLIPSIS
+            [((2,), <PaintingLayer ...'C'>)]
 
         If `bghit` is true, layers which could never affect the special
         background layer are excluded from the listing.  Specifically,
@@ -1315,7 +1621,7 @@ class RootLayerStack (group.LayerStack):
     def deepiter(self):
         """Iterates across all descendents of the stack
 
-        >>> import test
+        >>> from . import test
         >>> stack, leaves = test.make_test_stack()
         >>> len(list(stack.deepiter()))
         8
@@ -1333,7 +1639,7 @@ class RootLayerStack (group.LayerStack):
     def deepget(self, path, default=None):
         """Gets a layer based on its path
 
-        >>> import test
+        >>> from . import test
         >>> stack, leaves = test.make_test_stack()
         >>> stack.deepget(()) is stack
         True
@@ -1384,14 +1690,14 @@ class RootLayerStack (group.LayerStack):
         final indices greater than the number of layers in the addressed
         stack are quite valid in `path`::
 
-        >>> import test
-        >>> from data import PaintingLayer
+        >>> from . import data
+        >>> from . import test
         >>> stack, leaves = test.make_test_stack()
-        >>> layer = PaintingLayer(name='foo')
+        >>> layer = data.PaintingLayer(name='foo')
         >>> stack.deepinsert((0,9999), layer)
         >>> stack.deepget((0,-1)) is layer
         True
-        >>> layer = PaintingLayer(name='foo')
+        >>> layer = data.PaintingLayer(name='foo')
         >>> stack.deepinsert([0], layer)
         >>> stack.deepget([0]) is layer
         True
@@ -1424,7 +1730,7 @@ class RootLayerStack (group.LayerStack):
     def deeppop(self, path):
         """Removes a layer by its path
 
-        >>> import test
+        >>> from . import test
         >>> stack, leaves = test.make_test_stack()
         >>> stack.deeppop(())
         Traceback (most recent call last):
@@ -1455,7 +1761,7 @@ class RootLayerStack (group.LayerStack):
     def deepremove(self, layer):
         """Removes a layer from any of the root's descendents
 
-        >>> import test
+        >>> from . import test
         >>> stack, leaves = test.make_test_stack()
         >>> stack.deepremove(leaves[3])
         >>> stack.deepremove(leaves[2])
@@ -1488,7 +1794,7 @@ class RootLayerStack (group.LayerStack):
     def deepindex(self, layer):
         """Return a path for a layer by searching the stack tree
 
-        >>> import test
+        >>> from . import test
         >>> stack, leaves = test.make_test_stack()
         >>> stack.deepindex(stack)
         ()
@@ -1615,92 +1921,6 @@ class RootLayerStack (group.LayerStack):
 
     ## Layer merging
 
-    def _get_backdrop(self, path):
-        """Returns the backdrop layers underlying a path
-
-        :param tuple path: The addressed path
-        :returns: Its backdrop, as a list of layers
-        :rtype: list
-
-        These are the layers forming the isolated part of the backdop
-        beneath the identified layer.  The returned list may start with
-        the backdrop layer and contain others, or be empty.
-
-            >>> root = RootLayerStack(doc=None)
-            >>> for path, layer in [
-            ...     ([0], data.PaintingLayer(name="notpart")),
-            ...     ([1], group.LayerStack(name="ggp")),
-            ...     ([1,0], group.LayerStack(name="gp")),
-            ...     ([1,0,0], group.LayerStack(name="p")),
-            ...     ([1,0,0,0], data.PaintingLayer(name="notpart")),
-            ...     ([1,0,0,1], data.PaintingLayer(name="addressed")),
-            ...     ([1,0,0,2], data.PaintingLayer(name="invis.:notpart")),
-            ...     ([1,0,0,3], data.PaintingLayer(name="A")),
-            ...     ([1,0,1], data.PaintingLayer(name="B")),
-            ...     ([1,0,2], group.LayerStack(name="C")),
-            ...     ([1,0,2,0], data.PaintingLayer(name="notpart")),
-            ...     ([1,0,3], data.PaintingLayer(name="D")),
-            ...     ([1,1], data.PaintingLayer(name="E")),
-            ...     ([2], data.PaintingLayer(name="F")),
-            ...     ]:
-            ...     root.deepinsert(path, layer)
-            >>> root.deepget([1,0,0,2]).visible = False
-            >>> root.deepget([1,0,0]).mode = PASS_THROUGH_MODE
-            >>> root.deepget([1,0]).mode = PASS_THROUGH_MODE
-            >>> root.deepget([1]).mode = PASS_THROUGH_MODE
-
-        If there are no isolated groups (other than the root stack
-        itself), you'll get all the underlying layers including the
-        internal `background_layer`, if that's currently visible:
-
-            >>> path = [1,0,0,1]
-            >>> [b.name for b in root._get_backdrop(path)]
-            [u'background', u'F', u'E', u'D', u'C', u'B', u'A']
-
-        The nearest isolated group to the addressed path which is not
-        the addressed layer truncates the backdrop sequence:
-
-            >>> [b.name for b in root._get_backdrop([1])]
-            [u'background', u'F']
-            >>> root.deepget([1]).mode = lib.mypaintlib.CombineNormal
-            >>> [b.name for b in root._get_backdrop(path)]
-            [u'E', u'D', u'C', u'B', u'A']
-            >>> [b.name for b in root._get_backdrop([1])]
-            [u'background', u'F']
-            >>> root.deepget([1,0,0]).mode = lib.mypaintlib.CombineScreen
-            >>> [b.name for b in root._get_backdrop(path)]
-            [u'A']
-
-        If the layer being addressed is the lowest one in an isolated
-        group, its backdrop is blank:
-
-            >>> [b.name for b in root._get_backdrop([1,0,0,3])]
-            []
-
-        Compositing the returned list in order over a zero-alpha
-        starting point reproduces the pixels that the addressed layer
-        would be composited over when rendering normally without any
-        special layer visibility modes.
-        """
-        backdrop = []
-        if self._background_visible:
-            backdrop.append(self._background_layer)
-        stack = self
-        for i, idx in enumerate(path):
-            if idx < 0:
-                raise ValueError("Negative index in path %r" % (path,))
-            underlying = []
-            for layer in stack[(idx + 1):]:
-                if layer.visible:
-                    underlying.append(layer)
-            backdrop.extend(reversed(underlying))
-            stack = stack[idx]
-            if i == len(path) - 1:
-                break
-            if stack.mode != PASS_THROUGH_MODE:
-                backdrop = []
-        return backdrop
-
     def layer_new_normalized(self, path):
         """Copy a layer to a normal painting layer that looks the same
 
@@ -1724,8 +1944,8 @@ class RootLayerStack (group.LayerStack):
         visible and tangible painting layers in the original, and it has
         the same name as the original, initially.
 
-        >>> from lib.layer.test import make_test_stack
-        >>> root, leaves = make_test_stack()
+        >>> from . import test
+        >>> root, leaves = test.make_test_stack()
         >>> orig_walk = list(root.walk())
         >>> orig_layers = {l for (p,l) in orig_walk}
         >>> for path, layer in orig_walk:
@@ -1737,15 +1957,18 @@ class RootLayerStack (group.LayerStack):
         srclayer = self.deepget(path)
         if not srclayer:
             raise ValueError("Path %r not found", path)
-        # Simple case
+
+        # Simplest case
         if not srclayer.visible:
             return data.PaintingLayer(name=srclayer.name)
+
         # Backdrops need removing if they combine with this layer's data.
         # Surface-backed layers' tiles can just be used as-is if they're
         # already fairly normal.
+        # If default mode is Spectral WGM, we shouldn't remove backdrop.
         needs_backdrop_removal = True
-        backdrop_layers = []
-        if srclayer.mode == DEFAULT_MODE and srclayer.opacity == 1.0:
+        if srclayer.mode == lib.mypaintlib.CombineNormal and srclayer.opacity == 1.0:
+
             # Optimizations for the tiled-surface types
             if isinstance(srclayer, data.PaintingLayer):
                 return deepcopy(srclayer)  # include strokes
@@ -1753,15 +1976,16 @@ class RootLayerStack (group.LayerStack):
                 return data.PaintingLayer.new_from_surface_backed_layer(
                     srclayer
                 )
-            # Otherwise we're gonna have to render, but we can skip the
-            # background removal most of the time.
+
+            # Otherwise we're gonna have to render the source layer,
+            # but we can skip the background removal *most* of the time.
             if isinstance(srclayer, group.LayerStack):
                 needs_backdrop_removal = (srclayer.mode == PASS_THROUGH_MODE)
             else:
                 needs_backdrop_removal = False
-        if needs_backdrop_removal:
-            backdrop_layers = self._get_backdrop(path)
-        # Begin building output, and enumerate set of tiles to render
+        if srclayer.mode == lib.mypaintlib.CombineSpectralWGM:
+            needs_backdrop_removal = False
+        # Begin building output, collecting tile indices and strokemaps.
         dstlayer = data.PaintingLayer()
         dstlayer.name = srclayer.name
         tiles = set()
@@ -1773,25 +1997,39 @@ class RootLayerStack (group.LayerStack):
                     and not layer.locked
                     and not layer.branch_locked):
                 dstlayer.strokes[:0] = layer.strokes
-        # Render loop
-        logger.debug("Normalize: render using backdrop %r", backdrop_layers)
+
+        # Might need to render the backdrop, in order to subtract it.
+        bd_ops = []
+        if needs_backdrop_removal:
+            bd_spec = self._get_backdrop_render_spec_for_layer(path)
+            bd_ops = self.get_render_ops(bd_spec)
+
+        # Need to render the layer to be normalized too.
+        # The ops are processed on top of the tiles bd_ops will render.
+        src_spec = rendering.Spec(
+            current=srclayer,
+            solo=True,
+            layers=set(self.layers_along_or_under_path(path))
+        )
+        src_ops = self.get_render_ops(src_spec)
+
+        # Process by tile.
+        # This is like taking before/after pics from a normal render(),
+        # then subtracting the before from the after.
+        logger.debug("Normalize: bd_ops = %r", bd_ops)
+        logger.debug("Normalize: src_ops = %r", src_ops)
         dstsurf = dstlayer._surface
         tiledims = (tiledsurface.N, tiledsurface.N, 4)
         for tx, ty in tiles:
             bd = np.zeros(tiledims, dtype='uint16')
-            for layer in backdrop_layers:
-                if layer is self._background_layer:
-                    surf = self._background_layer._surface
-                    surf.blit_tile_into(bd, True, tx, ty, 0)
-                    # FIXME: shouldn't need this special case
-                else:
-                    layer.composite_tile(bd, True, tx, ty, mipmap_level=0)
             with dstsurf.tile_request(tx, ty, readonly=False) as dst:
+                self._process_ops_list(bd_ops, bd, True, tx, ty, 0)
                 lib.mypaintlib.tile_copy_rgba16_into_rgba16(bd, dst)
-                srclayer.composite_tile(dst, True, tx, ty, mipmap_level=0)
-                if backdrop_layers:
+                self._process_ops_list(src_ops, dst, True, tx, ty, 0)
+                if bd_ops:
                     dst[:, :, 3] = 0  # minimize alpha (discard original)
                     lib.mypaintlib.tile_flat2rgba(dst, bd)
+
         return dstlayer
 
     def get_merge_down_target(self, path):
@@ -1859,8 +2097,8 @@ class RootLayerStack (group.LayerStack):
         You get what you see. This means that both layers must be
         visible to be used in the output.
 
-        >>> from lib.layer.test import make_test_stack
-        >>> root, leaves = make_test_stack()
+        >>> from . import test
+        >>> root, leaves = test.make_test_stack()
         >>> orig_walk = list(root.walk())
         >>> orig_layers = {l for (p,l) in orig_walk}
         >>> n_merged = 0
@@ -1881,7 +2119,6 @@ class RootLayerStack (group.LayerStack):
         target_path = self.get_merge_down_target(path)
         if not target_path:
             raise ValueError("Invalid path for Merge Down")
-        backdrop_layers = self._get_backdrop(target_path)
         # Normalize input
         merge_layers = []
         opaque_masks = []
@@ -1912,14 +2149,20 @@ class RootLayerStack (group.LayerStack):
         ).join(names)
         if name != '':
             dstlayer.name = name
-        logger.debug("Merge Down: backdrop=%r", backdrop_layers)
         logger.debug("Merge Down: normalized source=%r", merge_layers)
         # Rendering loop
         dstsurf = dstlayer._surface
         for tx, ty in tiles:
             with dstsurf.tile_request(tx, ty, readonly=False) as dst:
                 for layer in merge_layers:
-                    layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+                    mode = layer.mode
+                    if mode != lib.mypaintlib.CombineSpectralWGM:
+                        mode = lib.mypaintlib.CombineNormal
+                    layer._surface.composite_tile(
+                        dst, True,
+                        tx, ty, mipmap_level=0,
+                        mode=mode
+                    )
 
         # If only_opaque is assigned,
         # Build 'target path' layer and use it as opaque mask.
@@ -1932,18 +2175,30 @@ class RootLayerStack (group.LayerStack):
             for tx, ty in tiles:
                 with masksurf.tile_request(tx, ty, readonly=False) as dst:
                     for layer in opaque_masks:
-                        layer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+                        mode = layer.mode
+                        if mode != lib.mypaintlib.CombineSpectralWGM:
+                            mode = lib.mypaintlib.CombineNormal
+                        layer._surface.composite_tile(
+                            dst, True, 
+                            tx, ty, mipmap_level=0, 
+                            mode
+                        )
 
             # Then, set dstlayer mode as Source-Atop and
             # composite on masklayer.
             # With this, only on opaque area of target 'masklayer'
             # would be overwritten by dstlayer(=merged layer image).
-            dstlayer.mode = lib.mypaintlib.CombineSourceAtop
+            mode = lib.mypaintlib.CombineSourceAtop
             for tx, ty in tiles:
                 with masksurf.tile_request(tx, ty, readonly=False) as dst:
-                    dstlayer.composite_tile(dst, True, tx, ty, mipmap_level=0)
+                    dstlayer._surface.composite_tile(
+                        dst, True, 
+                        tx, ty, mipmap_level=0,
+                        mode=mode
+                    )
 
-            # Finalizing (Notifying) surface changes.
+            # masksurf is completely new one,
+            # so finalizing (Notifying) surface changes.
             lib.surface.finalize_surface_changes(masksurf, tiles)
 
             # Pretend masklayer as dstlayer.
@@ -1970,8 +2225,8 @@ class RootLayerStack (group.LayerStack):
         It will be "subtracted" from the result of the merge so that the
         merge result can be stacked above the same background.
 
-        >>> from lib.layer.test import make_test_stack
-        >>> root, leaves = make_test_stack()
+        >>> from . import test
+        >>> root, leaves = test.make_test_stack()
         >>> orig_walk = list(root.walk())
         >>> orig_layers = {l for (p,l) in orig_walk}
         >>> merged = root.layer_new_merge_visible()
@@ -1980,18 +2235,21 @@ class RootLayerStack (group.LayerStack):
 
         See also: `walk()`, `background_visible`.
         """
-        # What to render (+ strokemap)
+
+        # Extract tile indices, names, and strokemaps.
         tiles = set()
         strokes = []
         names = []
         for path, layer in self.walk(visible=True):
             tiles.update(layer.get_tile_coords())
-            if (isinstance(layer, data.PaintingLayer)
+            if (isinstance(layer, data.StrokemappedPaintingLayer)
                     and not layer.locked
                     and not layer.branch_locked):
                 strokes[:0] = layer.strokes
             if layer.has_interesting_name():
                 names.append(layer.name)
+
+        # Start making the output layer.
         dstlayer = data.PaintingLayer()
         dstlayer.strokes = strokes
         name = C_(
@@ -2000,20 +2258,167 @@ class RootLayerStack (group.LayerStack):
         ).join(names)
         if name != '':
             dstlayer.name = name
-        # Render & subtract backdrop (= the background, if visible)
         dstsurf = dstlayer._surface
-        bgsurf = self._background_layer._surface
-        for tx, ty in tiles:
-            with dstsurf.tile_request(tx, ty, readonly=False) as dst:
-                self.composite_tile(
-                    dst, True, tx, ty, mipmap_level=0,
-                    render_background=self._background_visible
-                )
-                if self._background_visible:
+
+        # Render the entire tree, mostly normally.
+        # Solo mode counts as normal, previewing mode does not.
+        spec = self._get_render_spec(respect_previewing=False)
+        self.render(dstsurf, tiles, 0, spec=spec)
+
+        # Then subtract the background surface if it was rendered.
+        # This leaves a ghost image.
+        # Sure, we could render isolated for the case where all layers
+        # that hit the background composite with src-over.
+        # But that makes an exception and Exceptions Are Bad™.
+        # Especially if they're really non-obvious to the user, like this.
+        # Maybe it'd be better to split this op into two variants,
+        # "Remove Background" and "Ignore Background"?
+        if self._get_render_background(spec):
+            bgsurf = self._background_layer._surface
+            for tx, ty in tiles:
+                with dstsurf.tile_request(tx, ty, readonly=False) as dst:
                     with bgsurf.tile_request(tx, ty, readonly=True) as bg:
                         dst[:, :, 3] = 0  # minimize alpha (discard original)
                         lib.mypaintlib.tile_flat2rgba(dst, bg)
+
         return dstlayer
+
+    ## Layer uniquifying (sort of the opposite of Merge Down)
+
+    def uniq_layer(self, path, pixels=False):
+        """Uniquify a painting layer's tiles or pixels."""
+        targ_path = path
+        targ_layer = self.deepget(path)
+
+        if targ_layer is None:
+            logger.error("uniq: target layer not found")
+            return
+        if not isinstance(targ_layer, data.PaintingLayer):
+            logger.error("uniq: target layer is not a painting layer")
+            return
+
+        # Extract ops lists for the target and its backdrop
+        bd_spec = self._get_backdrop_render_spec_for_layer(targ_path)
+        bd_ops = self.get_render_ops(bd_spec)
+
+        targ_only_spec = rendering.Spec(
+            current=targ_layer,
+            solo=True,
+            layers=set(self.layers_along_or_under_path(targ_path))
+        )
+        targ_only_ops = self.get_render_ops(targ_only_spec)
+
+        # Process by tile, like Normalize's backdrop removal.
+        logger.debug("uniq: bd_ops = %r", bd_ops)
+        logger.debug("uniq: targ_only_ops = %r", targ_only_ops)
+        targ_surf = targ_layer._surface
+        tile_dims = (tiledsurface.N, tiledsurface.N, 4)
+        unchanged_tile_indices = set()
+        zeros = np.zeros(tile_dims, dtype='uint16')
+        for tx, ty in targ_surf.get_tiles():
+            bd_img = copy(zeros)
+            self._process_ops_list(bd_ops, bd_img, True, tx, ty, 0)
+            targ_img = copy(bd_img)
+            self._process_ops_list(targ_only_ops, targ_img, True, tx, ty, 0)
+            equal_channels = (targ_img == bd_img)   # NxNn4 dtype=bool
+            if equal_channels.all():
+                unchanged_tile_indices.add((tx, ty))
+            elif pixels:
+                equal_px = equal_channels.all(axis=2, keepdims=True)  # NxNx1
+                with targ_surf.tile_request(tx, ty, readonly=False) as targ:
+                    targ *= np.invert(equal_px)
+
+        targ_surf.remove_tiles(unchanged_tile_indices)
+
+    def refactor_layer_group(self, path, pixels=False):
+        """Factor common stuff out of a group's child layers."""
+        targ_path = path
+        targ_group = self.deepget(path)
+
+        if targ_group is None:
+            logger.error("refactor: target group not found")
+            return
+        if not isinstance(targ_group, group.LayerStack):
+            logger.error("refactor: target group is not a LayerStack")
+            return
+        if targ_group.mode == PASS_THROUGH_MODE:
+            logger.error("refactor: target group is not isolated")
+            return
+        if len(targ_group) == 0:
+            return
+
+        # Normalize each child layer that needs it.
+        # Refactoring can cope with some opacity variations.
+        for i, child in enumerate(targ_group):
+            if child.mode == lib.mypaintlib.CombineNormal:
+                continue
+            child_path = tuple(list(targ_path) + [i])
+            child = self.layer_new_normalized(child_path)
+            targ_group[i] = child
+
+        # Extract ops list fragments for the child layers.
+        normalized_child_layers = list(targ_group)
+        child_ops = {}
+        union_tiles = set()
+        for i, child in enumerate(normalized_child_layers):
+            child_path = tuple(list(targ_path) + [i])
+            spec = rendering.Spec(
+                current=child,
+                solo=True,
+                layers=set(self.layers_along_or_under_path(child_path))
+            )
+            ops = self.get_render_ops(spec)
+            child_ops[child] = ops
+            union_tiles.update(child.get_tile_coords())
+
+        # Insert a layer to contain all the common pixels or tiles
+        common_layer = data.PaintingLayer()
+        common_layer.name = C_(
+            "layer default names: refactor: name of the common areas layer",
+            u"Common",
+        )
+        common_surf = common_layer._surface
+        targ_group.append(common_layer)
+
+        # Process by tile
+        n = tiledsurface.N
+        zeros_rgba = np.zeros((n, n, 4), dtype='uint16')
+        ones_bool = np.ones((n, n, 1), dtype='bool')
+        common_data_tiles = set()
+        child0 = normalized_child_layers[0]
+        child0_surf = child0._surface
+        for tx, ty in union_tiles:
+            common_px = copy(ones_bool)
+            rgba0 = None
+            for child in normalized_child_layers:
+                ops = child_ops[child]
+                rgba = copy(zeros_rgba)
+                self._process_ops_list(ops, rgba, True, tx, ty, 0)
+                if rgba0 is None:
+                    rgba0 = rgba
+                else:
+                    common_px &= (rgba0 == rgba).all(axis=2, keepdims=True)
+
+            if common_px.all():
+                with common_surf.tile_request(tx, ty, readonly=False) as d:
+                    with child0_surf.tile_request(tx, ty, readonly=True) as s:
+                        d[:] = s
+                common_data_tiles.add((tx, ty))
+
+            elif pixels and common_px.any():
+                with common_surf.tile_request(tx, ty, readonly=False) as d:
+                    with child0_surf.tile_request(tx, ty, readonly=True) as s:
+                        d[:] = s * common_px
+                for child in normalized_child_layers:
+                    surf = child._surface
+                    if (tx, ty) in surf.get_tiles():
+                        with surf.tile_request(tx, ty, readonly=False) as d:
+                            d *= np.invert(common_px)
+
+        # Remove the remaining complete common tiles.
+        for child in normalized_child_layers:
+            surf = child._surface
+            surf.remove_tiles(common_data_tiles)
 
     ## Loading
 
@@ -2401,6 +2806,79 @@ class RootLayerStackSnapshot (group.LayerStackSnapshot):
         layer.background_layer.load_snapshot(self.bg_sshot)
         layer.background_visible = self.bg_visible
         layer.current_path = self.current_path
+
+
+class _TileRenderWrapper (TileAccessible, TileBlittable):
+    """Adapts a RootLayerStack to support RO tile_request()s.
+
+    The wrapping is very minimal.
+    Tiles are rendered into empty buffers on demand and cached.
+    The tile request interface is therefore read only,
+    and these wrappers should be used only as temporary objects.
+
+    """
+
+    def __init__(self, root, spec, use_cache=True):
+        """Adapt a renderable object to support "tile_request()".
+
+        :param RootLayerStack root: root of a tree.
+        :param lib.layer.rendering.Spec spec: How to render it.
+        :param bool use_cache: Cache rendered output.
+
+        """
+        super(_TileRenderWrapper, self).__init__()
+        self._root = root
+        self._ops = root.get_render_ops(spec)
+        self._use_cache = bool(use_cache)
+        self._cache = {}
+
+    @contextlib.contextmanager
+    def tile_request(self, tx, ty, readonly):
+        """Context manager that fetches a single tile as fix15 RGBA data.
+
+        :param int tx: Location to access (X coordinate).
+        :param int ty: Location to access (Y coordinate).
+        :param bool readonly: Must be True.
+        :yields: One NumPy tile array.
+
+        To be used with the 'with' statement.
+
+        """
+        if not readonly:
+            raise ValueError("Only readonly tile requests are supported")
+        dst = None
+        if self._use_cache:
+            dst = self._cache.get((tx, ty), None)
+        if dst is None:
+            tiledims = (tiledsurface.N, tiledsurface.N, 4)
+            dst = np.zeros(tiledims, 'uint16')
+            self._root.render_single_tile(
+                dst, True,
+                tx, ty, 0,
+                ops=self._ops,
+            )
+            if self._use_cache:
+                self._cache[(tx, ty)] = dst
+        yield dst
+
+    def get_bbox(self):
+        """Explicit passthrough of get_bbox"""
+        return self._root.get_bbox()
+
+    def blit_tile_into(self, dst, dst_has_alpha, tx, ty, **kwargs):
+        """Copy a rendered tile into a fix15 or 8bpp array."""
+        assert dst.dtype == 'uint8'
+        with self.tile_request(tx, ty, readonly=True) as src:
+            assert src.dtype == 'uint16'
+            if dst_has_alpha:
+                conv = lib.mypaintlib.tile_convert_rgba16_to_rgba8
+            else:
+                conv = lib.mypaintlib.tile_convert_rgbu16_to_rgbu8
+            conv(src, dst)
+
+    def __getattr__(self, attr):
+        """Pass through calls to other methods"""
+        return getattr(self._root, attr)
 
 
 ## Layer path tuple functions

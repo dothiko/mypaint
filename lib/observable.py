@@ -310,7 +310,7 @@ class _MethodWithObservers (object):
 
         The `observer` parameter can be a bound method or any other sort of
         callable. Bound methods are wrapped in a _BoundObserverMethod object
-        internally, to avoid keeping a hard reference to the object tthe
+        internally, to avoid keeping a hard reference to the object the
         method is bound to.
         """
         self.observers.append(_wrap_observer(observer))
@@ -414,8 +414,8 @@ class _BoundObserverMethod (object):
     to take a weakref to a bound method and have that be the only thing
     referring to it.  Therefore, wrap it up as a weakref to the object the
     method is bound to (which can then die naturally), and its implementing
-    function (which is always a staticly allocated thing belonging to the class
-    definition: those are eternal and we don't care about them).
+    function (which is always a statically allocated thing belonging to the
+    class definition: those are eternal and we don't care about them).
 
     """
 
@@ -582,7 +582,7 @@ class ObservableDict (dict):
     # Same as the builtin dict type, but announcing changes:
 
     def clear(self):
-        keys = list(self.iterkeys())
+        keys = list(self.keys())
         result = dict.clear(self)
         self.modified(keys)
         return result
@@ -608,7 +608,7 @@ class ObservableDict (dict):
         >>> od.update({"b": 202, "a": 303})
         >>> isinstance(hist[0], dict)
         True
-        >>> sorted(list(hist[0].iteritems()))  # first hist, predictable order
+        >>> sorted(list(hist[0].items()))  # first hist, predictable order
         [('a', 101), ('b', <WasAbsent>)]
         >>> hist[0]["b"] is ObservableDict.ABSENT
         True
@@ -646,6 +646,23 @@ class ObservableDict (dict):
         """
         return self.__class__(self)
 
+    @event
+    def sync_pending_changes(self, flush=True, **kwargs):
+        """Ask for pending changes to be synchronized (updated/flushed)
+
+        This event is triggered to signal objects which have their own
+        internal state that need to be be reflected in the per-doc
+        settings to write their changes to the settings dict. By
+        default, the request to flush changes is non-optional.
+
+        :param bool flush: if this is False, the flush is optional too
+        :param \*\*kwargs: passed through to observers
+
+        See: `lib.observable.event` for details of the signalling
+        mechanism.
+        See also: lib.document.Document.sync_pending_changes().
+
+        """
 
 def _test():
     """Run doctest strings"""

@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2013 by Andrew Chadwick <a.t.chadwick@gmail.com>
+# Copyright (C) 2013-2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -9,20 +9,22 @@
 """Widgets and popup dialogs for making quick choices"""
 
 ## Imports
-from __future__ import division, print_function
 
+from __future__ import division, print_function
 import abc
 
 from gi.repository import Gtk
 
-from pixbuflist import PixbufList
-import brushmanager
-import brushselectionwindow
-import widgets
-import spinbox
-import windowing
+from .pixbuflist import PixbufList
+from . import brushmanager
+from . import brushselectionwindow
+from . import widgets
+from . import spinbox
+from . import windowing
 from lib.observable import event
 import gui.colortools
+from lib.pycompat import add_metaclass
+
 
 ## Module consts
 
@@ -31,7 +33,7 @@ _DEFAULT_PREFS_ID = u"default"
 
 ## Interfaces
 
-
+@add_metaclass(abc.ABCMeta)
 class Advanceable:
     """Interface for choosers which can be advanced by pressing keys.
 
@@ -42,8 +44,6 @@ class Advanceable:
     choosers may actually change a brush setting as they advance.
 
     """
-
-    __metaclass__ = abc.ABCMeta
 
     @abc.abstractmethod
     def advance(self):

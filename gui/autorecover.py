@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # This file is part of MyPaint.
-# Copyright (C) 2015 by Andrew Chadwick <a.t.chadwick@gmail.com>
+# Copyright (C) 2015-2018 by the MyPaint Development Team
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -10,21 +10,20 @@
 """Autorecovery UI"""
 
 from __future__ import division, print_function
-
 import weakref
 import os.path
-from datetime import datetime
 from gettext import gettext as _
 import shutil
 import logging
-logger = logging.getLogger(__name__)
 
 from gi.repository import Gtk
-from gi.repository import GLib
 
 import lib.document
 import lib.helpers
 import lib.errors
+from lib.pycompat import unicode
+
+logger = logging.getLogger(__name__)
 
 
 class Presenter (object):
@@ -208,7 +207,8 @@ class Presenter (object):
         if iter is None:
             return None
         path = model.get_value(iter, self._LISTSTORE_PATH_COLUMN)
-        path = path.decode("utf-8")
+        if not isinstance(path, unicode):
+            path = path.decode("utf-8")
         assert isinstance(path, unicode)
         if not os.path.isdir(path):
             return None
@@ -222,7 +222,7 @@ class Presenter (object):
         logger.info("Recursively deleting %r...", autosave.path)
         try:
             shutil.rmtree(autosave.path, ignore_errors=True)
-        except:
+        except Exception:
             logger.exception("Deleting %r failed.", autosave.path)
         else:
             logger.info("Deleted %r successfully.", autosave.path)

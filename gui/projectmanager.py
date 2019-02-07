@@ -27,7 +27,6 @@ from gi.repository import GObject
 import cairo
 
 from windowing import SubWindow
-import gui.stamps
 import gui.dialogs
 import lib.projectsave
 

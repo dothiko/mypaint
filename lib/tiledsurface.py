@@ -1,5 +1,5 @@
 # This file is part of MyPaint.
-# Copyright (C) 2009-2017 by the MyPaint Development Team.
+# Copyright (C) 2009-2018 by the MyPaint Development Team.
 # Copyright (C) 2007-2012 by Martin Renold <martinxyz@gmx.ch>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -10,8 +10,8 @@
 """This module implements an unbounded tiled surface for painting."""
 
 ## Imports
-from __future__ import division, print_function
 
+from __future__ import division, print_function
 import time
 import sys
 import os
@@ -21,17 +21,20 @@ import logging
 from gettext import gettext as _
 import numpy as np
 
-import mypaintlib
-import lib.mypaintlib
-import helpers
-import pixbufsurface
+from . import mypaintlib
+from . import helpers
+from . import pixbufsurface
 import lib.surface
-from lib.surface import TileAccessible, TileBlittable, TileCompositable
-from errors import FileHandlingError
+from lib.surface import TileAccessible
+from lib.surface import TileBlittable
+from lib.surface import TileCompositable
+from .errors import FileHandlingError
 import lib.fileutils
 import lib.modes
 import lib.feedback
 import lib.pyramidfill # XXX For pyramid-fill
+from lib.pycompat import xrange
+from lib.pycompat import PY3
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +43,13 @@ logger = logging.getLogger(__name__)
 TILE_SIZE = N = mypaintlib.TILE_SIZE
 MAX_MIPMAP_LEVEL = mypaintlib.MAX_MIPMAP_LEVEL
 
-SYMMETRY_TYPES = tuple(range(lib.mypaintlib.NumSymmetryTypes))
+SYMMETRY_TYPES = tuple(range(mypaintlib.NumSymmetryTypes))
 SYMMETRY_STRINGS = {
-    lib.mypaintlib.SymmetryVertical: _("Vertical"),
-    lib.mypaintlib.SymmetryHorizontal: _("Horizontal"),
-    lib.mypaintlib.SymmetryVertHorz: _("Vertical and horizontal"),
-    lib.mypaintlib.SymmetryRotational: _("Rotational"),
-    lib.mypaintlib.SymmetrySnowflake: _("Snowflake"),
+    mypaintlib.SymmetryVertical: _("Vertical"),
+    mypaintlib.SymmetryHorizontal: _("Horizontal"),
+    mypaintlib.SymmetryVertHorz: _("Vertical and horizontal"),
+    mypaintlib.SymmetryRotational: _("Rotational"),
+    mypaintlib.SymmetrySnowflake: _("Snowflake"),
 }
 for sym_type in SYMMETRY_TYPES:
     assert sym_type in SYMMETRY_STRINGS
@@ -59,7 +62,7 @@ class _Tile (object):
 
     Note: pixels are stored with premultiplied alpha.
     15 bits are used, but fully opaque or white is stored as 2**15
-    (requiring 16 bits). This is to allow many calcuations to divide by
+    (requiring 16 bits). This is to allow many calculations to divide by
     2**15 instead of (2**16-1).
 
     """
@@ -132,6 +135,23 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
 
         # XXX for `faster-bbox`
         self._bbox = None
+
+    @classmethod
+    def _mock(cls):
+        """Returns a new mock surface with a pattern."""
+        surf = cls()
+        v1 = (1 << 15)
+        v0 = 0
+        black = (v0, v0, v0, v1)
+        white = (v1, v1, v1, v1)
+        bits = [(1, 0), (0, 1), (1, 1), (2, 1), (0, 2), (2, 2)]
+        b = 1
+        for tx in range(b+b+1+max(xt for (xt, yt) in bits)):
+            for ty in range(b+b+1+max(yt for (xt, yt) in bits)):
+                p = ((tx-b, ty-b) in bits) and white or black
+                with surf.tile_request(tx, ty, readonly=False) as rgba:
+                    rgba[:] = p
+        return surf
 
     def _create_mipmap_surfaces(self):
         """Internal: initializes an internal mipmap lookup table
@@ -343,8 +363,6 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
 
         :param int mipmap_level: layer mipmap level to use
 
-        Used mainly for saving (transparent PNG).
-
         """
 
         # assert dst_has_alpha is True
@@ -430,7 +448,11 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
 
         """
         sshot = _SurfaceSnapshot()
-        for t in self.tiledict.itervalues():
+        if PY3:
+            tiles_iter = self.tiledict.values()
+        else:
+            tiles_iter = self.tiledict.itervalues()
+        for t in tiles_iter:
             t.readonly = True
         sshot.tiledict = self.tiledict.copy()
         return sshot
@@ -446,9 +468,9 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
             # testcase: comparison above (if equal) takes 0.6ms,
             # code below 30ms
             return
-        old = set(self.tiledict.iteritems())
+        old = set(self.tiledict.items())
         self.tiledict = d.copy()
-        new = set(self.tiledict.iteritems())
+        new = set(self.tiledict.items())
         dirty = old.symmetric_difference(new)
         for pos, tile in dirty:
             self._mark_mipmap_dirty(*pos)
@@ -537,7 +559,7 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
                     # We have to handle feedback exceptions ourself
                     try:
                         state["progress"].items = ty_final - ty0
-                    except:
+                    except Exception:
                         logger.exception("setting progress.items failed")
                         state["progress"] = None
                 state['frame_size'] = (x, y, png_w, png_h)
@@ -579,7 +601,7 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
             if state["progress"]:
                 try:
                     state["progress"].completed(ty - ty0)
-                except:
+                except Exception:
                     logger.exception("Progress.completed() failed")
                     state["progress"] = None
 
@@ -588,6 +610,10 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         else:
             filename_sys = filename.encode(sys.getfilesystemencoding())
             # FIXME: should not do that, should use open(unicode_object)
+
+        if PY3:
+            filename_sys = filename_sys.decode()
+            # FIXME: https://github.com/mypaint/mypaint/issues/906
 
         try:
             flags = mypaintlib.load_png_fast_progressive(
@@ -648,7 +674,10 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         total = 0
         removed = 0
         for surf in self._mipmaps:
-            for pos, data in surf.tiledict.items():
+            tmp_items_list = surf.tiledict.items()
+            if PY3:
+                tmp_items_list = list(tmp_items_list)
+            for pos, data in tmp_items_list:
                 total += 1
                 try:
                     rgba = data.rgba
@@ -659,6 +688,23 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
                 surf.tiledict.pop(pos)
                 removed += 1
         return removed, total
+
+    def remove_tiles(self, indices):
+        """Removes a set of tiles from the surface by tile index."""
+        if self.mipmap_level != 0:
+            raise ValueError("Only call this on the top-level surface.")
+
+        removed = set()
+        for tx, ty in indices:
+            pos = (tx, ty)
+            if pos not in self.tiledict:
+                continue
+            self.tiledict.pop(pos)
+            removed.add(pos)
+            self._mark_mipmap_dirty(tx, ty)
+
+        bbox = lib.surface.get_tiles_bbox(removed)
+        self.notify_observers(*bbox)
 
     def get_move(self, x, y, sort=True):
         """Returns a move object for this surface
@@ -671,6 +717,8 @@ class MyPaintSurface (TileAccessible, TileBlittable, TileCompositable):
         It's up to the caller to ensure that only one move is active at a
         any single instant in time.
         """
+        if self.mipmap_level != 0:
+            raise ValueError("Only call this on the top-level surface.")
         return _TiledSurfaceMove(self, x, y, sort=sort)
 
     def flood_fill(self, x, y, color, bbox, tolerance, dst_surface, **kwargs):
@@ -852,14 +900,14 @@ class _TiledSurfaceMove (object):
         >>> surf = MyPaintSurface()
         >>> with surf.tile_request(-3, 2, readonly=False) as a:
         ...     a[...] = 1<<15
-        >>> surf.tiledict.keys()
+        >>> list(surf.tiledict.keys())
         [(-3, 2)]
         >>> move = surf.get_move(0, 0, sort=False)
         >>> move.update(N*3, -N*2)
         >>> move.process(n=1)   # single op suffices
         False
         >>> move.cleanup()
-        >>> surf.tiledict.keys()
+        >>> list(surf.tiledict.keys())
         [(0, 0)]
         >>> # Please excuse the doctest for this special case
         >>> # just regression-proofing.
@@ -883,7 +931,8 @@ class _TiledSurfaceMove (object):
         object.__init__(self)
         self.surface = surface
         self.snapshot = surface.save_snapshot()
-        self.chunks = self.snapshot.tiledict.keys()
+        self.chunks = []
+        self.chunks[:] = self.snapshot.tiledict.keys()
         self.sort = sort
         tx = x // N
         ty = y // N
@@ -915,7 +964,7 @@ class _TiledSurfaceMove (object):
         self.written = set()
         # Tile indices to be cleared during processing,
         # unless they've been written to
-        self.blank_queue = self.surface.tiledict.keys()  # fresh!
+        self.blank_queue[:] = self.surface.tiledict.keys()  # fresh!
         if self.sort:
             x, y = self.start_pos
             tx = (x + dx) // N
@@ -1208,6 +1257,19 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     :type do_antialias: boolean
 
     See also `lib.layer.Layer.flood_fill()`.
+
+    >>> surf1 = MyPaintSurface._mock()
+    >>> surf2 = MyPaintSurface._mock()
+    >>> x, y, w, h = bbox = surf1.get_bbox()
+    >>> col = (1, 0, 0)
+    >>> flood_fill(surf1, x+h//2, y+h//2, col, bbox, 0, surf2)
+    >>> flood_fill(surf1, x+h//2, y+h//2, col, bbox, 0, surf1)
+    >>> tiles = set(surf1.get_tiles()).union(set(surf2.get_tiles()))
+    >>> for tx, ty in tiles:
+    ...     with surf1.tile_request(tx, ty,readonly=True) as t1:
+    ...         with surf2.tile_request(tx, ty,readonly=True) as t2:
+    ...             assert (t2 == t1).all()
+
     """
     lib.pyramidfill.flood_fill(
         src,
@@ -1220,6 +1282,22 @@ class PNGFileUpdateTask (object):
     """Piecemeal callable: writes to or replaces a PNG file
 
     See lib.autosave.Autosaveable.
+
+    >>> from tempfile import mkdtemp
+    >>> from shutil import rmtree
+    >>> import os.path
+    >>> surf = MyPaintSurface._mock()
+    >>> tmpdir = mkdtemp(suffix="_pngupdate")
+    >>> tmpfile = os.path.join(tmpdir, "test.png")
+    >>> try:
+    ...     updater = PNGFileUpdateTask(surf, tmpfile, surf.get_bbox(), True)
+    ...     while updater():
+    ...         logger.debug("Wrote a tile strip")
+    ...     assert os.path.isfile(tmpfile)
+    ...     assert os.path.getsize(tmpfile) > 0
+    ... finally:
+    ...     rmtree(tmpdir)
+
     """
 
     def __init__(self, surface, filename, rect, alpha,
@@ -1270,7 +1348,13 @@ class PNGFileUpdateTask (object):
             self._png_writer.write(strip)
             return True
         except StopIteration:
-            self._png_writer.close()
+            try:
+                self._png_writer.close()
+            except Exception:
+                logger.exception(
+                    "Caught PNG writer close() exception "
+                    "in StopIteration handler",
+                )
             self._png_writer = None
             self._strips_iter = None
             self._tmp_fp.close()
@@ -1280,13 +1364,20 @@ class PNGFileUpdateTask (object):
             )
             logger.debug("autosave: updated %r", self._final_filename)
             return False
-        except:
-            self._png_writer.close()
+        except Exception:
+            try:
+                self._png_writer.close()
+            except Exception:
+                logger.exception(
+                    "Caught PNG writer close() exception "
+                    "in general Exception handler handler",
+                )
             self._png_writer = None
             self._strips_iter = None
             self._tmp_fp.close()
             if os.path.exists(self._tmp_filename):
                 os.unlink(self._tmp_filename)
+            logger.error("Original exception will be raised normally.")
             raise
 
 

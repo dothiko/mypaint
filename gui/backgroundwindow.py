@@ -1,4 +1,5 @@
 # This file is part of MyPaint.
+# Copyright (C) 2009-2018 by the MyPaint Development Team.
 # Copyright (C) 2008-2014 by Martin Renold <martinxyz@gmx.ch>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -9,8 +10,8 @@
 """Background tile chooser dialog"""
 
 ## Imports
-from __future__ import division, print_function
 
+from __future__ import division, print_function
 import os
 import sys
 import logging
@@ -19,11 +20,13 @@ from gettext import gettext as _
 from gi.repository import Gtk
 from gi.repository import GdkPixbuf
 
-import pixbuflist
-import windowing
+from . import pixbuflist
+from . import windowing
 from lib import tiledsurface
 from lib import helpers
 import lib.pixbuf
+from lib.pycompat import unicode
+from lib.pycompat import xrange
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 N = tiledsurface.N
 DEFAULT_BACKGROUND = 'default.png'
-FALLBACK_BACKGROUND = '10_soft_yellow.png'
+FALLBACK_BACKGROUND = 'mrmamurk/mamurk_e_1.png'
 BACKGROUNDS_SUBDIR = 'backgrounds'
 RESPONSE_SAVE_AS_DEFAULT = 1
 BLOAT_MAX_SIZE = 1024
@@ -42,7 +45,7 @@ BLOAT_MAX_SIZE = 1024
 class BackgroundWindow (windowing.Dialog):
 
     def __init__(self):
-        import application
+        from gui import application
         app = application.get_app()
         assert app is not None
 

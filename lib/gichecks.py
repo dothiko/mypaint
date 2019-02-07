@@ -1,4 +1,4 @@
-# Copyright (C) 2015 by the MyPaint Develoment Team.
+# Copyright (C) 2018 by the MyPaint Development Team.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -20,4 +20,3 @@ gi.require_version('GdkPixbuf', '2.0')
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
 gi.require_version('PangoCairo', '1.0')
-
