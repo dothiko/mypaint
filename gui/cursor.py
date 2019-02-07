@@ -41,7 +41,7 @@ class Name:
     """
 
     ARROW = "cursor_arrow"
-    ARROW_MOVE = "cursor_arrow_move"
+    ARROW_MOVE = "cursor_arrow_move" #XXX There is no pixmaps/cursor_arrow_move.png ?
     PENCIL = "cursor_pencil"
     HAND_OPEN = "cursor_hand_open"
     HAND_CLOSED = "cursor_hand_closed"

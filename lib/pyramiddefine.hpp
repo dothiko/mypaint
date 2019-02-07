@@ -30,15 +30,18 @@
 // This macro is used in pyramid.cpp/hpp
 #define POSITIVE_MOD(a, b) (((a) % (b) + (b)) % (b))
 
-// MAX pyramid level. 6 means maximum 2^6 == 64 pixel.
-#define MAX_PYRAMID 6
+// MAX pyramid level. 5 means maximum 2^5 == 32 pixel.
+#define MAX_PYRAMID 5
+ 
+// root of MYPAINT_TILE_SIZE. i.e. 2**6 = 64 pixel.
+#define TILE_ROOT 6
 
 // Convert a progress level 0(source or final result) coordinate
 // into each progress level (greater than 0) coordinate.
 #define PYRAMID_PIXEL_COORD(a, l) ((a) >> (l)) 
 
 // XXX CAUTION: PYRAMID_TILE_SIZE(0) MUST BE SAME AS MYPAINT_TILE_SIZE.
-#define PYRAMID_TILE_SIZE(l) (1 << (MAX_PYRAMID - (l)))
+#define PYRAMID_TILE_SIZE(l) (1 << (TILE_ROOT - (l)))
 #define PYRAMID_BUF_SIZE(l) (PYRAMID_TILE_SIZE(l) * PYRAMID_TILE_SIZE(l))
 
 //#define TILE_SIZE MYPAINT_TILE_SIZE
@@ -116,15 +119,16 @@
 // This flag should be most significant bit, for final antialiasing.
 #define FLAG_WORK 0x10 
     
-// FLAG_AA used for final anti-aliasing.
-// CAUTION: With this flag set, the pixel contains 128 Level of antialias
-// alpha seed value. 
-// Therefore, all of PIXEL_ constants are invalid for such pixel.
-// And, FLAG_AA should be most significant bit (== 0x80 for uint8_t).
+// FLAG_AA used for anti-aliasing.
+// XXX CAUTION: With this flag set, the pixel contains 128 Level 
+// of antialias alpha value. 
+// Therefore, all of PIXEL_ and other FLAG_ constants are invalid 
+// for such `anti-aliased` pixel.
+// And, FLAG_AA MUST be most significant bit (== 0x80 for uint8_t).
 #define FLAG_AA 0x80
 #define AA_MASK 0x7F 
 
-// Offset Direction constants, to refer TileWorker::xoffset/yoffset.  
+// Offset Direction constants, to refer KernelWorker::xoffset/yoffset.  
 #define OFFSET_TOP 0
 #define OFFSET_RIGHT 1
 #define OFFSET_BOTTOM 2
@@ -132,85 +136,27 @@
 
 // Forward declaration of Flagtile / FlagtileSurface.
 // Actually they are defined at pyramidfill.hpp
+// and exposed to python.
 class Flagtile;
 class FlagtileSurface;
 
 /**
-* @class PixelWorker
+* @class BaseWorker
 * @brief Base class of worker for drawing / searching pixel.
 *
 * Abstruct Worker class of walking line.
 * This is to share same logic between drawing line
 * and searching unfilled target area.
 */
-class PixelWorker 
+class BaseWorker 
 {
 protected:
     FlagtileSurface* m_surf;
     int m_level;
-
-public:
-    PixelWorker(FlagtileSurface* surf) 
-        : m_surf(surf), m_level(0) 
-    {
-        // Calling virtual method `set_target_level` 
-        // at here (i.e. constructor) is meaningless.
-        // Derived virtual function cannot be called from
-        // constructor by C++ design.
-        // So I use initialization list.
-    }
-    virtual ~PixelWorker(){}
-
-    inline int get_target_level() { return m_level;}
-
-    virtual void set_target_level(const int level) 
-    {
-#ifdef HEAVY_DEBUG
-        assert(level >= 0); 
-        assert(level <= MAX_PYRAMID); 
-#endif
-        m_level = level; 
-    }
-};
-
-/**
-* @class DrawWorker
-* @brief Base class of worker for drawing / searching pixel.
-*
-* Abstruct Worker class of walking line or some basic pixel operation.
-* This worker is used for pixel operations for all over the surface.
-*/
-class DrawWorker : public PixelWorker 
-{
-protected:
-public:
-    DrawWorker(FlagtileSurface* surf) 
-        : PixelWorker(surf) { }
-
-    /**
-    * @step
-    * processing current pixel
-    *
-    * @param x,y Surface coordinate of current pixel
-    * @detail 
-    * If pixel operation is not done(failed) by some reason,
-    * return false. Otherwise, return true.
-    */    
-    virtual bool step(const int x, const int y) = 0;
-};
-
-/**
-* @class TileWorker
-* @brief Abstruct class of tile-based pixel operation.
-*
-*/
-class TileWorker : public PixelWorker 
-{
-protected:
     
     // process only outerrim ridges of a tile.
     // use for a tile which is filled some specific value.
-    void process_only_ridge(Flagtile * const targ, const int sx, const int sy)
+    void process_only_ridge(Flagtile *targ, const int sx, const int sy)
     {
         int ridge = PYRAMID_TILE_SIZE(m_level);
 
@@ -227,45 +173,56 @@ protected:
             }
         }
     }
-    
-    // Wrapper method to get pixel with direction.
-    virtual uint8_t get_pixel_with_direction(const int x, const int y, 
-                                             const int direction);
 
 public:
-    TileWorker(FlagtileSurface* surf) 
-        : PixelWorker(surf) { }
-    
-    // `start` called at the starting point of tile processing.
-    // All processing cancelled when this return false.
-    virtual bool start(Flagtile * const tile, const int sx, const int sy) 
+    BaseWorker(FlagtileSurface* surf) 
+        : m_surf(surf), m_level(0) 
     {
-        return true; // As a default, always return true.
+        // Calling virtual method `set_target_level` 
+        // at here (i.e. constructor) is meaningless.
+        // Derived virtual function cannot be called from
+        // constructor by C++ design.
+        // So I use initialization list.
     }
-   
+    virtual ~BaseWorker(){}
+
+    inline int get_target_level() { return m_level;}
+
+    virtual void set_target_level(const int level) 
+    {
+#ifdef HEAVY_DEBUG
+        assert(level >= 0); 
+        assert(level <= MAX_PYRAMID); 
+#endif
+        m_level = level; 
+    }
+    
     /**
     * @step
-    * processing current pixel
+    * processing current pixel, called from some other worker
+    * or FlagtileSurface-class method.
     *
     * @param x,y tile-local progress coordinate of current pixel
     * @param sx,sy surface-global progress coordinate of current pixel
+    * @return Normally, return the instance which is assigned `tile` param. 
+    *         When a new tile generated inside step method, return that new tile. 
+    *         That tile would be used from next iteration.
+    *
     * @detail 
-    * Workers should implement this method.
+    * Workers implement this method to manipulate pixel.
+    * This method would be called some iterating operation
+    * such as FlagtileSurface::filter_tile or something.
+    *
+    * Use sx/sy for global pixel access.
+    * You can access faster by using tile-local pixels, such as 
+    * tile->get(level, x, y) .
     */    
     virtual void step(Flagtile * const tile, 
                       const int x, const int y,
-                      const int sx, const int sy) { }
-    
-    // Called when a tile processing end.
-    virtual void end( Flagtile* tile) { }
+                      const int sx, const int sy) = 0;
     
     // Called when entire tiles processing end.
-    virtual void finalize() { }
-    
-    // Offsets to refer neighboring pixels. 
-    // This is public. Some class might refer them.
-    static const int xoffset[];
-    static const int yoffset[];
+    virtual void finalize() {}
 };
 
 /**
@@ -273,12 +230,12 @@ public:
 * @brief Dedicated pixelworker for flood-fill operation
 *
 */
-class FillWorker : public TileWorker
+class FillWorker : public BaseWorker
 {
 protected:
 public:
     FillWorker(FlagtileSurface* surf)
-        : TileWorker(surf) { }
+        : BaseWorker(surf) { }
     
     // To check whether a pixel to be processed or not. 
     // `match` and `step` methods are almost same, it seems to be done
@@ -293,27 +250,37 @@ public:
 * @class KernelWorker
 * @brief Base class of Filter Kernel workers. Used in FlagtileSurface::filter method.
 * 
-* Abstruct class of pixel filter worker.
+* Abstruct class of pixel filter kernel.
+* Kernelworker has ability to access neighbouring 4-direction pixels of
+* specific location.
 */
-class KernelWorker : public TileWorker 
+class KernelWorker : public BaseWorker 
 {
 protected:
-    // Cache of m_surf information
-    int m_max_x;
-    int m_max_y;
-    
-
+    // Utility method to access neighbor pixels.
+    // You can use offset constant(macro) such as OFFSET_UP/RIGHT/DOWN/LEFT
+    virtual uint8_t get_pixel_with_direction(const int x, const int y, 
+                                             const int direction);
 public:
     // Defined at lib/pyramid.cpp
     KernelWorker(FlagtileSurface *surf)
-        : TileWorker(surf) { }
+        : BaseWorker(surf) { }
 
     virtual void set_target_level(const int level);
 
-    virtual bool start(Flagtile * const tile, const int sx, const int sy);
-    virtual void end(Flagtile * const tile);
+    // `start` called at the starting point of tile processing.
+    // All processing cancelled when this return false.
+    virtual bool start(Flagtile * const targ, const int sx, const int sy) = 0;
+    
+    // Called when a tile processing end.
+    virtual void end(Flagtile * const targ){} 
     
     virtual void finalize();
+    //
+    // Offsets to refer neighboring pixels. 
+    // This is public. Some class might refer them.
+    static const int xoffset[];
+    static const int yoffset[];
 };
 
 // Walking kernel base class.
@@ -353,8 +320,6 @@ protected:
     // To detect walking is closewise or counter-clockwise.
     long m_clockwise_cnt;
 
-
-
     inline uint8_t get_front_pixel() 
     {
         return get_pixel_with_direction(m_x, m_y, m_cur_dir);
@@ -384,33 +349,27 @@ protected:
     bool proceed();
     
     //// Walking callbacks / virtual methods
-    
+    // void type Callbacks are optional.
+
     // Rotation callback. 
     // If parameter `right` is true, kernel turns right. 
     // otherwise turns left.
-    virtual void on_rotate_cb(const bool right) { }
+    virtual void on_rotate_cb(const bool right){}
 
     // `Entering new pixel` callback.
     // This called when forward() method go (forward) into new pixel.
     // Current pixel is ensured as `forwardable` target pixel.
-    virtual void on_new_pixel() { }
+    virtual void on_new_pixel(){}
 
     // Check whether the right side pixel of current position / direction
     // is match to forward.
-    virtual bool is_wall_pixel(const uint8_t pixel);
-
+    virtual bool is_wall_pixel(const uint8_t pixel) = 0;
     
 public:
     WalkingKernel(FlagtileSurface *surf)
         : KernelWorker(surf) { } 
 
     // start/end should be implemented in child class.
-    virtual bool start(Flagtile* targ, const int sx, const int sy) 
-    {
-        return false;
-    }
-
-    virtual void end(Flagtile* targ) { }
 
     // Tell whether the walking is clockwise or not.
     // We can use this method only after the walking finished.

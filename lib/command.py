@@ -2244,8 +2244,6 @@ class ClosedAreaFill (FloodFill):
         return targ._surface
         
     def redo(self):
-        # [TODO] Implement 'fill once' option.
-
         if self.erase_pixel:
             combine_mode = lib.mypaintlib.CombineDestinationOut
         else:

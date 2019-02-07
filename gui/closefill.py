@@ -117,6 +117,42 @@ class _Prefs:
         _FillMethod.LASSO_FILL : "lasso_fill",
     }
 
+class AdjustContext(object):
+    """To manage dragging multiple nodes with some factor.
+    """
+
+    def __init__(self, tdw, nodes, target, pixrange):
+        d = {}
+        cnt = len(nodes)
+        self.datas = d
+        bn = nodes[target]
+        d[target] = (bn.x, bn.y, 1.0)
+        hpi = math.pi / 2.0
+        bx, by = tdw.model_to_display(bn.x, bn.y)
+
+        for i, cn in enumerate(nodes):
+            if i == target:
+                continue
+
+            cn = nodes[i]
+            cx, cy = tdw.model_to_display(cn.x, cn.y)
+            dist = math.hypot(cx-bx, cy-by)
+            if dist <= pixrange:
+               #factor = math.sin((1.0 - (dist / pixrange)) * hpi)
+                factor = (dist / pixrange)
+                factor = 1.0 - (factor ** 2)
+                d[i] = (cn.x, cn.y, factor)
+
+    def iter_offseted(self, tdw, ox, oy):
+        """Generator method of offseted values.
+        :param ox,oy: Offset values, in Display coord.
+        :return : tuple of (node-index, new-node-x, new-node-y)
+        """
+        for i, data in self.datas.items():
+            bx, by, f = data
+            bx, by = tdw.model_to_display(bx, by)
+            bx, by = tdw.display_to_model(bx+(ox*f), by+(oy*f))
+            yield (i, bx, by)
 
 
 class ClosefillMode (gui.mode.ScrollableModeMixin,
@@ -158,7 +194,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
     MAX_INTERNODE_DISTANCE_ENDS = 2   # display pixels
 
     # Editable radius. nodes within this radius would affect ADJUSTing.
-    EDITABLE_RADIUS = 16 # display pixels
+    EDITABLE_RADIUS = 24 # display pixels
 
     ## Cursors
     _cursors = {}
@@ -167,6 +203,8 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
     _CURSOR_PENCIL = 2
     _CURSOR_ERASER = 3
     _CURSOR_CROSS_ERASER = 4
+    _CURSOR_DRAGGABLE = 5
+    _CURSOR_DRAGGING = 6
 
     ## Other class vars
 
@@ -211,6 +249,19 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         )
         cursor_dict[cls._CURSOR_CROSS_ERASER] = c
 
+        # Dragging node cursor
+        c = cursors.get_action_cursor(
+            cls.ACTION_NAME,
+            name.HAND_OPEN
+        )
+        cursor_dict[cls._CURSOR_DRAGGABLE] = c
+
+        c = cursors.get_action_cursor(
+            cls.ACTION_NAME,
+            name.HAND_CLOSED
+        )
+        cursor_dict[cls._CURSOR_DRAGGING] = c
+
     ## Initialization & lifecycle methods
 
     def __init__(self, **kwargs):
@@ -234,6 +285,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         self._button_down = None
 
         self._overridden_fill_method = None
+        self._adj_ctx = None
 
     def _reset_nodes(self):
         self.nodes = []  # nodes that met the distance+time criteria
@@ -386,6 +438,24 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                 self._update_zone_and_target(tdw, event.x, event.y)
                 self._update_current_node_index()
                 return False
+            else:
+                if self.zone == _EditZone.CONTROL_NODE:
+                    # We can not change cursor from
+                    # dragging handlers.
+                    # And it means that We cannot use self.in_drag
+                    # to know whether node adjusting drag 
+                    # is currently ongoing or not.
+                    # So, instead of it, we use self._adj_ctx.
+                    # and generate the ctx at here(button_press_cb),
+                    # not at drag_start_cb.
+                    self._adj_ctx = AdjustContext(
+                        tdw,
+                        self.nodes, 
+                        self.target_node_index,
+                        self.EDITABLE_RADIUS
+                    )
+                    self._update_cursor(tdw)
+
                 # FALLTHRU: *do* start a drag
         elif self.phase == _Phase.CAPTURE:
             # XXX Not sure what to do here.
@@ -435,6 +505,11 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                         self._update_zone_and_target(tdw, event.x, event.y)
                         self._update_current_node_index()
                         return False
+                else:
+                    if self._adj_ctx is not None:
+                        self._adj_ctx = None
+                        self._update_cursor(tdw)
+
                 # (otherwise fall through and end any current drag)
             elif self.phase == _Phase.CAPTURE:
                 # XXX Not sure what to do here: see above
@@ -453,7 +528,8 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
-        self._update_zone_and_target(tdw, event.x, event.y, event.state)
+        if not self.in_drag:
+            self._update_zone_and_target(tdw, event.x, event.y, event.state)
         return super(ClosefillMode, self).motion_notify_cb(tdw, event)
 
     def key_press_cb(self, win ,tdw, event):
@@ -586,7 +662,10 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         else:
             if self.phase == _Phase.ADJUST:
                 if self.zone == _EditZone.CONTROL_NODE: 
-                    cursor = cursors[self._CURSOR_ARROW]
+                    if self._adj_ctx is not None:
+                        cursor = cursors[self._CURSOR_DRAGGING]
+                    else:
+                        cursor = cursors[self._CURSOR_DRAGGABLE]
                 else:
                     if erase_pixel:
                         cursor = cursors[self._CURSOR_CROSS_ERASER]
@@ -601,7 +680,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
 
         if cursor is not self._current_override_cursor:
             if tdw is not None:
-                tdws = (tdw)
+                tdws = (tdw, )
             else:
                 tdws = self._overlays.keys()
 
@@ -636,7 +715,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         if len(self.nodes) < 2:
             return
 
-        m = 3 # margin
+        m = 4 # margin
 
         if i == len(self.nodes) - 1:
             cn = self.nodes[i - 1]
@@ -660,8 +739,8 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
 
             x = math.floor(cx)
             y = math.floor(cy)
-            w = math.ceil(nx - cx)
-            h = math.ceil(ny - cy)
+            w = math.ceil(nx - cx) + 1
+            h = math.ceil(ny - cy) + 1
             tdw.queue_draw_area(x-m, y-m, w+m*2, h+m*2)
             
     def _queue_redraw_all_nodes(self):
@@ -687,8 +766,11 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
             self._last_event_node = node
         elif self.phase == _Phase.ADJUST:
             if self.target_node_index is not None:
+                self._queue_draw_buttons()
                 node = self.nodes[self.target_node_index]
-                self._dragged_node_start_pos = (node.x, node.y)
+                # XXX Initialize of self._adj_ctx is done at
+                # button_press_cb, because we need to change
+                # pointer cursor before drag_start_cb.
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -707,28 +789,38 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                 )
                 append_node = False
             else:
-                dx = event.x - self._last_node_evdata[0]
-                dy = event.y - self._last_node_evdata[1]
-                dist = math.hypot(dy, dx)
-                max_dist = self.MAX_INTERNODE_DISTANCE_MIDDLE
-                if len(self.nodes) < 2:
-                    max_dist = self.MAX_INTERNODE_DISTANCE_ENDS
-                append_node = (
-                    dist > max_dist 
-                )
+                if self.fill_method_option == _FillMethod.LASSO_FILL:
+                    # Lasso-fill needs more precise capture.
+                    append_node = True
+                else:
+                    # Close-fill needs rough capture point 
+                    # to ease adjustment.
+                    dx = event.x - self._last_node_evdata[0]
+                    dy = event.y - self._last_node_evdata[1]
+                    dist = math.hypot(dy, dx)
+                    max_dist = self.MAX_INTERNODE_DISTANCE_MIDDLE
+                    if len(self.nodes) < 2:
+                        max_dist = self.MAX_INTERNODE_DISTANCE_ENDS
+                    append_node = (
+                        dist > max_dist 
+                    )
             if append_node:
                 self.nodes.append(node)
                 self._queue_draw_node(len(self.nodes)-1)
                 self._last_node_evdata = evdata
             self._last_event_node = node
         elif self.phase == _Phase.ADJUST:
-            if self._dragged_node_start_pos:
-                x0, y0 = self._dragged_node_start_pos
-                disp_x, disp_y = tdw.model_to_display(x0, y0)
-               #disp_x += event.x - self.start_x
-               #disp_y += event.y - self.start_y
-               #x, y = tdw.display_to_model(disp_x, disp_y)
-                self.update_node(tdw, self.target_node_index, dx, dy)
+            if self._adj_ctx is not None:
+                ox = event.x - self.start_x
+                oy = event.y - self.start_y
+                nodes = self.nodes
+                ti = self.target_node_index
+                assert ti is not None
+                self._queue_redraw_all_nodes()
+                for i, nx, ny in self._adj_ctx.iter_offseted(tdw, ox, oy):
+                    cn = nodes[i]
+                    nodes[i] = cn._replace(x=nx, y=ny)
+                self._queue_redraw_all_nodes()
         else:
             raise NotImplementedError("Unknown phase %r" % self.phase)
 
@@ -773,6 +865,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                 self.nodes = []
 
         elif self.phase == _Phase.ADJUST:
+            self._update_cursor(tdw)
             self._dragged_node_start_pos = None
             self._queue_draw_buttons()
         else:
@@ -1230,14 +1323,14 @@ class OptionsPresenter(Gtk.Grid):
             _("Specifying the size of closing the gap of contour,in 6 level."),
             row
         )
-        # Gap closing level is from 0 to 6.
-        # It is actually exponent of power of 2, so, 
-        # level 0 is 2^0==1px(no gap closing), and level 6(maximum) is 2^6==64px.
-        # And, it is `radius`, so gap-closing-level 6 would stop 
-        # maximum 127px diameter hole.
+        # Gap closing level is from 0 to lib.mypaintlib.Flagtile.MAX_PYRAMID_LEVEL.
+        # It is actually pixel size, exponent of power of 2. 
+        # level 0 is 2^0==1px(no gap closing), and level 5(maximum) is 2^5==32px.
+        # Therefore, gap-closing-level 5 would stop `at least` 32px hole but
+        # maximum 64px diameter hole under some situation.
         adj = Gtk.Adjustment(
             value=_Prefs.DEFAULT_GAP_LEVEL, lower=0,
-            upper=6,
+            upper=lib.mypaintlib.Flagtile.MAX_PYRAMID_LEVEL,
             step_increment=1, page_increment=1,
             page_size=0
         )

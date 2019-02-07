@@ -9,9 +9,11 @@
 import lib.mypaintlib
 import lib.surface
 import lib.helpers
+import gui.drawutils
 
 import operator 
 import numpy as np
+import math
 
 N = lib.mypaintlib.TILE_SIZE 
 
@@ -28,12 +30,16 @@ class _PIXEL:
     INVALID = lib.mypaintlib.Flagtile.PIXEL_INVALID_VALUE
 
 
+## Utility Functions
+
 def _convert_result(dstsurf, ft, color, combine_mode, pixel=_PIXEL.FILLED):
     """Draw filled result of flagtile surface into 
     mypaint-colortiles of the layer.
 
     :param dstsurf: Destination tiledsurface.
     :param combine_mode: CombineMode of lib.mypaintlib.tile_combine.
+                         It is defined in lib/pixops.hpp .
+                         Also refer to
                          https://www.w3.org/TR/compositing-1/
     """
 
@@ -76,6 +82,60 @@ def _convert_result(dstsurf, ft, color, combine_mode, pixel=_PIXEL.FILLED):
     tile_bbox = lib.surface.get_tiles_bbox(filled)
     dstsurf.notify_observers(*tile_bbox)
 
+def _create_FlagtileSurface(nodes, lasso=False, show_debug=False):
+    fn = nodes[0]
+    min_x, min_y = fn.x, fn.y
+    max_x, max_y = min_x, min_y
+
+    for cn in nodes[1:]:
+        min_x = min(min_x, cn.x)
+        min_y = min(min_y, cn.y)
+        max_x = max(max_x, cn.x)
+        max_y = max(max_y, cn.y)
+
+    min_x = int(min_x)
+    min_y = int(min_y)
+    max_x = int(max_x)
+    max_y = int(max_y)
+
+    ft = lib.mypaintlib.ClosefillSurface(min_x, min_y, max_x, max_y)
+    # XXX We need to convert node position in model-coordinate 
+    # to flagtilesurface-coordinate.
+    ox = ft.get_origin_x() * N
+    oy = ft.get_origin_y() * N
+
+    idx=0
+    bn = fn
+    for cn in nodes[1:]:
+        ft.draw_line(
+            int(bn.x)-ox, int(bn.y)-oy, 
+            int(cn.x)-ox, int(cn.y)-oy, 
+            _PIXEL.AREA
+        )
+        bn = cn
+        idx+=1
+    ft.draw_line(
+        int(bn.x)-ox, int(bn.y)-oy, 
+        int(fn.x)-ox, int(fn.y)-oy, 
+        _PIXEL.AREA
+    )
+
+    # XXX Debug/profiling code
+    if show_debug:
+        _dbg_show_flag(ft, 'area', title='just drawn')
+    # XXX Debug code end
+
+    ft.decide_area()
+
+    # XXX Debug/profiling code
+    if show_debug:
+        _dbg_show_flag(ft, 'area', title='surface created')
+    # XXX Debug code end
+
+    return ft
+
+## Main Functions.
+
 def close_fill(targ, src, nodes, targ_pos, level, 
                color, combine_mode,
                tolerance=0.1,
@@ -95,10 +155,16 @@ def close_fill(targ, src, nodes, targ_pos, level,
     # XXX Debug/profiling code
     import time
     ctm = time.time()
+    if debug_info:
+        show_flag = debug_info.get('show_flag', False)
+        tile_output = debug_info.get('tile_output', False)
+    else:
+        show_flag = False
+        tile_output = False
     # XXX Debug code end
 
     # Create flagtilesurface object
-    ft = lib.mypaintlib.ClosefillSurface(level, nodes)
+    ft = _create_FlagtileSurface(nodes, show_debug=show_flag)
 
     ox = ft.get_origin_x()
     oy = ft.get_origin_y()
@@ -106,13 +172,8 @@ def close_fill(targ, src, nodes, targ_pos, level,
     th = ft.get_height()
     
     # XXX Debug code
-    if debug_info:
-        show_flag = debug_info.get('show_flag', False)
-        tile_output = debug_info.get('tile_output', False)
-        if tile_output:
-            _dbg_tile_output(debug_info, ox, oy, tw, th, src)
-    else:
-        show_flag = False
+    if tile_output:
+        _dbg_tile_output(debug_info, ox, oy, tw, th, src)
     # XXX Debug code End
     
     # Get target color if needed
@@ -140,20 +201,15 @@ def close_fill(targ, src, nodes, targ_pos, level,
                         False
                     )
 
-    # XXX Debug/profiling code
-   #if show_flag:
-   #    _dbg_show_flag(ft, 'contour,filled',title='post-convert tile')
-    #XXX debug code end
-
     # Build pyramid
-    ft.build_progress_seed()
+    ft.propagate_upward(level)
 
     # Deciding outside of filling area
     ft.decide_outside(level)
       
     # Then, start progressing tiles.
     for i in range(level, 0, -1):
-        ft.progress_tile(i, True)
+        ft.propagate_downward(i, True)
         # For early culling:
         if i == early_culling_level:
             ft.identify_areas(
@@ -216,14 +272,13 @@ def lasso_fill(targ, src, nodes, targ_pos, level,
                ):
 
     # Create flagtilesurface object
-    lt = lib.mypaintlib.LassofillSurface(nodes)
+    lt = _create_FlagtileSurface(nodes, lasso=True)
 
     # XXX Debug code
     import time
     ctm = time.time()
     if debug_info:
         show_flag = debug_info.get('show_flag', False)
-        show_flag = True
         tile_output = debug_info.get('tile_output', False)
         if tile_output:
             _dbg_tile_output(debug_info, ox, oy, tw, th, src)
@@ -262,10 +317,10 @@ def lasso_fill(targ, src, nodes, targ_pos, level,
                     cx %= N
                     cy %= N
                     key = tuple([int(c) for c in src_tile[cy][cx]])
-                    # Only opaque color should be count.
-                    if key[3] != 0:
-                        cnt = node_colors.get(key, 0)
-                        node_colors[key] = cnt + 1
+                   ## Only opaque color should be count.
+                   #if key[3] != 0:
+                    cnt = node_colors.get(key, 0)
+                    node_colors[key] = cnt + 1
                 
 
     # get most frequent color
@@ -276,6 +331,11 @@ def lasso_fill(targ, src, nodes, targ_pos, level,
     # We sort the dict by value,
     # but need key(tuple of pixel color), not value(color count). 
     targ_r, targ_g, targ_b, targ_a = targ_item[0] 
+
+    if (targ_a == 0 
+            and combine_mode != lib.mypaintlib.CombineDestinationOut):
+        alpha_threshold = 0.0 # We write in empty area, so disable alpha threshould.
+        combine_mode = lib.mypaintlib.CombineNormal
     
     # Convert colortiles into flagtiles
     for fty in range(th):
@@ -290,7 +350,7 @@ def lasso_fill(targ, src, nodes, targ_pos, level,
                         targ_r, targ_g, targ_b, targ_a,
                         tolerance,
                         alpha_threshold,
-                        True
+                        False
                     )
     
     # Finalize lasso fill, with converting 
@@ -384,6 +444,7 @@ def cut_protrude(layers,
             flag_tile.convert_from_transparency(
                 src_tile,
                 alpha_threshold, 
+                _PIXEL.AREA,
                 _PIXEL.AREA
             )
             # Then, overwrite with visible contents 
@@ -397,7 +458,7 @@ def cut_protrude(layers,
                 )
             flagtiles[(tx, ty)] = flag_tile
 
-    ft = lib.mypaintlib.CutprotrudeSurface(flagtiles, level)
+    ft = lib.mypaintlib.CutprotrudeSurface(flagtiles)
     ox = ft.get_origin_x()
     oy = ft.get_origin_y()
     for tx, ty in flagtiles:
@@ -408,7 +469,7 @@ def cut_protrude(layers,
     dbg_show('pre-remove') # XXX Debug/profiling code
 
     # Build pyramid
-    ft.build_progress_seed()
+    ft.propagate_upward(level)
 
     dbg_show('post-seed', level=level) # XXX Debug/profiling code
 
@@ -430,7 +491,7 @@ def cut_protrude(layers,
     dbg_show('post-remove', level=level) # XXX Debug/profiling code
 
     for i in range(level, 0, -1):
-        ft.progress_tile(i, False)
+        ft.propagate_downward(i, False)
 
     dbg_show('post-progress') # XXX Debug/profiling code
 
@@ -480,6 +541,7 @@ def cut_protrude(layers,
 
 def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     """Fills connected areas of one surface into another
+    With using pyramid-fill functionality.
 
     :param src: Source surface-like object
     :type src: Anything supporting readonly tile_request()
@@ -618,9 +680,8 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
                         False
                     )
                     if level > 0:
-                        flag_tile.build_progress_seed(level)
+                        flag_tile.propagate_upward(level)
                     filled[(tx, ty)] = flag_tile
-                    #print('flagtile %d,%d generated' % (tx, ty))
             if flag_tile is not None:
                 overflows = lib.mypaintlib.pyramid_flood_fill(
                     flag_tile, seeds,
@@ -646,23 +707,26 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
                         tpos = (tx+1, ty)
                         tileq.append((tpos, seeds_e))
 
-    base_level = 2 # Practically, level 2 is enough for placeholder flood-fill.
+    # Practically, level 2 is enough for 1st stage flood-fill.
+    base_level = 2 
     if pyramid_level > base_level:
         # 1st stage: 
-        # Do flood-fill in enough low level pyramid.
+        # Do flood-fill in `enough low` level pyramid.
         # With this, we can get maximum flood-fillable areas of
         # _PIXEL.RESERVE.
         do_fill(_PIXEL.AREA, _PIXEL.RESERVE, base_level)
 
         # 2nd stage:
-        # Progress all tiles genareted in 1st stage.
+        # Propergate upward all tiles genareted in 1st stage.
         for t in filled.values():
             for i in range(base_level+1, pyramid_level+1):
-                t.build_progress_level(i)
+                t.propagate_upward_single(i)
 
         # Then, Fill it with _PIXEL.FILLED at assigned (greater) level.
-        # Some of _PIXEL.RESERVE remained there, but that placeholders
-        # would be converted at later call of FlagtileSurface::progress_tile.
+        # This gives you possible outmost gap-closing fill.
+        # Some of _PIXEL.RESERVE still remained there, but that 
+        # placeholder pixels would be converted at 
+        # FlagtileSurface::propagate_downward later.
         do_fill(_PIXEL.RESERVE, _PIXEL.FILLED, pyramid_level)
 
     else:
@@ -671,7 +735,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     # FloodfillSurface increace reference counter of `filled` dictionary.
     # `filled` dictionary used to just calculate bbox of surface in 
     # constructor.
-    ft = lib.mypaintlib.FloodfillSurface(filled, pyramid_level)
+    ft = lib.mypaintlib.FloodfillSurface(filled)
     ox = ft.get_origin_x()
     oy = ft.get_origin_y()
     for tx, ty in filled:
@@ -737,7 +801,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     
     # Downward-progress pixels.
     for i in range(pyramid_level, 0, -1):
-        ft.progress_tile(i, True)
+        ft.propagate_downward(i, True)
 
     if show_flag:
         _dbg_show_flag(ft, "area, outside, filled, contour", 1, title="progressed-level")
