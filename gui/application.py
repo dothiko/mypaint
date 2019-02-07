@@ -410,7 +410,6 @@ class Application (object):
             "InputTestWindow": inputtestwindow.InputTestWindow,
             "BrushIconEditorWindow": brushiconeditor.BrushIconEditorWindow,
             "ProjectManagerWindow": projectmanager.ProjectManagerWindow,
-            }
         }
         self._subwindows = {}
 
