@@ -1880,23 +1880,87 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
             if (dx, dy) != (0, 0):
                 stroke.translate(dx, dy)
             return stroke
+        # XXX for `node pick` end
+
         while True:
             t = f.read(1)
+           # XXX original codes
+           #if t == b"b":
+           #    length, = struct.unpack('>I', f.read(4))
+           #    tmp = f.read(length)
+           #    brushes.append(zlib.decompress(tmp))
+           #elif t == b"s":
+           #    brush_id, length = struct.unpack('>II', f.read(2 * 4))
+           #    stroke = lib.strokemap.StrokeShape()
+           #    tmp = f.read(length)
+           #    stroke.init_from_string(tmp, x, y)
+           #    stroke.brush_string = brushes[brush_id]
+           #    # Translate non-aligned strokes
+           #    if (dx, dy) != (0, 0):
+           #        stroke.translate(dx, dy)
+           #    self.strokes.append(stroke)
+           #elif t == b"}":
+           #    break
+           #else:
+           #    errmsg = "Invalid strokemap (initial char=%r)" % (t,)
+           #    raise ValueError(errmsg)
+
+            # XXX for `node pick
             if t == b"b":
-                length, = struct.unpack('>I', f.read(4))
-                tmp = f.read(length)
-                brushes.append(zlib.decompress(tmp))
+                __read_brush_from_stream(f, brushes)
             elif t == b"s":
-                brush_id, length = struct.unpack('>II', f.read(2 * 4))
-                stroke = lib.strokemap.StrokeShape()
-                tmp = f.read(length)
-                stroke.init_from_string(tmp, x, y)
-                stroke.brush_string = brushes[brush_id]
-                # Translate non-aligned strokes
-                if (dx, dy) != (0, 0):
-                    stroke.translate(dx, dy)
+                stroke = __read_stroke_from_stream(
+                    f, lib.strokemap.StrokeShape()
+                )
                 self.strokes.append(stroke)
+            elif t == b"i":
+                strokeinfo = __read_stroke_from_stream(
+                    f, lib.strokemap.StrokeInfo()
+                )
+                # Read additional node informations.
+                strokeinfo.init_info_from_string(
+                    *pickable.load_from_filestream(f)
+                )
+                self.strokes.append(strokeinfo)
             elif t == b"}":
+                # For Backward compatiblity of wrong codes.
+                # TODO This block should be removed as soon as possible.
+                block_cnt = 0
+                while True:
+                    t = f.read(1)
+                    if t == b"b":
+                        __read_brush_from_stream(f, brushes)
+                    elif t == b"i":
+                        strokeinfo = __read_stroke_from_stream(
+                            f, lib.strokemap.StrokeInfo()
+                        )
+                        # Read additional node informations.
+                        strokeinfo.init_info_from_string(
+                            *pickable.load_from_filestream(f)
+                        )
+                        self.strokes.append(strokeinfo)
+                        block_cnt += 1
+                    elif t == b"}":
+                        # The second end signature.
+                        # i.e. end of expanded portion.
+                        break
+                    elif t == '':
+                        if block_cnt > 0:
+                            # There are expanded portion 
+                            # but we met end of file unexpectedly
+                            # before end signature.
+                            assert False, 'unexpected EOF'
+                        else:
+                            # There is no expanded portion.
+                            # Just exit.
+                            break
+                    else:
+                        logger.warning(
+                            "Strokemap file contains unknown signature: %r", t
+                        )
+                        # Just exit without assertion, for further expansion.
+                        break 
+            # XXX for `node pick` end
                 break
             else:
                 errmsg = "Invalid strokemap (initial char=%r)" % (t,)
