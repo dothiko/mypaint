@@ -19,7 +19,7 @@ from gi.repository import Gtk
 
 from . import windowing
 import gui.mode
-import accelmap
+from . import accelmap
 import gui.device
 import gui.stategroup
 

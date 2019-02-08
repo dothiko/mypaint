@@ -2181,7 +2181,7 @@ class RootLayerStack (group.LayerStack):
                         layer._surface.composite_tile(
                             dst, True, 
                             tx, ty, mipmap_level=0, 
-                            mode
+                            mode=mode
                         )
 
             # Then, set dstlayer mode as Source-Atop and

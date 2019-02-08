@@ -15,11 +15,11 @@ import math
 import logging
 logger = logging.getLogger(__name__)
 import weakref
+import array
 
 from gi.repository import Gtk, Gdk
 from gettext import gettext as _
-from curve import CurveWidget
-import array
+from gui. curve import CurveWidget
 
 import gui.mode
 import gui.cursor

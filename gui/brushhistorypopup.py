@@ -8,10 +8,10 @@
 
 from gi.repository import Gtk
 
-import widgets
-import windowing
-import quickchoice
-import history
+from . import widgets
+from . import windowing
+from . import quickchoice
+from . import history
 from lib.observable import event
 from gettext import gettext as _
 

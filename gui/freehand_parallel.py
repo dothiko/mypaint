@@ -26,11 +26,10 @@ from gi.repository import GLib
 import numpy as np
 
 import gui.mode
-from drawutils import spline_4p
-
+from gui.drawutils import spline_4p
 from lib import mypaintlib
 import lib.helpers
-import freehand_assisted
+from . import freehand_assisted
 from gui.ui_utils import *
 from gui.rulercontroller import *
 from gui.linemode import *

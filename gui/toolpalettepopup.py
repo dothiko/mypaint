@@ -13,9 +13,9 @@ import cairo
 import math
 
 from lib import helpers
-import windowing
-import drawutils
-import quickchoice
+from . import windowing
+from . import drawutils
+from . import quickchoice
 import gui.mode
 
 

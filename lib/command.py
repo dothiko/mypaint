@@ -10,19 +10,6 @@
 
 ## Imports
 
-from gi.repository import Gtk
-import numpy as np # XXX for `adjust-layer`
-
-import lib.layer
-import helpers
-from observable import event
-import lib.stroke
-from warnings import warn
-import lib.mypaintlib
-import lib.surface
-import lib.tiledsurface
-import lib.pyramidfill
-
 from __future__ import division, print_function
 from warnings import warn
 from copy import deepcopy
@@ -30,11 +17,18 @@ import weakref
 from gettext import gettext as _
 from logging import getLogger
 
+from gi.repository import Gtk
+import numpy as np # XXX for `adjust-layer`
+
 import lib.layer
 from . import helpers
 from lib.observable import event
 import lib.stroke
 from lib.pycompat import unicode
+import lib.surface # XXX for `cut-current-layer`
+import lib.tiledsurface # XXX for `cut-current-layer`
+import lib.mypaintlib # XXX for `pyramid-fill`
+import lib.pyramidfill  # XXX for `pyramid-fill`
 
 
 logger = getLogger(__name__)

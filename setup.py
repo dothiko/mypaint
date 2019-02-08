@@ -582,6 +582,8 @@ def get_ext_modules():
             'lib/pixops.cpp',
             'lib/fastpng.cpp',
             'lib/brushsettings.cpp',
+            'lib/pyramidfill.cpp', # XXX for pyramid-fill
+            'lib/opencv_util.cpp', # XXX for adjust tool
         ],
         swig_opts=mypaintlib_swig_opts,
         language='c++',

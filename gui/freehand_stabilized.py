@@ -24,13 +24,12 @@ from gettext import gettext as _
 import numpy as np
 
 import gui.mode
-from drawutils import spline_4p
-from lib import mypaintlib
-import lib.helpers
-import freehand_assisted
+from gui.drawutils import spline_4p
+from . import freehand_assisted
 from gui.ui_utils import *
+from lib import mypaintlib
 from lib.helpers import clamp
-
+import lib.helpers
 
 ## Module settings
 

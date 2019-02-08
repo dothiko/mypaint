@@ -40,6 +40,7 @@ if not PY3:
 # Pull them in for backwards compat.
 # Might change these to _Glib.dgettext/ngettext instead.
 
+# XXX CANNOT WORK,so revert
 from gettext import gettext  # noqa: F401 E402
 from gettext import ngettext  # noqa: F401 E402
 

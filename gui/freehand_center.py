@@ -26,15 +26,14 @@ from gi.repository import GLib
 import numpy as np
 
 import gui.mode
-from drawutils import spline_4p, render_round_floating_color_chip
-
-from lib import mypaintlib
-import lib.helpers
-import freehand_assisted
+import gui.pickable as pickable
+from gui.drawutils import spline_4p, render_round_floating_color_chip
 from gui.ui_utils import *
 from gui.linemode import *
-from freehand_parallel import StrokeLastableMixin, LastableOptionsMixin 
-import gui.pickable as pickable
+from gui.freehand_parallel import StrokeLastableMixin, LastableOptionsMixin 
+from . import freehand_assisted
+from lib import mypaintlib
+import lib.helpers
 
 ## Module settings
 class _Phase(object):

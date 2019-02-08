@@ -8,7 +8,6 @@
 # the Free Software Foundation; either version 2 of the License, or
 # (at your option) any later version.
 
-
 ## Imports
 
 from __future__ import division, print_function
@@ -93,20 +92,21 @@ import lib.xml
 import gui.profiling
 from lib.pycompat import unicode
 # XXX Added experimental modules (and needed from them)
-import sizechangemode
-import beziertool
-import inktool
-import selectionmode
-import exinktool
-import projectmanager
 from lib.observable import event
-import freehand_stabilized
-import freehand_parallel
-import freehand_center
 import lib.tiledsurface
-import oncanvas
-import closefill
-import adjustmode # XXX for adjustlayer 
+from . import sizechangemode
+from . import beziertool
+from . import inktool
+from . import selectionmode
+from . import exinktool
+from . import projectmanager
+from . import freehand_stabilized
+from . import freehand_parallel
+from . import freehand_center
+from . import oncanvas
+from . import closefill
+from . import adjustmode # XXX for adjustlayer 
+import gui.widgets 
 # XXX Added experimental modules (and needed from them) end
 
 logger = logging.getLogger(__name__)
@@ -244,7 +244,7 @@ class Application (object):
             if not os.path.isdir(basedir):
                 os.makedirs(basedir)
                 logger.info('Created basedir %r', basedir)
-        for datasubdir in [u'backgrounds', u'brushes', u'scratchpads', u'stamps']:
+        for datasubdir in [u'backgrounds', u'brushes', u'scratchpads']:
             datadir = os.path.join(state_dirs.user_data, datasubdir)
             if not os.path.isdir(datadir):
                 os.mkdir(datadir)
@@ -479,15 +479,14 @@ class Application (object):
         menu_orp = self.ui_manager.get_widget('/Menubar/FileMenu/ProjectMenu/OpenRecentProject')
         self.filehandler.init_project_related(menu_orp)
 
-        # Stamp manager
-        self.stamp_manager = stamptool.StampPresetManager(self)
-
         # Plugin initialize
         self.doc.init_plugins(self)
 
         # Replace tiledrawwidget.flood_fill with decorated one.
-        lib.tiledsurface.flood_fill = drawwindow.with_wait_cursor(
+        lib.tiledsurface.flood_fill = gui.widgets.with_wait_cursor(
                                         lib.tiledsurface.flood_fill)
+
+        # XXX my codes end --------------------
 
     def save_settings(self):
         """Saves the current settings to persistent storage."""
@@ -881,11 +880,7 @@ class Application (object):
         """The input test window."""
         return self.get_subwindow("InputTestWindow")
 
-    @property
-    def stamp_editor_window(self):
-        """The stamp editor window."""
-        return self.get_subwindow("StampEditorWindow")
-
+    # XXX for `project-save`
     @property
     def project_manager_window(self):
         """The project manager window."""

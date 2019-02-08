@@ -1228,8 +1228,13 @@ FloodfillSurface::FloodfillSurface(PyObject* tiledict)
     assert(PyTuple_Check(ck));
     assert(ck != NULL);
 #endif
+#if PY_MAJOR_VERSION >= 3
+        int cx = (int)PyLong_AsLong(PyTuple_GetItem(ck, 0));
+        int cy = (int)PyLong_AsLong(PyTuple_GetItem(ck, 1));
+#else
         int cx = (int)PyInt_AsLong(PyTuple_GetItem(ck, 0));
         int cy = (int)PyInt_AsLong(PyTuple_GetItem(ck, 1));
+#endif
         if(i == 0) {
             min_x = cx;
             max_x = cx;

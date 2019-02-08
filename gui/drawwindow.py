@@ -56,9 +56,9 @@ import lib.glib
 from lib.gettext import gettext as _
 from lib.gettext import C_
 import gui.projectsave_progress # XXX for `project-save`
-import sizechangepopup # XXX for `sizechange` popup
-import toolpalettepopup # XXX for `toolpalette` popup
-import brushhistorypopup # XXX for `brushhistory` popup
+from . import sizechangepopup # XXX for `sizechange` popup
+from . import toolpalettepopup # XXX for `toolpalette` popup
+from . import brushhistorypopup # XXX for `brushhistory` popup
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,6 @@ logger = logging.getLogger(__name__)
 ## Module constants
 
 BRUSHPACK_URI = 'https://github.com/mypaint/mypaint/wiki/Brush-Packages'
-
 
 ## Class definitions
 

@@ -26,7 +26,7 @@ from gi.repository import GdkPixbuf
 from gi.repository import GObject
 import cairo
 
-from windowing import SubWindow
+from gui.windowing import SubWindow
 import gui.dialogs
 import lib.projectsave
 

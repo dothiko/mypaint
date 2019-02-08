@@ -16,7 +16,7 @@ import weakref
 
 from gettext import gettext as _
 from gi.repository import Gtk, Gdk
-from curve import CurveWidget
+from gui.curve import CurveWidget
 
 import gui.mode
 import gui.cursor

@@ -24,7 +24,6 @@ except ImportError:
 
 from gi.repository import Gtk, Gdk
 from gettext import gettext as _
-from curve import CurveWidget
 from gi.repository import GLib
 
 import lib.helpers
@@ -38,7 +37,8 @@ import gui.style
 import lib.command 
 from gui.oncanvas import *
 from gui.linemode import *
-import gui.drawwindow 
+import gui.widgets 
+from gui.curve import CurveWidget
 
 ## Module constants
 N = int(lib.mypaintlib.TILE_SIZE)
@@ -1170,7 +1170,7 @@ class AdjustLayerMode(gui.mode.ScrollableModeMixin,
         self._drag_update_idler_srcid = None
         return False
 
-    @gui.drawwindow.with_wait_cursor
+    @gui.widgets.with_wait_cursor
     def _do_transform(self):
         """To show wait-cursor for transform operation with decorator
         """

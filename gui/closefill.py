@@ -28,7 +28,7 @@ import gui.mode
 import gui.overlays
 import gui.style
 import gui.drawutils
-import gui.drawwindow
+import gui.widgets  # for with_wait_cursor
 import gui.cursor
 import lib.helpers
 import lib.observable
@@ -933,7 +933,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
 
     # Do close_and_fill or lasso_fill.
     # Flood_fill is done at button_release_cb.
-    @gui.drawwindow.with_wait_cursor
+    @gui.widgets.with_wait_cursor
     def do_fill_operation(self, targ_color_pos, fill_method):
         app = self.doc.app
         pref = app.preferences
