@@ -39,7 +39,7 @@ from gui.exinktool import *
 from gui.exinktool import _LayoutNode
 from gui.linemode import *
 from gui.oncanvas import *
-import gui.pickable as pickable
+import lib.pickable as pickable
 
 ## Function defs
 

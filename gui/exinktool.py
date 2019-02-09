@@ -48,7 +48,7 @@ from gui.linemode import *
 import gui.ui_utils
 from gui.oncanvas import *
 from gui.inktool import _Node, _NODE_FIELDS
-import gui.pickable as pickable
+import lib.pickable as pickable
 
 ## Module constants
 

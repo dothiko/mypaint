@@ -41,7 +41,7 @@ import gui.widgets
 from gui.linemode import *
 import gui.ui_utils
 import lib.strokemap # XXX for `info pick`
-import gui.pickable as pickable # XXX for `info pick`
+import lib.pickable as pickable # XXX for `info pick`
 
 ## Module constants
 

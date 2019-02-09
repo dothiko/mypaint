@@ -33,7 +33,7 @@ from . import freehand_assisted
 from gui.ui_utils import *
 from gui.rulercontroller import *
 from gui.linemode import *
-import gui.pickable as pickable
+import lib.pickable as pickable
 
 N = mypaintlib.TILE_SIZE
 

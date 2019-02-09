@@ -26,7 +26,7 @@ from gi.repository import GLib
 import numpy as np
 
 import gui.mode
-import gui.pickable as pickable
+import lib.pickable as pickable
 from gui.drawutils import spline_4p, render_round_floating_color_chip
 from gui.ui_utils import *
 from gui.linemode import *
