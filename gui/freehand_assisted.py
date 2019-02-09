@@ -206,7 +206,15 @@ class AssistedFreehandMode (freehand.FreehandMode,
         ytilt = event.get_axis(Gdk.AxisUse.YTILT)
         viewzoom = tdw.scale
         viewrotation = tdw.rotation
+        barrel_rotation = event.get_axis(Gdk.AxisUse.WHEEL)
         state = event.state
+        
+        #If WHEEL is missing (barrel_rotation)
+        #send -1 to tell libmypaint not to deal with barrel_rotation
+        #we can't just send 0.0 because barrel-rotation is affected by ascension
+        if (barrel_rotation is None or 
+              not tdw.app.preferences.get("input.use_barrel_rotation")):
+            barrel_rotation = -1.0
 
         # Workaround for buggy evdev behaviour.
         # Events sometimes get a zero raw pressure reading when the
@@ -337,7 +345,8 @@ class AssistedFreehandMode (freehand.FreehandMode,
                     time, 
                     x, y, p, 
                     xtilt, ytilt, 
-                    viewzoom, viewrotation
+                    viewzoom, viewrotation,
+                    barrel_rotation
                 )
                 drawstate.queue_motion(event_data)
 
@@ -350,7 +359,8 @@ class AssistedFreehandMode (freehand.FreehandMode,
                 time, 
                 x, y, pressure, 
                 xtilt, ytilt, 
-                viewzoom, viewrotation
+                viewzoom, viewrotation,
+                barrel_rotation
             )
             drawstate.queue_motion(event_data)
 
@@ -455,10 +465,11 @@ class AssistedFreehandMode (freehand.FreehandMode,
 
     ## Utility method
     def queue_motion(self, tdw, time, x, y, 
-                     pressure=0.0, xtilt=0.0, ytilt=0.0):
+                     pressure=0.0, xtilt=0.0, ytilt=0.0, barrel_rotation=-1.0):
         """Queue motion into drawing state, from everywhere we need.
 
         :param x,y: stroke position, in MODEL coodinate.
+        :param barrel_rotation: Default is -1.0, according to freehand.py
         """
         drawstate = self._get_drawing_state(tdw)
         event_data = (
@@ -467,7 +478,8 @@ class AssistedFreehandMode (freehand.FreehandMode,
             pressure, 
             xtilt, ytilt,
             tdw.scale, # viewzoom
-            tdw.rotation # viewrotation
+            tdw.rotation, # viewrotation
+            barrel_rotation # barrel_rotation
         )
         drawstate.queue_motion(event_data)
 
