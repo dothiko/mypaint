@@ -168,14 +168,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 
     ## Class config vars
 
-    # Input node capture settings:
-    MAX_INTERNODE_DISTANCE_MIDDLE = 30   # display pixels
-    MAX_INTERNODE_DISTANCE_ENDS = 10   # display pixels
-    MAX_INTERNODE_TIME = 1/100.0   # seconds
-
-    # Node value adjustment settings
-    MIN_INTERNODE_TIME = 1/200.0   # seconds (used to manage adjusting)
-
     # Node drawing margin, which is dropping shadows
     NODE_SIZE = int(math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE) + 
                     math.ceil(gui.style.DROP_SHADOW_BLUR)) + 1
@@ -359,23 +351,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
 
     ## Internal states
 
-    def _start_new_capture_phase(self, rollback=False):
-        """Let the user capture a new stroke"""
-        if rollback:
-            self._stop_task_queue_runner(complete=False)
-            self.brushwork_rollback_all()
-        else:
-            self._stop_task_queue_runner(complete=True)
-            self.brushwork_commit_all()
-        self.options_presenter.target = (self, None)
-        # Queue current node to erase
-        self._queue_draw_buttons()
-        self._queue_redraw_all_nodes()
-       #self._reset_nodes()
-        self._reset_capture_data()
-        self._reset_adjust_data()
-        self.phase = PhaseMixin.CAPTURE
-        self.enable_switch_actions(True)
 
     def enter(self, doc, **kwds):
         """Enters the mode: called by `ModeStack.push()` etc."""
@@ -403,33 +378,9 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         """Leaves the mode: called by `ModeStack.pop()` etc."""
         if not self._is_active():
             self._discard_overlays()
-        self._stop_task_queue_runner(complete=True)
         self.enable_switch_actions(False)
         super(OncanvasEditMixin, self).leave(**kwds)  # supercall will commit
 
-    def checkpoint(self, flush=True, **kwargs):
-        """Sync pending changes from (and to) the model
-    
-        If called with flush==False, this is an override which just
-        redraws the pending stroke with the current brush settings and
-        color. This is the behavior our testers expect:
-        https://github.com/mypaint/mypaint/issues/226
-    
-        When this mode is left for another mode (see `leave()`), the
-        pending brushwork is committed properly.
-    
-        """
-        if flush:
-            # Commit the pending work normally
-            self._start_new_capture_phase(rollback=False)
-            super(OncanvasEditMixin, self).checkpoint(flush=flush, **kwargs)
-        else:
-            # Queue a re-rendering with any new brush data
-            # No supercall
-            self._stop_task_queue_runner(complete=False)
-            self._queue_draw_buttons()
-            self._queue_redraw_all_nodes()
-            self._queue_redraw_item()
  
     def _update_zone_and_target(self, tdw, x, y):
         """Update the zone and target node under a cursor position"""
@@ -606,40 +557,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 else:
                     self._queue_draw_node(tdw, i)
 
-    ## Redrawing task management
-
-    def _queue_task(self, callback, *args, **kwargs):
-        """Append a task to be done later in an idle cycle"""
-        self._task_queue.append((callback, args, kwargs))
- 
-    def _start_task_queue_runner(self):
-        """Begin processing the task queue, if not already going"""
-        if self._task_queue_runner_id is not None:
-            return
-        idler_id = GLib.idle_add(self._task_queue_runner_cb)
-        self._task_queue_runner_id = idler_id
- 
-    def _stop_task_queue_runner(self, complete=True):
-        """Halts processing of the task queue, and clears it"""
-        if self._task_queue_runner_id is None:
-            return
-        if complete:
-            for (callback, args, kwargs) in self._task_queue:
-                callback(*args, **kwargs)
-        self._task_queue.clear()
-        GLib.source_remove(self._task_queue_runner_id)
-        self._task_queue_runner_id = None
- 
-    def _task_queue_runner_cb(self):
-        """Idle runner callback for the task queue"""
-        try:
-            callback, args, kwargs = self._task_queue.popleft()
-        except IndexError:  # queue empty
-            self._task_queue_runner_id = None
-            return False
-        else:
-            callback(*args, **kwargs)
-            return True
  
     ## Raw event handling (prelight & zone selection in adjust phase)
 
@@ -746,12 +663,9 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                 self._clicked_button_id = None
                 self._update_zone_and_target(tdw, event.x, event.y)
                 return False  # NO `drag_stop_cb` activated.
-
             elif self.phase == PhaseMixin.CHANGE_PHASE:
                 self.phase = self._returning_phase
-
             else:
-
                 if self.target_node_index >= 0:
                     self.node_release_cb(tdw, event)
 
@@ -911,76 +825,9 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         """Proxy method for setting node position.
         """
         pass
- 
+
     ## Interrogating events
  
-    def _get_event_pressure(self, event):
-        # FIXME: CODE DUPLICATION: copied from freehand.py
-        # However, this class has no parent-child relationship 
-        # with freehand. so I copied this from it.
-        # (or we need to create something mixin...?)
-        pressure = event.get_axis(Gdk.AxisUse.PRESSURE)
-        if pressure is not None:
-            if not np.isfinite(pressure):
-                pressure = None
-            else:
-                pressure = lib.helpers.clamp(pressure, 0.0, 1.0)
- 
-        if pressure is None:
-            pressure = 0.0
-            if event.state & Gdk.ModifierType.BUTTON1_MASK:
-                pressure = 0.5
- 
-        # Workaround for buggy evdev behaviour.
-        # Events sometimes get a zero raw pressure reading when the
-        # pressure reading has not changed. This results in broken
-        # lines. As a workaround, forbid zero pressures if there is a
-        # button pressed down, and substitute the last-known good value.
-        # Detail: https://github.com/mypaint/mypaint/issues/223
-        if self._button_down is not None:
-            if pressure == 0.0:
-                pressure = self._last_good_raw_pressure
-            elif pressure is not None and np.isfinite(pressure):
-                self._last_good_raw_pressure = pressure
-        return pressure
- 
-    def _get_event_tilt(self, tdw, event):
-        # FIXME: CODE DUPLICATION: copied from freehand.py
-        xtilt = event.get_axis(Gdk.AxisUse.XTILT)
-        ytilt = event.get_axis(Gdk.AxisUse.YTILT)
-        if xtilt is None or ytilt is None or not np.isfinite(xtilt + ytilt):
-            return (0.0, 0.0)
- 
-        # Switching from a non-tilt device to a device which reports
-        # tilt can cause GDK to return out-of-range tilt values, on X11.
-        xtilt = lib.helpers.clamp(xtilt, -1.0, 1.0)
-        ytilt = lib.helpers.clamp(ytilt, -1.0, 1.0)
- 
-        # Evdev workaround. X and Y tilts suffer from the same
-        # problem as pressure for fancier devices.
-        if self._button_down is not None:
-            if xtilt == 0.0:
-                xtilt = self._last_good_raw_xtilt
-            else:
-                self._last_good_raw_xtilt = xtilt
-            if ytilt == 0.0:
-                ytilt = self._last_good_raw_ytilt
-            else:
-                self._last_good_raw_ytilt = ytilt
- 
-        # Tilt inputs are assumed to be relative to the viewport,
-        # but the canvas may be rotated or mirrored, or both.
-        # Compensate before passing them to the brush engine.
-        # https://gna.org/bugs/?19988
-        if tdw.mirrored:
-            xtilt *= -1.0
-        if tdw.rotation != 0:
-            tilt_angle = math.atan2(ytilt, xtilt) - tdw.rotation
-            tilt_magnitude = math.sqrt((xtilt**2) + (ytilt**2))
-            xtilt = tilt_magnitude * math.cos(tilt_angle)
-            ytilt = tilt_magnitude * math.sin(tilt_angle)
- 
-        return (xtilt, ytilt)
  
     ## Node related
     def select_node(self, idx, exclusive=False, update_gui=True, ):
@@ -1056,26 +903,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
     @lib.observable.event
     def current_node_changed(self, index):
         """Event: current_node_index was changed"""
-
-    def get_node_dtime(self, i):
-        if not (0 < i < len(self.nodes)):
-            return 0.0
-        n0 = self.nodes[i-1]
-        n1 = self.nodes[i]
-        dtime = n1.time - n0.time
-        dtime = max(dtime, self.MIN_INTERNODE_TIME)
-        return dtime
- 
-    def set_node_dtime(self, i, dtime):
-        dtime = max(dtime, self.MIN_INTERNODE_TIME)
-        nodes = self.nodes
-        if not (0 < i < len(nodes)):
-            return
-        old_dtime = nodes[i].time - nodes[i-1].time
-        for j in range(i, len(nodes)):
-            n = nodes[j]
-            new_time = n.time + dtime - old_dtime
-            self.update_node(j, time=new_time)
  
     def can_insert_node(self, i):
         return 0 <= i < len(self.nodes)-1
@@ -1106,20 +933,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                        'x', 'y', or 'pressure' are stored as keyworded data.
         """
         pass # placeholder, to be implemented in derived class.
-
-
-       #changing_pos = bool({"x", "y"}.intersection(kwargs))
-       #oldnode = self.nodes[i]
-       #if changing_pos:
-       #    self._queue_draw_node(i)
-       #self.nodes[i] = oldnode._replace(**kwargs)
-       ## FIXME: The curve redraw is a bit flickery.
-       ##   Perhaps dragging to adjust should only draw an
-       ##   armature during the drag, leaving the redraw to
-       ##   the stop handler.
-       #self._queue_redraw_item()
-       #if changing_pos:
-       #    self._queue_draw_node(i)
 
     ## Action button related
 
@@ -1161,9 +974,12 @@ class PressPhase(PhaseMixin):
     #  _Phase.ADJUST.
     INSERT_NODE = PhaseMixin.MAX_PHASE + 3
 
-class PressureEditableMixin(OncanvasEditMixin,
-                            gui.mode.BrushworkModeMixin):
+class EditableStrokeMixin(OncanvasEditMixin,
+                          gui.mode.BrushworkModeMixin):
     """ The mixin for oncanvas pressure editable class.
+
+    The node object which an user of this mixin using
+    should have x, y, pressure and dtime attribute.
     """
 
     ## Pressure oncanvas edit settings
@@ -1172,12 +988,32 @@ class PressureEditableMixin(OncanvasEditMixin,
     # these can be hard-coded,but we might need some customizability later.
     _ADD_SELECTION_MASK = Gdk.ModifierType.CONTROL_MASK
 
-    def is_pressure_modifying(self):
-        return self.phase in (PressPhase.ADJUST_PRESSURE,
-                    PressPhase.ADJUST_PRESSURE_ONESHOT)
+
+    MIN_INTERNODE_TIME = 1/200.0   # seconds (used to manage adjusting)
+
+    def get_node_dtime(self, i):
+        if not (0 < i < len(self.nodes)):
+            return 0.0
+        n0 = self.nodes[i-1]
+        n1 = self.nodes[i]
+        dtime = n1.time - n0.time
+        dtime = max(dtime, self.MIN_INTERNODE_TIME)
+        return dtime
+ 
+    def set_node_dtime(self, i, dtime):
+        dtime = max(dtime, self.MIN_INTERNODE_TIME)
+        nodes = self.nodes
+        if not (0 < i < len(nodes)):
+            return
+        old_dtime = nodes[i].time - nodes[i-1].time
+        for j in range(i, len(nodes)):
+            n = nodes[j]
+            new_time = n.time + dtime - old_dtime
+            self.update_node(j, time=new_time)
+
 
     def __init__(self, **kwargs):
-        super(PressureEditableMixin, self).__init__(**kwargs)
+        super(EditableStrokeMixin, self).__init__(**kwargs)
         self._sshot_before = None
         self._pending_cmd = None
 
@@ -1204,9 +1040,13 @@ class PressureEditableMixin(OncanvasEditMixin,
         elif new_zone == EditZoneMixin.CONTROL_NODE:
             app.show_transient_message(_("Node editing; Shift change pressure, Ctrl edit selection group."))
         else:
-            super(PressureEditableMixin, self)._enter_zone_cb(new_zone)
+            super(EditableStrokeMixin, self)._enter_zone_cb(new_zone)
 
     ## Event handlers
+    def leave(self, **kwds):
+        """Leaves the mode: called by `ModeStack.pop()` etc."""
+        self._stop_task_queue_runner(complete=True)
+        super(EditableStrokeMixin, self).leave(**kwds)  # supercall will commit
 
     def mode_button_press_cb(self, tdw, event):
         if self.is_adjusting_phase():
@@ -1226,7 +1066,7 @@ class PressureEditableMixin(OncanvasEditMixin,
             
                 # FALLTHRU: *do* start a drag
         else:
-            super(PressureEditableMixin, self).mode_button_press_cb(tdw, event)
+            super(EditableStrokeMixin, self).mode_button_press_cb(tdw, event)
 
     def mode_button_release_cb(self, tdw, event):
 
@@ -1242,7 +1082,7 @@ class PressureEditableMixin(OncanvasEditMixin,
             self._update_zone_and_target(tdw, event.x, event.y)
 
         else:
-            super(PressureEditableMixin, self).mode_button_press_cb(tdw, event)
+            super(EditableStrokeMixin, self).mode_button_press_cb(tdw, event)
 
     def node_drag_start_cb(self, tdw, event):
         if self.is_pressure_modifying():
@@ -1255,13 +1095,13 @@ class PressureEditableMixin(OncanvasEditMixin,
             # Update options_presenter when capture phase end
             self.options_presenter.target = (self, None)
         else:
-            super(PressureEditableMixin, self).node_drag_start_cb(tdw, event)
+            super(EditableStrokeMixin, self).node_drag_start_cb(tdw, event)
 
     def node_drag_update_cb(self, tdw, event, dx, dy):
         if self.is_pressure_modifying():
             self._adjust_pressure_with_motion(dx, dy)
         else:
-            super(PressureEditableMixin, self).node_drag_update_cb(tdw, 
+            super(EditableStrokeMixin, self).node_drag_update_cb(tdw, 
                     event, dx, dy)
                 
     def node_drag_stop_cb(self, tdw):
@@ -1278,7 +1118,7 @@ class PressureEditableMixin(OncanvasEditMixin,
                 self._queue_redraw_item()
                 self._queue_draw_buttons()
         else:
-            super(PressureEditableMixin, self).node_drag_stop_cb(tdw)
+            super(EditableStrokeMixin, self).node_drag_stop_cb(tdw)
 
     def node_scroll_cb(self, tdw, dx, dy):
         """Handles scroll-wheel events, to adjust pressure.
@@ -1313,6 +1153,11 @@ class PressureEditableMixin(OncanvasEditMixin,
 
     def node_leave_cb(self, tdw, node):
         self.enable_switch_actions(True)
+
+    ### Pressure/tilt related.
+    def is_pressure_modifying(self):
+        return self.phase in (PressPhase.ADJUST_PRESSURE,
+                    PressPhase.ADJUST_PRESSURE_ONESHOT)
 
     def _adjust_pressure_with_motion(self, dx, dy):
         """Adjust pressure of current selected node,
@@ -1406,7 +1251,151 @@ class PressureEditableMixin(OncanvasEditMixin,
         for tdw in self._overlays:
             self._update_cursor(tdw) 
 
+    def _get_event_pressure(self, event):
+        # FIXME: CODE DUPLICATION: copied from freehand.py
+        # However, this class has no parent-child relationship 
+        # with freehand. so I copied this from it.
+        # (or we need to create something mixin...?)
+        pressure = event.get_axis(Gdk.AxisUse.PRESSURE)
+        if pressure is not None:
+            if not np.isfinite(pressure):
+                pressure = None
+            else:
+                pressure = lib.helpers.clamp(pressure, 0.0, 1.0)
+ 
+        if pressure is None:
+            pressure = 0.0
+            if event.state & Gdk.ModifierType.BUTTON1_MASK:
+                pressure = 0.5
+ 
+        # Workaround for buggy evdev behaviour.
+        # Events sometimes get a zero raw pressure reading when the
+        # pressure reading has not changed. This results in broken
+        # lines. As a workaround, forbid zero pressures if there is a
+        # button pressed down, and substitute the last-known good value.
+        # Detail: https://github.com/mypaint/mypaint/issues/223
+        if self._button_down is not None:
+            if pressure == 0.0:
+                pressure = self._last_good_raw_pressure
+            elif pressure is not None and np.isfinite(pressure):
+                self._last_good_raw_pressure = pressure
+        return pressure
+ 
+    def _get_event_tilt(self, tdw, event):
+        # FIXME: CODE DUPLICATION: copied from freehand.py
+        xtilt = event.get_axis(Gdk.AxisUse.XTILT)
+        ytilt = event.get_axis(Gdk.AxisUse.YTILT)
+        if xtilt is None or ytilt is None or not np.isfinite(xtilt + ytilt):
+            return (0.0, 0.0)
+ 
+        # Switching from a non-tilt device to a device which reports
+        # tilt can cause GDK to return out-of-range tilt values, on X11.
+        xtilt = lib.helpers.clamp(xtilt, -1.0, 1.0)
+        ytilt = lib.helpers.clamp(ytilt, -1.0, 1.0)
+ 
+        # Evdev workaround. X and Y tilts suffer from the same
+        # problem as pressure for fancier devices.
+        if self._button_down is not None:
+            if xtilt == 0.0:
+                xtilt = self._last_good_raw_xtilt
+            else:
+                self._last_good_raw_xtilt = xtilt
+            if ytilt == 0.0:
+                ytilt = self._last_good_raw_ytilt
+            else:
+                self._last_good_raw_ytilt = ytilt
+ 
+        # Tilt inputs are assumed to be relative to the viewport,
+        # but the canvas may be rotated or mirrored, or both.
+        # Compensate before passing them to the brush engine.
+        # https://gna.org/bugs/?19988
+        if tdw.mirrored:
+            xtilt *= -1.0
+        if tdw.rotation != 0:
+            tilt_angle = math.atan2(ytilt, xtilt) - tdw.rotation
+            tilt_magnitude = math.sqrt((xtilt**2) + (ytilt**2))
+            xtilt = tilt_magnitude * math.cos(tilt_angle)
+            ytilt = tilt_magnitude * math.sin(tilt_angle)
+ 
+        return (xtilt, ytilt)
+
+    ## Redrawing task management
+
+    def _queue_task(self, callback, *args, **kwargs):
+        """Append a task to be done later in an idle cycle"""
+        self._task_queue.append((callback, args, kwargs))
+ 
+    def _start_task_queue_runner(self):
+        """Begin processing the task queue, if not already going"""
+        if self._task_queue_runner_id is not None:
+            return
+        idler_id = GLib.idle_add(self._task_queue_runner_cb)
+        self._task_queue_runner_id = idler_id
+ 
+    def _stop_task_queue_runner(self, complete=True):
+        """Halts processing of the task queue, and clears it"""
+        if self._task_queue_runner_id is None:
+            return
+        if complete:
+            for (callback, args, kwargs) in self._task_queue:
+                callback(*args, **kwargs)
+        self._task_queue.clear()
+        GLib.source_remove(self._task_queue_runner_id)
+        self._task_queue_runner_id = None
+ 
+    def _task_queue_runner_cb(self):
+        """Idle runner callback for the task queue"""
+        try:
+            callback, args, kwargs = self._task_queue.popleft()
+        except IndexError:  # queue empty
+            self._task_queue_runner_id = None
+            return False
+        else:
+            callback(*args, **kwargs)
+            return True
+
     ## Brushwork related, to enable undo node operations.
+    def _start_new_capture_phase(self, rollback=False):
+        """Let the user capture a new stroke"""
+        if rollback:
+            self._stop_task_queue_runner(complete=False)
+            self.brushwork_rollback_all()
+        else:
+            self._stop_task_queue_runner(complete=True)
+            self.brushwork_commit_all()
+        self.options_presenter.target = (self, None)
+        # Queue current node to erase
+        self._queue_draw_buttons()
+        self._queue_redraw_all_nodes()
+       #self._reset_nodes()
+        self._reset_capture_data()
+        self._reset_adjust_data()
+        self.phase = PhaseMixin.CAPTURE
+        self.enable_switch_actions(True)
+    
+    def checkpoint(self, flush=True, **kwargs):
+        """Sync pending changes from (and to) the model
+    
+        If called with flush==False, this is an override which just
+        redraws the pending stroke with the current brush settings and
+        color. This is the behavior our testers expect:
+        https://github.com/mypaint/mypaint/issues/226
+    
+        When this mode is left for another mode (see `leave()`), the
+        pending brushwork is committed properly.
+    
+        """
+        if flush:
+            # Commit the pending work normally
+            self._start_new_capture_phase(rollback=False)
+            super(EditableStrokeMixin, self).checkpoint(flush=flush, **kwargs)
+        else:
+            # Queue a re-rendering with any new brush data
+            # No supercall
+            self._stop_task_queue_runner(complete=False)
+            self._queue_draw_buttons()
+            self._queue_redraw_all_nodes()
+            self._queue_redraw_item()
 
     def brushwork_begin(self, model, description=None, abrupt=False, 
                         layer=None):
@@ -1610,7 +1599,7 @@ class HandleNodeUserMixin(NodeUserMixin):
         """
         c_node = self.nodes[nodeidx]
         hit_dist = gui.style.FLOATING_BUTTON_RADIUS
-        if n == 0:
+        if nodeidx == 0:
             seq = self.INITIAL_NODE_HANDLE_RANGE #(1,)
         else:
             seq = (0, 1)

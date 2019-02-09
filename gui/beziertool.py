@@ -422,7 +422,7 @@ class PressureMap(object):
         return self.curve_widget.get_pressure_value(step)
 
 
-class BezierMode (PressureEditableMixin,
+class BezierMode (EditableStrokeMixin,
                   HandleNodeUserMixin):
 
     ## Metadata properties
@@ -618,7 +618,8 @@ class BezierMode (PressureEditableMixin,
         if ti is not None:
             self.current_node_handle = self._get_current_handle(tdw, ti, x, y)
         else:
-            self.current_node_handle = None
+            if self.current_node_index is None:
+                self.current_node_handle = None
 
         if self.phase == _Phase.INSERT_NODE:
             self._update_cursor(tdw) 
@@ -926,10 +927,12 @@ class BezierMode (PressureEditableMixin,
         elif self.phase in (_Phase.ADJUST_HANDLE, _Phase.INIT_HANDLE):
             node = self._last_event_node
             if self._last_event_node:
+                assert self.current_node_handle is not None
                 self._queue_draw_node(tdw, self.current_node_index)# to erase
-                node.set_control_handle(self.current_node_handle,
-                        mx, my,
-                        shift_state)
+                node.set_control_handle(
+                    self.current_node_handle,
+                    mx, my,
+                    shift_state)
                 self._queue_draw_node(tdw, self.current_node_index)# to update
             self._queue_redraw_item()
         else:

@@ -115,7 +115,7 @@ class _ActionButton(ActionButtonMixin):
 
 # _Node object is imported from original inktool.
 
-class ExInkingMode (PressureEditableMixin, 
+class ExInkingMode (EditableStrokeMixin, 
                     NodeUserMixin):
     """Experimental Inking mode
     to test new feature.
@@ -167,11 +167,13 @@ class ExInkingMode (PressureEditableMixin,
     # but avoids generating too much work.
     INTERPOLATION_MAX_SLICE_TIME = 1/200.0   # seconds
     INTERPOLATION_MAX_SLICE_DISTANCE = 20   # model pixels
-    INTERPOLATION_MAX_SLICES = \
-            OncanvasEditMixin.MAX_INTERNODE_DISTANCE_MIDDLE * 5
+    MAX_INTERNODE_DISTANCE_MIDDLE = 30   # display pixels
+    MAX_INTERNODE_DISTANCE_ENDS = 10   # display pixels
+    INTERPOLATION_MAX_SLICES = MAX_INTERNODE_DISTANCE_MIDDLE * 5
     # In other words, limit to a set number of interpolation slices
     # per display pixel at the time of stroke capture.
 
+    MAX_INTERNODE_TIME = 1/100.0   # seconds
 
     ## Other class vars
 
