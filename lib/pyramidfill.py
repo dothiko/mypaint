@@ -434,7 +434,7 @@ def cut_protrude(layers,
     assert hasattr(layers, "background_visible")
     background_orig = layers.background_visible
     layers.background_visible = False
-    allsurf = lib.surface.TileRequestWrapper(layers)
+    allsurf = layers.get_tile_accessible_layer_rendering(layers)
 
     for tx, ty in curtiles:
         flag_tile = None

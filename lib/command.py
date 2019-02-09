@@ -794,6 +794,8 @@ class FloodFill (Command):
         self.new_layer = None
         self.new_layer_path = None
         self.snapshot = None
+
+        self.erase_pixel = kwds.get('erase_pixel', False) # XXX added for pyramidfill
         self.kwds = kwds
 
     def redo(self):
@@ -2225,10 +2227,7 @@ class ClosedAreaFill (FloodFill):
         assert self.pyramid_level <= 6
         self.alpha_threshold = float(kwds.get('alpha_threshold', 0.2))
         self.fill_all_holes = bool(kwds.get('fill_all_holes', False))
-        self.erase_pixel = kwds.get('erase_pixel', False)
         self.remove_disconnected = kwds.get('remove_disconnected', True)
-                
-        self._restore_bg = False
 
         # XXX DEBUG options
         self.tile_output = kwds.get('tile_output', False)
@@ -2241,17 +2240,11 @@ class ClosedAreaFill (FloodFill):
         """
         layers = self.doc.layer_stack
         if self.sample_merged:
-            cl = layers
+            surf = layers.get_tile_accessible_layer_rendering(layers)
         else:
             cl = layers.current
-
-        if hasattr(cl, "_surface"):
-            return cl._surface
-        else:
-            assert hasattr(cl, "background_visible")
-            self._restore_bg = cl.background_visible
-            cl.background_visible = False
-            return lib.surface.TileRequestWrapper(cl)
+            surf = cl._surface
+        return surf
 
     def _create_debug_info(self):
         info = {}
@@ -2316,12 +2309,6 @@ class ClosedAreaFill (FloodFill):
             self._create_debug_info()
         )
 
-        if self._restore_bg:
-            layers = self.doc.layer_stack
-            assert hasattr(layers, "background_visible")
-            assert layers.background_visible == False
-            layers.background_visible = True
-
 
 class LassoFill(ClosedAreaFill):
     """Doing Lasso fill on the current layer"""
@@ -2363,12 +2350,6 @@ class LassoFill(ClosedAreaFill):
             self.fill_all_holes,
             self._create_debug_info()
         )
-
-        if self._restore_bg:
-            layers = self.doc.layer_stack
-            assert hasattr(layers, "background_visible")
-            assert layers, background_visible == False
-            layers.background_visible = True
 
 # XXX for `close-and-fill / lasso-fill` feature end.
 
@@ -2465,7 +2446,6 @@ class AdjustLayer (Command):
         self._redraw_bbox = None
         # But leave _snapshor_after as None.
         self._snapshot_after = None
-        self._restore_bg = False
 
         # Finally, call capture source image.
         self._capture_source()
@@ -2649,17 +2629,14 @@ class AdjustLayer (Command):
         If the layer is layergroup, use TileRequestWrapper.
         But, temporally hide background to get transparent pixels.
         """
+        model = self.doc
         cl = self.layer
-        if hasattr(cl, "_surface"):
-            return cl._surface
+        if cl is model.layer_stack:
+            assert hasattr(cl, "background_visible")
+            return cl.get_tile_accessible_layer_rendering(cl)
         else:
-            # Layerstack, or layer group, something.
-            model = self.doc
-            if cl is model.layer_stack:
-                assert hasattr(cl, "background_visible")
-                self._restore_bg = cl.background_visible
-                cl.background_visible = False
-            return lib.surface.TileRequestWrapper(cl)
+            assert hasattr(cl, "_surface")
+            return cl._surface
 
     def _capture_source(self):
         assert self._src_area is not None
@@ -2697,13 +2674,6 @@ class AdjustLayer (Command):
                         )
         self._src_img = img
         self._src_alpha = alpha
-
-        if self._restore_bg:
-            layers = self.doc.layer_stack
-            assert hasattr(layers, "background_visible")
-            cl.background_visible = True
-            self._restore_bg = False
-       #self.debug_show_array((buf,), ('source',))
 
     @property
     def new_layer(self):

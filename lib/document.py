@@ -1402,11 +1402,6 @@ class Document (object):
             return
         # Inner functions, to know the `real` border of a layer.
         def get_edge_position(layer):
-            if hasattr(layer, "_surface"):
-                surf = layer._surface
-            else:
-                surf = lib.surface.TileRequestWrapper(layer)
-
             x, y, w, h = layer.get_bbox()
             # Get leftmost pixel position
             tx = x // N

@@ -475,8 +475,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         self._ensure_overlay_for_tdw(tdw)
         current_layer = tdw.doc._layers.current
         opts = self.get_options_widget()
-        if not ((tdw.is_sensitive and current_layer.get_paintable()) 
-                    or opts.make_new_layer):
+        if not tdw.is_sensitive:
             return False
 
         if self.fill_method_option == _FillMethod.FLOOD_FILL:
@@ -943,6 +942,10 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         color = app.brush_color_manager.get_color().get_rgb()
         erase_pixel = model.brush.brushinfo.is_eraser()
         make_new_layer = opts.make_new_layer
+
+        targ = model.layer_stack.current
+        if not isinstance(targ, lib.layer.data.SimplePaintingLayer):
+            make_new_layer = True # Force to unfillable layer.
 
         if fill_method == _FillMethod.FLOOD_FILL:
             assert targ_color_pos is not None
