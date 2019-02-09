@@ -72,7 +72,7 @@ def _nodes_deletion_decorator(method):
     """
     def _decorator(self, *args):
         # To ensure redraw entire overlay,avoiding glitches.
-        self._queue_redraw_item()
+        self._queue_redraw_stroke()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
@@ -82,7 +82,7 @@ def _nodes_deletion_decorator(method):
 
         if result > 0:
             self.options_presenter.target = (self, self.current_node_index)
-            self._queue_redraw_item()
+            self._queue_redraw_stroke()
             self._queue_redraw_all_nodes()
             self._queue_draw_buttons()
         return result
@@ -91,8 +91,8 @@ def _nodes_deletion_decorator(method):
 
 ## Class defs
 
-# _Phase is currently same as base PressPhase
-_Phase = PressPhase
+# _Phase is currently same as base StrokePhaseMixin
+_Phase = StrokePhaseMixin
 
 # _EditZone is currently same as base EditZoneMixin
 _EditZone = EditZoneMixin
@@ -117,7 +117,7 @@ class _ActionButton(ActionButtonMixin):
 
 class ExInkingMode (EditableStrokeMixin, 
                     NodeUserMixin):
-    """Experimental Inking mode
+    """EXperimental Inking mode
     to test new feature.
     """
 
@@ -138,7 +138,6 @@ class ExInkingMode (EditableStrokeMixin,
     }
 
     ## Metadata methods
-
     @classmethod
     def get_name(cls):
         return _(u"ExpInk")
@@ -146,10 +145,9 @@ class ExInkingMode (EditableStrokeMixin,
     def get_usage(self):
         return _(u"Draw, and then adjust smooth lines")
 
-
     @property
     def active_cursor(self):
-        if self.phase == _Phase.ADJUST_POS:
+        if self.phase == _Phase.ADJUST:
             if self.zone == _EditZone.CONTROL_NODE:
                 return self._crosshair_cursor
             elif self.zone != _EditZone.EMPTY_CANVAS: # assume button
@@ -183,7 +181,6 @@ class ExInkingMode (EditableStrokeMixin,
     ## Initialization & lifecycle methods
 
     def __init__(self, **kwargs):
-
         super(ExInkingMode, self).__init__(**kwargs)
 
         self._last_good_raw_pressure = 0.0
@@ -207,25 +204,14 @@ class ExInkingMode (EditableStrokeMixin,
         self._last_event_node = None  # node for the last event
         self._last_node_evdata = None  # (xdisp, ydisp, tmilli) for nodes[-1]
 
-    def _reset_adjust_data(self):
-        super(ExInkingMode, self)._reset_adjust_data()
-        self._node_dragged = False
-
     def is_adjusting_phase(self):
         return self.phase in (_Phase.ADJUST,
-                              _Phase.ADJUST_POS,
                               _Phase.ADJUST_PRESSURE,
-                              _Phase.ADJUST_PRESSURE_ONESHOT,
-                              _Phase.ADJUST_ITEM)
+                              _Phase.ADJUST_PRESSURE_ONESHOT)
 
     def is_pressure_modifying(self):
         return self.phase in (_Phase.ADJUST_PRESSURE,
-                              _Phase.ADJUST_PRESSURE_ONESHOT,
-                              _Phase.ADJUST_ITEM)
-
-    def _start_new_capture_phase(self, rollback=False):
-        super(ExInkingMode, self)._start_new_capture_phase(rollback)
-        self._reset_capture_data()
+                              _Phase.ADJUST_PRESSURE_ONESHOT)
 
     def _generate_overlay(self, tdw):
         return Overlay(self, tdw)
@@ -233,11 +219,24 @@ class ExInkingMode (EditableStrokeMixin,
     def _generate_presenter(self):
         return OptionsPresenter_ExInking()
 
-    def update_cursor_cb(self, tdw):
+    def _update_zone_and_target(self, tdw, x, y):
+        new_zone = super(ExInkingMode, self)._update_zone_and_target(tdw, x, y)
+        if new_zone == _EditZone.EMPTY_CANVAS:
+            new_zone = self._update_target_node(tdw, x, y)
+        elif new_zone == _EditZone.ACTION_BUTTON:
+            if self.current_button_id == _ActionButton.EDIT:
+                self.app.show_transient_message(
+                    _("Edit Pressure Button; Enter pressure edit mode."))
+                self._queue_draw_buttons()
+   
+        if self.zone != new_zone:
+            self.zone = new_zone
+            self._update_cursor(tdw, None)
+
+    def _update_cursor(self, tdw, cursor):
         """ Called from _update_zone_and_target()
         to update cursors
         """
-        cursor = None
         if self.is_adjusting_phase():
             if self.zone != _EditZone.EMPTY_CANVAS: # assume button
                 cursor = self._arrow_cursor
@@ -246,21 +245,7 @@ class ExInkingMode (EditableStrokeMixin,
         elif self.phase == _Phase.INSERT_NODE:
             cursor = self._insert_cursor
 
-        return cursor
-
-    def enter_insert_node_phase(self):
-        if len(self.nodes) >= 2:
-            if self.phase == _Phase.INSERT_NODE:
-                self.phase = _Phase.ADJUST
-                self.doc.app.show_transient_message(_("Toggled to adjust phase."))
-            else:
-                self.phase = _Phase.INSERT_NODE
-                self.doc.app.show_transient_message(_("Entering insert node phase."))
-
-            for tdw in self._overlays:
-                self._update_cursor(tdw) 
-        else:
-            self.doc.app.show_transient_message(_("There is no stroke.Cannot enter insert phase."))
+        super(ExInkingMode, self)._update_cursor(tdw, cursor)
 
     def enter(self, doc, **kwds):
         """Enters the mode: called by `ModeStack.push()` etc."""
@@ -276,87 +261,12 @@ class ExInkingMode (EditableStrokeMixin,
         """Returns offset vector(dragging vector, tuple of x, y)
         depend on current phase.
         """
-        if self.phase == _Phase.ADJUST_POS:
+        if self.phase == _Phase.ADJUST:
             return self.drag_offset.get_model_offset()
         return None
 
     ## Redraws
-
-    def _queue_draw_ink_node(self, tdw, i, base_node, offset_vec):
-        """Redraws a specific control node on all known view TDWs
-        :param node_ctx: node queuing context information.
-        """
-
-        pos = self._get_node_position(i, base_node, offset_vec)
-
-        x, y = tdw.model_to_display(*pos)
-        x = math.floor(x)
-        y = math.floor(y)
-        size = math.ceil(gui.style.DRAGGABLE_POINT_HANDLE_SIZE * 2)
-        tdw.queue_draw_area(x-size, y-size, size*2+1, size*2+1)
-
-    def _queue_draw_node(self, tdw, idx):
-        """ For compatibility """
-        if tdw is None:
-            for tdw in self._overlays:
-                self._queue_draw_node(tdw, idx)
-            return 
-
-        if self.current_node_index != None:
-            basept = self.nodes[self.current_node_index]
-        else:
-            basept = None
-
-        self._queue_draw_ink_node(tdw, idx, basept,
-            self._generate_offset_vector())
-
-    def _queue_draw_selected_nodes(self, tdw):
-        """ Override mixin """
-        if tdw is None:
-            for tdw in self._overlays:
-                self._queue_draw_selected_nodes(tdw)
-            return
-
-        if len(self._overlays) > 0:
-            if self.current_node_index != None:
-                basept = self.nodes[self.current_node_index]
-            else:
-                basept = None
-
-            offset_vec = self._generate_offset_vector()
-
-            for i in self.selected_nodes:
-                self._queue_draw_ink_node(tdw, i, basept, offset_vec)
-
-    def _queue_redraw_all_nodes(self):
-        """ Override mixin :
-        Redraws all nodes on all known view TDWs"""
-        if len(self.nodes) > 0:
-            if self.current_node_index != None:
-                basept = self.nodes[self.current_node_index]
-            else:
-                basept = None
-            offset_vec = self._generate_offset_vector()
-
-            for tdw in self._overlays:
-                for i in range(len(self.nodes)):
-                    self._queue_draw_ink_node(tdw, i, basept, offset_vec)
-
-    def _get_node_position(self, idx, base_node, offset_vec):
-        """ Utility method, For unifying all node-editing codes. 
-        """
-        node = self.nodes[idx]
-        if offset_vec is None or len(self.selected_nodes)==0:
-            return (node.x, node.y)
-        else:
-            if idx in self.selected_nodes:
-                ox , oy = offset_vec
-                pos = (node.x + ox, node.y + oy)
-            else:
-                pos = (node.x, node.y)
-        return pos
-
-    def _queue_redraw_item(self):
+    def _queue_redraw_stroke(self):
         """Redraws the entire curve on all known view TDWs"""
         self._stop_task_queue_runner(complete=False)
         if self.current_node_index != None:
@@ -373,7 +283,7 @@ class ExInkingMode (EditableStrokeMixin,
             self._queue_task(self.brushwork_rollback, model)
             self._queue_task(
                 self.brushwork_begin, model,
-                description=_("Inking"),
+                description=_("ExInking"),
                 abrupt=True,
             )
             interp_state = {"t_abs": self.nodes[0].time}
@@ -428,7 +338,9 @@ class ExInkingMode (EditableStrokeMixin,
         mod_state = event.state & self.ONCANVAS_MODIFIER_MASK
         detected_stroke = None
 
-        if self.phase in (_Phase.ADJUST, _Phase.ADJUST_ITEM):
+        # Detect `Inserting node` operation.
+        # Or, just end current edit and enter new capture phase.
+        if self.phase in (_Phase.ADJUST, _Phase.ADJUST_PRESSURE):
             if event.button == 1:
                 if self.zone == EditZoneMixin.EMPTY_CANVAS:
                     if not mod_state:
@@ -442,11 +354,14 @@ class ExInkingMode (EditableStrokeMixin,
 
                     # Fallthrough
 
-        # Not `elif`. In above codes, `detected_stroke` might become True.
-        if self.phase == _Phase.INSERT_NODE or detected_stroke:
+        # Not `elif`. In above codes, self.phase might be changed.
+        if self.phase == _Phase.INSERT_NODE:
+            # Phase might be changed into INSERT_NODE other than mouse
+            # clicking (of above lines). 
+            # So we cannot assume detected_stroke is not None at here.
             if detected_stroke is None:
                 mx, my = tdw.display_to_model(event.x, event.y)
-                detected_info = self._detect_on_stroke(mx, my)
+                detected_stroke = self._detect_on_stroke(mx, my)
 
             if detected_stroke:
                 # pressed_segment is a tuple which contains
@@ -472,7 +387,6 @@ class ExInkingMode (EditableStrokeMixin,
                     new_ytilt *= 0.5
                     new_time *= 0.5
 
-
                 self.nodes.insert(
                     idx + 1, # insert method requires the inserted position. 
                     _Node(
@@ -485,8 +399,6 @@ class ExInkingMode (EditableStrokeMixin,
                     )
                 )
 
-                # queue new node here.
-                
                 self._bypass_phase(_Phase.ADJUST)
                 self.doc.app.show_transient_message(_("Create a new node on stroke"))
                 return True # Cancel drag event
@@ -515,7 +427,6 @@ class ExInkingMode (EditableStrokeMixin,
     ## Capture handling
 
     def node_drag_start_cb(self, tdw, event):
-        self._node_dragged = False
         if self.phase == _Phase.CAPTURE:
             assert len(self.nodes) == 0
             # Workaround for numlock status.
@@ -530,7 +441,7 @@ class ExInkingMode (EditableStrokeMixin,
                 self._queue_draw_node(tdw, 0)
                 self._last_node_evdata = (event.x, event.y, event.time)
                 self._last_event_node = node
-        elif self.phase == _Phase.ADJUST_ITEM:
+        elif self.phase == _Phase.ADJUST_PRESSURE:
             self._queue_draw_selected_nodes(tdw)
         else:
             super(ExInkingMode, self).node_drag_start_cb(tdw, event)
@@ -569,22 +480,16 @@ class ExInkingMode (EditableStrokeMixin,
                 if append_node:
                     self.nodes.append(node)
                     self._queue_draw_node(tdw, len(self.nodes)-1)
-                    self._queue_redraw_item()
+                    self._queue_redraw_stroke()
                     self._last_node_evdata = evdata
                 self._last_event_node = node
                 return True
 
-        elif self.phase == _Phase.ADJUST_POS:
-            if self._dragged_node_start_pos:
-                self._node_dragged = True
-                doff = self.drag_offset
-
-                # To erase old-positioned nodes.
-                self._queue_draw_selected_nodes(tdw)
-                x, y = tdw.display_to_model(event.x, event.y)
-                doff.end(x, y)
-                self._queue_draw_selected_nodes(tdw)
-                self._queue_redraw_item()
+        elif self.phase == _Phase.ADJUST:
+            super(ExInkingMode, self).node_drag_update_cb(tdw, event, dx, dy)
+            # Actual node position might be changed at base class handler. 
+            # So stroke redrawing should be done after supercall.
+            self._queue_redraw_stroke()
         else:
             super(ExInkingMode, self).node_drag_update_cb(tdw, event, dx, dy)
  
@@ -611,7 +516,6 @@ class ExInkingMode (EditableStrokeMixin,
             
                 self.nodes.append(node)
 
-
             if (self._autoapply is not None 
                     and len(self.nodes) > self._autoapply_threshold):
                 if self._autoapply == 'cull':
@@ -624,36 +528,13 @@ class ExInkingMode (EditableStrokeMixin,
             if len(self.nodes) > 1:
                 self.phase = _Phase.ADJUST
                 self._queue_redraw_all_nodes()
-                self._queue_redraw_item()
+                self._queue_redraw_stroke()
                 self._queue_draw_buttons()
             else:
                 # Should enter capture phase again
                 self.nodes = []
                 self._reset_capture_data()
                 tdw.queue_draw()
-
-        elif self.phase == _Phase.ADJUST_POS:
-            # Finalize dragging motion to selected nodes.
-            if self._node_dragged:
- 
-                self._queue_draw_selected_nodes(tdw) # to ensure erase them
- 
-                for i, cn, x, y in self.nodes_position_iter(tdw, convert_to_display=False):
-                    if cn.x != x or cn.y != y:
-                        self.nodes[i] = cn._replace(x=x, y=y)
- 
-                self.drag_offset.reset()
- 
-            self._dragged_node_start_pos = None
-
-            self.phase = _Phase.ADJUST
-
-        elif self.phase == _Phase.ADJUST_ITEM:
-            # Finalize dragging motion as pressure changing.
-            if self._node_dragged:
-                self.drag_offset.reset()
-            self._dragged_node_start_pos = None
-            self._queue_draw_buttons()
         else:
             super(ExInkingMode, self).node_drag_stop_cb(tdw)
 
@@ -680,7 +561,6 @@ class ExInkingMode (EditableStrokeMixin,
                  None.
         
         """
-
         # XXX Transplant from https://gist.github.com/MadRabbit/996893
         def find_x_for(p_1, p0, p1, p2, tx, init):
             x=init 
@@ -770,7 +650,7 @@ class ExInkingMode (EditableStrokeMixin,
         #   Perhaps dragging to adjust should only draw an
         #   armature during the drag, leaving the redraw to
         #   the stop handler.
-        self._queue_redraw_item()
+        self._queue_redraw_stroke()
         if changing_pos:
             self._queue_draw_node(None, i)
 
@@ -787,8 +667,8 @@ class ExInkingMode (EditableStrokeMixin,
             self.current_node_index = len(self.nodes) - 2
             if self.current_node_index < 0:
                 self.current_node_index = None
-            self.current_node_changed(
-                    self.current_node_index)
+            # Call event 
+            self.current_node_changed(self.current_node_index)
 
     def delete_node(self, i):
         """Delete a node, and issue redraws & updates"""
@@ -801,12 +681,11 @@ class ExInkingMode (EditableStrokeMixin,
         self.options_presenter.target = (self, self.current_node_index)
 
         # Issue redraws for the changed on-canvas elements
-        self._queue_redraw_item()
+        self._queue_redraw_stroke()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
     def delete_selected_nodes(self):
-
         self._queue_draw_buttons()
         for idx in self.selected_nodes:
             self._queue_draw_node(None, idx)
@@ -826,10 +705,9 @@ class ExInkingMode (EditableStrokeMixin,
         self.target_node_index = None
 
         # Issue redraws for the changed on-canvas elements
-        self._queue_redraw_item()
+        self._queue_redraw_stroke()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
-
 
     def insert_node(self, i):
         """Insert a node, and issue redraws & updates"""
@@ -853,7 +731,7 @@ class ExInkingMode (EditableStrokeMixin,
         self.nodes.insert(i+1,newnode)
 
         # Issue redraws for the changed on-canvas elements
-        self._queue_redraw_item()
+        self._queue_redraw_stroke()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
@@ -882,7 +760,6 @@ class ExInkingMode (EditableStrokeMixin,
                 return None
             return cur_idx
 
-
         self.current_node_index = adjust_index(self.current_node_index,idx)
         self.target_node_index = adjust_index(self.target_node_index,idx)
 
@@ -892,7 +769,6 @@ class ExInkingMode (EditableStrokeMixin,
         """Internal method of simplify nodes.
 
         """
-
         # Algorithm: Reumann-Witkam.
         i=0
         oldcnt=len(self.nodes)
@@ -938,7 +814,7 @@ class ExInkingMode (EditableStrokeMixin,
 
     def _queue_all_visual_redraw(self):
         """Redraw all overlay objects"""
-        self._queue_redraw_item()
+        self._queue_redraw_stroke()
         self._queue_redraw_all_nodes()
         self._queue_draw_buttons()
 
@@ -954,7 +830,6 @@ class ExInkingMode (EditableStrokeMixin,
     def cull_nodes(self):
         """User interface method of cull nodes."""
         return self._cull_nodes()
-
 
     ## nodes average
     def average_nodes_angle(self):
@@ -975,12 +850,9 @@ class ExInkingMode (EditableStrokeMixin,
         but when the only one node is selected,
         entire nodes (except for the first and last) affected.
         """
-
         if len(self.nodes) > 2:
-
             # Redraw to erase old nodes
             self._queue_all_visual_redraw()
-
             idx = 1
             nodes = self.nodes
 
@@ -1016,10 +888,8 @@ class ExInkingMode (EditableStrokeMixin,
 
             # first time, it targets the odd index nodes.
             _do_average_nodes(1)
-
             # then next time, it targets the even index nodes.
             _do_average_nodes(2)
-
             # redraw new nodes
             self._queue_all_visual_redraw()
 
@@ -1032,9 +902,7 @@ class ExInkingMode (EditableStrokeMixin,
         this method affects entire self.nodes,
         regardless of how many nodes selected.
         """
-
         if len(self.nodes) > 2:
-
             # Redraw to erase old nodes
             self._queue_all_visual_redraw()
 
@@ -1093,11 +961,8 @@ class ExInkingMode (EditableStrokeMixin,
         but when the only one node is selected,
         entire nodes (except for the first and last) affected.
         """
-
         if len(self.nodes) > 2:
-
             new_nodes = []
-
             for idx,cn in enumerate(self.nodes):
                 if (idx > 0 and idx < len(self.nodes) - 1 and
                         (len(self.selected_nodes) == 0 or
@@ -1115,8 +980,7 @@ class ExInkingMode (EditableStrokeMixin,
                 new_nodes.append(cn)
 
             self.nodes = new_nodes
-            self._queue_redraw_item()
-
+            self._queue_redraw_stroke()
 
     ## Node selection
     def select_all(self):
@@ -1142,7 +1006,6 @@ class ExInkingMode (EditableStrokeMixin,
                     modified = True
         if modified:
             self._queue_redraw_all_nodes()
-       
 
     ## Action button related
     def accept_button_cb(self, tdw):
@@ -1155,8 +1018,8 @@ class ExInkingMode (EditableStrokeMixin,
         assert self.phase == _Phase.CAPTURE
 
     def edit_button_cb(self, tdw):
-        if self.phase != _Phase.ADJUST_ITEM:
-            self.phase = _Phase.ADJUST_ITEM
+        if self.phase != _Phase.ADJUST_PRESSURE:
+            self.phase = _Phase.ADJUST_PRESSURE
         else:
             self.phase = _Phase.ADJUST
         self._queue_redraw_all_nodes()
@@ -1409,11 +1272,9 @@ class Overlay (OverlayOncanvasMixin):
             color = gui.style.EDITABLE_ITEM_COLOR
             show_node = not mode.hide_nodes
             if mode.phase in (_Phase.ADJUST, 
-                    _Phase.ADJUST_POS,
-                    _Phase.ADJUST_PRESSURE,
-                    _Phase.ADJUST_PRESSURE_ONESHOT,
-                    _Phase.CHANGE_PHASE,
-                    _Phase.ADJUST_ITEM):
+                              _Phase.ADJUST_PRESSURE,
+                              _Phase.ADJUST_PRESSURE_ONESHOT,
+                              _Phase.CHANGE_PHASE):
                 if show_node:
                     if i == mode.current_node_index:
                         color = gui.style.ACTIVE_ITEM_COLOR
@@ -1434,12 +1295,9 @@ class Overlay (OverlayOncanvasMixin):
                     fill=fill_flag)
 
         if mode.is_adjusting_phase():
-            
             # Drawing Buttons when not in drag.
             if not mode.in_drag:
                 self._draw_mode_buttons(cr)
-                
-
 
 class _LayoutNode (object):
     """Vertex/point for the button layout algorithm."""
@@ -1584,7 +1442,6 @@ class StrokePressureSettings (object):
         if not 'Default' in self._settings:
             self._settings['Default'] = self.get_default_setting()
 
-
     @classmethod
     def get_pref_key(cls, name):
         return "%s.%s" % (cls._PREF_KEY_BASE, name)
@@ -1622,7 +1479,6 @@ class StrokePressureSettings (object):
         """ Finalize current settings into app.preference
         """
         save_settings = []
-
         for cname in self._settings:
             save_settings.append((cname, self._settings[cname]))
 
@@ -1633,7 +1489,6 @@ class StrokePressureSettings (object):
     def points_changed_cb(self, curve):
         """ callback for when StrokeCurveWidget point has been changed.
         """
-
         setting = self._settings[self.current_setting]
         for i in range(min(len(curve.points),4)):
             setting[i] = curve.points[i] # no copy needed,because it is tuple.
@@ -1675,7 +1530,6 @@ class StrokeCurveWidget (gui.curve.CurveWidget):
         self.setting_changed_cb()
         self._update()
 
-
     def setting_changed_cb(self):
         name = self.app.stroke_pressure_settings.current_setting
         preset_seq = self.app.stroke_pressure_settings.settings[name]
@@ -1689,13 +1543,11 @@ class StrokeCurveWidget (gui.curve.CurveWidget):
         # we needs this method ,called from superclass 
         self.queue_draw()
 
-
     def _changed_cb(self, curve):
         """Updates the linemode pressure settings when the curve is altered"""
         self.app.stroke_pressure_settings.points_changed_cb(self)
 
     def draw_cb(self, widget, cr):
-
         super(StrokeCurveWidget, self).draw_cb(widget, cr)
 
         width, height = self.get_display_area()
@@ -1705,7 +1557,6 @@ class StrokeCurveWidget (gui.curve.CurveWidget):
         def get_disp(x, y):
             return (x * width + gui.curve.RADIUS, 
                     y * height + gui.curve.RADIUS)
-
         
         cr.save()
 
@@ -1760,7 +1611,6 @@ class StrokeCurveWidget (gui.curve.CurveWidget):
                     ap[0], bp[0], cp[0], t_step),
                  gui.drawutils.get_bezier(
                     ap[1], bp[1], cp[1], t_step))
-        
 
     def get_pressure_value(self, step):
         junk, value = self._get_curve_value(step)
@@ -1802,7 +1652,6 @@ class OptionsPresenter_ExInking (object):
         self._target = (None, None)
 
         OptionsPresenter_ExInking.init_variation_preset_store()
-        
 
     def _ensure_ui_populated(self):
         if self._options_grid is not None:
@@ -1913,8 +1762,6 @@ class OptionsPresenter_ExInking (object):
                 return True
 
         self.variation_preset_store.foreach(walk_combo_cb,None)
-
-
 
     @property
     def widget(self):
@@ -2067,8 +1914,4 @@ class OptionsPresenter_ExInking (object):
         if inkmode:
             inkmode.set_autoapply_threshold(adj.get_value())
             prefs[_Prefs.THRESHOLD_PREF] = adj.get_value()
-
-
-
-
 

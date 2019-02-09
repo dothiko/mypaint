@@ -942,8 +942,6 @@ class AdjustLayerMode(gui.mode.ScrollableModeMixin,
         new_zone = EditZoneMixin.EMPTY_CANVAS
  
         if not self.in_drag:
-           #if self.phase in (PhaseMixin.CAPTURE, PhaseMixin.ADJUST):
-           #if self.phase == PhaseMixin.ADJUST:
             if self.is_actionbutton_ready():
                 new_target_node_index = None
                 self.current_button_id = None
@@ -964,6 +962,7 @@ class AdjustLayerMode(gui.mode.ScrollableModeMixin,
 
                 # Fallthrough
 
+            area = self._active_area
             # Test nodes for a hit, in reverse draw order
             if new_zone == EditZoneMixin.EMPTY_CANVAS:
                 new_target_node_index = self._search_target_node(tdw, x, y)
@@ -974,18 +973,15 @@ class AdjustLayerMode(gui.mode.ScrollableModeMixin,
             if new_target_node_index != self.target_node_index:
                 # Redrawing old target node.
                 if self.target_node_index is not None:
-                   #self._queue_draw_node(tdw, self.target_node_index)
-                    self.node_leave_cb(tdw, self.target_node_index) 
+                    self._queue_draw((area, )) # To erase
 
                 self.target_node_index = new_target_node_index
                 if self.target_node_index is not None:
-                   #self._queue_draw_node(tdw, self.target_node_index)
-                    self.node_enter_cb(tdw, new_target_node_index) 
+                    self._queue_draw((area, )) # To draw
 
             # In spite of above line, still active node not found...  
             # Cursor might be on `handle`
             self.target_handle_index = None
-            area = self._active_area
             if self.target_node_index is None and area is not None:
                 new_handle_index = area.get_handle_index_from_pos(tdw, x, y)
                 if new_handle_index is not None:
@@ -1366,15 +1362,6 @@ class AdjustLayerMode(gui.mode.ScrollableModeMixin,
             self.phase = _Phase.ADJUST_AREA
             self._active_area = self._source
             self._target.reset()
-
-    ## Node related
-    def node_leave_cb(self, tdw, old_index):
-        area = self._active_area
-        self._queue_draw((area, ))
-
-    def node_enter_cb(self, tdw, new_index):
-        area = self._active_area
-        self._queue_draw((area, ))
 
     ## Notifications from optionspresenter
     def notify_tranform_method_changed(self):
