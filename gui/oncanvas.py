@@ -241,16 +241,18 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         """ To know whether this mode is active or not. 
         """
         return self in self.doc.modes
-       #for mode in self.doc.modes:
-       #    if mode is self:
-       #        return True
-       #return False
 
     def is_adjusting_phase(self):
         """To know whether current phase is node adjusting phase.
         this method should be overriden in deriving classes.
         """
         return self.phase == PhaseMixin.ADJUST
+
+    def is_modefier_pressed(self, event):
+        """Utility method, to know whether modifier key is pressed
+        during pointer button operation.
+        """
+        return (event.state & self.ONCANVAS_MODIFIER_MASK) != 0
 
     ## Action buttons property 
     
@@ -457,7 +459,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
         current_layer = tdw.doc._layers.current
         if not (tdw.is_sensitive and current_layer.get_paintable()):
             return False
-       #self._update_zone_and_target(tdw, event.x, event.y)
         self._update_current_node_index()
 
         # Update workaround state for evdev dropouts
@@ -499,8 +500,6 @@ class OncanvasEditMixin(gui.mode.ScrollableModeMixin,
                     # Otherwise, only the node is selected, other selected nodes
                     # should be cleared.
                     self.select_node(targidx ,targidx)
-            else:
-                pass
 
             # FALLTHRU: *do* start a drag
 
@@ -935,6 +934,11 @@ class EditableStrokeMixin(OncanvasEditMixin,
         super(EditableStrokeMixin, self).mode_button_press_cb(tdw, event)
 
     def node_drag_start_cb(self, tdw, event):
+        if (self.phase == PhaseMixin.ADJUST 
+                and self.zone == EditZoneMixin.CONTROL_NODE
+                and self.is_modefier_pressed(event)):
+            self.phase = StrokePhaseMixin.ADJUST_PRESSURE_ONESHOT
+
         if self.is_pressure_modifying():
             if self.phase == StrokePhaseMixin.ADJUST_PRESSURE_ONESHOT:
                     self._queue_draw_selected_nodes(tdw)
