@@ -313,7 +313,7 @@ class ExInkingMode (EditableStrokeMixin,
         for i in range(int(steps) + 1):
             t = i / steps
             point = gui.drawutils.spline_4p(t, p_1, p0, p1, p2)
-            x, y, pressure, xtilt, ytilt, t_abs, viewzoom, viewrotation = point
+            x, y, pressure, xtilt, ytilt, t_abs, viewzoom, viewrotation, barrel_rotation = point
             pressure = lib.helpers.clamp(pressure, 0.0, 1.0)
             xtilt = lib.helpers.clamp(xtilt, -1.0, 1.0)
             ytilt = lib.helpers.clamp(ytilt, -1.0, 1.0)
@@ -326,7 +326,7 @@ class ExInkingMode (EditableStrokeMixin,
                 x, y, 
                 pressure, 
                 xtilt, ytilt,
-                viewzoom, viewrotation,
+                viewzoom, viewrotation, barrel_rotation,
                 auto_split=False,
             )
 
@@ -621,6 +621,7 @@ class ExInkingMode (EditableStrokeMixin,
             time=(event.time / 1000.0),
             viewzoom = self.doc.tdw.scale,
             viewrotation = self.doc.tdw.rotation,
+            barrel_rotation = 0.0 # TODO support barrel_rotation offset like tilt.
         )
 
     def nodes_position_iter(self, tdw, convert_to_display=True):
@@ -727,6 +728,7 @@ class ExInkingMode (EditableStrokeMixin,
             time=(cn.time + nn.time) / 2.0,
             viewzoom=(cn.viewzoom + nn.viewzoom) / 2.0,
             viewrotation=(cn.viewrotation + nn.viewrotation) / 2.0,
+            barrel_rotation=(cn.barrel_rotation + nn.barrel_rotation) / 2.0
         )
         self.nodes.insert(i+1,newnode)
 
@@ -1068,7 +1070,23 @@ class ExInkingMode (EditableStrokeMixin,
         data_length = field_cnt * 8
         for i in range(count):
             a = struct.unpack(fmt, raw_data[idx: idx+data_length])
-            node = _Node(*a)
+            # Workaround for new node fields
+            min_field = 7 # For older _Node field count.
+            max_field = 10
+            if (len(a) < max_field):
+                x, y, pressure, xtilt, ytilt, time = a[:min_field-1]
+                new_field = [0.0, 0.0, 0.0] # viewzoom, viewrotation, barrel_rotation
+                for i in range(min_field, max_field): # XXX at this time, maximum 9 fieldibutes.
+                    try:
+                        new_field[i-min_field] = a[i] 
+                    except IndexError:
+                        break;
+                node = _Node(
+                    x, y, pressure, xtilt, ytilt, time,
+                    new_field[0], new_field[1], new_field[2]
+                )
+            else:
+                node = _Node(*a)
             nodes.append(node)
             idx += data_length
         return nodes

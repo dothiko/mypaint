@@ -8,6 +8,7 @@
 
 
 ## Imports
+from __future__ import print_function
 
 import math
 from numpy import isfinite
@@ -765,6 +766,7 @@ class BezierMode (EditableStrokeMixin,
             
             viewzoom = self.doc.tdw.scale
             viewrotation = self.doc.tdw.rotation  
+            barrel_rotation = 0.0 # TODO should support from optionspresenter
                         
             self.stroke_to(
                 model, dtime,
@@ -777,7 +779,7 @@ class BezierMode (EditableStrokeMixin,
                     p0.xtilt, p3.xtilt, cur_step),
                 gui.drawutils.linear_interpolation(
                     p0.ytilt, p3.ytilt, cur_step),
-                viewzoom, viewrotation,
+                viewzoom, viewrotation, barrel_rotation,
                 auto_split=False,
             )
 
