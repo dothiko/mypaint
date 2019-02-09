@@ -1914,7 +1914,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
                 self.strokes.append(stroke)
             elif t == b"i":
                 # TODO This block should be removed as soon as possible.
-                # For Backward compatiblity of wrong codes.
+                # For compatiblity of testing(wrong) codes.
                 logger.warning(
                     "Loaded deprecated stroke map block - additional info."
                 )
@@ -1929,6 +1929,8 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
                 self.strokes.append(strokeinfo)
             elif t == b"}":
                 # Load expanded portion of strokemap.
+                # With placing datas at here, we can keep forward
+                # compatibility with older mypaint strokemap file.
                 block_cnt = 0
                 while True:
                     t = f.read(1)
@@ -1945,7 +1947,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
                         block_cnt += 1
                     elif t == b"b":
                         # TODO This block should be removed as soon as possible.
-                        # For Backward compatiblity of wrong codes.
+                        # For compatiblity of testing(wrong) codes.
                         logger.warning(
                             "Loaded deprecated stroke map block - expanded brush."
                         )
@@ -2170,7 +2172,7 @@ def _write_strokemap(f, strokes, dx, dy):
 
     # Then, write stroke datas.
     for stroke in strokes:
-        # For backward compatibility, separate StrokeInfo instances
+        # For forward compatibility, separate StrokeInfo instances
         # and process it later.
         if isinstance(stroke, lib.strokemap.StrokeInfo):
             infos.append(stroke)
@@ -2179,7 +2181,7 @@ def _write_strokemap(f, strokes, dx, dy):
     f.write(b'}')
 
     # Write 2nd(expanded) strokemap-infomations, after 1st end signature.
-    # With this, we can keep backward compatibility.
+    # This is for forward compatibility.
     for info in infos:
         _write_strokemap_stroke(f, info, brush2id, dx, dy)
     f.write(b'}')
