@@ -1570,11 +1570,8 @@ pyramid_flood_fill (Flagtile *tile, /* target flagtile object */
 #ifdef HEAVY_DEBUG
     assert(tile != NULL);
     assert(PySequence_Check(seeds));
+    assert(targ_pixel != fill_pixel);
 #endif
-
-    // Exit when the tile already filled up.
-    if (tile->is_filled_with(fill_pixel))
-        Py_RETURN_NONE;
 
     const int tile_size = PYRAMID_TILE_SIZE(level);
 
@@ -1582,13 +1579,15 @@ pyramid_flood_fill (Flagtile *tile, /* target flagtile object */
     if (min_y < 0) min_y = 0;
     if (max_x > tile_size-1) max_x = tile_size-1;
     if (max_y > tile_size-1) max_y = tile_size-1;
-    if (min_x > max_x || min_y > max_y) {
+    if (min_x > max_x || min_y > max_y 
+            || tile->is_filled_with(fill_pixel)) {
         return Py_BuildValue("[()()()()]");
     }
     // Populate a working queue with seeds
     int x = 0;
     int y = 0;
     GQueue *queue = g_queue_new();   /* Of tuples, to be exhausted */
+    
     for (int i=0; i<PySequence_Size(seeds); ++i) {
         PyObject *seed_tup = PySequence_GetItem(seeds, i);
 #ifdef HEAVY_DEBUG
@@ -1618,7 +1617,6 @@ pyramid_flood_fill (Flagtile *tile, /* target flagtile object */
     // Instantly fill up when the tile is empty and enqueue all edges.
     // But, it would be less effcient above 4 pyramid-level.
     if (level <= 4 && tile->is_filled_with(targ_pixel)) {
-
         // Mark FLAG_WORK at seeded pixels.
         // And avoid seed into that direction.
         while (! g_queue_is_empty(queue)) {
@@ -1630,9 +1628,10 @@ pyramid_flood_fill (Flagtile *tile, /* target flagtile object */
 
         // Enqueue all edges of the tile,
         // Except for `seed pixels`.  
-        for(int x=0; x<=tile_size-1; x+=(tile_size-1)) {
-            for(int y=0; y<=tile_size-1; y++) {
-                if ((tile->get(level, x, y) & FLAG_WORK) == 0) {
+        // XXX NOTE: seed pixels are incoming from inverted position.
+        for(int x=0; x<tile_size; x+=(tile_size-1)) {
+            for(int y=0; y<tile_size; y++) {
+                if ((tile->get(level, tile_size-x-1, y) & FLAG_WORK) == 0) {
                     PyObject *s = Py_BuildValue("ii", x, y);
                     PyList_Append(result, s);
                     Py_DECREF(s);
@@ -1645,9 +1644,9 @@ pyramid_flood_fill (Flagtile *tile, /* target flagtile object */
         }
         
         result = result_s;
-        for(int y=0; y<=tile_size-1; y+=(tile_size-1)) {
-            for(int x=0; x<=tile_size-1; x++) {
-                if ((tile->get(level, x, y) & FLAG_WORK) == 0) {
+        for(int y=0; y<tile_size; y+=(tile_size-1)) {
+            for(int x=0; x<tile_size; x++) {
+                if ((tile->get(level, x, tile_size-y-1) & FLAG_WORK) == 0) {
                     PyObject *s = Py_BuildValue("ii", x, y);
                     PyList_Append(result, s);
                     Py_DECREF(s);

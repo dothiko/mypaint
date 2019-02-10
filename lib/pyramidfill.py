@@ -679,7 +679,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
                         targ_r, targ_g, targ_b, targ_a,
                         tolerance,
                         alpha_threshold,
-                        False
+                        True
                     )
                     if level > 0:
                         flag_tile.propagate_upward(level)
@@ -748,8 +748,8 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     if show_flag:
         _dbg_show_flag(
             ft, 
-            "area, contour, outside, reserve", 
-            base_level-1, 
+            "area, filled, contour, outside, reserve", 
+            base_level, 
             title="1st stage"
         )
         _dbg_show_flag(
