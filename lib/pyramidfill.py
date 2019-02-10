@@ -31,7 +31,6 @@ class _PIXEL:
 
 
 ## Utility Functions
-
 def _convert_result(dstsurf, ft, color, combine_mode, pixel=_PIXEL.FILLED):
     """Draw filled result of flagtile surface into 
     mypaint-colortiles of the layer, using tile_combine functon

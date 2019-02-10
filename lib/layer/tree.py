@@ -616,7 +616,7 @@ class RootLayerStack (group.LayerStack):
             options["alpha"] = True
         lib.surface.save_as_png(rendering, filename, *bbox, **options)
 
-    def get_tile_accessible_layer_rendering(self, layer):
+    def get_tile_accessible_layer_rendering(self, layer, ignore_bg=False): # XXX for pyramidfill
         """Get a TileAccessible temporary rendering of a sublayer.
 
         :returns: A temporary rendering object with inbuilt tile cache.
@@ -626,6 +626,10 @@ class RootLayerStack (group.LayerStack):
 
         """
         spec = self._get_render_spec_for_layer(layer)
+        # XXX for pyramidfill
+        if ignore_bg:
+            spec.solo = True
+        # XXX for pyramidfill end
         rendering = _TileRenderWrapper(self, spec)
         return rendering
 

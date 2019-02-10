@@ -2235,12 +2235,10 @@ class ClosedAreaFill (FloodFill):
 
     def _get_source_surface(self):
         """Get source surface from currently selected layer.
-        If the layer is layergroup, use TileRequestWrapper.
-        But, temporally hide background to get transparent pixels.
         """
-        layers = self.doc.layer_stack
         if self.sample_merged:
-            surf = layers.get_tile_accessible_layer_rendering(layers)
+            cl = self.doc.layer_stack
+            surf = cl.get_tile_accessible_layer_rendering(cl, ignore_bg=True)
         else:
             cl = layers.current
             surf = cl._surface
@@ -2632,8 +2630,7 @@ class AdjustLayer (Command):
         model = self.doc
         cl = self.layer
         if cl is model.layer_stack:
-            assert hasattr(cl, "background_visible")
-            return cl.get_tile_accessible_layer_rendering(cl)
+            return cl.get_tile_accessible_layer_rendering(cl, ignore_bg=True)
         else:
             assert hasattr(cl, "_surface")
             return cl._surface
