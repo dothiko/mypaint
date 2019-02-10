@@ -1870,6 +1870,11 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         dx = translate_x % N
         dy = translate_y % N
         # XXX for `info pick`
+        def __read_brush_from_stream(f, brushes):
+            length, = struct.unpack('>I', f.read(4))
+            tmp = f.read(length)
+            brushes.append(zlib.decompress(tmp))
+
         def __read_stroke_from_stream(f, stroke):
             brush_id, length = struct.unpack('>II', f.read(2 * 4))
             tmp = f.read(length)
@@ -1906,9 +1911,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
 
             # XXX for `info pick`
             if t == b"b":
-                length, = struct.unpack('>I', f.read(4))
-                tmp = f.read(length)
-                brushes.append(zlib.decompress(tmp))
+                __read_brush_from_stream(f, brushes) 
             elif t == b"s":
                 stroke = __read_stroke_from_stream(
                     f, lib.strokemap.StrokeShape()
@@ -1948,20 +1951,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
                         self.strokes.append(strokeinfo)
                         block_cnt += 1
                     elif t == b"b":
-                        # TODO This block should be removed as soon as possible.
-                        # For compatiblity of testing(wrong) codes.
-                        logger.warning(
-                            "Loaded deprecated stroke map block - expanded brush."
-                        )
-                        length, = struct.unpack('>I', f.read(4))
-                        tmp = f.read(length)
-                        brushes.append(zlib.decompress(tmp))
-                        block_cnt += 1
-                    elif t == b"e":
-                        # XXX Reserved signature, for future expansion. 
-                        logger.warning(
-                            "Expanded strokemap contains reserved signature."
-                        )
+                        __read_brush_from_stream(f, brushes) 
                         block_cnt += 1
                     elif t == b"}":
                         # The second end signature.
@@ -2167,12 +2157,6 @@ class PaintingLayer (StrokemappedPaintingLayer, core.ExternallyEditable):
 def _write_strokemap(f, strokes, dx, dy):
     brush2id = {}
     infos = []
-    # At first, write all used brushes.
-    # All brushes should be written in 1st(normal) strokemap block.
-    for stroke in strokes:
-        _write_strokemap_brush(f, stroke, brush2id)
-
-    # Then, write stroke datas.
     for stroke in strokes:
         # For forward compatibility, separate StrokeInfo instances
         # and process it later.
@@ -2188,8 +2172,9 @@ def _write_strokemap(f, strokes, dx, dy):
         _write_strokemap_stroke(f, info, brush2id, dx, dy)
     f.write(b'}')
 
-def _write_strokemap_brush(f, stroke, brush2id):
-    # save brush (if not already recorderd)
+def _write_strokemap_stroke(f, stroke, brush2id, dx, dy):
+    """Write strokemap stroke and additional infomation. 
+    """
     b = stroke.brush_string
     if b not in brush2id:
         brush2id[b] = len(brush2id)
@@ -2200,9 +2185,7 @@ def _write_strokemap_brush(f, stroke, brush2id):
         f.write(struct.pack('>I', len(b)))
         f.write(b)
 
-def _write_strokemap_stroke(f, stroke, brush2id, dx, dy):
-    """Write strokemap stroke and additional infomation. 
-    """
+    # Write basic stroke info.
     if isinstance(stroke, lib.strokemap.StrokeInfo):
         signature = b'i'
     else:
@@ -2240,27 +2223,68 @@ class _StrokemapFileUpdateTask (object):
         self._brush2id = {}
         self._strokes = strokes[:]
         self._strokes_i = 0
+        # XXX for `info-pick`
+        self._infos_i = 0
+        self._infos = []
+        # XXX for `info-pick` end
         logger.debug("autosave: scheduled update of %r", self._final_name)
 
+   # XXX Original codes:
+   #def __call__(self):
+   #    if self._tmp.closed:
+   #        raise RuntimeError("Called too many times")
+   #    if self._strokes_i < len(self._strokes):
+   #        stroke = self._strokes[self._strokes_i]
+   #        _write_strokemap_stroke(
+   #            self._tmp,
+   #            stroke,
+   #            self._brush2id,
+   #            self._dx, self._dy,
+   #        )
+   #        self._strokes_i += 1
+   #        return True
+   #    else:
+   #        self._tmp.write(b'}')
+   #        self._tmp.close()
+   #        lib.fileutils.replace(self._tmp.name, self._final_name)
+   #        logger.debug("autosave: updated %r", self._final_name)
+   #        return False
+
+    # XXX for `info-pick`
     def __call__(self):
         if self._tmp.closed:
             raise RuntimeError("Called too many times")
         if self._strokes_i < len(self._strokes):
             stroke = self._strokes[self._strokes_i]
+            if isinstance(stroke, lib.strokemap.StrokeInfo):
+                self._infos.append(stroke)
+            else:
+                _write_strokemap_stroke(
+                    self._tmp,
+                    stroke,
+                    self._brush2id,
+                    self._dx, self._dy,
+                )
+            self._strokes_i += 1
+            return True
+        elif self._infos_i < len(self._infos):
+            if self._infos_i == 0:
+                self._tmp.write(b'}') # Ordinary end signature
+            info = self._infos[self._infos_i]
             _write_strokemap_stroke(
                 self._tmp,
-                stroke,
+                info,
                 self._brush2id,
                 self._dx, self._dy,
             )
-            self._strokes_i += 1
-            return True
+            self._infos_i += 1
         else:
             self._tmp.write(b'}')
             self._tmp.close()
             lib.fileutils.replace(self._tmp.name, self._final_name)
             logger.debug("autosave: updated %r", self._final_name)
             return False
+    # XXX for `info-pick` end
 
 
 class StrokemappedPaintingLayerSnapshot (SurfaceBackedLayerSnapshot):

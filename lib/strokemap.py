@@ -23,7 +23,7 @@ from . import mypaintlib
 from . import tiledsurface
 from . import idletask
 from lib.pycompat import PY3
-import gui.pickable as pickable
+import lib.pickable as pickable
 
 logger = getLogger(__name__)
 TILE_SIZE = N = mypaintlib.TILE_SIZE
