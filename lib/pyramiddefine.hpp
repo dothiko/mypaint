@@ -30,21 +30,27 @@
 // This macro is used in pyramid.cpp/hpp
 #define POSITIVE_MOD(a, b) (((a) % (b) + (b)) % (b))
 
-// MAX pyramid level. 5 means maximum 2^5 == 32 pixel.
-#define MAX_PYRAMID 5
  
-// root of MYPAINT_TILE_SIZE. i.e. 2**6 = 64 pixel.
-#define TILE_ROOT 6
+// logarithmic value of MYPAINT_TILE_SIZE. i.e. 2**6 = 64 pixel.
+#define TILE_LOG 6
+
+// MAX pyramid level. 5 means maximum 2**5 == 32 pixel.
+#define MAX_PYRAMID ((TILE_LOG)-1)
 
 // Convert a progress level 0(source or final result) coordinate
 // into each progress level (greater than 0) coordinate.
 #define PYRAMID_PIXEL_COORD(a, l) ((a) >> (l)) 
 
 // XXX CAUTION: PYRAMID_TILE_SIZE(0) MUST BE SAME AS MYPAINT_TILE_SIZE.
-#define PYRAMID_TILE_SIZE(l) (1 << (TILE_ROOT - (l)))
+#define PYRAMID_TILE_SIZE(l) (1 << (TILE_LOG - (l)))
 #define PYRAMID_BUF_SIZE(l) (PYRAMID_TILE_SIZE(l) * PYRAMID_TILE_SIZE(l))
 
-//#define TILE_SIZE MYPAINT_TILE_SIZE
+#define FLAGTILE_BUF_SIZE  (PYRAMID_BUF_SIZE(0) + \
+                            PYRAMID_BUF_SIZE(1) + \
+                            PYRAMID_BUF_SIZE(2) + \
+                            PYRAMID_BUF_SIZE(3) + \
+                            PYRAMID_BUF_SIZE(4) + \
+                            PYRAMID_BUF_SIZE(5)) 
 
 // Maximum Anti-Aliasing transparency level.
 #define MAX_AA_LEVEL 127
@@ -153,26 +159,7 @@ class BaseWorker
 protected:
     FlagtileSurface* m_surf;
     int m_level;
-    
-    // process only outerrim ridges of a tile.
-    // use for a tile which is filled some specific value.
-    void process_only_ridge(Flagtile *targ, const int sx, const int sy)
-    {
-        int ridge = PYRAMID_TILE_SIZE(m_level);
-
-        for(int y=0;y < ridge;y+=ridge-1){
-            for(int x=0;x < ridge;x++){
-                step(targ, x, y, sx+x, sy+y);
-            }
-        }
-
-        // Corner pixels are already processed at above loop.
-        for(int x=0;x < ridge;x+=ridge-1){
-            for(int y=1;y < ridge-1;y++){
-                step(targ, x, y, sx+x, sy+y);
-            }
-        }
-    }
+    static Flagtile *m_shared_empty;
 
 public:
     BaseWorker(FlagtileSurface* surf) 
@@ -221,8 +208,32 @@ public:
                       const int x, const int y,
                       const int sx, const int sy) = 0;
     
+    // process only outerrim ridges of a tile.
+    // use for a tile which is filled some specific value.
+    void process_only_ridge(Flagtile *targ, const int sx, const int sy)
+    {
+        int ridge = PYRAMID_TILE_SIZE(m_level);
+
+        for(int y=0;y < ridge;y+=ridge-1){
+            for(int x=0;x < ridge;x++){
+                step(targ, x, y, sx+x, sy+y);
+            }
+        }
+
+        // Corner pixels are already processed at above loop.
+        for(int x=0;x < ridge;x+=ridge-1){
+            for(int y=1;y < ridge-1;y++){
+                step(targ, x, y, sx+x, sy+y);
+            }
+        }
+    }
+    
     // Called when entire tiles processing end.
     virtual void finalize() {}
+
+    static Flagtile *get_shared_empty(); 
+    static bool sync_shared_empty();
+    static void free_shared_empty(); 
 };
 
 /**

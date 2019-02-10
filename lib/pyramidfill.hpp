@@ -27,18 +27,10 @@
  */
 class Flagtile 
 {
-private:
+protected:
     uint8_t *m_buf;
     // Pixel counts. This stores how many pixels per pixel value in this tile.
-    uint16_t m_pixcnt[8];
-
-    // The total buffer size,
-    static const int BUF_SIZE = PYRAMID_BUF_SIZE(0) + 
-                                PYRAMID_BUF_SIZE(1) + 
-                                PYRAMID_BUF_SIZE(2) + 
-                                PYRAMID_BUF_SIZE(3) + 
-                                PYRAMID_BUF_SIZE(4) + 
-                                PYRAMID_BUF_SIZE(5); 
+    uint16_t m_pixcnt[PIXEL_MASK+1];
 
     // buffer offsets of progress levels.
     static const int m_buf_offsets[MAX_PYRAMID+1];
@@ -66,7 +58,7 @@ public:
         return *BUF_PTR(level, x, y);
     }
 
-    virtual void replace(const int level, int x, int y, uint8_t val) 
+    inline void replace(const int level, int x, int y, uint8_t val) 
     {
         uint8_t oldpix = *BUF_PTR(level, x, y) & PIXEL_MASK;
         if (level == 0 
@@ -156,7 +148,7 @@ public:
     // This tile is a borrowed one from python dictionary.
     // i.e. this tile should not be deleted. just replace with NULL.
     static const int BORROWED = 0x00000002;
-    
+
     // To Expose PIXEL_ values for python
     // without `contaminating` original mypaint namespace.
     static const int PIXEL_FILLED_VALUE = PIXEL_FILLED;
@@ -171,47 +163,6 @@ public:
     static const int MAX_PYRAMID_LEVEL = MAX_PYRAMID;
 };
 
-/* Special empty tile class 
- * This is used to avoid bug around dealing with 
- * NULL pointer (vacant tile) in FlagtileSurface. 
- * With this class, we can access every tile in
- * surface, even if it does not exist actually.
- * And if a pixel is written into such `empty` tile,
- * that tile changed into actual surface tile immidiately 
- * and new empty tile would be generated.
- */ 
-class Emptytile : public Flagtile
-{
-protected:
-    int m_requested_tx;
-    int m_requested_ty;
-    FlagtileSurface *m_surf;
-
-public:
-    Emptytile(FlagtileSurface* surf)
-        : Flagtile(PIXEL_EMPTY),
-          m_requested_tx(-1),
-          m_requested_ty(-1),
-          m_surf(surf) {}
-    virtual ~Emptytile() {
-#ifdef HEAVY_DEBUG
-        printf("Emptytile released.\n");
-#endif
-    } 
-
-    // Record where the empty tile is requested as.
-    void requested(const int tx, const int ty)
-    {
-#ifdef HEAVY_DEBUG
-        assert(m_surf != NULL);
-#endif
-        m_requested_tx = tx;
-        m_requested_ty = ty;
-    }
-
-    virtual void replace(const int level, int x, int y, uint8_t val); 
-};
-
 /* Flagtile psuedo surface object.
  * This is the base class of fill operation classes.
  * This class is exposed to python, but cannot be used.
@@ -222,8 +173,9 @@ protected:// Use protected, this is base-class.
     // The array of pointer of Flagtiles.
     Flagtile** m_tiles;
 
-    // The dummy empty tile. unique for FlagtileSurface instance.
-    Emptytile* m_empty_tile;
+    // Shared buffer, for dummy empty tile. 
+    uint8_t *m_empty_shared_buf;
+    uint16_t *m_empty_shared_cnt;
 
     // Origin x,y (tile coordinate)
     int m_ox; 
@@ -244,6 +196,18 @@ protected:// Use protected, this is base-class.
     inline int get_tile_index(const int tx, const int ty) 
     {
         return (ty * m_width + tx);
+    }
+
+    // Set tile forcefully. Use carefully.
+    // Mainly used from filter_tile method.
+    inline void set_tile(const int tx, const int ty, Flagtile* t) 
+    {
+        int idx = get_tile_index(tx, ty);
+#ifdef HEAVY_DEBUG
+        assert(idx < (m_width * m_height));
+        assert(m_tiles[idx] == NULL);
+#endif
+        m_tiles[idx] = t;
     }
 
     // Replace pixel when that pixel exactly same with targ_flag.
@@ -279,14 +243,14 @@ public:
     }
 
     inline Flagtile* get_tile(const int tx, const int ty, 
-                              const bool request=false) 
+                              const bool request=false)
     {
         return get_tile(get_tile_index(tx, ty), request);
     }
 
     inline Flagtile* get_tile_from_pixel(const int level, 
                                          const int sx, const int sy, 
-                                         const bool request) 
+                                         const bool request)
     { 
         int tile_size = PYRAMID_TILE_SIZE(level);
         int raw_tx = sx / tile_size;
@@ -309,28 +273,26 @@ public:
         return get_tile(raw_ty * m_width + raw_tx, request);
     }
     
-    inline Flagtile* get_tile(const int idx, const bool request=false) 
+    inline Flagtile* get_tile(const int idx, const bool request=false)
     {
 #ifdef HEAVY_DEBUG
         assert(idx < (m_width * m_height));
 #endif
         Flagtile* ct = m_tiles[idx];
-        if (request && ct == NULL) {
-            ct = new Flagtile(PIXEL_EMPTY);
-            m_tiles[idx] = ct;
-        }
-        else if (ct == NULL) {
-            m_empty_tile->requested(idx % m_width, idx / m_height);
-            return m_empty_tile;
+        if (ct == NULL) {
+            if (request) {
+                ct = new Flagtile(PIXEL_EMPTY);
+                m_tiles[idx] = ct;
+            }
         }
         return ct;
     }
-    
+
     // Check existence of a tile, 
     // without generating/discarding a wrapper object.
     inline bool tile_exists(const int tx, const int ty) 
     {
-        return get_tile(get_tile_index(tx, ty), false) != m_empty_tile;
+        return get_tile(tx, ty, false) != NULL;
     }
 
     inline uint8_t get_pixel(const int level, 
@@ -365,10 +327,6 @@ assert(ct != NULL);
                     POSITIVE_MOD(sy, tile_size), 
                     val);
     }
-
-    //// `Empty tile` related.
-    inline bool is_empty_tile(Flagtile * const t){return m_empty_tile==t;}
-    bool update_empty_tile(const int tx, const int ty);
 
     //// Propagate methods.
 

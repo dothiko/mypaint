@@ -99,8 +99,9 @@ class _Prefs:
     SHARE_SETTING_PREF = 'share_setting'
     ALPHA_THRESHOLD_PREF = 'alpha_threshold'
     FILL_ALL_HOLES_PREF = 'fill_all_holes'
+    TOLERANCE_LIMIT_PREF = 'tolerance_limit'
 
-    DEFAULT_TOLERANCE = 0.2
+    DEFAULT_TOLERANCE = 0.05
     DEFAULT_GAP_LEVEL = 3
     DEFAULT_DILATION_SIZE = 2
     DEFAULT_SAMPLE_MERGED = True
@@ -110,6 +111,7 @@ class _Prefs:
     DEFAULT_SHARE_SETTING = True
     DEFAULT_ALPHA_THRESHOLD = 0.0156
     DEFAULT_FILL_ALL_HOLES = False
+    DEFAULT_TOLERANCE_LIMIT = True
 
     PREFIX = {
         _FillMethod.FLOOD_FILL : "flood_fill",
@@ -947,12 +949,24 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         if not isinstance(targ, lib.layer.data.SimplePaintingLayer):
             make_new_layer = True # Force to unfillable layer.
 
+        tolerance = opts.tolerance
+        if tolerance == 0.0:
+            if pref.get(_Prefs.TOLERANCE_LIMIT_PREF, True):
+                tolerance = 0.001 # XXX should we configurable this value?
+                app.show_transient_message(
+                    _("Warning: tolerance option is lowest, so changed by advanced configuration.")
+                )
+            else:
+                app.show_transient_message(
+                    _("Warning: tolerance option is the lowest value. This might make annoying result.")
+                )
+
         if fill_method == _FillMethod.FLOOD_FILL:
             assert targ_color_pos is not None
             x, y = targ_color_pos
             model.flood_fill(
                 x, y, color,
-                tolerance=opts.tolerance,
+                tolerance=tolerance,
                 sample_merged=opts.sample_merged,
                 make_new_layer=make_new_layer,
                 # keyword arguments
@@ -970,7 +984,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
             cmd = lib.command.ClosedAreaFill(
                 model, nodes, 
                 color,
-                opts.tolerance,
+                tolerance,
                 opts.sample_merged,
                 make_new_layer,
                 opts.dilation_size,
@@ -990,7 +1004,7 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
             cmd = lib.command.LassoFill(
                 model, nodes, 
                 color,
-                opts.tolerance,
+                tolerance,
                 opts.sample_merged,
                 make_new_layer,
                 opts.dilation_size,
@@ -1214,6 +1228,11 @@ class OptionsPresenter(Gtk.Grid):
     _SPACING = 6
 
     def __init__(self):
+        # XXX NOTE: some options might be shared/exclusive
+        # for each fill-method.
+        # Such options would be set in self._refresh_ui_from_fillmethod,
+        # so do nothing about preference at here for them.
+
         Gtk.Grid.__init__(self)
         self._update_ui = True
         self.set_row_spacing(self._SPACING)
@@ -1466,12 +1485,33 @@ class OptionsPresenter(Gtk.Grid):
               "Some options might be disabled for a certain method.")
         )
         adv_grid.attach(checkbut, 1, adv_row, 1, 1)
-        # This option access to app.preferences directly.
+        # This option is not shared, access to app.preferences directly.
         active = prefs.get(_Prefs.SHARE_SETTING_PREF,
                            _Prefs.DEFAULT_SHARE_SETTING)
         checkbut.set_active(bool(active))
         checkbut.connect("toggled", self._share_setting_toggled_cb)
         self._share_setting_toggle = checkbut
+
+        adv_row += 1
+        label = generate_label(
+            _("Tolerance option:"),
+            _("About tolerance settings."),
+            adv_row,
+            adv_grid
+        )
+        text = _("tolerance never become 0")
+        checkbut = Gtk.CheckButton.new_with_label(text)
+        checkbut.set_tooltip_text(
+            _("mypaint-brush has so high fidelity, there might be invisible brush stroke.\n"
+              "For such area, Zero-tolerance fill would make annoying result.")
+        )
+        adv_grid.attach(checkbut, 1, adv_row, 1, 1)
+        # This option is not shared, access to app.preferences directly.
+        active = prefs.get(_Prefs.TOLERANCE_LIMIT_PREF,
+                           _Prefs.DEFAULT_TOLERANCE_LIMIT)
+        checkbut.set_active(bool(active))
+        checkbut.connect("toggled", self._tolerance_limit_toggled_cb)
+        self._tolerance_limit_toggle = checkbut
 
         # XXX Debug buttons
         adv_row += 1
@@ -1508,9 +1548,13 @@ class OptionsPresenter(Gtk.Grid):
 
     def _refresh_ui_from_fillmethod(self, method, force=False):
         """Refresh user interface widgets.
-        You must modify this method when adding/removing
-        option widgets.
+        This also means `Apply dedicated configuration for each fill-method`
         """
+        # XXX You must consider to modify this method 
+        # when adding/removing option widgets,
+        # if it is `shareable` between fill-method.
+        # `Advanced options` would not be shared.
+
         prev = self._update_ui
         self._update_ui = True
 
@@ -1733,6 +1777,10 @@ class OptionsPresenter(Gtk.Grid):
         if not self._update_ui:
             self.app.preferences[_Prefs.SHARE_SETTING_PREF] = btn.get_active()
             self._refresh_ui_from_fillmethod(self.fill_method, force=True)
+
+    def _tolerance_limit_toggled_cb(self, btn):
+        if not self._update_ui:
+            self.app.preferences[_Prefs.TOLERANCE_LIMIT_PREF] = btn.get_active()
 
     def _spin_focus_in_cb(self, widget, event):
         if self._update_ui:

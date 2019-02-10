@@ -113,6 +113,38 @@ assert_tile(PyArrayObject* array) {
 // FYC, Base worker classes are defined at lib/profilldefine.hpp
 // And most of derived worker classes are defined at lib/pyramidworkers.hpp
 
+//----------------------------------------------------------------------------
+/// BaseWorker
+
+//// Shared empty tile related.
+Flagtile *BaseWorker::m_shared_empty = NULL;
+
+Flagtile* 
+BaseWorker::get_shared_empty() 
+{
+    if (m_shared_empty == NULL) 
+        m_shared_empty = new Flagtile(PIXEL_EMPTY);
+    return m_shared_empty;
+}
+
+bool 
+BaseWorker::sync_shared_empty()
+{
+    if (!m_shared_empty->is_filled_with(PIXEL_EMPTY)) {
+        printf("shared_empty entangled\n");
+        m_shared_empty = NULL;
+        return true;
+    }
+    return false;
+}
+
+// Call this from FlagtileSurface destructor.
+void 
+BaseWorker::free_shared_empty() 
+{
+    delete m_shared_empty;
+    m_shared_empty = NULL;
+}
 
 //--------------------------------------
 /// KernelWorker 
@@ -305,15 +337,12 @@ Flagtile::m_buf_offsets[MAX_PYRAMID+1] = {
 Flagtile::Flagtile(const int initial_value) 
     : m_statflag(0) 
 {
-    m_buf = new uint8_t[BUF_SIZE];
+    m_buf = new uint8_t[FLAGTILE_BUF_SIZE];
     fill(initial_value);
 }
 
 Flagtile::~Flagtile() 
 {
-#ifdef HEAVY_DEBUG
-    assert(m_buf != NULL);
-#endif
     delete[] m_buf;
 }
 
@@ -337,7 +366,7 @@ Flagtile::propagate_upward_single(const int targ_level)
             // process chunk of pixels, like `pooling`
             for (int by=0; by < 2; by++) {
                 for (int bx=0; bx < 2; bx++) {
-                    uint8_t pix = get(b_level, bbx+bx, bby+by);
+                    uint8_t pix = get(b_level, bbx+bx, bby+by) & PIXEL_MASK;
                     switch(pix) {
                         case PIXEL_CONTOUR:
                         case PIXEL_OVERWRAP:
@@ -628,29 +657,9 @@ Flagtile::fill(const uint8_t val)
 #endif
     // Fill only equal and above of assigned level.
     
-    memset(m_buf, val, BUF_SIZE);
-    memset(m_pixcnt, 0, sizeof(m_pixcnt));
+    memset(m_buf, val, FLAGTILE_BUF_SIZE);
+    memset(m_pixcnt, 0, sizeof(uint16_t)*(PIXEL_MASK+1));
     m_pixcnt[val] = TILE_SIZE * TILE_SIZE;
-}
-
-//--------------------------------------
-//// Emptytile class.
-void 
-Emptytile::replace(const int level, int x, int y, uint8_t val) 
-{
-    Flagtile::replace(level, x, y, val);
-    if (m_surf != NULL) {
-        // Automatically update 
-        // FlagtileSurface empty tile, 
-        // if any pixel writing operation executed.
-        // With this, we can write(replace) psuedo-constant 
-        // empty-tile pixel, without any effort.
-        m_surf->update_empty_tile(
-            m_requested_tx,
-            m_requested_ty
-        );
-        m_surf = NULL;
-    }
 }
 
 //--------------------------------------
@@ -663,47 +672,26 @@ FlagtileSurface::FlagtileSurface()
     : m_tiles(NULL)
 {
 #ifdef HEAVY_DEBUG
-    // This should be `static assert`
-    assert((1 << TILE_ROOT) == MYPAINT_TILE_SIZE);
+    // This should be `static assert` and exactly 
+    // compare with MYPAINT_TILE_SIZE, not other macros.
+    assert((1 << TILE_LOG) == MYPAINT_TILE_SIZE);
 #endif
-    m_empty_tile = new Emptytile(this);
 }
 
 FlagtileSurface::~FlagtileSurface() 
 {
     for(int i=0; i<m_width*m_height; i++) {
-        Flagtile *ct = m_tiles[i];
-        delete ct;
+        delete m_tiles[i]; 
     }
     delete[] m_tiles;
-    delete m_empty_tile;
+
+    BaseWorker::free_shared_empty();
 #ifdef HEAVY_DEBUG
     printf("FlagtileSurface destructor called.\n");
 #endif
 }
 
 //// Internal methods
-/**
-* @update_empty_tile
-* Detect whether `empty tile` has been changed or not.
-* If it is changed, replace that NULL pointer and 
-* generate new empty tile.
-*/
-bool
-FlagtileSurface::update_empty_tile(const int tx, const int ty)
-{
-    if (! m_empty_tile->is_filled_with(PIXEL_EMPTY)) {
-        int idx = get_tile_index(tx, ty);
-#ifdef HEAVY_DEBUG
-        assert(m_tiles[idx] == NULL);
-#endif
-        m_tiles[idx] = m_empty_tile;
-        m_empty_tile = new Emptytile(this);
-        return true;
-    }
-    return false;
-}
-
 /**
 * @generate_tileptr_buf
 * Generate(allocate) tile pointer array buffer.
@@ -757,7 +745,7 @@ FlagtileSurface::generate_tileptr_buf(const int ox, const int oy,
 * without returning python seed tuples.
 */
 void 
-FlagtileSurface::flood_fill(const int sx, const int sy,
+FlagtileSurface::flood_fill(const int sx, const int sy, 
                             FillWorker* w)                                
 {
     const int level = w->get_target_level();
@@ -796,6 +784,7 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
     static const int x_offset[] = {0, 1};
     const int max_x = tile_size * m_width;
     const int max_y = tile_size * m_height;
+    const bool accept_empty = w->match(PIXEL_EMPTY);
 
     while (! g_queue_is_empty(queue)) {
         pyramid_point *pos = (pyramid_point*) g_queue_pop_head(queue);
@@ -824,12 +813,15 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
                 int px = x % tile_size;
                 Flagtile *t;
                 
-                if (otx == tx && oty == ty) {
+                if (otx == tx && oty == ty && ot != NULL) {
                     t = ot;
                 }
                 else {
-                    t = get_tile(tx, ty, true);
+                    t = get_tile(tx, ty, accept_empty);
                     ot = t;
+                    if (t == NULL) {
+                        break;
+                    }
                     otx = tx;
                     oty = ty;
                 }              
@@ -904,6 +896,7 @@ FlagtileSurface::filter_tiles(KernelWorker *w)
 {
     Flagtile *t;
     int tile_size = PYRAMID_TILE_SIZE(w->get_target_level());
+    bool use_shared;
 
     // When targ_flag and new_flag are same,
     // it cause chain reaction within operation and
@@ -913,11 +906,16 @@ FlagtileSurface::filter_tiles(KernelWorker *w)
 
     for(int ty=0; ty<m_height; ty++) {
         for(int tx=0; tx<m_width; tx++) {
+            // Get tile. 
             t = get_tile(tx, ty, false);
+            use_shared = (t==NULL);
+
+            if (use_shared)
+                t = BaseWorker::get_shared_empty();
+
             int bx = tx * tile_size;
             int by = ty * tile_size;
             if (w->start(t, bx, by)) {
-
                 // iterate tile pixel.
                 for (int y=0; y<tile_size; y++) {
                     for (int x=0; x<tile_size; x++) {
@@ -929,6 +927,11 @@ FlagtileSurface::filter_tiles(KernelWorker *w)
                 // of KernelWorker would set 
                 // DIRTY stat flag for the tile.
                 w->end(t);
+            }
+
+            if (use_shared) {
+                if(BaseWorker::sync_shared_empty())
+                    set_tile(tx, ty, t);
             }
         }
     }
@@ -959,7 +962,7 @@ FlagtileSurface::propagate_upward(const int max_level)
         for(int tx=0; tx<m_width; tx++) {
 
             Flagtile *t = get_tile(tx, ty, false);
-            if (is_empty_tile(t)) {
+            if (t == NULL) {
                 continue;
             }
             t->propagate_upward(max_level);
@@ -1838,7 +1841,7 @@ FlagtileSurface::render_to_numpy(PyObject *npbuf,
             px = 0;
             for(int tx=0; tx<w; tx++) {
                 Flagtile *t = get_tile(tx, ty, false);
-                if (! is_empty_tile(t)) {
+                if (t != NULL) {
                     lptr = baseptr + (ystride * py + xstride * px);
                     for (int y=0; y < TILE_SIZE; y+=step) {
                         tptr = lptr;
@@ -1880,7 +1883,7 @@ FlagtileSurface::render_to_numpy(PyObject *npbuf,
             px = 0;
             for(int tx=0; tx<w; tx++) {
                 Flagtile *t = get_tile(tx, ty, false);
-                if (! is_empty_tile(t)) {
+                if (t != NULL) {
                     lptr = baseptr + (ystride * py + xstride * px);
                     for (int y=0; y < TILE_SIZE; y++) {
                         tptr = lptr;
@@ -1919,7 +1922,7 @@ FlagtileSurface::render_to_numpy(PyObject *npbuf,
             px = 0;
             for(int tx=0; tx<w; tx++) {
                 Flagtile *t = get_tile(tx, ty, false);
-                if (! is_empty_tile(t)) {
+                if (t != NULL) {
                     lptr = baseptr + (ystride * py + xstride * px);
                     for (int y=0; y < TILE_SIZE; y++) {
                         tptr = lptr;

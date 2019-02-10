@@ -34,7 +34,8 @@ class _PIXEL:
 
 def _convert_result(dstsurf, ft, color, combine_mode, pixel=_PIXEL.FILLED):
     """Draw filled result of flagtile surface into 
-    mypaint-colortiles of the layer.
+    mypaint-colortiles of the layer, using tile_combine functon
+    of pixops.cpp .
 
     :param dstsurf: Destination tiledsurface.
     :param combine_mode: CombineMode of lib.mypaintlib.tile_combine.
@@ -629,6 +630,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
    #print("px/py %s" % str((min_px, min_py, max_px, max_py, px, py)))
     print("tx/ty limits %s" % str((min_tx, min_ty, max_tx, max_ty)))
     print("targ color : %s" % str((targ_r, targ_g, targ_b, targ_a)))
+    print("fill color : %s" % str(color))
     print("fill_all_holes : %s" % str(fill_all_holes))
 
     show_flag = kwargs.get('show_flag', False)
@@ -822,7 +824,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     if show_flag:
         _dbg_show_flag(ft, "area, filled, contour", 0, title="removed")
     
-    ft.dilate(_PIXEL.FILLED, dilation_size)
+    ft.dilate(_PIXEL.FILLED, int(dilation_size))
 
     if fill_all_holes:
         ft.fill_holes()
