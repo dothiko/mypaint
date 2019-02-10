@@ -131,7 +131,6 @@ bool
 BaseWorker::sync_shared_empty()
 {
     if (!m_shared_empty->is_filled_with(PIXEL_EMPTY)) {
-        printf("shared_empty entangled\n");
         m_shared_empty = NULL;
         return true;
     }

@@ -941,7 +941,13 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
         model = self.doc.model
         opts = self.options_presenter
         nodes = self.nodes
-        color = app.brush_color_manager.get_color().get_rgb()
+        # XXX from Original fill.py.
+        # We cannot `correct color` from 
+        # app.brush_color_manager.get_color().get_rgb()
+        # directly.Need modify it.
+        rgb = app.brush_color_manager.get_color().get_rgb()
+        color = (rgb[0]**2.4, rgb[1]**2.4, rgb[2]**2.4)
+
         erase_pixel = model.brush.brushinfo.is_eraser()
         make_new_layer = opts.make_new_layer
 
