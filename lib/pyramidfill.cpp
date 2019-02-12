@@ -571,7 +571,7 @@ Flagtile::convert_to_color(PyObject *py_targ_tile,
     for(int y=0; y<TILE_SIZE; y++) {
         for(int x=0; x<TILE_SIZE; x++) {
             uint8_t pix = *sptr;
-            // At first, We need check anti-aliasing flag of pixel.
+            // At first, We need to check anti-aliasing flag of pixel.
             // Anti-aliasing pixel is not compatible
             // with another PIXEL_* values.
             if ((pix & FLAG_AA) != 0) {
