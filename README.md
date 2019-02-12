@@ -115,16 +115,8 @@ also 'Average points' / 'Delete points' / oncanvas node pressure editing , now w
 コントロールキーを押しながらノードをクリックすることで、制御点を複数選択できます。
 平均化・削除・キャンバス状での筆圧修正の機能が、この複数選択状態に対応しています。
 
-#### multiple node editing within defined range:
-You can move multiple nodes within defined range ('Editing range' scale of options presenter), without selecting them.
-
-Also, you can change how the editing affects against far nodes.('Editing factor' scale)
-When 'affected factor' come near to 1.0, editing affects much more directly to far nodes.
-When the factor come near to -1.0, editing affects almost near nodes, much less to far nodes.
-
 #### Pickable stroke:
 You can pick expinktool stroke nodes after that stroke is accepted, with 'Pick context' action.
-
 
 ### Beziertool - Draw Cubic Bezier-sprine curve like inktool : 三次ベジェ曲線を描くためのベジェツール
 The Cubic bezier-sprine tool,like 'inkscape' tool.
@@ -160,14 +152,6 @@ CTRLキーを押しながらストロークをクリックすることで、そ�
 
 #### Pickable stroke:
 You can pick beziertool stroke nodes after that stroke is accepted, with 'Pick context' action.
-
-
-### Polygon fill tool - fill a region surrounded with a (curved) path. : ポリゴンフィルツール
-Polygon fill tool, which enable to fill/erase/only fill current opaque pixel with curved polygon.
-
-with holding shift+ctrl and click empty canvas, we can popup "round button palette" around cursor.
-and with clicking that button , do fill(check icon)/erase(eraser icon)/erase outside(cut icon)/fill atop(plus icon) operation immidiately.
-
 
 ### Per device mode change : デバイスごとのモード変更
 A 'Device' referred to here is, for example, Pen tablet styls,or Pen tablet tail eraser,etc.
@@ -214,6 +198,14 @@ You can popup New Tool Palette feature with the action 'Tool Palette Popup'
 With this, you can popup circular tool icons at anywhere of canvas, and quickly select drawing tool.
 
 For many of so-called 'Left-hand devices' has limited number of buttons, and with this feature you can dramatically decrease buttons for tool select.
+
+### User-Configurable blink interval, Default pigment-usage.
+
+You can set custom blink interval of user interface in millisecond, at `Preferences` dialog. 
+It can fasten layer selection, stoke pick, etc.
+
+Also, you can force disable initial `Pigment` scale and initial layer blendmode as `Normal`, not `Paint`, to make mypaint running faster as old version.
+It's just setting initial value, you can still use Pigment feature whenever you need.
 
 
 ### Plugin feature
