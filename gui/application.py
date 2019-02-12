@@ -107,6 +107,7 @@ from . import oncanvas
 from . import closefill
 from . import adjustmode # XXX for adjustlayer 
 import gui.widgets 
+import lib.layer.core as core # XXX for `default_pigment`
 # XXX Added experimental modules (and needed from them) end
 
 logger = logging.getLogger(__name__)
@@ -303,6 +304,14 @@ class Application (object):
         self._preferences = lib.observable.ObservableDict()
         self.load_settings()
 
+        # XXX for `default paint method`
+        # Setting default combine mode for layer.
+        # This line should be after self._preferences loaded,
+        # and before model(lib.document) is constructed.
+        if self.preferences.get('ui.default_pigment', False):
+            core.LayerBase.INITIAL_MODE = lib.mypaintlib.CombineNormal
+        # XXX for `default paint method` end
+
         # Keyboard manager
         self.kbm = keyboard.KeyboardManager(self)
 
@@ -485,6 +494,7 @@ class Application (object):
         # Replace tiledrawwidget.flood_fill with decorated one.
         lib.tiledsurface.flood_fill = gui.widgets.with_wait_cursor(
                                         lib.tiledsurface.flood_fill)
+
 
         # XXX my codes end --------------------
 
@@ -679,6 +689,11 @@ class Application (object):
         assert not self.brush_adjustment
         changed_cb = self._brush_adjustment_value_changed_cb
         for s in brushsettings.settings_visible:
+            # XXX for `default paint method`
+            if s.cname == 'paint_mode':
+                if self.preferences.get('ui.default_pigment', False):
+                    s.default = 0.0
+            # XXX for `default paint method` end
             adj = Gtk.Adjustment(value=s.default, lower=s.min, upper=s.max,
                                  step_incr=0.01, page_incr=0.1)
             self.brush_adjustment[s.cname] = adj

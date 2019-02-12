@@ -206,6 +206,7 @@ class PreferencesWindow (windowing.Dialog):
 
         # XXX for `other configuration panel`
         # Other configurations
+
         # XXX for `Oncanvas item modifier`
         oncanvas_modifier_combo = getobj("combobox_oncanvas_modifier")
         self.oncanvas_modifier_combo = oncanvas_modifier_combo
@@ -225,6 +226,13 @@ class PreferencesWindow (windowing.Dialog):
             self.app.preferences.get("ui.quickchooser_timeout", 0)
         )
         # XXX for `autoleave chooser` end        
+
+        # XXX for `default paint method as pigment`
+        btn = getobj("checkbutton_default_pigment")
+        btn.set_active(p.get("ui.default_pigment", True))
+        # XXX for `default paint method as pigment` end
+
+
         # XXX for `other configuration panel` end
         
         self.in_update_ui = False
@@ -387,3 +395,10 @@ class PreferencesWindow (windowing.Dialog):
         if not self.in_update_ui:
             self.app.preferences["ui.quickchooser_timeout"] = adj.get_value()
     # XXX for `autoleave chooser` end
+
+    # XXX for `default paint method`
+    def default_pigment_checked_cb(self, btn):
+        if not self.in_update_ui:
+            active = btn.get_active()
+            self.app.preferences["ui.default_pigment"] = active
+    # XXX for `default paint method as pigment` end
