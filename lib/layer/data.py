@@ -1634,6 +1634,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
     # until v2.0.0.
 
     _ORA_STROKEMAP_ATTR = "{%s}strokemap" % (lib.xml.OPENRASTER_MYPAINT_NS,)
+    _ORA_STROKEMAP_ATTR_1a = "{%s}strokemap_v1a" % (lib.xml.OPENRASTER_MYPAINT_NS,)
 
     ## Initializing & resetting
 
@@ -1687,11 +1688,15 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         attrs = elem.attrib
         x += int(attrs.get('x', 0))
         y += int(attrs.get('y', 0))
+        # XXX for `info-pick`, change list as tuple of (attr-name, loadfunc)
         supported_strokemap_attrs = [
-            self._ORA_STROKEMAP_ATTR,
+            (self._ORA_STROKEMAP_ATTR,
+                self._load_strokemap_from_file),
+            (self._ORA_STROKEMAP_ATTR_1a,
+                self._load_strokemap_from_file_v1a)
         ]
         strokemap_name = None
-        for attr_qname in supported_strokemap_attrs:
+        for attr_qname, load_strokemap in supported_strokemap_attrs: # XXX for `info-pick`
             strokemap_name = attrs.get(attr_qname, None)
             if strokemap_name is None:
                 continue
@@ -1703,17 +1708,18 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
             break
         if strokemap_name is None:
             return
+
         if orazip:
             if PY3:
                 ioclass = BytesIO
             else:
                 ioclass = StringIO
             sio = ioclass(orazip.read(strokemap_name))
-            self._load_strokemap_from_file(sio, x, y)
+            load_strokemap(sio, x, y) # XXX for `info-pick`
             sio.close()
         elif oradir:
             with open(os.path.join(oradir, strokemap_name), "rb") as sfp:
-                self._load_strokemap_from_file(sfp, x, y)
+                load_strokemap(sfp, x, y) # XXX for `info-pick`
         else:
             raise ValueError("either orazip or oradir must be specified")
 
@@ -1733,7 +1739,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
     ## Flood fill
 
     def flood_fill(self, x, y, color, bbox, tolerance, dst_layer=None,
-                   **kwargs): # XXX for `progress-fill`
+                   **kwargs): # XXX for `pyramid-fill`
         """Fills a point on the surface with a color
 
         :param x: Starting point X coordinate
@@ -1761,7 +1767,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         dst_layer.autosave_dirty = True   # XXX hmm, not working?
         self._surface.flood_fill(x, y, color, bbox, tolerance,
                                  dst_surface=dst_layer._surface,
-                                 **kwargs) # XXX for `progress-fill`
+                                 **kwargs) # XXX for `pyramid-fill`
 
     ## Stroke recording and rendering
 
@@ -1820,12 +1826,12 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         )
 
         if shape is not None:
-            shape.set_info(info) 
+            shape.set_info(info)
             shape.brush_string = stroke.brush_settings
             self.strokes.append(shape)
 
     def remove_stroke_info(self, shape):
-        """When this method is called, some Node-editing tool 
+        """When this method is called, some Node-editing tool
         has been accepted re-editing stroke.
         That stroke would be registered again when new editing end.
         It is virtually `same` storke, so must not coexist in
@@ -1869,11 +1875,38 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         y = int(translate_y // N) * N
         dx = translate_x % N
         dy = translate_y % N
-        # XXX for `info pick`
-        def __read_brush_from_stream(f, brushes):
-            length, = struct.unpack('>I', f.read(4))
-            tmp = f.read(length)
-            brushes.append(zlib.decompress(tmp))
+
+        while True:
+            t = f.read(1)
+            if t == b"b":
+                length, = struct.unpack('>I', f.read(4))
+                tmp = f.read(length)
+                brushes.append(zlib.decompress(tmp))
+            elif t == b"s":
+                brush_id, length = struct.unpack('>II', f.read(2 * 4))
+                stroke = lib.strokemap.StrokeShape()
+                tmp = f.read(length)
+                stroke.init_from_string(tmp, x, y)
+                stroke.brush_string = brushes[brush_id]
+                # Translate non-aligned strokes
+                if (dx, dy) != (0, 0):
+                    stroke.translate(dx, dy)
+                self.strokes.append(stroke)
+            elif t == b"}":
+                break
+            else:
+                errmsg = "Invalid strokemap (initial char=%r)" % (t,)
+                raise ValueError(errmsg)
+
+    # XXX for `info pick`
+    # New strokemap file, for info-pick feature.
+    def _load_strokemap_from_file_v1a(self, f, translate_x, translate_y):
+        assert not self.strokes
+        brushes = []
+        x = int(translate_x // N) * N
+        y = int(translate_y // N) * N
+        dx = translate_x % N
+        dy = translate_y % N
 
         def __read_stroke_from_stream(f, stroke):
             brush_id, length = struct.unpack('>II', f.read(2 * 4))
@@ -1884,45 +1917,36 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
             if (dx, dy) != (0, 0):
                 stroke.translate(dx, dy)
             return stroke
-        # XXX for `info pick` end
+
+        # Check version number, for future expansion
+        t = f.read(1)
+        if t == b"v":
+            # Version number, for future expansion
+            # 2 unsigned chars.
+            major, minor = struct.unpack('>BB', f.read(2))
+            assert major == 0x01
+            assert minor == 0x01
+        else:
+            errmsg = "Invalid version of strokemap-v1a" 
+            raise ValueError(errmsg)
 
         while True:
             t = f.read(1)
-           # XXX original codes
-           #if t == b"b":
-           #    length, = struct.unpack('>I', f.read(4))
-           #    tmp = f.read(length)
-           #    brushes.append(zlib.decompress(tmp))
-           #elif t == b"s":
-           #    brush_id, length = struct.unpack('>II', f.read(2 * 4))
-           #    stroke = lib.strokemap.StrokeShape()
-           #    tmp = f.read(length)
-           #    stroke.init_from_string(tmp, x, y)
-           #    stroke.brush_string = brushes[brush_id]
-           #    # Translate non-aligned strokes
-           #    if (dx, dy) != (0, 0):
-           #        stroke.translate(dx, dy)
-           #    self.strokes.append(stroke)
-           #elif t == b"}":
-           #    break
-           #else:
-           #    errmsg = "Invalid strokemap (initial char=%r)" % (t,)
-           #    raise ValueError(errmsg)
-
-            # XXX for `info pick`
-            if t == b"b":
-                __read_brush_from_stream(f, brushes) 
+            if t == b"v":
+                # Version number, for future expansion
+                major, minor = struct.unpack('>II', f.read(2 * 4))
+                assert major == 1
+                assert minor == 1
+            elif t == b"b":
+                length, = struct.unpack('>I', f.read(4))
+                tmp = f.read(length)
+                brushes.append(zlib.decompress(tmp))
             elif t == b"s":
                 stroke = __read_stroke_from_stream(
                     f, lib.strokemap.StrokeShape()
                 )
                 self.strokes.append(stroke)
             elif t == b"i":
-                # TODO This block should be removed as soon as possible.
-                # For compatiblity of testing(wrong) codes.
-                logger.warning(
-                    "Loaded deprecated stroke map block - additional info."
-                )
                 # At first, read compatible parts of stroke.
                 strokeinfo = __read_stroke_from_stream(
                     f, lib.strokemap.StrokeInfo()
@@ -1933,50 +1957,11 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
                 )
                 self.strokes.append(strokeinfo)
             elif t == b"}":
-                # Load expanded portion of strokemap.
-                # With placing datas at here, we can keep forward
-                # compatibility with older mypaint strokemap file.
-                block_cnt = 0
-                while True:
-                    t = f.read(1)
-                    if t == b"i":
-                        # At first, read compatible parts of stroke.
-                        strokeinfo = __read_stroke_from_stream(
-                            f, lib.strokemap.StrokeInfo()
-                        )
-                        # Read additional node informations.
-                        strokeinfo.init_info_from_string(
-                            *lib.pickable.load_from_filestream(f)
-                        )
-                        self.strokes.append(strokeinfo)
-                        block_cnt += 1
-                    elif t == b"b":
-                        __read_brush_from_stream(f, brushes) 
-                        block_cnt += 1
-                    elif t == b"}":
-                        # The second end signature.
-                        # i.e. end of expanded portion.
-                        break
-                    elif t == b"":
-                        # Empty signature, this means EOF.
-                        if block_cnt > 0:
-                            # There are expanded portion 
-                            # but we met end of file unexpectedly
-                            # before end signature.
-                            errmsg = "Unexpected EOF in expanded strokemap."
-                            raise ValueError(errmsg)
-                        else:
-                            # There is no expanded portion.
-                            # Just exit.
-                            break
-                    else:
-                        errmsg = "Invalid strokemap (initial char=%r)" % (t,)
-                        raise ValueError(errmsg)
-            # XXX for `info pick` end
                 break
             else:
-                errmsg = "Invalid strokemap (initial char=%r)" % (t,)
+                errmsg = "Invalid strokemap-v1a (initial char=%r)" % (t,)
                 raise ValueError(errmsg)
+    # XXX for `info pick` end
 
     ## Strokemap querying
 
@@ -2020,7 +2005,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         helpers.zipfile_writestr(orazip, storepath, data)
         # Add strokemap XML attrs and return.
         # See comment above for compatibility strategy.
-        elem.attrib[self._ORA_STROKEMAP_ATTR] = storepath
+        elem.attrib[self._ORA_STROKEMAP_ATTR_1a] = storepath  # XXX for `info-pick`
         return elem
 
     def save_to_project(self, projdir, path,
@@ -2056,8 +2041,7 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
 
         # Add strokemap XML attrs and return.
         # See comment above for compatibility strategy.
-        elem.attrib[self._ORA_STROKEMAP_ATTR] = dat_relpath
-        elem.attrib[self._ORA_STROKEMAP_LEGACY_ATTR] = dat_relpath
+        elem.attrib[self._ORA_STROKEMAP_ATTR_1a] = dat_relpath # XXX for `info-pick`
         elem.attrib[self.PRJ_LAYERID_ATTR] = self.unique_id
         return elem
 
@@ -2083,17 +2067,19 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
         )
         # Add strokemap XML attrs and return.
         # See comment above for compatibility strategy.
-        elem.attrib[self._ORA_STROKEMAP_ATTR] = dat_relpath
+        elem.attrib[self._ORA_STROKEMAP_ATTR_1a] = dat_relpath # XXX for `info-pick`
         manifest.add(dat_relpath)
         return elem
 
     ## Type-specific stuff
+    # XXX for `project-save`
     def enum_filenames(self):
         """Enum filenames which consists this layer.
         This method used for project-save.
         """
         yield self.filename
         yield self._get_strokemap_filename()
+    # XXX for `project-save` end
 
     def _get_strokemap_filename(self):
         """Get strokemap filename according to self.filename.
@@ -2157,23 +2143,17 @@ class PaintingLayer (StrokemappedPaintingLayer, core.ExternallyEditable):
 def _write_strokemap(f, strokes, dx, dy):
     brush2id = {}
     infos = []
-    for stroke in strokes:
-        # For forward compatibility, separate StrokeInfo instances
-        # and process it later.
-        if isinstance(stroke, lib.strokemap.StrokeInfo):
-            infos.append(stroke)
-        else:
-            _write_strokemap_stroke(f, stroke, brush2id, dx, dy)
-    f.write(b'}')
 
-    # Write 2nd(expanded) strokemap-infomations, after 1st end signature.
-    # This is for forward compatibility.
-    for info in infos:
-        _write_strokemap_stroke(f, info, brush2id, dx, dy)
+    # Version number of 2 unsigned chars.
+    f.write(b'v')
+    f.write(struct.pack('>BB', 0x01, 0x01)) # Version 1.1
+
+    for stroke in strokes:
+        _write_strokemap_stroke(f, stroke, brush2id, dx, dy)
     f.write(b'}')
 
 def _write_strokemap_stroke(f, stroke, brush2id, dx, dy):
-    """Write strokemap stroke and additional infomation. 
+    """Write strokemap stroke and additional infomation.
     """
     b = stroke.brush_string
     if b not in brush2id:
@@ -2200,8 +2180,10 @@ def _write_strokemap_stroke(f, stroke, brush2id, dx, dy):
     if signature == b'i':
         # save_info_to_string resurns already `struct.pack`ed bytedata.
         # so just write it.
-        s = stroke.save_info_to_string(dx, dy) 
+        assert hasattr(stroke, 'save_info_to_string')
+        s = stroke.save_info_to_string(dx, dy)
         f.write(s)
+    return
 
 # XXX for `info pick` end
 
