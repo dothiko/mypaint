@@ -13,10 +13,10 @@
 #include <Python.h>
 #include "pyramiddefine.hpp"
 
-/* HOW IT WORKS : `pyramid-fill` 
+/* HOW IT WORKS : `pyramid-fill`
  *
- * This Module is for implementing python interface of 
- * 'Pyramid-fill' 
+ * This Module is for implementing python interface of
+ * 'Pyramid-fill'
  *
  * I don't know how this should be called, so I named this as
  * Pyramid-fill. You can see images with googling 'pyramid mipmap'.
@@ -26,49 +26,49 @@
  * Pyramid-fill is simular to mipmap, but not getting average,
  * get maximum pixel value (i.e. PIXEL_CONTOUR).
  * This is almost same as `max-pooling`
- * 
+ *
  * And when pyramid creation completed, you will see
  * very large chunky pixels in the higher pyramid-level.
  * These chunky pixel acutually close gaps and avoid
  * spill out the flood-fill operation.
  *
- * Then we gradually progress pixels to downward of pyramid-level. 
- * It gradually propergates `decided`(PIXEL_FILLED/PIXEL_OUTSIDE) 
+ * Then we gradually progress pixels to downward of pyramid-level.
+ * It gradually propergates `decided`(PIXEL_FILLED/PIXEL_OUTSIDE)
  * pixel value around neighbored `undecided`(PIXEL_AREA) pixels.
  * This operation also block holes of pixel contour.
  *
- * When propagation reached to level 0, identify undecided pixel area. 
- * If it is neighbored too many `outside/invalid` pixels, reject them. 
+ * When propagation reached to level 0, identify undecided pixel area.
+ * If it is neighbored too many `outside/invalid` pixels, reject them.
  * Otherwise, accept such pixel area as `decided` area.
  *
  * At last, we convert decided pixels as Mypaint colortiles,
  * and combine them to target layer.
- * 
+ *
  * Finally, You'll get gap-closed filled pixels around there.
  */
 
 
-/* Flagtile class, to contain pixel flag information. 
- * 
+/* Flagtile class, to contain pixel flag information.
+ *
  * This class holds pixels in like a pyramid shape.
- * Actually, it is the same concept as `mipmap`, 
+ * Actually, it is the same concept as `mipmap`,
  * but I named it `Pyramid` to avoid confusion with already existing `surface mipmap`.
  *
  * TODO: Currently, the flag buffer is allocated with C++ `new` function.
  *       This can be numpy buffer, to modefy the contents easily from python.
  */
-class Flagtile 
+class Flagtile
 {
 protected:
-    
+
     uint8_t *m_buf; // XXX Should this be numpy, not raw C++ memory...?
-    
+
     // Pixel counts. This stores how many pixels per pixel value in this tile.
     uint16_t m_pixcnt[PIXEL_MASK+1];
 
     // buffer offsets of progress levels.
     static const int m_buf_offsets[MAX_PYRAMID+1];
-    
+
     // Status bit flag for each tile.
     // It is Dirty flag, etc.
     // 32bit length would be (too) enough.
@@ -84,17 +84,17 @@ protected:
 public:
     Flagtile(const int initial_value);
 
-    virtual ~Flagtile(); 
+    virtual ~Flagtile();
 
-    inline uint8_t get(const int level, const int x, const int y) 
+    inline uint8_t get(const int level, const int x, const int y)
     {
         return *BUF_PTR(level, x, y);
     }
 
-    inline void replace(const int level, int x, int y, uint8_t val) 
+    inline void replace(const int level, int x, int y, uint8_t val)
     {
         uint8_t oldpix = *BUF_PTR(level, x, y) & PIXEL_MASK;
-        if (level == 0 
+        if (level == 0
                 && (val & PIXEL_MASK) != oldpix) {
             m_pixcnt[oldpix]--;
             m_pixcnt[val & PIXEL_MASK]++;
@@ -102,11 +102,11 @@ public:
 
         if((val & FLAG_MASK) != 0)
             set_dirty();
-        
+
         *BUF_PTR(level, x, y) = val;
     }
 
-    void clear_bitwise_flag(const int level, const uint8_t flag) 
+    void clear_bitwise_flag(const int level, const uint8_t flag)
     {
         uint8_t *cp = BUF_PTR(level, 0, 0);
         for(int i=0; i < PYRAMID_BUF_SIZE(level); i++) {
@@ -119,17 +119,17 @@ public:
     void fill(const uint8_t val);
 
     void convert_from_color(PyObject *py_src_tile,
-                            const int targ_r, 
-                            const int targ_g, 
-                            const int targ_b, 
-                            const int targ_a, 
+                            const int targ_r,
+                            const int targ_g,
+                            const int targ_b,
+                            const int targ_a,
                             const double tolerance,
                             const double alpha_threshold,
                             const bool limit_within_opaque);
 
     void convert_to_color(PyObject *py_targ_tile,
-                          const double r, 
-                          const double g, 
+                          const double r,
+                          const double g,
                           const double b,
                           const int pixel);
 
@@ -140,18 +140,18 @@ public:
 
     inline int get_stat() { return m_statflag; }
 
-    inline bool is_filled_with(const int pix) 
-    { 
+    inline bool is_filled_with(const int pix)
+    {
         uint16_t cnt;
-        if (pix == PIXEL_INVALID) 
+        if (pix == PIXEL_INVALID)
             cnt = m_pixcnt[PIXEL_EMPTY] + m_pixcnt[PIXEL_OUTSIDE];
-        else 
+        else
             cnt = m_pixcnt[pix & PIXEL_MASK];
         return cnt == (MYPAINT_TILE_SIZE * MYPAINT_TILE_SIZE);
     }
-    
+
     inline int get_pixel_count(const int pix) {
-        if (pix == PIXEL_INVALID) 
+        if (pix == PIXEL_INVALID)
             return m_pixcnt[PIXEL_EMPTY] + m_pixcnt[PIXEL_OUTSIDE];
         else
             return m_pixcnt[pix & PIXEL_MASK];
@@ -167,17 +167,17 @@ public:
     void propagate_upward_single(const int targ_level);
 
     //// Tile Status flags.
-    // Actually, it is int32_t. but, for SWIG, we need 
-    // %include stdint.i 
+    // Actually, it is int32_t. but, for SWIG, we need
+    // %include stdint.i
     // at SWIG interface file.
     // So, currently use int.
-    
+
     // DIRTY means this tile is written something.
     // This flag would be used in
-    // FlagtileSurface::_filter method and 
+    // FlagtileSurface::_filter method and
     // some Kernelworkers finalize_worker method.
     static const int DIRTY = 0x00000001;
-    
+
     // This tile is a borrowed one from python dictionary.
     // i.e. this tile should not be deleted. just replace with NULL.
     static const int BORROWED = 0x00000002;
@@ -200,40 +200,40 @@ public:
  * This is the base class of fill operation classes.
  * This class is exposed to python, but cannot be used.
  */
-class FlagtileSurface 
+class FlagtileSurface
 {
 protected:// Use protected, this is base-class.
     // The array of pointer of Flagtiles.
     Flagtile** m_tiles;
 
-    // Shared buffer, for dummy empty tile. 
+    // Shared buffer, for dummy empty tile.
     uint8_t *m_empty_shared_buf;
     uint16_t *m_empty_shared_cnt;
 
     // Origin x,y (tile coordinate)
-    int m_ox; 
+    int m_ox;
     int m_oy;
-    // Pixel based Origin 
+    // Pixel based Origin
     // (i.e. possible minimum x/y in pixel coordinate)
     // This origin is based on original(i.e. progress level 0)
     // piexl coordinate.
     int m_width;
     int m_height;
-    
-    void generate_tileptr_buf(const int ox, const int oy, 
+
+    void generate_tileptr_buf(const int ox, const int oy,
                                const int w, const int h);
 
     void init_nodes(const int max_count);
 
     // Offsets used for pixel search kernel.
-    inline int get_tile_index(const int tx, const int ty) 
+    inline int get_tile_index(const int tx, const int ty)
     {
         return (ty * m_width + tx);
     }
 
     // Set tile forcefully. Use carefully.
     // Mainly used from filter_tile method.
-    inline void set_tile(const int tx, const int ty, Flagtile* t) 
+    inline void set_tile(const int tx, const int ty, Flagtile* t)
     {
         int idx = get_tile_index(tx, ty);
 #ifdef HEAVY_DEBUG
@@ -244,10 +244,10 @@ protected:// Use protected, this is base-class.
     }
 
     // Replace pixel when that pixel exactly same with targ_flag.
-    void convert_flag(const uint8_t targ_flag, 
+    void convert_flag(const uint8_t targ_flag,
                        const uint8_t flag,
                        const bool look_dirty=false);
-    // Hide default constructor from python interface. 
+    // Hide default constructor from python interface.
     FlagtileSurface();
 public:
 
@@ -255,7 +255,7 @@ public:
 
     //// Getter methods
 
-    
+
     // Get origin and dimension - in TILE unit.
     inline int get_origin_x() { return m_ox; }
     inline int get_origin_y() { return m_oy; }
@@ -265,47 +265,47 @@ public:
     // progress tile have different dimension.
     // So, maximum size of surface or pixel coordinate
     // is different from original(progress level 0).
-    inline int get_pixel_max_x(const int level) 
+    inline int get_pixel_max_x(const int level)
     {
         return m_width * PYRAMID_TILE_SIZE(level);
     }
 
-    inline int get_pixel_max_y(const int level) 
+    inline int get_pixel_max_y(const int level)
     {
         return m_height * PYRAMID_TILE_SIZE(level);
     }
 
-    inline Flagtile* get_tile(const int tx, const int ty, 
+    inline Flagtile* get_tile(const int tx, const int ty,
                               const bool request=false)
     {
         return get_tile(get_tile_index(tx, ty), request);
     }
 
-    inline Flagtile* get_tile_from_pixel(const int level, 
-                                         const int sx, const int sy, 
+    inline Flagtile* get_tile_from_pixel(const int level,
+                                         const int sx, const int sy,
                                          const bool request)
-    { 
+    {
         int tile_size = PYRAMID_TILE_SIZE(level);
         int raw_tx = sx / tile_size;
         int raw_ty = sy / tile_size;
 
-        // sx and sy should start from (0,0) 
+        // sx and sy should start from (0,0)
         // in every case.
         // Flagtilesurface reserves 1 tile around
         // of original tiles, and every pixel operation
         // MUST not exceed 64 pixel away(from original tiles).
         // Thus, when sx or sy is lower than zero, it is empty tile.
-        if(raw_tx >= m_width || sx < 0 
+        if(raw_tx >= m_width || sx < 0
                 || raw_ty >= m_height || sy < 0) {
             return NULL;
         }
-        
-        // above raw_tx/ty is zero-based, 
-        // adjusted by origin already. 
-        // so do not use get_tile_index, 
+
+        // above raw_tx/ty is zero-based,
+        // adjusted by origin already.
+        // so do not use get_tile_index,
         return get_tile(raw_ty * m_width + raw_tx, request);
     }
-    
+
     inline Flagtile* get_tile(const int idx, const bool request=false)
     {
 #ifdef HEAVY_DEBUG
@@ -321,18 +321,18 @@ public:
         return ct;
     }
 
-    // Check existence of a tile, 
+    // Check existence of a tile,
     // without generating/discarding a wrapper object.
-    inline bool tile_exists(const int tx, const int ty) 
+    inline bool tile_exists(const int tx, const int ty)
     {
         return get_tile(tx, ty, false) != NULL;
     }
 
-    inline uint8_t get_pixel(const int level, 
-                             const int sx, const int sy) 
+    inline uint8_t get_pixel(const int level,
+                             const int sx, const int sy)
     {
         Flagtile *ct = get_tile_from_pixel(level, sx, sy, false);
-        
+
         // If sx or sy exceeding the border of surface,
         // get_tile_from_pixel returns NULL, instead of m_empty_tile.
         if(ct == NULL) {
@@ -341,23 +341,23 @@ public:
 
         const int tile_size = PYRAMID_TILE_SIZE(level);
         return ct->get(level,
-                       POSITIVE_MOD(sx, tile_size), 
+                       POSITIVE_MOD(sx, tile_size),
                        POSITIVE_MOD(sy, tile_size));
     }
 
-    inline void replace_pixel(const int level, 
-                              const int sx, const int sy, 
-                              const uint8_t val) 
+    inline void replace_pixel(const int level,
+                              const int sx, const int sy,
+                              const uint8_t val)
     {
         Flagtile *ct = get_tile_from_pixel(level, sx, sy, true);
-        
+
 #ifdef HEAVY_DEBUG
 assert(ct != NULL);
 #endif
         const int tile_size = PYRAMID_TILE_SIZE(level);
         ct->replace(level,
-                    POSITIVE_MOD(sx, tile_size), 
-                    POSITIVE_MOD(sy, tile_size), 
+                    POSITIVE_MOD(sx, tile_size),
+                    POSITIVE_MOD(sy, tile_size),
                     val);
     }
 
@@ -365,11 +365,11 @@ assert(ct != NULL);
 
     // Propagate base pixels upward level.
     void propagate_upward(const int max_level);
-    
+
     // Propagate `Decided` pixels toward level 0.
     void propagate_downward(const int level, const bool expand_outside);
 
-    // flood_fill method. 
+    // flood_fill method.
     // This should(or, could) not be called from Python codes.
     // but might be called from other C++ worker classes.
     // So this must be public method.
@@ -377,7 +377,7 @@ assert(ct != NULL);
     // from python, use pyramidfloodfill function of tiledsurface.py.
     // XXX We might use C++ friend keyword for this...
     void flood_fill(const int sx, const int sy, FillWorker *w);
-    
+
     // Also, filter method would be called from some worker classes.
     // Not for python.
     void filter_tiles(KernelWorker *k);
@@ -387,24 +387,24 @@ assert(ct != NULL);
 #endif
     //
     // Utility Methods
-    void convert_pixel(const int level, const int targ_pixel, const int new_pixel); 
+    void convert_pixel(const int level, const int targ_pixel, const int new_pixel);
 
-    // Identify pixels (and reject or accept) 
+    // Identify pixels (and reject or accept)
     // by how many pixels touches `outside` pixels.
-    void identify_areas(const int level, 
-                        const int targ_pixel, 
-                        const double accept_threshold, 
-                        const double reject_threshold, 
-                        const int accepted_pixel, 
+    void identify_areas(const int level,
+                        const int targ_pixel,
+                        const double accept_threshold,
+                        const double reject_threshold,
+                        const int accepted_pixel,
                         const int rejected_pixel,
-                        int size_threshold=0); 
+                        int size_threshold=0);
 
     void dilate(const int pixel, const int dilation_size);
-    
+
     // Finalize related methods.
     void fill_holes();
     void draw_antialias();
-    
+
     // XXX for Debug (might be used even not in HEAVY_DEBUG)
     PyObject*
     render_to_numpy(PyObject *npbuf,
@@ -416,10 +416,10 @@ assert(ct != NULL);
 
 /* FloodfillSurface for flood-fill.
  */
-class FloodfillSurface : public FlagtileSurface 
+class FloodfillSurface : public FlagtileSurface
 {
 private:
-    // m_src_dict holds pointer of python dictinary 
+    // m_src_dict holds pointer of python dictinary
     // from python code, used for Py_INCREF / Py_DECREF
     // to it.
     //
@@ -428,7 +428,7 @@ private:
     // might be freed before this object is freed.
     // And, FloodfillSurface borrow some flagtiles
     // from that dictionary.
-    // So we need INCREF the dictionary at constructor, 
+    // So we need INCREF the dictionary at constructor,
     // and DECREF it at destructor.
     PyObject* m_src_dict;
 
@@ -441,14 +441,14 @@ public:
 
 /* ClosefillSurface for close and fill.
  */
-class ClosefillSurface : public FlagtileSurface 
+class ClosefillSurface : public FlagtileSurface
 {
 public:
     ClosefillSurface(const int min_x, const int min_y,
                      const int max_x, const int max_y);
     virtual ~ClosefillSurface();
-    
-    void draw_line(const int sx, const int sy, 
+
+    void draw_line(const int sx, const int sy,
                    const int ex, const int ey,
                    const int pixel);
 
@@ -467,7 +467,7 @@ public:
 class CutprotrudeSurface : public FloodfillSurface
 {
 public:
-    CutprotrudeSurface(PyObject *tiledict); 
+    CutprotrudeSurface(PyObject *tiledict);
     virtual ~CutprotrudeSurface();
 
     void remove_overwrap_contour();
@@ -475,7 +475,7 @@ public:
 
 //// functions
 
-/* floodfill of Pyramid_fill version. 
+/* floodfill of Pyramid_fill version.
  * This would be used from lib/tiledsurface.py
  */
 PyObject *
