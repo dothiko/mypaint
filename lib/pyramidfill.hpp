@@ -13,10 +13,42 @@
 #include <Python.h>
 #include "pyramiddefine.hpp"
 
-// This Module is for implementing python interface of 
-// 'Pyramid fill' 
+/* HOW IT WORKS : `pyramid-fill` 
+ *
+ * This Module is for implementing python interface of 
+ * 'Pyramid-fill' 
+ *
+ * I don't know how this should be called, so I named this as
+ * Pyramid-fill. You can see images with googling 'pyramid mipmap'.
+ * (Also, I want to avoid name-conflict/confusion around already existing
+ * `surface-mipmap` of Mypaint.)
+ *
+ * Pyramid-fill is simular to mipmap, but not getting average,
+ * get maximum pixel value (i.e. PIXEL_CONTOUR).
+ * This is almost same as `max-pooling`
+ * 
+ * And when pyramid creation completed, you will see
+ * very large chunky pixels in the higher pyramid-level.
+ * These chunky pixel acutually close gaps and avoid
+ * spill out the flood-fill operation.
+ *
+ * Then we gradually progress pixels to downward of pyramid-level. 
+ * It gradually propergates `decided`(PIXEL_FILLED/PIXEL_OUTSIDE) 
+ * pixel value around neighbored `undecided`(PIXEL_AREA) pixels.
+ * This operation also block holes of pixel contour.
+ *
+ * When propagation reached to level 0, identify undecided pixel area. 
+ * If it is neighbored too many `outside/invalid` pixels, reject them. 
+ * Otherwise, accept such pixel area as `decided` area.
+ *
+ * At last, we convert decided pixels as Mypaint colortiles,
+ * and combine them to target layer.
+ * 
+ * Finally, You'll get gap-closed filled pixels around there.
+ */
 
-/* Flagtile class, to contain flag information. 
+
+/* Flagtile class, to contain pixel flag information. 
  * 
  * This class holds pixels in like a pyramid shape.
  * Actually, it is the same concept as `mipmap`, 
@@ -28,7 +60,9 @@
 class Flagtile 
 {
 protected:
-    uint8_t *m_buf;
+    
+    uint8_t *m_buf; // XXX Should this be numpy, not raw C++ memory...?
+    
     // Pixel counts. This stores how many pixels per pixel value in this tile.
     uint16_t m_pixcnt[PIXEL_MASK+1];
 
@@ -39,7 +73,6 @@ protected:
     // It is Dirty flag, etc.
     // 32bit length would be (too) enough.
     int32_t m_statflag;
-
 
     // Get antialias value(0.0 - 1.0) from Antialias pixel of flagtile.
     inline double get_aa_double_value(const uint8_t pix)
@@ -348,7 +381,11 @@ assert(ct != NULL);
     // Also, filter method would be called from some worker classes.
     // Not for python.
     void filter_tiles(KernelWorker *k);
-
+#ifdef _OPENMP
+    // Parallelized version of filter_tiles. very limited usage.
+    void filter_tiles_mp(KernelWorker *w);
+#endif
+    //
     // Utility Methods
     void convert_pixel(const int level, const int targ_pixel, const int new_pixel); 
 
@@ -375,7 +412,6 @@ assert(ct != NULL);
                     int tr, int tg, int tb,
                     int level);
 };
-
 
 
 /* FloodfillSurface for flood-fill.

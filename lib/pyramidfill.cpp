@@ -196,6 +196,7 @@ KernelWorker::finalize()
 {
     // Remove working flag from entire surface 
     // And clear dirty state flags here.
+    #pragma omp parallel for
     for(int i=0; i<m_surf->get_width() * m_surf->get_height(); i++) {
         Flagtile *t = m_surf->get_tile(i, false);
         if (t != NULL && (t->get_stat() & Flagtile::DIRTY)) {
@@ -324,7 +325,7 @@ WalkingKernel::walk(const int sx, const int sy, const int direction)
 
 const int 
 Flagtile::m_buf_offsets[MAX_PYRAMID+1] = {
-    // progress level 0: 64x64(TILE_SIZE * TILE_SIZE), start from 0.
+    // pyramid level 0: 64x64(TILE_SIZE * TILE_SIZE), start from 0.
     0,
     PYRAMID_BUF_SIZE(0),
     Flagtile::m_buf_offsets[1] + PYRAMID_BUF_SIZE(1),
@@ -354,9 +355,12 @@ Flagtile::propagate_upward_single(const int targ_level)
     int c_size = PYRAMID_TILE_SIZE(targ_level);
     int b_level = targ_level - 1;
 
+    // XXX To maximize parallel processing effeciency, 
+    // not using omp here.
+    // It is done at FlagtileSurface::propagate_upward.
     for (int y=0; y < c_size; y++) {
         for (int x=0; x < c_size; x++) {
-            // The progress level beneath is always
+            // The pyramid level beneath is always
             // double sized of current level.
             int bbx = x << 1;
             int bby = y << 1;
@@ -459,9 +463,7 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
     
     const unsigned int xstride = PyArray_STRIDE(array, 1) / sizeof(fix15_short_t);
     const unsigned int ystride = PyArray_STRIDE(array, 0) / sizeof(fix15_short_t);
-    const unsigned int yoffset = ystride - xstride * TILE_SIZE;
-    fix15_short_t *cptr = (fix15_short_t*)PyArray_BYTES(array);
-    uint8_t* tptr = m_buf;
+    fix15_short_t *bptr = (fix15_short_t*)PyArray_BYTES(array);
 
     const fix15_short_t targ[4] = {
         fix15_short_clamp(targ_r), 
@@ -473,9 +475,12 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
     fix15_t f15_tolerance = (fix15_t)(tolerance * (double)fix15_one);
     fix15_t f15_threshold = (fix15_t)(alpha_threshold * (double)fix15_one);
 
+    #pragma omp parallel for
     for(int y=0; y<TILE_SIZE; y++) {
+        fix15_short_t *cptr = bptr + y * ystride;
+
         for(int x=0; x<TILE_SIZE; x++) {
-            uint8_t pix = *tptr & PIXEL_MASK;
+            uint8_t pix = get(0, x, y);
             fix15_t alpha = (fix15_t)cptr[3];
             if (!limit_within_opaque || alpha > 0) {
                 // Only some `basic pixel` (not PIXEL_EMPTY,
@@ -488,9 +493,7 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
                     );
                     
                     if (match == 0) { 
-                        m_pixcnt[pix]--;
-                        m_pixcnt[PIXEL_CONTOUR]++;
-                        *tptr = PIXEL_CONTOUR;
+                        replace(0, x, y, PIXEL_CONTOUR);
                     }
                 }
             }
@@ -499,15 +502,11 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
                 // limit_within_opaque is true and current pixel
                 // is completely transparent.
                 if (pix != PIXEL_EMPTY) {
-                    m_pixcnt[pix]--;
-                    m_pixcnt[PIXEL_EMPTY]++;
-                    *tptr = PIXEL_EMPTY;
+                    replace(0, x, y, PIXEL_EMPTY);
                 }
             }
             cptr += xstride;
-            tptr++;
         }
-        cptr += yoffset;
     }
 }
 
@@ -523,6 +522,10 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
 * Parameter r,g,b is pixel color. They are floating point value, 
 * from 0.0 to 1.0.
 * This method would also render anti-aliasing pixels into mypaint colortile.
+*
+* For this method, array of py_targ_tile should be empty(Zero-filled).
+* Actual pixel composition against target layer surface is done by 
+* lib.mypaintlib.combine_tile later.
 */
 void 
 Flagtile::convert_to_color(PyObject *py_targ_tile,
@@ -536,9 +539,7 @@ Flagtile::convert_to_color(PyObject *py_targ_tile,
 
     const unsigned int xstride = PyArray_STRIDE(array, 1) / sizeof(fix15_short_t);
     const unsigned int ystride = PyArray_STRIDE(array, 0) / sizeof(fix15_short_t);
-    const unsigned int yoffset = ystride - xstride * TILE_SIZE;
     fix15_short_t *cptr = (fix15_short_t*)PyArray_BYTES(array);
-    uint8_t *sptr = m_buf;
 
     // Premult color pixel array.
     fix15_short_t cols[4];
@@ -549,51 +550,51 @@ Flagtile::convert_to_color(PyObject *py_targ_tile,
     
     // Completely filled tile can be filled with memcpy.
     if (is_filled_with(pixel)) {
-        fix15_short_t *optr = cptr;
+        fix15_short_t *dptr = cptr;
         // Build one line
         for(int x=0; x<TILE_SIZE; x++) {
-            cptr[0] = cols[0];
-            cptr[1] = cols[1];
-            cptr[2] = cols[2];
-            cptr[3] = cols[3];
-            cptr += xstride;
+            dptr[0] = cols[0];
+            dptr[1] = cols[1];
+            dptr[2] = cols[2];
+            dptr[3] = cols[3];
+            dptr += xstride;
         }
-        cptr += yoffset;
         // Just copy that completed line.
-        for(int y=1; y<TILE_SIZE; y++) {
-            memcpy(cptr, optr, sizeof(fix15_short_t) * 4 * TILE_SIZE);
-            cptr += ystride;
+        int y=1;
+        while(y < TILE_SIZE) {
+            dptr = cptr + y * ystride;
+            memcpy(dptr, cptr, sizeof(fix15_short_t) * 4 * TILE_SIZE * y);
+            y <<= 1;
         }
         return;
     }   
 
-    // Converting progress level 0 pixel into color tile.
+    // Converting pyramid level 0 pixel into color tile.
+    #pragma omp parallel for
     for(int y=0; y<TILE_SIZE; y++) {
+        fix15_short_t *dptr = cptr + y * ystride;
+
         for(int x=0; x<TILE_SIZE; x++) {
-            uint8_t pix = *sptr;
+            uint8_t pix = get(0, x, y);
             // At first, We need to check anti-aliasing flag of pixel.
             // Anti-aliasing pixel is not compatible
             // with another PIXEL_* values.
             if ((pix & FLAG_AA) != 0) {
                 double alpha = get_aa_double_value(pix & AA_MASK);
-                fix15_short_t cur_alpha = fix15_short_clamp(
-                    (alpha * fix15_one) + cptr[3]
-                );
-                cptr[0] = fix15_short_clamp(r * cur_alpha);
-                cptr[1] = fix15_short_clamp(g * cur_alpha);
-                cptr[2] = fix15_short_clamp(b * cur_alpha);
-                cptr[3] = cur_alpha;
+                fix15_short_t cur_alpha = fix15_short_clamp((alpha * fix15_one));
+                dptr[0] = fix15_short_clamp(r * cur_alpha);
+                dptr[1] = fix15_short_clamp(g * cur_alpha);
+                dptr[2] = fix15_short_clamp(b * cur_alpha);
+                dptr[3] = cur_alpha;
             }
             else if ((pix & PIXEL_MASK) == pixel) {
-                cptr[0] = cols[0];
-                cptr[1] = cols[1];
-                cptr[2] = cols[2];
-                cptr[3] = cols[3];
+                dptr[0] = cols[0];
+                dptr[1] = cols[1];
+                dptr[2] = cols[2];
+                dptr[3] = cols[3];
             }
-            cptr += xstride;
-            sptr++;
+            dptr += xstride;
         }
-        cptr += yoffset;
     }
 }
 
@@ -629,9 +630,10 @@ Flagtile::convert_from_transparency(PyObject *py_src_tile,
     fix15_short_t *cptr_base = (fix15_short_t*)PyArray_BYTES(array);
     fix15_short_t threshold = (fix15_short_t)(alpha_threshold * fix15_one);
     
-    // Converting progress level 0 pixel into color tile.
+    // Converting pyramid level 0 pixel into color tile.
+    #pragma omp parallel for
     for(int y=0; y<TILE_SIZE; y++) {
-        fix15_short_t *cptr = cptr_base;
+        fix15_short_t *cptr = cptr_base + y * ystride;
         for(int x=0; x<TILE_SIZE; x++) {
             if (cptr[3] > threshold) {
                 if (pixel_value != overwrap_value
@@ -642,7 +644,6 @@ Flagtile::convert_from_transparency(PyObject *py_src_tile,
             }
             cptr += xstride;
         }
-        cptr_base += ystride;
     }
 }
 
@@ -734,7 +735,7 @@ FlagtileSurface::generate_tileptr_buf(const int ox, const int oy,
 * @flood_fill
 * Do `Flood fill` from
 *
-* @param level Target progress level to doing flood-fill
+* @param level Target pyramid level to doing flood-fill
 * @param sx,sy Flood-fill starting point, in pyramid level coordinate.
 *
 * Call step method of worker for each flood-fill point.
@@ -886,28 +887,27 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
 * @filter_tiles
 * Internal method of tile pixel iteration.
 *
-* @param level The target progress level.
+* @param level The target pyramid level.
 *
-* This internal method is to apply worker classes for all pixels.
+* This internal method is to iterate all pixels to worker classes.
 */
 void 
 FlagtileSurface::filter_tiles(KernelWorker *w)
 {
-    Flagtile *t;
     int tile_size = PYRAMID_TILE_SIZE(w->get_target_level());
-    bool use_shared;
 
-    // When targ_flag and new_flag are same,
-    // it cause chain reaction within operation and
-    // almost entire tile would be rewritten incorrectly.
-    // To avoid this, we need to place temporary
-    // working flag(FLAG_DILATED) and convert it later.
-
+    // This loop would trigger worker-object, which might
+    // also refer/write pixels all over the FlagtileSurface. 
+    // Furthermore, This method utilize shared-empty tile
+    // for workers can access even NULL tile area, generate
+    // new tile on demand seamlessly, without requesting it.
+    //
+    // Therefore, we cannot use OpemMP here.
     for(int ty=0; ty<m_height; ty++) {
         for(int tx=0; tx<m_width; tx++) {
             // Get tile. 
-            t = get_tile(tx, ty, false);
-            use_shared = (t==NULL);
+            Flagtile *t = get_tile(tx, ty, false);
+            bool use_shared = (t==NULL);
 
             if (use_shared)
                 t = BaseWorker::get_shared_empty();
@@ -937,15 +937,67 @@ FlagtileSurface::filter_tiles(KernelWorker *w)
     w->finalize();
 }
 
-/// progress related.
+#ifdef _OPENMP
+/**
+* @filter_tiles_mp
+* Internal method of tile pixel iteration, OpenMP enabled version.
+*
+* @param level The target pyramid level.
+*
+* This internal method is to iterate all pixels to worker classes.
+*
+* Different from original filter_tiles, this cannot use
+* shared-empty tile. (i.e. NULL empty tile should not be targetted.) 
+* Also, worker should not change global pixel.
+* So very limited worker can use this method.
+* Use carefully.
+*/
+void 
+FlagtileSurface::filter_tiles_mp(KernelWorker *w)
+{
+    int tile_size = PYRAMID_TILE_SIZE(w->get_target_level());
+
+    #pragma omp parallel for
+    for(int ty=0; ty<m_height; ty++) {
+        for(int tx=0; tx<m_width; tx++) {
+            // Get tile. 
+            Flagtile *t = get_tile(tx, ty, false);
+
+            int bx = tx * tile_size;
+            int by = ty * tile_size;
+            if (t != NULL && w->start(t, bx, by)) {
+                // iterate tile pixel.
+                for (int y=0; y<tile_size; y++) {
+                    for (int x=0; x<tile_size; x++) {
+                        w->step(t, x, y, bx+x, by+y);
+                    }
+                }
+                // iterate tile pixel end.
+                // As a default, the `end` method 
+                // of KernelWorker would set 
+                // DIRTY stat flag for the tile.
+                w->end(t);
+            }
+        }
+    }
+
+    w->finalize();
+}
+#endif
+
+/// propagate related.
 
 /**
 * @propagate_upward
-* The interfacing function of building(finalizing) progress seeds.
+* The function to build(finalize) propagating pixel seeds.
 *
-* To call internal building method for each progress level.
-* Call this method after all of targeting color tiles are converted
-* into FlagtileSurface.
+* As first, we would convert color tiles into each Flagtiles
+* at pyramid-level 0.
+* And register such tiles into FlagtileSurface, 
+* Then, call this method to `propagate` pixel upward and create 
+* pyramid level.
+* `propagate` of this functionality is simular to so called 
+* `max pooling`.
 *
 * Before this method called, polygon rendering(with FLAG_AREA)
 * should be completed.
@@ -957,6 +1009,7 @@ FlagtileSurface::propagate_upward(const int max_level)
     assert(max_level <= MAX_PYRAMID);
 #endif
 
+    #pragma omp parallel for
     for(int ty=0; ty<m_height; ty++) {
         for(int tx=0; tx<m_width; tx++) {
 
@@ -964,12 +1017,11 @@ FlagtileSurface::propagate_upward(const int max_level)
             if (t == NULL) {
                 continue;
             }
-            t->propagate_upward(max_level);
+            t->propagate_upward(max_level); 
         }
-    }// Surface processing end
+    }
 }
 
-/// `Pyramid-fill` related.
 /**
 * @propagate_downwards
 * The interface method of doing downward-propagation of 
@@ -990,7 +1042,13 @@ FlagtileSurface::propagate_downward(const int level, const bool expand_outside)
 #endif
     PropagateKernel k(this, expand_outside); 
     k.set_target_level(level);            
+
+#ifdef _OPENMP
+    filter_tiles_mp((KernelWorker*)&k);  // This worker is parallelizable.
+#else
     filter_tiles((KernelWorker*)&k);
+#endif
+
 }
 
 /**
@@ -1003,9 +1061,18 @@ FlagtileSurface::convert_pixel(const int level,
                                const int targ_pixel,
                                const int new_pixel) 
 {
+#ifdef HEAVY_DEBUG
+    assert(targ_pixel != new_pixel);
+#endif
     ConvertKernel ck(this);
     ck.set_target_level(level);
     ck.set_target_pixel(targ_pixel, new_pixel);
+#ifdef _OPENMP
+    if (targ_pixel != PIXEL_EMPTY) {
+        filter_tiles_mp((KernelWorker*)&ck);  // This worker is parallelizable for non-empty pixel.
+        return;
+    }
+#endif    
     filter_tiles((KernelWorker*)&ck);
 }
 
@@ -1434,10 +1501,10 @@ ClosefillSurface::decide_area()
 * @detail 
 * Fill outside pixels with PIXEL_OUTSIDE and 
 * fill inside-contour pixels with PIXEL_FILLED 
-* at current progress level.
+* at current pyramid level.
 * With this, we decide outside/inside of current
 * closed area roughly, and, as a side effect, 
-* closing gap of contour by progress pixel size.
+* closing gap of contour by pyramid-level-pixel size.
 *
 * After this method called, we would call propagate_downwards method
 * and gradually progress(reshape) filled pixels.
@@ -1549,7 +1616,7 @@ CutprotrudeSurface::remove_overwrap_contour()
 * @param tile A flag tile object. 
 * @param seeds A python list of tuple, that tuple is (x, y) of floodfill seed points.
 * @param min_x,min_y,max_x,max_y Surface border within tile, in PYRAMID coordinate.
-* @param level The target progress level.
+* @param level The target pyramid level.
 *
 * Used for floodfill tool, to implement gap-closing functionality.
 * parameter `tile` object should be already set up by `propagate_upward` method.
@@ -1833,7 +1900,7 @@ FlagtileSurface::render_to_numpy(PyObject *npbuf,
 
     if (level > 0) {
         // Target level is greater than 0.
-        // We need to draw progress chunkey pixels.
+        // We need to draw pyramid chunkey pixels.
         int step = 1 << level;
         for(int ty=0; ty<h; ty++) {
             px = 0;
@@ -1849,7 +1916,7 @@ FlagtileSurface::render_to_numpy(PyObject *npbuf,
                             uint8_t *byptr = tptr;
 
                             if (t->get(level, mx, my) == tflag) {
-                                // Fill a progress chunk.
+                                // Fill a pyramid chunk.
                                 for(int cy=0; cy < step; cy ++) {
                                     uint8_t *bxptr = byptr;
                                     for(int cx=0; cx < step; cx ++) {

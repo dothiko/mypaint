@@ -68,6 +68,7 @@ public:
                 if (kpix == m_targ_pix) {
                     m_processed++;
                     targ->replace(0, x, y, m_targ_pix | FLAG_WORK);
+                    return;
                 }
             }
         }
@@ -132,6 +133,9 @@ public:
 // It seems that this can be integrated at Flagtile class,
 // but `propagating downward` needs to refer `surface-global` neighbor tile pixels.
 // It cannot be done at Flagtile.
+// But this worker just refer global pixels, never write to them.
+// Also this never target empty tile. 
+// So this worker is parallelizable, can use at FlagtileSurface::fillter_tiles_mp.
 class PropagateKernel: public KernelWorker
 {
 protected:
@@ -152,6 +156,7 @@ public:
     
     virtual bool start(Flagtile * const targ, const int sx, const int sy) 
     {
+        assert(targ != NULL); 
         // Target tile 
         if(targ->is_filled_with(PIXEL_FILLED)
                 || targ->is_filled_with(PIXEL_INVALID)) { 
