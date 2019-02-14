@@ -784,14 +784,11 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
     static const int x_offset[] = {0, 1};
     const int max_x = tile_size * m_width;
     const int max_y = tile_size * m_height;
-    const bool accept_empty = w->match(PIXEL_EMPTY);
 
     while (! g_queue_is_empty(queue)) {
         pyramid_point *pos = (pyramid_point*) g_queue_pop_head(queue);
         int x0 = pos->x;
         int y = pos->y;
-        int ty = y / tile_size;
-        int py = y % tile_size;
         free(pos);
 
         // Find easternmost and westernmost points of the same colour
@@ -809,32 +806,15 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
                     break;
                 }
 
-                int tx = x / tile_size;
-                int px = x % tile_size;
-                Flagtile *t;
-
-                if (otx == tx && oty == ty && ot != NULL) {
-                    t = ot;
-                }
-                else {
-                    t = get_tile(tx, ty, accept_empty);
-                    ot = t;
-                    if (t == NULL) {
-                        break;
-                    }
-                    otx = tx;
-                    oty = ty;
-                }
-
                 if (x != x0) { // Test was already done for queued pixels
-                    pix = t->get(level, px, py);
+                    pix = get_pixel(level, x, y);
                     if (!w->match(pix))
                     {
                         break;
                     }
                 }
                 // Fill this pixel, and continue iterating in this direction
-                w->step(t, px, py, x, y);
+                w->step(x, y);
 
                 // In addition, enqueue the pixels above and below.
                 // Scanline algorithm here to avoid some pointless queue faff.

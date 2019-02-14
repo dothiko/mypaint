@@ -184,49 +184,6 @@ public:
         m_level = level;
     }
 
-    /**
-    * @step
-    * processing current pixel, called from some other worker
-    * or FlagtileSurface-class method.
-    *
-    * @param x,y tile-local progress coordinate of current pixel
-    * @param sx,sy surface-global progress coordinate of current pixel
-    * @return Normally, return the instance which is assigned `tile` param.
-    *         When a new tile generated inside step method, return that new tile.
-    *         That tile would be used from next iteration.
-    *
-    * @detail
-    * Workers implement this method to manipulate pixel.
-    * This method would be called some iterating operation
-    * such as FlagtileSurface::filter_tile or something.
-    *
-    * Use sx/sy for global pixel access.
-    * You can access faster by using tile-local pixels, such as
-    * tile->get(level, x, y) .
-    */
-    virtual void step(Flagtile * const tile,
-                      const int x, const int y,
-                      const int sx, const int sy) = 0;
-
-    // process only outerrim ridges of a tile.
-    // use for a tile which is filled some specific value.
-    void process_only_ridge(Flagtile *targ, const int sx, const int sy)
-    {
-        int ridge = PYRAMID_TILE_SIZE(m_level);
-
-        for(int y=0;y < ridge;y+=ridge-1){
-            for(int x=0;x < ridge;x++){
-                step(targ, x, y, sx+x, sy+y);
-            }
-        }
-
-        // Corner pixels are already processed at above loop.
-        for(int x=0;x < ridge;x+=ridge-1){
-            for(int y=1;y < ridge-1;y++){
-                step(targ, x, y, sx+x, sy+y);
-            }
-        }
-    }
 
     // Called when entire tiles processing end.
     virtual void finalize() {}
@@ -255,6 +212,8 @@ public:
     // to only look(check) the pixel, without process it,
     // so they are separated.
     virtual bool match(const uint8_t pix) = 0;
+
+    virtual void step(const int sx, const int sy) = 0;
 };
 
 /**
@@ -282,6 +241,30 @@ public:
     // `start` called at the starting point of tile processing.
     // All processing cancelled when this return false.
     virtual bool start(Flagtile * const targ, const int sx, const int sy) = 0;
+
+    virtual void step(Flagtile * const tile,
+                      const int x, const int y,
+                      const int sx, const int sy) = 0;
+    
+    // process only outerrim ridges of a tile.
+    // use for a tile which is filled some specific value.
+    void process_only_ridge(Flagtile *targ, const int sx, const int sy)
+    {
+        int ridge = PYRAMID_TILE_SIZE(m_level);
+
+        for(int y=0;y < ridge;y+=ridge-1){
+            for(int x=0;x < ridge;x++){
+                step(targ, x, y, sx+x, sy+y);
+            }
+        }
+
+        // Corner pixels are already processed at above loop.
+        for(int x=0;x < ridge;x+=ridge-1){
+            for(int y=1;y < ridge-1;y++){
+                step(targ, x, y, sx+x, sy+y);
+            }
+        }
+    }
 
     // Called when a tile processing end.
     virtual void end(Flagtile * const targ){}
@@ -325,7 +308,7 @@ protected:
     int m_step;
 
     // To detect 1px infinite loop. if this is greater or equal to 4,
-    // Walking kernel enters infinite rotating state in 1px hole.
+    // walker enters into 1px hole, so just quit walking.
     int m_right_rotate_cnt;
 
     // To detect walking is closewise or counter-clockwise.

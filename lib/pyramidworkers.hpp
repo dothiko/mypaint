@@ -563,11 +563,9 @@ public:
         return (pix & PIXEL_MASK) == m_target;
     }
 
-    virtual void step(Flagtile * const targ,
-                      const int x, const int y,
-                      const int sx, const int sy)
+    virtual void step(const int sx, const int sy)
     {
-        targ->replace(m_level, x, y, m_replace);
+        m_surf->replace_pixel(m_level, sx, sy, m_replace);
     }
 
     void set_target_pixel(const uint8_t targ, const uint8_t replace)
@@ -801,11 +799,9 @@ public:
                     || pix == (PIXEL_FILLED | FLAG_WORK));
     }
 
-    virtual void step(Flagtile * const targ,
-                      const int x, const int y,
-                      const int sx, const int sy)
+    virtual void step(const int sx, const int sy)
     {
-        targ->replace(0, x, y, PIXEL_FILLED);
+        m_surf->replace_pixel(0, sx, sy, PIXEL_FILLED);
     }
 };
 #endif
