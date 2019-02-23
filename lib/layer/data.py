@@ -1928,7 +1928,11 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
             assert minor == 0x01
         else:
             errmsg = "Invalid version of strokemap-v1a" 
-            raise ValueError(errmsg)
+           #raise ValueError(errmsg)
+            # XXX Currently, just exit.
+            logger.warning(errmsg)
+            return
+            
 
         while True:
             t = f.read(1)

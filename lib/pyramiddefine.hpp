@@ -7,7 +7,6 @@
  * (at your option) any later version.
  */
 
-
 // This file is to avoid polluting mypaintlib namespace, because these
 // worker classes cannot be used from python.
 // Also, all classes in this file are base class, so all
@@ -29,7 +28,6 @@
 // with modulo against negative number.
 // This macro is used in pyramid.cpp/hpp
 #define POSITIVE_MOD(a, b) (((a) % (b) + (b)) % (b))
-
 
 // logarithmic value of MYPAINT_TILE_SIZE. i.e. 2**6 = 64 pixel.
 #define TILE_LOG 6
@@ -105,6 +103,12 @@
 // XXX NOTE: This pixel value should NOT be propergated to
 // lower level in ProgressKernel::step.
 
+#define PIXEL_MAX 0x07 
+// Actual maximum pixel value.
+// PIXEL_* values of greater than this value is `imaginary`,
+// used for special parameter of some functions,
+// never placed in tile.
+
 #define PIXEL_INVALID 0x08
 // Special pixel value. This actually does not exist as pixel.
 // This means `PIXEL_EMPTY or PIXEL_OUTSIDE` and use for
@@ -157,13 +161,11 @@ class FlagtileSurface;
 class BaseWorker
 {
 protected:
-    FlagtileSurface* m_surf;
     int m_level;
-    static Flagtile *m_shared_empty;
 
 public:
-    BaseWorker(FlagtileSurface* surf)
-        : m_surf(surf), m_level(0)
+    BaseWorker()
+        : m_level(0)
     {
         // Calling virtual method `set_target_level`
         // at here (i.e. constructor) is meaningless.
@@ -184,26 +186,27 @@ public:
         m_level = level;
     }
 
-
-    // Called when entire tiles processing end.
-    virtual void finalize() {}
-
-    static Flagtile *get_shared_empty();
-    static bool sync_shared_empty();
-    static void free_shared_empty();
+    inline bool in_border(const int x, const int y) 
+    {
+        return (x == 0 || y ==0
+                    || x == PYRAMID_TILE_SIZE(m_level)-1
+                    || y == PYRAMID_TILE_SIZE(m_level)-1);
+    }
 };
 
 /**
-* @class FillWorker
+* @class Filler
 * @brief Dedicated pixelworker for flood-fill operation
 *
+* Actually this worker is a bit different from Baseworker.
+* This worker does not use m_surf.
 */
-class FillWorker : public BaseWorker
+class Filler : public BaseWorker
 {
 protected:
 public:
-    FillWorker(FlagtileSurface* surf)
-        : BaseWorker(surf) { }
+    Filler() :
+        BaseWorker() {}  
 
     // To check whether a pixel to be processed or not.
     // `match` and `step` methods are almost same, it seems to be done
@@ -213,7 +216,14 @@ public:
     // so they are separated.
     virtual bool match(const uint8_t pix) = 0;
 
-    virtual void step(const int sx, const int sy) = 0;
+    virtual void step(Flagtile *t, const int x, const int y) = 0;
+
+    // Just a stub.
+    // Some derived class might not be able to decrible target pixel as
+    // a single pixel.
+    // Because it can be so complicated.
+    virtual uint8_t get_fill_pixel(){ return PIXEL_INVALID; }
+    virtual uint8_t get_target_pixel(){ return PIXEL_INVALID; }
 };
 
 /**
@@ -227,14 +237,21 @@ public:
 class KernelWorker : public BaseWorker
 {
 protected:
+    FlagtileSurface* m_surf;
+    static Flagtile *m_shared_empty;
+    
     // Utility method to access neighbor pixels.
     // You can use offset constant(macro) such as OFFSET_UP/RIGHT/DOWN/LEFT
-    virtual uint8_t get_pixel_with_direction(const int x, const int y,
+    // This is virtual, because needs to be overridden in AntialiasWalker.
+    virtual uint8_t get_pixel_with_direction(const int sx, const int sy,
                                              const int direction);
+
 public:
     // Defined at lib/pyramid.cpp
     KernelWorker(FlagtileSurface *surf)
-        : BaseWorker(surf) { }
+        : BaseWorker(),
+          m_surf(surf)
+    { }
 
     virtual void set_target_level(const int level);
 
@@ -268,9 +285,13 @@ public:
 
     // Called when a tile processing end.
     virtual void end(Flagtile * const targ){}
+    
+    // Shared-empty tile related.
+    static inline bool is_shared_empty(Flagtile* t){return t==m_shared_empty;}
+    static Flagtile *get_shared_empty();
+    static bool sync_shared_empty(const int level);
+    static void free_shared_empty();
 
-    virtual void finalize();
-    //
     // Offsets to refer neighboring pixels.
     // This is public. Some class might refer them.
     static const int xoffset[];
@@ -377,19 +398,10 @@ public:
     void walk(const int sx, const int sy, const int direction);
 };
 
-// XXX Currently almost same as floodfill_point of fill.cpp,
-// But pyramid_point member might be changed in future.
+// To decrease memory usage, use short. 
+// (actually, enough with `char`...)
 typedef struct {
-    int x;
-    int y;
-} pyramid_point;
-
-// pyramid_tilepoint used for flood-fill operation of FlagtileSurface.
-typedef struct {
-    int x; // Pixel location of tile
-    int y;
-    int tx; // Tile location
-    int ty;
-} pyramid_tilepoint;
-
+    short x;
+    short y;
+} floodfill_point;
 #endif

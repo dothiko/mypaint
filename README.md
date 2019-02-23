@@ -261,6 +261,9 @@ fully immerse themselves in their work.
 * Extensive graphic tablet support
 * Speed, simplicity, and expressiveness
 * Realistic paint-like pigment model
+* 15 bit Rec 709 linear RGB colorspace
+* Brush settings stored with each stroke on the canvas
+* Layers, various modes, and layer groups
 
 ## Build/Test/Install
 

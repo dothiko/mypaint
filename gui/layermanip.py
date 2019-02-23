@@ -112,8 +112,7 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
         self._drag_active_tdw = None
         self._drag_active_model = None
         # XXX for `overlay move`
-       #self.move_type = _MoveType.SURFACE 
-        self.move_type = _MoveType.OVERLAY
+        self.move_type = _Prefs.DEFAULT_MOVE_TYPE
         self.pixbuf = None
         self.cur_x = 0
         self.cur_y = 0
@@ -135,6 +134,12 @@ class LayerMoveMode (gui.mode.ScrollableModeMixin,
         opt = self.get_options_widget()
         assert opt is not None
         opt.target = self
+
+        app = doc.app
+        self.move_type = app.preferences.get(
+            _Prefs.MOVE_TYPE_PREF, 
+            _MoveType.SURFACE
+        )
 
     def leave(self, **kwds):
         if self._cmd is not None:

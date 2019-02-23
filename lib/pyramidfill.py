@@ -31,7 +31,22 @@ class _PIXEL:
 
 
 ## Utility Functions
-def _convert_result(dstsurf, ft, color, combine_mode, pixel=_PIXEL.FILLED):
+def _get_level_index(lvl):
+    idx = 0
+    for i in range(lvl):
+        vn = 1 << (6-i) 
+        idx += vn * vn
+    return idx
+
+def _get_pyramid_view(level, nptile):
+    """Get numpy view from numpy 1D array (flagtile-locked buffer).
+    """
+    l_idx = _get_level_index(level)
+    MN = 1 << (6 - level)
+    return np.reshape(nptile[l_idx:l_idx+MN*MN], (MN,MN))
+
+def _convert_result(dstsurf, ft, color, combine_mode, 
+                    pixel=_PIXEL.FILLED, frame_bbox=None):
     """Draw filled result of flagtile surface into 
     mypaint-colortiles of the layer, using tile_combine functon
     of pixops.cpp .
@@ -51,13 +66,25 @@ def _convert_result(dstsurf, ft, color, combine_mode, pixel=_PIXEL.FILLED):
     assert type(color) is tuple
     r, g, b = color
 
+    if frame_bbox is not None:
+        x, y, w, h = frame_bbox
+        btsx = (x // N) - ox
+        btsy = (y // N) - oy
+        btex = ((w + x - 1) // N) - ox
+        btey = ((h + y - 1) // N) - oy
+
     filled = {}
     work_tile = np.zeros((N, N, 4), "uint16")
 
     for fty in range(th):
         for ftx in range(tw):
+            if frame_bbox is not None:
+                if (ftx < btsx or fty < btsy
+                        or ftx > btex or fty > btey):
+                    continue
+
             ct = ft.get_tile(ftx, fty, False)
-            if ct is not None and not ct.is_filled_with(_PIXEL.INVALID):
+            if ct is not None and not ct.is_filled_with(0, _PIXEL.INVALID):
                 tx = ftx + ox
                 ty = fty + oy
                 with dstsurf.tile_request(tx, ty, readonly=False) \
@@ -82,7 +109,7 @@ def _convert_result(dstsurf, ft, color, combine_mode, pixel=_PIXEL.FILLED):
     tile_bbox = lib.surface.get_tiles_bbox(filled)
     dstsurf.notify_observers(*tile_bbox)
 
-def _create_FlagtileSurface(nodes, lasso=False, show_debug=False):
+def _create_FlagtileSurface(nodes, frame=None, lasso=False, show_debug=False):
     fn = nodes[0]
     min_x, min_y = fn.x, fn.y
     max_x, max_y = min_x, min_y
@@ -93,16 +120,25 @@ def _create_FlagtileSurface(nodes, lasso=False, show_debug=False):
         max_x = max(max_x, cn.x)
         max_y = max(max_y, cn.y)
 
-    min_x = int(min_x)
+    min_x = int(min_x) 
     min_y = int(min_y)
     max_x = int(max_x)
     max_y = int(max_y)
 
+    # Expand minimum surface border to tile edge.
+    min_x = (min_x // N) * N
+    min_y = (min_y // N) * N
+    # Shrink maximum surface border to tile edge
+    max_x = (max_x // N) * N 
+    max_y = (max_y // N) * N 
+    # With above and ClosefillSurface constructor,
+    # Tiles are centered.
+
     ft = lib.mypaintlib.ClosefillSurface(min_x, min_y, max_x, max_y)
     # XXX We need to convert node position in model-coordinate 
     # to flagtilesurface-coordinate.
-    ox = ft.get_origin_x() * N
-    oy = ft.get_origin_y() * N
+    ox = (ft.get_origin_x() * N) 
+    oy = (ft.get_origin_y() * N) 
 
     idx=0
     bn = fn
@@ -120,19 +156,91 @@ def _create_FlagtileSurface(nodes, lasso=False, show_debug=False):
         _PIXEL.AREA
     )
 
-    # XXX Debug/profiling code
-    if show_debug:
-        _dbg_show_flag(ft, 'area', title='just drawn')
-    # XXX Debug code end
-
     ft.decide_area()
-
-    # XXX Debug/profiling code
-    if show_debug:
-        _dbg_show_flag(ft, 'area', title='surface created')
-    # XXX Debug code end
-
     return ft
+
+def _trim_border(ft, bbox):
+    """Trim border pixels.
+
+    Caution: This function just trim pixel areas from
+    tiles on frame-border. 
+    This has no effect for tiles which is outside of that border.
+    Such tiles should be rejected at _convert_result().
+    """
+    if bbox is None:
+        return
+   #print(bbox)
+    x, y, w, h = bbox
+
+    ox = ft.get_origin_x()
+    oy = ft.get_origin_y()
+    osx = ox * N
+    osy = oy * N
+    oex = osx + ft.get_width() * N - 1
+    oey = osy + ft.get_height() * N - 1
+
+    ex = x + w - 1
+    ey = y + h - 1
+
+   #print("ox %d, oy %d, osx %d, osy %d, oex %d, oey %d" %
+   #        (ox, oy, osx, osy, oex, oey))
+
+    # If Flagtilesurface is completely inside the frame,
+    # there is nothing to trim. Exit immidiately.
+    if (x <= osx  and y <= osy
+            and oex <= ex and oey <= ey):
+        return
+
+    min_px = x % N
+    max_px = ex % N
+    min_py = y % N
+    max_py = ey % N
+    min_tx = x // N
+    min_ty = y // N
+    max_tx = ex // N
+    max_ty = ey // N
+
+   #print("min_tx %d, min_ty %d, max_tx %d, max_ty %d," %
+   #        (min_ty, min_ty, max_tx, max_ty))
+
+    def _trim_tile(ft, tx, ty):
+        # Convert tx & ty of mypaint surface coordinate
+        # into Flagtilesurface coordinate.
+        ftx = tx - ox
+        fty = ty - oy
+        if (ftx < 0 or fty < 0 
+                or ftx >= ft.get_width() or fty >= ft.get_height()):
+            return
+       #print("tile try %d, %d (%d,%d)" % (ftx, fty, tx, ty))
+        tile = ft.get_tile(ftx, fty, False)
+        if tile is not None and tile.get_pixel_count(0, _PIXEL.FILLED) > 0:
+       #    print("tile get %d, %d (%d,%d)" % (ftx, fty, tx, ty))
+            sx = sy = 0
+            ex = ey = N
+            # Do not use `elif`  
+            # There might be only one tile width!
+            if tx == 0:
+                ex = min_px 
+            if tx == max_tx:
+                sx = max_px + 1 # Start from the next of max_px 
+            if ty == 0:
+                ey = min_py 
+            if ty == max_ty:
+                sy = max_py + 1 # Start from the next of max_py
+            if sx != 0 or sy != 0 or ex != N or ey != N:
+       #        print("processing %d, %d - %d,%d to %d, %d" % (tx, ty, sx,sy,ex,ey))
+                npary = tile.lock()
+                w = np.reshape(npary[0:N*N], (N,N))
+                w[sy:ey, sx:ex] = _PIXEL.EMPTY
+                tile.unlock(npary)
+
+    for ty in (min_ty, max_ty): # Note: This is not range().  just a tuple.
+        for tx in range(min_tx, max_tx+1):
+            _trim_tile(ft, tx, ty)
+
+    for tx in (min_tx, max_tx): # Note: This is not range().  just a tuple.
+        for ty in range(min_ty, max_ty): # 4 Corners are already processed.
+            _trim_tile(ft, tx, ty)
 
 ## Main Functions.
 
@@ -141,7 +249,7 @@ def close_fill(targ, src, nodes, targ_pos, level,
                tolerance=0.1,
                alpha_threshold=0.2,
                dilation=2,
-               fill_all_holes=True, 
+               frame_bbox=None,
                debug_info=None# XXX for Debug 
                ):
     """Do `Close and fill`, called from ClosefillMode of lib/command.py
@@ -218,39 +326,62 @@ def close_fill(targ, src, nodes, targ_pos, level,
                 0.0, # All unrejected areas are remained.
                 0.3, # 0.3(30%) is practical value.
                 _PIXEL.AREA,
-                _PIXEL.OUTSIDE
+                _PIXEL.OUTSIDE,
+                -1 # Don't use size threshold
             )
 
-    # XXX Debug/profiling code
-    if show_flag:
-        _dbg_show_flag(
-            ft, 
-            'contour,filled,outside,area', 
-            title='post-progress'
-        )
-    #XXX debug code end
-
     # Finalize fill result.
+    # With rejecting very small (garbage) area
     ft.identify_areas(
         0, 
         _PIXEL.AREA,
         -1.0, # All unrejected areas are accepted.
         0.1, # 0.1(10%) is practical value.
         _PIXEL.FILLED,
-        _PIXEL.AREA
+        _PIXEL.AREA,
+        (1 << level) * 3 * 2 
     )
+    # XXX Debug/profiling code
+    if show_flag:
+        _dbg_show_flag(
+            ft, 
+            'contour,filled,outside,area', 
+            title='post-identified'
+        )
+    #XXX debug code end
+
 
     if dilation > 0:
         ft.dilate(_PIXEL.FILLED, dilation)
 
     # After dilation, fill all holes.
-    if fill_all_holes:
-        ft.fill_holes()
+    ft.fill_holes()
+
+    # XXX Debug/profiling code
+    if show_flag:
+        _dbg_show_flag(
+            ft, 
+            'contour,filled,outside,area', 
+            title='after-fill-hole'
+        )
+    #XXX debug code end
 
     ft.draw_antialias()
+
+    # All pixels are decided.
+    # Then, trim result surface with frame (if exists)
+    # 
+    # Different from ordinary flood-fill,
+    # close_fill and lasso_fill might produce
+    # wrong result, when closed-area (polygon) 
+    # and contours inside are removed.
+    # Therefore, we cannot truncate tile during
+    # fill operation.
+    if frame_bbox:
+        _trim_border(ft, frame_bbox)
     
     # Convert flagtiles into that new layer.
-    _convert_result(targ, ft, color, combine_mode)
+    _convert_result(targ, ft, color, combine_mode, frame_bbox=frame_bbox)
     
     # XXX Debug/profiling code
     print("processing time %s" % str(time.time()-ctm))
@@ -267,7 +398,7 @@ def lasso_fill(targ, src, nodes, targ_pos, level,
                tolerance=0.1,
                alpha_threshold=0.2,
                dilation=2,
-               fill_all_holes=True, 
+               frame_bbox=None,
                debug_info=None# XXX for Debug 
                ):
 
@@ -298,7 +429,7 @@ def lasso_fill(targ, src, nodes, targ_pos, level,
     th = lt.get_height()
     
 
-    # Sampling colors from src color tiles around nodes.
+    # Sampling colors from src mypaint-color-tiles around nodes.
     node_colors = {}
     # previous node position, in integer precision.
     px = None
@@ -317,8 +448,6 @@ def lasso_fill(targ, src, nodes, targ_pos, level,
                     cx %= N
                     cy %= N
                     key = tuple([int(c) for c in src_tile[cy][cx]])
-                   ## Only opaque color should be count.
-                   #if key[3] != 0:
                     cnt = node_colors.get(key, 0)
                     node_colors[key] = cnt + 1
                 
@@ -334,10 +463,11 @@ def lasso_fill(targ, src, nodes, targ_pos, level,
 
     if (targ_a == 0 
             and combine_mode != lib.mypaintlib.CombineDestinationOut):
-        alpha_threshold = 0.0 # We write in empty area, so disable alpha threshould.
+        # We are goint to write in empty area. disable alpha threshould.
+        alpha_threshold = 0.0 
         combine_mode = lib.mypaintlib.CombineNormal
     
-    # Convert colortiles into flagtiles
+    # Target color decided, then convert colortiles into flagtiles
     for fty in range(th):
         for ftx in range(tw):
             ct = lt.get_tile(ftx, fty, False)
@@ -370,10 +500,13 @@ def lasso_fill(targ, src, nodes, targ_pos, level,
         )
     # XXX Debug code end
 
-    if fill_all_holes:
-        lt.fill_holes()
-
+    lt.fill_holes()
     lt.draw_antialias()
+
+    # All pixels are decided.
+    # Then, trim result surface with frame (if exists)
+    if frame_bbox:
+        _trim_border(lt, frame_bbox)
 
     # XXX Debug code
     if show_flag:
@@ -385,7 +518,7 @@ def lasso_fill(targ, src, nodes, targ_pos, level,
     # XXX Debug code end
     
     # Convert flagtiles into that new layer.
-    _convert_result(targ, lt, color, combine_mode)
+    _convert_result(targ, lt, color, combine_mode, frame_bbox=frame_bbox)
 
     # XXX Debug/profiling code
     print("processing time %s" % str(time.time()-ctm))
@@ -458,7 +591,8 @@ def cut_protrude(layers,
                 )
             flagtiles[(tx, ty)] = flag_tile
 
-    ft = lib.mypaintlib.CutprotrudeSurface(flagtiles)
+    ft = lib.mypaintlib.CutprotrudeSurface()
+    ft.refer_tiledict(tiles) # Set up actual surface dimension.
     ox = ft.get_origin_x()
     oy = ft.get_origin_y()
     for tx, ty in flagtiles:
@@ -606,7 +740,6 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     erase_pixel = kwargs.get('erase_pixel', False)
     anti_alias = kwargs.get('anti_alias', True)
     alpha_threshold = kwargs.get('alpha_threshold', 0.2)
-    fill_all_holes = kwargs.get('fill_all_holes', False)
 
     if erase_pixel:
         combine_mode = lib.mypaintlib.CombineDestinationOut
@@ -622,6 +755,8 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     # Flood-fill loop
     filled = {}
 
+    w = lib.mypaintlib.FloodFiller()
+
     # XXX DEBUG START
     print("tolerance %.6f" % tolerance)
     print("pyramid_level %s" % str(pyramid_level))
@@ -630,44 +765,64 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     print("tx/ty limits %s" % str((min_tx, min_ty, max_tx, max_ty)))
     print("targ color : %s" % str((targ_r, targ_g, targ_b, targ_a)))
     print("fill color : %s" % str(color))
-    print("fill_all_holes : %s" % str(fill_all_holes))
 
     show_flag = kwargs.get('show_flag', False)
     tile_output = kwargs.get('tile_output', False)
+
+    def print_seeds(eq, msg):
+        tx = eq.get_tx()
+        ty = eq.get_ty()
+        print('--- %s %d,%d' % (msg, tx, ty))
+        if eq.get_incoming_dir() == eq.SPILL_INIT:
+            print("initial pos")
+        else:
+            for i in range(4):
+                if eq.dbg_is_seed(i):
+                    s = ''
+                    for c in range(64):
+                        s += str(eq.dbg_get_seed(i, c))
+                    print("%d : %s" % (i, s))
     # XXX DEBUG END
 
     def do_fill(targ_pixel, fill_pixel, level):
-        min_px = base_min_px >> level
-        min_py = base_min_py >> level
-        max_px = base_max_px >> level
-        max_py = base_max_py >> level
-        tileq = [
-            ((btx, bty),
-             [(bpx>>level, bpy>>level)])
-        ]
+       #min_px = base_min_px >> level
+       #min_py = base_min_py >> level
+       #max_px = base_max_px >> level
+       #max_py = base_max_py >> level
         MN = 1 << (MAX_PROGRESS_LEVEL - level) # Pyramid tile-size
 
+        w.set_target_level(level)
+        w.set_target_pixel(targ_pixel, fill_pixel)
+
+        tileq = [ lib.mypaintlib.BorderQueue(btx, bty, bpx>>level, bpy>>level), ]
+
         while len(tileq) > 0:
-            (tx, ty), seeds = tileq.pop(0)
-            # Bbox-derived limits
+            eq = tileq.pop()
+            tx = eq.get_tx()
+            ty = eq.get_ty()
+            
+            # Bbox-derived limits.
+            # Pixel limits within this tile
+            # are trimmed later.
+            # Only check tile-border here.
             if tx > max_tx or ty > max_ty:
                 continue
             if tx < min_tx or ty < min_ty:
                 continue
-            # Pixel limits within this tile...
-            min_x = 0
-            min_y = 0
-            max_x = MN-1
-            max_y = MN-1
-            # ... vary at the edges
-            if tx == min_tx:
-                min_x = min_px
-            if ty == min_ty:
-                min_y = min_py
-            if tx == max_tx:
-                max_x = max_px
-            if ty == max_ty:
-                max_y = max_py
+           #min_x = 0
+           #min_y = 0
+           #max_x = MN-1
+           #max_y = MN-1
+           #if level == 0:
+           #    # ... vary at the edges (only level 0)
+           #    if tx == min_tx:
+           #        min_x = min_px
+           #    if ty == min_ty:
+           #        min_y = min_py
+           #    if tx == max_tx:
+           #        max_x = max_px
+           #    if ty == max_ty:
+           #        max_y = max_py
             # Flood-fill one tile
             flag_tile = filled.get((tx, ty), None)
             if flag_tile is None:
@@ -683,30 +838,19 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
                     if level > 0:
                         flag_tile.propagate_upward(level)
                     filled[(tx, ty)] = flag_tile
-            if flag_tile is not None:
-                overflows = lib.mypaintlib.pyramid_flood_fill(
-                    flag_tile, seeds,
-                    min_x, min_y, max_x, max_y,
-                    level,
-                    targ_pixel,
-                    fill_pixel
-                )
-                if overflows is not None:
-                    seeds_n, seeds_e, seeds_s, seeds_w = overflows
 
-                    # Enqueue overflows in each cardinal direction
-                    if seeds_n and ty > min_ty:
-                        tpos = (tx, ty-1)
-                        tileq.append((tpos, seeds_n))
-                    if seeds_w and tx > min_tx:
-                        tpos = (tx-1, ty)
-                        tileq.append((tpos, seeds_w))
-                    if seeds_s and ty < max_ty:
-                        tpos = (tx, ty+1)
-                        tileq.append((tpos, seeds_s))
-                    if seeds_e and tx < max_tx:
-                        tpos = (tx+1, ty)
-                        tileq.append((tpos, seeds_e))
+            if flag_tile is not None:
+               #overflows = lib.mypaintlib.flagtile_flood_fill(
+                if lib.mypaintlib.flagtile_flood_fill(flag_tile, eq, w):
+                    for i in range(4):
+                        if not eq.is_empty(i):
+                            ntx = lib.mypaintlib.BorderQueue.adjust_tx(tx, i)
+                            nty = lib.mypaintlib.BorderQueue.adjust_ty(ty, i)
+                            if (ntx <= max_tx and nty <= max_ty
+                                    and ntx >= min_tx and nty >= min_ty):
+                                neq = lib.mypaintlib.BorderQueue(i, eq, ntx, nty)
+                                tileq.append(neq)
+                del eq # Explicily call (or, to be called) destructor
 
     # Practically, level 2 is enough for 1st stage flood-fill.
     base_level = 2 
@@ -716,6 +860,14 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
         # With this, we can get maximum flood-fillable areas of
         # _PIXEL.RESERVE.
         do_fill(_PIXEL.AREA, _PIXEL.RESERVE, base_level)
+
+        if show_flag:
+            _dbg_show_flag(
+                filled, 
+                "area, filled, contour, outside, reserve", 
+                base_level, 
+                title="1st stage"
+            )
 
         # 2nd stage:
         # Propergate upward all tiles genareted in 1st stage.
@@ -736,7 +888,8 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
     # FloodfillSurface increace reference counter of `filled` dictionary.
     # `filled` dictionary used to just calculate bbox of surface in 
     # constructor.
-    ft = lib.mypaintlib.FloodfillSurface(filled)
+    ft = lib.mypaintlib.FloodfillSurface()
+    ft.refer_tiledict(filled) # Set up actual surface dimension.
     ox = ft.get_origin_x()
     oy = ft.get_origin_y()
     for tx, ty in filled:
@@ -745,12 +898,6 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
         ft.borrow_tile(ftx, fty, filled[(tx, ty)])
 
     if show_flag:
-        _dbg_show_flag(
-            ft, 
-            "area, filled, contour, outside, reserve", 
-            base_level, 
-            title="1st stage"
-        )
         _dbg_show_flag(
             ft, 
             "area, filled, contour, outside, reserve", 
@@ -769,7 +916,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
             0.1,
             _PIXEL.AREA,
             _PIXEL.OUTSIDE,
-            -1 # With -1, reject even largest area (Because outside areas might be largest)
+            -1 # Don't use size threshold.
         )
 
     # XXX DEBUG START
@@ -817,18 +964,20 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
             0.0, # Accept areas which touches the PIXEL_FILLED areas only.
             0.1, # Reject opened area greater than 0.1
             _PIXEL.FILLED,
-            _PIXEL.AREA
+            _PIXEL.AREA,
+            -1 # Don't use size threshold.
         )
 
     if show_flag:
         _dbg_show_flag(ft, "area, filled, contour", 0, title="removed")
     
     ft.dilate(_PIXEL.FILLED, int(dilation_size))
-
-    if fill_all_holes:
-        ft.fill_holes()
+    ft.fill_holes()
     if anti_alias:
         ft.draw_antialias()
+
+    # All pixels decided. then, trim the border (for frame).
+    _trim_border(ft, bbox)
             
     # XXX DEBUG START
     print("end tile")
@@ -848,8 +997,6 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
 # XXX For debug 
 
 def _dbg_show_flag(ft, method, level=0, title=None):
-    # XXX debug method
-    
     # From lib/progfilldefine.hpp
     FLAG_WORK = 0x10
     FLAG_AA = 0x80
@@ -857,6 +1004,7 @@ def _dbg_show_flag(ft, method, level=0, title=None):
     if title is None:
         title = method
     title = title.decode('UTF-8')
+    SN = 1<<(6-level) # 2^6 == 64 == MYPAINT_TILE_SIZE
 
     colors = {
         _PIXEL.FILLED : (255, 160, 0),
@@ -871,13 +1019,38 @@ def _dbg_show_flag(ft, method, level=0, title=None):
         FLAG_AA : (0, 255, 255)
     }
 
+    if isinstance(ft, dict):
+        min_tx, min_ty = ft.keys()[0]
+        max_tx = min_tx
+        max_ty = min_ty
+        for tx, ty in ft:
+            min_tx = min(tx, min_tx)
+            min_ty = min(ty, min_ty)
+            max_tx = max(tx, max_tx)
+            max_ty = max(ty, max_ty)
+
+        tw = ((max_tx - min_tx)+1) 
+        th = ((max_ty - min_ty)+1) 
+        origins = (min_tx, min_ty)
+    else:
+        tw = ft.get_width()
+        th = ft.get_height()
+        origins = None
+
+    assert tw >= 0 
+    assert th >= 0 
+
     def create_npbuf(npbuf, level, pix):
-        r, g, b = colors[pix]
-        return ft.render_to_numpy(
+        if npbuf is None:
+            npbuf = np.zeros((th*SN, tw*SN, 3), 'uint8')
+        _dbg_render_to_numpy(
+            ft,
             npbuf, pix,
-            r, g, b,
-            level
+            colors[pix],
+            level,
+            origins=origins
         )
+        return npbuf
         
     for m in method.split(","):
         m = m.strip()
@@ -922,6 +1095,9 @@ def _dbg_show_flag(ft, method, level=0, title=None):
 
     from PIL import Image, ImageDraw
     newimg = Image.fromarray(npbuf)
+    if level > 0:
+        newimg = newimg.resize((tw*N, th*N), resample=0)
+
     d = ImageDraw.Draw(newimg)
     d.text((0,0),title, (0, 0, 0))
     d.text((1,1),title, (255, 255, 255))        
@@ -958,6 +1134,32 @@ def _dbg_tile_output(info, ox, oy, tw, th, src, prefix="tiles"):
     with open("%s/info" % outputdir, 'w') as ofp:
         json.dump(info, ofp)
 
+def _dbg_render_to_numpy(ft, npbuf, pix, color, level, origins=None):
+
+    def _render_tile(tile, tx, ty):
+        if tile is not None and tile.get_pixel_count(level, pix) > 0:
+            nptile = tile.lock()
+            srcview = np.reshape(nptile[l_idx:l_idx+VN*VN], (VN,VN))
+            x = tx * VN
+            y = ty * VN
+            targview = npbuf[y:y+VN, x:x+VN]
+            targview[srcview==pix] = color
+            tile.unlock(nptile)
+            # Explicitly delete view
+            del nptile
+
+    VN = 1 << (6-level) 
+    l_idx = _get_level_index(level)
+
+    if isinstance(ft, dict):
+        assert origins is not None
+        min_tx, min_ty = origins
+        for tx, ty in ft:
+            _render_tile(ft[(tx, ty)], tx-min_tx, ty-min_ty)
+    else:
+        for ty in range(ft.get_height()):
+            for tx in range(ft.get_width()):
+                _render_tile(ft.get_tile(tx, ty, False), tx, ty)
 
 if __name__ == '__main__':
 

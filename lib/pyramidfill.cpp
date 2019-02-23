@@ -30,7 +30,7 @@
 
 // XXX borrowed from `_floodfill_color_match` of lib/fill.cpp. almost same.
 static inline fix15_t
-pyramid_color_match(const fix15_short_t c1_premult[4],
+floodfill_color_match(const fix15_short_t c1_premult[4],
                        const fix15_short_t c2_premult[4],
                        const fix15_t tolerance)
 {
@@ -114,13 +114,13 @@ assert_tile(PyArrayObject* array) {
 // And most of derived worker classes are defined at lib/pyramidworkers.hpp
 
 //----------------------------------------------------------------------------
-/// BaseWorker
+/// KernelWorker
 
 //// Shared empty tile related.
-Flagtile *BaseWorker::m_shared_empty = NULL;
+Flagtile *KernelWorker::m_shared_empty = NULL;
 
 Flagtile*
-BaseWorker::get_shared_empty()
+KernelWorker::get_shared_empty()
 {
     if (m_shared_empty == NULL)
         m_shared_empty = new Flagtile(PIXEL_EMPTY);
@@ -128,9 +128,9 @@ BaseWorker::get_shared_empty()
 }
 
 bool
-BaseWorker::sync_shared_empty()
+KernelWorker::sync_shared_empty(const int level)
 {
-    if (!m_shared_empty->is_filled_with(PIXEL_EMPTY)) {
+    if (!m_shared_empty->is_filled_with(level, PIXEL_EMPTY)) {
         m_shared_empty = NULL;
         return true;
     }
@@ -139,14 +139,11 @@ BaseWorker::sync_shared_empty()
 
 // Call this from FlagtileSurface destructor.
 void
-BaseWorker::free_shared_empty()
+KernelWorker::free_shared_empty()
 {
     delete m_shared_empty;
     m_shared_empty = NULL;
 }
-
-//--------------------------------------
-/// KernelWorker
 
 void
 KernelWorker::set_target_level(const int level)
@@ -171,39 +168,14 @@ const int KernelWorker::yoffset[] = {-1, 0, 1,  0};
 
 // Wrapper method to get pixel with direction.
 uint8_t
-KernelWorker::get_pixel_with_direction(const int x, const int y,
+KernelWorker::get_pixel_with_direction(const int sx, const int sy,
                                        const int direction)
 {
     return m_surf->get_pixel(
         m_level,
-        x + xoffset[direction],
-        y + yoffset[direction]
+        sx + xoffset[direction],
+        sy + yoffset[direction]
     );
-}
-
-/**
-* @finalize
-* Called when the entire pixel operation has end.
-*
-* @detail
-* This method called when the entire pixel operation has end.
-* It seems that such codes should be written in destructor,
-* but virtual destructor would be called parent class one,
-* it cannot be cancelled easily. so this method is created.
-*/
-void
-KernelWorker::finalize()
-{
-    // Remove working flag from entire surface
-    // And clear dirty state flags here.
-    #pragma omp parallel for
-    for(int i=0; i<m_surf->get_width() * m_surf->get_height(); i++) {
-        Flagtile *t = m_surf->get_tile(i, false);
-        if (t != NULL && (t->get_stat() & Flagtile::DIRTY)) {
-            t->clear_bitwise_flag(m_level, FLAG_WORK);
-            t->clear_dirty();
-        }
-    }
 }
 
 //--------------------------------------
@@ -272,8 +244,7 @@ WalkingKernel::forward()
             return false; // Walking end!!
         }
 
-        if ((m_surf->get_pixel(m_level, m_x, m_y) & FLAG_WORK) == 0)
-            on_new_pixel();
+        on_new_pixel();
     }
     return true;
 }
@@ -335,7 +306,8 @@ Flagtile::m_buf_offsets[MAX_PYRAMID+1] = {
 };
 
 Flagtile::Flagtile(const int initial_value)
-    : m_statflag(0)
+    : m_npbuf(NULL),
+      m_statflag(0)
 {
     m_buf = new uint8_t[FLAGTILE_BUF_SIZE];
     fill(initial_value);
@@ -343,6 +315,9 @@ Flagtile::Flagtile(const int initial_value)
 
 Flagtile::~Flagtile()
 {
+    if (m_npbuf != NULL) 
+        Py_DECREF(m_npbuf);
+    
     delete[] m_buf;
 }
 
@@ -406,21 +381,21 @@ Flagtile::propagate_upward(const int max_level)
     assert(max_level >= 1);
     assert(max_level <= MAX_PYRAMID);
 #endif
-    if (is_filled_with(PIXEL_INVALID))
+    if (is_filled_with(0, PIXEL_INVALID))
         return; // There is nothing to do for empty tile.
 
     // In this stage, when the all of level-0 pixels are filled with same value
     // , but it might not be filled above level 0.
     // So, ensure the filled pixels such case.
-    if (is_filled_with(PIXEL_AREA)) {
+    if (is_filled_with(0, PIXEL_AREA)) {
         if (get(max_level, 0, 0) != PIXEL_AREA)
             fill(PIXEL_AREA);
     }
-    else if (is_filled_with(PIXEL_CONTOUR)) {
+    else if (is_filled_with(0, PIXEL_CONTOUR)) {
         if (get(max_level, 0, 0) != PIXEL_CONTOUR)
             fill(PIXEL_CONTOUR);
     }
-    else if (is_filled_with(PIXEL_OUTSIDE)) {
+    else if (is_filled_with(0, PIXEL_OUTSIDE)) {
         if (get(max_level, 0, 0) != PIXEL_OUTSIDE)
             fill(PIXEL_OUTSIDE);
     }
@@ -487,7 +462,7 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
                 // such as PIXEL_AREA or PIXEL_OUTSIDE)
                 // should be convertable.
                 if (pix != PIXEL_EMPTY && alpha >= f15_threshold) {
-                    fix15_t match = pyramid_color_match(
+                    fix15_t match = floodfill_color_match(
                         targ, cptr,
                         f15_tolerance
                     );
@@ -497,6 +472,7 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
                     }
                 }
             }
+            /*
             else {
                 // Code reaches here when
                 // limit_within_opaque is true and current pixel
@@ -504,7 +480,7 @@ Flagtile::convert_from_color(PyObject *py_src_tile,
                 if (pix != PIXEL_EMPTY) {
                     replace(0, x, y, PIXEL_EMPTY);
                 }
-            }
+            }*/
             cptr += xstride;
         }
     }
@@ -549,7 +525,8 @@ Flagtile::convert_to_color(PyObject *py_targ_tile,
     cols[3] = fix15_one;
 
     // Completely filled tile can be filled with memcpy.
-    if (is_filled_with(pixel)) {
+    // In this stage, we can know it from level 0 pixel count.
+    if (is_filled_with(0, pixel)) {
         fix15_short_t *dptr = cptr;
         // Build one line
         for(int x=0; x<TILE_SIZE; x++) {
@@ -647,6 +624,7 @@ Flagtile::convert_from_transparency(PyObject *py_src_tile,
     }
 }
 
+
 void
 Flagtile::fill(const uint8_t val)
 {
@@ -658,8 +636,62 @@ Flagtile::fill(const uint8_t val)
     // Fill only equal and above of assigned level.
 
     memset(m_buf, val, FLAGTILE_BUF_SIZE);
-    memset(m_pixcnt, 0, sizeof(uint16_t)*(PIXEL_MASK+1));
-    m_pixcnt[val] = TILE_SIZE * TILE_SIZE;
+    memset(m_pixcnt, 0, sizeof(uint16_t) * PIXEL_MAX * MAX_PYRAMID);
+    for(int l=0; l < MAX_PYRAMID; l++) {
+        int tile_size = PYRAMID_TILE_SIZE(l);
+        m_pixcnt[l][val] = tile_size * tile_size;
+    }
+}
+
+/**
+* @to_nparray
+* Get internal m_buf buffer as numpy.array
+*
+* @return numpy array object.
+*
+* You can get and manipulate m_buf buffer pixel, via numpy API.
+* That numpy array is just `view`, and you must discard(or just
+* stop using) it before this Flagtile instance is released.
+*
+* Use this method carefully.
+*/
+PyObject*
+Flagtile::lock()
+{
+#ifdef HEAVY_DEBUG
+    assert(m_npbuf == NULL); 
+#endif
+    m_statflag |= COUNT_DIRTY;
+    npy_intp dim = FLAGTILE_BUF_SIZE;
+    m_npbuf = PyArray_SimpleNewFromData(1, &dim, NPY_UINT8, m_buf);
+    Py_INCREF(m_npbuf);
+    return m_npbuf;
+}
+
+/**
+* @unlock
+* Return the right of use numpy.array, which came from lock method.
+*
+* @param nparray The numpy array object, which is generated by lock method.
+* @return True when that array object is released.
+*
+* You MUST call this method if you get a numpy.array object with lock method.
+* Use this method carefully.
+*/
+void
+Flagtile::unlock(PyObject *nparray)
+{
+    // Assert strictly, even not in HEAVY_DEBUG.
+    assert(nparray == m_npbuf); 
+
+    // COUNT_DIRTY statflag should not be cleared here.
+    // To save processing time, pixel-count update 
+    // should be done on-demand.
+    // And, in some case (e.g. frame-bbox trimming, after all pixel decided)
+    // we might not need pixel count anymore.
+
+    Py_DECREF(m_npbuf);
+    m_npbuf = NULL;
 }
 
 //--------------------------------------
@@ -672,9 +704,11 @@ FlagtileSurface::FlagtileSurface()
     : m_tiles(NULL)
 {
 #ifdef HEAVY_DEBUG
-    // This should be `static assert` and exactly
-    // compare with MYPAINT_TILE_SIZE, not other macros.
-    assert((1 << TILE_LOG) == MYPAINT_TILE_SIZE);
+    // These are actually `static assert`. 
+    // We MUST exactly compare them with 
+    // MYPAINT_TILE_SIZE, not other macros such as `N` or `TILE_SIZE`.
+    assert((1 << TILE_LOG) == MYPAINT_TILE_SIZE); // for Flagtile
+    assert(sizeof(uint64_t) == (MYPAINT_TILE_SIZE/8)); // for EdgeQueue
 #endif
 }
 
@@ -685,7 +719,7 @@ FlagtileSurface::~FlagtileSurface()
     }
     delete[] m_tiles;
 
-    BaseWorker::free_shared_empty();
+    KernelWorker::free_shared_empty();
 #ifdef HEAVY_DEBUG
     printf("FlagtileSurface destructor called.\n");
 #endif
@@ -745,121 +779,48 @@ FlagtileSurface::generate_tileptr_buf(const int ox, const int oy,
 * without returning python seed tuples.
 */
 void
-FlagtileSurface::flood_fill(const int sx, const int sy,
-                            FillWorker* w)
+FlagtileSurface::flood_fill(const int sx, const int sy, Filler* w)
 {
     const int level = w->get_target_level();
-    const int tile_size = PYRAMID_TILE_SIZE(level);
-    int px = sx % tile_size;
-    int py = sy % tile_size;
-    int otx = sx / tile_size;
-    int oty = sy / tile_size;
-
-#ifdef HEAVY_DEBUG
-    assert(px >= 0);
-    assert(py >= 0);
-    assert(px < tile_size);
-    assert(py < tile_size);
-    assert(otx >= 0);
-    assert(oty >= 0);
-    assert(otx < m_width);
-    assert(oty < m_height);
-#endif
-    Flagtile *ot = get_tile(otx, oty, true);
-    uint8_t pix = ot->get(level, px, py);
-
-    // Initial seed pixel check.
-    if (!w->match(pix))
+    int tile_size = PYRAMID_TILE_SIZE(level);
+    int tx = sx / tile_size;
+    int ty = sy / tile_size;
+    bool request = (w->match(PIXEL_EMPTY));
+    if (tx < 0 && ty < 0 && tx >= get_width() && ty >= get_height()) {
         return;
+    }
 
-    // Populate a working queue with seeds
-    GQueue *queue = g_queue_new();   /* Of tuples, to be exhausted */
-    pyramid_point *seed_pt = (pyramid_point*)
-                                  malloc(sizeof(pyramid_point));
-    seed_pt->x = sx;
-    seed_pt->y = sy;
-    g_queue_push_tail(queue, seed_pt);
-
-    static const int x_delta[] = {-1, 1};
-    static const int x_offset[] = {0, 1};
-    const int max_x = tile_size * m_width;
-    const int max_y = tile_size * m_height;
+    GQueue *queue = g_queue_new();
+    BorderQueue *q = new BorderQueue(
+        tx, ty, sx%tile_size, sy%tile_size
+    );
+    g_queue_push_tail(queue, q);
 
     while (! g_queue_is_empty(queue)) {
-        pyramid_point *pos = (pyramid_point*) g_queue_pop_head(queue);
-        int x0 = pos->x;
-        int y = pos->y;
-        free(pos);
-
-        // Find easternmost and westernmost points of the same colour
-        // Westwards loop includes (x,y), eastwards ignores it.
-        for (int i=0; i<2; ++i)
-        {
-            bool look_above = true;
-            bool look_below = true;
-            for ( int x = x0 + x_offset[i] ;
-                  x >= 0 && x < max_x ;
-                  x += x_delta[i] )
-            {
-                // halt if we're outside the bbox range
-                if (x < 0|| y < 0 || x >= max_x || y >= max_y) {
-                    break;
-                }
-
-                if (x != x0) { // Test was already done for queued pixels
-                    pix = get_pixel(level, x, y);
-                    if (!w->match(pix))
-                    {
-                        break;
-                    }
-                }
-                // Fill this pixel, and continue iterating in this direction
-                w->step(x, y);
-
-                // In addition, enqueue the pixels above and below.
-                // Scanline algorithm here to avoid some pointless queue faff.
-                if (y > 0) {
-                    pix = get_pixel(level, x, y-1);
-                    if(w->match(pix)) {
-                        if (look_above) {
-                            // Enqueue the pixel to the north
-                            pyramid_point *p = (pyramid_point *) malloc(
-                                                    sizeof(pyramid_point)
-                                                  );
-                            p->x = x;
-                            p->y = y-1;
-                            g_queue_push_tail(queue, p);
-                            look_above = false;
+        q = (BorderQueue*)g_queue_pop_head(queue);
+        tx = q->get_tx();
+        ty = q->get_ty();
+#ifdef HEAVY_DEBUG
+        assert(q != NULL);
+        assert(tx >= 0 && ty >= 0 && tx < get_width() && ty < get_height()); 
+#endif
+        Flagtile *t = get_tile(tx, ty, request);
+        if (t != NULL) {
+            if (flagtile_flood_fill(t, q, w)) {
+                for(int i=0; i < 4; i++) {
+                    if (! q->is_empty(i)) {
+                        int ntx = BorderQueue::adjust_tx(tx, i);
+                        int nty = BorderQueue::adjust_ty(ty, i);
+                        if(ntx >= 0 && nty >= 0 && ntx < get_width() && nty < get_height()) { 
+                            BorderQueue *nq = new BorderQueue(i, q, ntx, nty);
+                            g_queue_push_tail(queue, nq);
                         }
-                    }
-                    else { // !match_above
-                        look_above = true;
-                    }
-                }
-
-                if (y < max_y - 1) {
-                    pix = get_pixel(level, x, y+1);
-                    if(w->match(pix)) {
-                        if (look_below) {
-                            // Enqueue the pixel to the South
-                            pyramid_point *p = (pyramid_point *) malloc(
-                                                    sizeof(pyramid_point)
-                                                  );
-                            p->x = x;
-                            p->y = y+1;
-                            g_queue_push_tail(queue, p);
-                            look_below = false;
-                        }
-                    }
-                    else { //!match_below
-                        look_below = true;
                     }
                 }
             }
         }
+        delete q;
     }
-
-    // Clean up working state.
     g_queue_free(queue);
 }
 
@@ -874,7 +835,8 @@ FlagtileSurface::flood_fill(const int sx, const int sy,
 void
 FlagtileSurface::filter_tiles(KernelWorker *w)
 {
-    int tile_size = PYRAMID_TILE_SIZE(w->get_target_level());
+    int level = w->get_target_level();
+    int tile_size = PYRAMID_TILE_SIZE(level);
 
     // This loop would trigger worker-object, which might
     // also refer/write pixels all over the FlagtileSurface.
@@ -890,7 +852,7 @@ FlagtileSurface::filter_tiles(KernelWorker *w)
             bool use_shared = (t==NULL);
 
             if (use_shared)
-                t = BaseWorker::get_shared_empty();
+                t = KernelWorker::get_shared_empty();
 
             int bx = tx * tile_size;
             int by = ty * tile_size;
@@ -909,12 +871,12 @@ FlagtileSurface::filter_tiles(KernelWorker *w)
             }
 
             if (use_shared) {
-                if(BaseWorker::sync_shared_empty())
-                    set_tile(tx, ty, t);
+                if(KernelWorker::sync_shared_empty(level)) {
+                    m_tiles[get_tile_index(tx, ty)] = t;
+                }
             }
         }
     }
-    w->finalize();
 }
 
 #ifdef _OPENMP
@@ -960,8 +922,6 @@ FlagtileSurface::filter_tiles_mp(KernelWorker *w)
             }
         }
     }
-
-    w->finalize();
 }
 #endif
 
@@ -1080,7 +1040,7 @@ void __foreach_largest_cb(gpointer data, gpointer user_data)
 * @param reject_threshold  The threshold value of surrounding `opened` pixels ratio.
 * @param accepted_pixel Filling pixel value of accepted area.
 * @param rejected_pixel Filling(Erasing) pixel value of rejected area.
-* @param size_threshold  Optional parameter,to accept area from its size, even if it is `opened`.
+* @param size_threshold  Optional parameter,to reject area from its size, even if it is not `opened`.
 *
 * This method is to identify pixel areas whether it is useless(to be rejected)
 * or usable(to be accepted).
@@ -1100,9 +1060,6 @@ void __foreach_largest_cb(gpointer data, gpointer user_data)
 * Such area would be left unchanged.
 * An area which has larger or equal perimeter than size_threshold would be always accepted,
 * even if how it is `opened`.
-* If size_threshold is 0, automatically largest area perimeter is used as threshold,
-* If size_threshold is less than 0, that threshould is ignored, every area might be
-* rejected when it is `too opened`.
 */
 void
 FlagtileSurface::identify_areas(const int level,
@@ -1130,12 +1087,13 @@ FlagtileSurface::identify_areas(const int level,
         size_threshold = max_length; // Rewrite size_threshold param. so not use const.
     }
 
-    FloodfillWorker ra(this);
+    FloodFiller ra;
     ClearflagWalker cf(this);
 
     ra.set_target_level(level);
     cf.set_target_level(level);
 
+    //printf("---- area start \n");
     while(g_queue_get_length(queue) > 0) {
         perimeter_info *info = (perimeter_info*)g_queue_pop_head(queue);
 
@@ -1147,16 +1105,20 @@ FlagtileSurface::identify_areas(const int level,
         }
         else {
             bool erase_flag = false;
+            //printf("area %p (%d,%d) accept %f, reject %f\n", info, info->sx, info->sy, info->accept_ratio, info->reject_ratio);
 
             if (info->length == 1 && level == 0) {
                 // Just a dot. Erase it.
                 replace_pixel(level, info->sx, info->sy, rejected_pixel);
             }
             else if (info->reject_ratio > reject_threshold
-                        && (size_threshold < 0 || info->length < size_threshold)) {
+                        || info->length < size_threshold) {
                 // This area should be rejected.
+                //printf("area %p to be reject\n", info);
                 if (targ_pixel == rejected_pixel) {
+                    // But, already rejected for some reason.
                     erase_flag = true;
+                    //printf("but only cleared.\n");
                 }
                 else {
                     ra.set_target_pixel(targ_pixel, rejected_pixel);
@@ -1205,16 +1167,21 @@ FlagtileSurface::fill_holes()
 
     ClearflagWalker cf(this);
     cf.set_target_pixel(PIXEL_FILLED);
-    FillHoleWorker fh(this);
+    HoleFiller fh;
+    fh.set_target_level(0);
 
     while(g_queue_get_length(queue) > 0) {
         perimeter_info *info = (perimeter_info*)g_queue_pop_head(queue);
 
         if (!info->clockwise && info->reject_ratio == 0.0) {
-            flood_fill(
-                info->sx, info->sy,
-                (FillWorker*)&fh
-            );
+            // Walking always starts from PIXEL_FILL pixel, 
+            // and left of that pixel is other than it (i.e. fill target).
+            int fx = info->sx-1;
+            int fy = info->sy;
+#ifdef HEAVY_DEBUG
+            assert((get_pixel(fx, fy, false) & PIXEL_MASK) != PIXEL_FILLED);
+#endif
+            flood_fill(fx, fy, (Filler*)&fh);
         }
         else {
             cf.walk(info->sx, info->sy, cf.get_hand_dir(info->direction));
@@ -1251,8 +1218,35 @@ FlagtileSurface::draw_antialias()
 //--------------------------------------
 // FloodfillSurface class
 
-FloodfillSurface::FloodfillSurface(PyObject* tiledict)
-    : FlagtileSurface()
+FloodfillSurface::FloodfillSurface()
+    : FlagtileSurface(),
+      m_src_dict(NULL)
+{
+}
+
+FloodfillSurface::~FloodfillSurface()
+{
+    if (m_tiles != NULL) {
+        for(int i=0; i<m_width*m_height; i++) {
+            Flagtile *ct = m_tiles[i];
+            // Borrowed tile MUST NOT be deleted.
+            if (ct != NULL
+                    && (ct->get_stat() & Flagtile::BORROWED) != 0)
+                m_tiles[i] = NULL; // So, just `hide` it.
+        }
+        // m_tiles array would be deleted at parent destructor.
+    }
+
+    if (m_src_dict != NULL)
+        Py_DECREF(m_src_dict);
+
+#ifdef HEAVY_DEBUG
+    printf("Floodfill destructor called.\n");
+#endif
+}
+
+void
+FloodfillSurface::refer_tiledict(PyObject* tiledict)
 {
 #ifdef HEAVY_DEBUG
     assert(PyDict_Check(tiledict));
@@ -1304,9 +1298,12 @@ FloodfillSurface::FloodfillSurface(PyObject* tiledict)
         (max_y - min_y) + 1
     );
 
-    // Incref the source dictionary
-    // to ensure the flagtile exists
-    // at destructor.
+    // We can borrow tiles from dict here,
+    // but it takes time and effort.
+    // For now, I took easist way.
+
+    // By the way, incref the source dictionary
+    // to ensure flagtiles exist during this class is used.
     m_src_dict = tiledict;
     Py_INCREF(m_src_dict);
 #ifdef HEAVY_DEBUG
@@ -1314,27 +1311,8 @@ FloodfillSurface::FloodfillSurface(PyObject* tiledict)
 #endif
 }
 
-FloodfillSurface::~FloodfillSurface()
-{
-    for(int i=0; i<m_width*m_height; i++) {
-        Flagtile *ct = m_tiles[i];
-        // Borrowed tile MUST NOT be deleted.
-        if (ct != NULL
-                && (ct->get_stat() & Flagtile::BORROWED) != 0)
-            m_tiles[i] = NULL; // So, just `hide` it.
-    }
-    // m_tiles array would be deleted at parent destructor.
-
-    // Do not forget to decref source dictionary.
-    Py_DECREF(m_src_dict);
-
-#ifdef HEAVY_DEBUG
-    printf("Floodfill destructor called.\n");
-#endif
-}
-
 void
-FloodfillSurface::borrow_tile(const int tx, const int ty, Flagtile* tile)
+FloodfillSurface::borrow_tile(const int tx, const int ty, Flagtile *tile)
 {
     int idx = get_tile_index(tx, ty);
     m_tiles[idx] = tile;
@@ -1452,7 +1430,7 @@ ClosefillSurface::decide_area()
     pk.set_target_pixel(PIXEL_EMPTY);
     filter_tiles(&pk);
 
-    FloodfillWorker fw(this);
+    FloodFiller fw;
     fw.set_target_level(0);
     fw.set_target_pixel(PIXEL_EMPTY, PIXEL_AREA);
 
@@ -1500,7 +1478,7 @@ ClosefillSurface::decide_outside(const int level)
     pk.set_target_pixel(PIXEL_AREA);
     filter_tiles(&pk);
 
-    FloodfillWorker ra(this);
+    FloodFiller ra;
     ClearflagWalker cf(this);
     ra.set_target_level(level);
     cf.set_target_level(level);
@@ -1526,8 +1504,8 @@ ClosefillSurface::decide_outside(const int level)
 
 //--------------------------------------
 // Cutprotrude
-CutprotrudeSurface::CutprotrudeSurface(PyObject* tiledict)
-    :  FloodfillSurface(tiledict)
+CutprotrudeSurface::CutprotrudeSurface()
+    :  FloodfillSurface()
 {
 }
 
@@ -1556,7 +1534,7 @@ CutprotrudeSurface::remove_overwrap_contour()
     pk.set_target_pixel(PIXEL_OVERWRAP);
     filter_tiles(&pk);
 
-    FloodfillWorker ra(this);
+    FloodFiller ra;
     ra.set_target_level(0);
 
     while(g_queue_get_length(queue) > 0) {
@@ -1590,402 +1568,162 @@ CutprotrudeSurface::remove_overwrap_contour()
 // Functions
 
 /**
-* @pyramid_flood_fill
-* Doing `pyramid-gap-closing-floodfill` into Flagtile.
+* @flagtile_flood_fill
+* Flagtile flood-fill core function
 *
-* @param tile A flag tile object.
-* @param seeds A python list of tuple, that tuple is (x, y) of floodfill seed points.
-* @param min_x,min_y,max_x,max_y Surface border within tile, in PYRAMID coordinate.
 * @param level The target pyramid level.
+* @param tile A flag tile object.
+* @param q  BorderQueue object, contains queueing information.
+* @param w  Filler object, do execute pixel match/filling operation.
 *
-* Used for floodfill tool, to implement gap-closing functionality.
-* parameter `tile` object should be already set up by `propagate_upward` method.
-* And, seed points of parameter `seeds` should be in PYRAMID coordinate.
-* This function would be called from python flood_fill function repeatedly.
+* This function is to share codes with every flood-fill operation of flagtile.
 */
-PyObject *
-pyramid_flood_fill (Flagtile *tile, /* target flagtile object */
-                    PyObject *seeds, /* List of 2-tuples */
-                    int min_x, int min_y, int max_x, int max_y,
-                    int level,
-                    int targ_pixel,
-                    int fill_pixel)
+bool
+flagtile_flood_fill(Flagtile *t, BorderQueue *q, Filler *w)
 {
-
-    // XXX Code duplication most parts from fill.cpp
-
 #ifdef HEAVY_DEBUG
-    assert(tile != NULL);
-    assert(PySequence_Check(seeds));
-    assert(targ_pixel != fill_pixel);
+    assert(t != NULL);
+    assert(q != NULL);
+    assert(w != NULL);
 #endif
-
+    const int level = w->get_target_level();
     const int tile_size = PYRAMID_TILE_SIZE(level);
 
-    if (min_x < 0) min_x = 0;
-    if (min_y < 0) min_y = 0;
-    if (max_x > tile_size-1) max_x = tile_size-1;
-    if (max_y > tile_size-1) max_y = tile_size-1;
-    if (min_x > max_x || min_y > max_y
-            || tile->is_filled_with(fill_pixel)) {
-        return Py_BuildValue("[()()()()]");
-    }
-    // Populate a working queue with seeds
-    int x = 0;
-    int y = 0;
-    GQueue *queue = g_queue_new();   /* Of tuples, to be exhausted */
-
-    for (int i=0; i<PySequence_Size(seeds); ++i) {
-        PyObject *seed_tup = PySequence_GetItem(seeds, i);
-#ifdef HEAVY_DEBUG
-        assert(PySequence_Size(seed_tup) == 2);
-#endif
-        if (! PyArg_ParseTuple(seed_tup, "ii", &x, &y)) {
-            continue;
+    // Some filler-worker might match multiple type of pixel.
+    // For such filler, checking fillable pixel count would not work.
+    if (w->get_target_pixel() != PIXEL_INVALID) {
+        if (t->get_pixel_count(level, w->get_target_pixel()) == 0) {
+            q->clear_border_seed();
+            return false;
         }
-        Py_DECREF(seed_tup);
-        x = MAX(0, MIN(x, tile_size-1));
-        y = MAX(0, MIN(y, tile_size-1));
-        uint8_t pix = tile->get(level, x, y);
-        if (pix == targ_pixel) {
-            pyramid_point *seed_pt = (pyramid_point*)
-                                          malloc(sizeof(pyramid_point));
-            seed_pt->x = x;
-            seed_pt->y = y;
-            g_queue_push_tail(queue, seed_pt);
+        else if (t->is_filled_with(level, w->get_target_pixel())) {
+            t->fill(w->get_fill_pixel());
+         
+            // With this, we can seed every direction
+            // except for incoming seed.
+            q->invert_all_border(); 
+            return true;
         }
     }
 
-    PyObject *result_n = PyList_New(0);
-    PyObject *result_e = PyList_New(0);
-    PyObject *result_s = PyList_New(0);
-    PyObject *result_w = PyList_New(0);
-
-    // Instantly fill up when the tile is empty and enqueue all edges.
-    // But, it would be less effcient above 4 pyramid-level.
-    if (level <= 4 && tile->is_filled_with(targ_pixel)) {
-        // Mark FLAG_WORK at seeded pixels.
-        // And avoid seed into that direction.
-        while (! g_queue_is_empty(queue)) {
-            pyramid_point *pos = (pyramid_point*) g_queue_pop_head(queue);
-            tile->replace(level, pos->x, pos->y, fill_pixel | FLAG_WORK);
-            free(pos);
-        }
-        PyObject* result = result_e;
-
-        // Enqueue all edges of the tile,
-        // Except for `seed pixels`.
-        // XXX NOTE: seed pixels are incoming from inverted position.
-        for(int x=0; x<tile_size; x+=(tile_size-1)) {
-            for(int y=0; y<tile_size; y++) {
-                if ((tile->get(level, tile_size-x-1, y) & FLAG_WORK) == 0) {
-                    PyObject *s = Py_BuildValue("ii", x, y);
-                    PyList_Append(result, s);
-                    Py_DECREF(s);
-#ifdef HEAVY_DEBUG
-                    assert(s->ob_refcnt == 1);
-#endif
-                }
-            }
-            result = result_w;
-        }
-
-        result = result_s;
-        for(int y=0; y<tile_size; y+=(tile_size-1)) {
-            for(int x=0; x<tile_size; x++) {
-                if ((tile->get(level, x, tile_size-y-1) & FLAG_WORK) == 0) {
-                    PyObject *s = Py_BuildValue("ii", x, y);
-                    PyList_Append(result, s);
-                    Py_DECREF(s);
-#ifdef HEAVY_DEBUG
-                    assert(s->ob_refcnt == 1);
-#endif
-                }
-            }
-            result = result_n;
-        }
-
-        // At last, fill entire pixels.
-        // This also clear all FLAG_WORK flags inside tile.
-        tile->fill(fill_pixel);
+    GQueue *queue = q->get_working_state(level, t, w);
+    if (queue == NULL) {
+        q->clear_border_seed();
+        return false;
     }
-    else {
-        // Ordinary flood-fill
-        while (! g_queue_is_empty(queue)) {
-            pyramid_point *pos = (pyramid_point*) g_queue_pop_head(queue);
-            int x0 = pos->x;
-            int y = pos->y;
-            free(pos);
-            // Find easternmost and westernmost points of the same colour
-            // Westwards loop includes (x,y), eastwards ignores it.
-            static const int x_delta[] = {-1, 1};
-            static const int x_offset[] = {0, 1};
-            for (int i=0; i<2; ++i)
+
+    static const int x_delta[] = {-1, 1};
+    static const int x_offset[] = {0, 1};
+    //int min_x = 0;
+    //int min_y = 0;
+    int max_x = tile_size;
+    int max_y = tile_size;
+    /*
+    if (min_px >= 0)
+        min_x = min_px;
+    if (min_py >= 0)
+        min_y = min_py;
+
+    if (max_px >= 0)
+        max_x = max_px;
+    if (max_py >= 0)
+        max_y = max_py;
+#ifdef HEAVY_DEBUG
+    assert(max_x >= min_x);
+    assert(max_y >= min_y);
+#endif
+    */
+
+    uint8_t pix;
+
+    while (! g_queue_is_empty(queue)) {
+        floodfill_point *pos = (floodfill_point*) g_queue_pop_head(queue);
+        int x0 = pos->x;
+        int y = pos->y;
+        free(pos);
+
+        // Find easternmost and westernmost points of the same colour
+        // Westwards loop includes (x,y), eastwards ignores it.
+        for (int i=0; i<2; ++i)
+        {
+            bool look_above = true;
+            bool look_below = true;
+            for ( int x = x0 + x_offset[i] ;
+                  x >= 0 && x < max_x ;
+                  x += x_delta[i] )
             {
-                bool look_above = true;
-                bool look_below = true;
-                for ( int x = x0 + x_offset[i] ;
-                      x >= min_x && x <= max_x ;
-                      x += x_delta[i] )
-                {
-                    uint8_t pix = tile->get(level, x, y);
-                    if (x != x0) { // Test was already done for queued pixels
-                        if (pix != targ_pixel)
-                        {
-                            break;
-                        }
-                    }
-                    // Also halt if we're outside the bbox range
-                    if (x < min_x || y < min_y || x > max_x || y > max_y) {
+                // halt if we're outside the bbox range
+                if (x < 0|| y < 0|| x >= max_x || y >= max_y) {
+                    break;
+                }
+
+                if (x != x0) { // Test was already done for queued pixels
+                    pix = t->get(level, x, y);
+                    if (!w->match(pix)) {
                         break;
                     }
-                    // Fill this pixel, and continue iterating in this direction
-                    tile->replace(level, x, y, fill_pixel);
-                    // In addition, enqueue the pixels above and below.
-                    // Scanline algorithm here to avoid some pointless queue faff.
-                    if (y > 0) {
-                        uint8_t pix_above = tile->get(level, x, y-1);
-                        if (pix_above == targ_pixel) {
-                            if (look_above) {
-                                // Enqueue the pixel to the north
-                                pyramid_point *p = (pyramid_point *) malloc(
-                                                        sizeof(pyramid_point)
-                                                      );
-                                p->x = x;
-                                p->y = y-1;
-                                g_queue_push_tail(queue, p);
-                                look_above = false;
-                            }
-                        }
-                        else { // !match_above
-                            look_above = true;
+                }
+                // Operate this pixel, and continue iterating in this direction
+                w->step(t, x, y);
+
+                // In addition, enqueue the pixels above and below.
+                // Scanline algorithm here to avoid some pointless queue faff.
+                if (y > 0) {
+                    pix = t->get(level, x, y-1);
+                    if(w->match(pix)) {
+                        if (look_above) {
+                            // Enqueue the pixel to the north
+                            floodfill_point *p = (floodfill_point *) malloc(
+                                sizeof(floodfill_point)
+                            );
+                            p->x = x;
+                            p->y = y-1;
+                            g_queue_push_tail(queue, p);
+                            look_above = false;
                         }
                     }
-                    else {
-                        // Overflow onto the tile to the North.
-                        // Scanlining not possible here: pixel is over the border.
-                        PyObject *s = Py_BuildValue("ii", x, tile_size-1);
-                        PyList_Append(result_n, s);
-                        Py_DECREF(s);
-    #ifdef HEAVY_DEBUG
-                        assert(s->ob_refcnt == 1);
-    #endif
+                    else { // !match_above
+                        look_above = true;
                     }
-                    if (y < tile_size - 1) {
-                        uint8_t pix_below = tile->get(level, x, y+1);
-                        if (pix_below == targ_pixel) {
-                            if (look_below) {
-                                // Enqueue the pixel to the South
-                                pyramid_point *p = (pyramid_point *) malloc(
-                                                        sizeof(pyramid_point)
-                                                      );
-                                p->x = x;
-                                p->y = y+1;
-                                g_queue_push_tail(queue, p);
-                                look_below = false;
-                            }
-                        }
-                        else { //!match_below
-                            look_below = true;
+                }
+                else {
+                    q->queue_border(BorderQueue::SPILL_NORTH, x);
+                }
+
+                if (y < max_y - 1) {
+                    pix = t->get(level, x, y+1);
+                    if(w->match(pix)) {
+                        if (look_below) {
+                            // Enqueue the pixel to the South
+                            floodfill_point *p = (floodfill_point *) malloc(
+                                sizeof(floodfill_point)
+                            );
+                            p->x = x;
+                            p->y = y+1;
+                            g_queue_push_tail(queue, p);
+                            look_below = false;
                         }
                     }
-                    else {
-                        // Overflow onto the tile to the South
-                        // Scanlining not possible here: pixel is over the border.
-                        PyObject *s = Py_BuildValue("ii", x, 0);
-                        PyList_Append(result_s, s);
-                        Py_DECREF(s);
-    #ifdef HEAVY_DEBUG
-                        assert(s->ob_refcnt == 1);
-    #endif
+                    else { //!match_below
+                        look_below = true;
                     }
-                    // If the fill is now at the west or east extreme, we have
-                    // overflowed there too.  Seed West and East tiles.
-                    if (x == 0) {
-                        PyObject *s = Py_BuildValue("ii", tile_size-1, y);
-                        PyList_Append(result_w, s);
-                        Py_DECREF(s);
-    #ifdef HEAVY_DEBUG
-                        assert(s->ob_refcnt == 1);
-    #endif
-                    }
-                    else if (x == tile_size-1) {
-                        PyObject *s = Py_BuildValue("ii", 0, y);
-                        PyList_Append(result_e, s);
-                        Py_DECREF(s);
-    #ifdef HEAVY_DEBUG
-                        assert(s->ob_refcnt == 1);
-    #endif
-                    }
+                }
+                else {
+                    q->queue_border(BorderQueue::SPILL_SOUTH, x);
+                }
+
+                if (x == 0) {
+                    q->queue_border(BorderQueue::SPILL_WEST, y);
+                }
+                else if (x == tile_size-1) {
+                    q->queue_border(BorderQueue::SPILL_EAST, y);
                 }
             }
         }
     }
-    // Clean up working state, and return where the fill has overflowed
-    // into neighbouring tiles.
+
+    // Clean up working state.
     g_queue_free(queue);
-    PyObject *result = Py_BuildValue("[OOOO]", result_n, result_e,
-                                               result_s, result_w);
-    Py_DECREF(result_n);
-    Py_DECREF(result_e);
-    Py_DECREF(result_s);
-    Py_DECREF(result_w);
-#ifdef HEAVY_DEBUG
-    assert(result_n->ob_refcnt == 1);
-    assert(result_e->ob_refcnt == 1);
-    assert(result_s->ob_refcnt == 1);
-    assert(result_w->ob_refcnt == 1);
-    assert(result->ob_refcnt == 1);
-#endif
-
-    return result;
+    return true;
 }
 
-//-----------------------------------------------------------------------------
-/// XXX for debug
-
-// XXX render_to_numpy exists even HEAVY_DEBUG is not defined.
-// this should be removed in release.
-PyObject*
-FlagtileSurface::render_to_numpy(PyObject *npbuf,
-                                 int tflag,
-                                 int tr, int tg, int tb,
-                                 int level)
-{
-    int w = get_width();
-    int h = get_height();
-
-    PyArrayObject *array;
-    if (npbuf != Py_None) {
-        array = (PyArrayObject*)npbuf;
-        Py_INCREF(array);
-    }
-    else {
-        npy_intp dims[] = {
-            h * TILE_SIZE,
-            w * TILE_SIZE,
-            3
-        };
-        array = (PyArrayObject*)PyArray_ZEROS(3, dims, NPY_UINT8, 0);
-    }
-
-    const unsigned int xstride = PyArray_STRIDE(array, 1);
-    const unsigned int ystride = PyArray_STRIDE(array, 0);
-    uint8_t *tptr;
-    uint8_t *lptr;
-    uint8_t *baseptr = (uint8_t*)PyArray_BYTES(array);
-
-    int px;
-    int py=0;
-
-    if (level > 0) {
-        // Target level is greater than 0.
-        // We need to draw pyramid chunkey pixels.
-        int step = 1 << level;
-        for(int ty=0; ty<h; ty++) {
-            px = 0;
-            for(int tx=0; tx<w; tx++) {
-                Flagtile *t = get_tile(tx, ty, false);
-                if (t != NULL) {
-                    lptr = baseptr + (ystride * py + xstride * px);
-                    for (int y=0; y < TILE_SIZE; y+=step) {
-                        tptr = lptr;
-                        for (int x=0; x < TILE_SIZE; x+=step) {
-                            int mx = x >> level;
-                            int my = y >> level;
-                            uint8_t *byptr = tptr;
-
-                            if (t->get(level, mx, my) == tflag) {
-                                // Fill a pyramid chunk.
-                                for(int cy=0; cy < step; cy ++) {
-                                    uint8_t *bxptr = byptr;
-                                    for(int cx=0; cx < step; cx ++) {
-                                        bxptr[0] = (uint8_t)tr;
-                                        bxptr[1] = (uint8_t)tg;
-                                        bxptr[2] = (uint8_t)tb;
-                                        bxptr += xstride;
-                                    }
-                                    byptr += ystride;
-                                }
-                            }
-                            tptr+=(xstride * step);
-                        }
-                        lptr+=(ystride * step);
-                    }
-                }
-                px += TILE_SIZE;
-            }
-            py += TILE_SIZE;
-        }
-    }
-    else if (level == -1) {
-        // XXX Antialiasing debugging test: remove later!
-        // The pixel appearance number array.
-        int pixel_counts[MAX_AA_LEVEL];
-        memset(pixel_counts, 0, MAX_AA_LEVEL * sizeof(int));
-
-        for(int ty=0; ty<h; ty++) {
-            px = 0;
-            for(int tx=0; tx<w; tx++) {
-                Flagtile *t = get_tile(tx, ty, false);
-                if (t != NULL) {
-                    lptr = baseptr + (ystride * py + xstride * px);
-                    for (int y=0; y < TILE_SIZE; y++) {
-                        tptr = lptr;
-                        for (int x=0; x < TILE_SIZE; x++) {
-                            uint8_t pix = t->get(0, x, y);
-                            if (pix & FLAG_AA) {
-                                pix &= AA_MASK;
-                                double alpha = (double)pix / MAX_AA_LEVEL;
-                                alpha *= 0.9; // Adjust alpha(looks too opaque)
-                                // Add 10 every color channel
-                                // to distinguish with non-AA pixel area.
-                                tptr[0] = (uint8_t)(tr * alpha) + 10;
-                                tptr[1] = (uint8_t)(tg * alpha) + 10;
-                                tptr[2] = (uint8_t)(tb * alpha) + 10;
-
-                                // Increase pixel appearance count.
-                                pixel_counts[pix]++;
-                            }
-                            else if ((pix & PIXEL_MASK) == PIXEL_FILLED) {
-                                tptr[0] = (uint8_t)tr;
-                                tptr[1] = (uint8_t)tg;
-                                tptr[2] = (uint8_t)tb;
-                            }
-                            tptr+=xstride;
-                        }
-                        lptr+=ystride;
-                    }
-                }
-                px += TILE_SIZE;
-            }
-            py += TILE_SIZE;
-        }
-    }
-    else {
-        for(int ty=0; ty<h; ty++) {
-            px = 0;
-            for(int tx=0; tx<w; tx++) {
-                Flagtile *t = get_tile(tx, ty, false);
-                if (t != NULL) {
-                    lptr = baseptr + (ystride * py + xstride * px);
-                    for (int y=0; y < TILE_SIZE; y++) {
-                        tptr = lptr;
-                        for (int x=0; x < TILE_SIZE; x++) {
-                            if (t->get(0, x, y) == tflag) {
-                                tptr[0] = (uint8_t)tr;
-                                tptr[1] = (uint8_t)tg;
-                                tptr[2] = (uint8_t)tb;
-                            }
-                            tptr+=xstride;
-                        }
-                        lptr+=ystride;
-                    }
-                }
-                px+=TILE_SIZE;
-            }
-            py+=TILE_SIZE;
-        }
-    }
-    return (PyObject*)array;
-}

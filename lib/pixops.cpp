@@ -26,6 +26,11 @@
 #include <stdlib.h>
 #include <math.h>
 
+//XXX for testing `sse-pixops`
+#ifdef USE_SSE
+static v4sf multv_1o2_4 = {1.0/2.4, 1.0/2.4, 1.0/2.4, 1.0}; // XXX Added for `sse-pixops`
+static v4sf multv_2_4 = {2.4, 2.4, 2.4, 1.0}; // XXX Added for `sse-pixops`
+#endif
 
 void
 tile_downscale_rgba16_c(const uint16_t *src, int src_strides, uint16_t *dst,
@@ -218,21 +223,7 @@ tile_convert_rgba16_to_rgba8_c (const uint16_t* const src,
       }
       // XXX for `channel error workaround` end
 #endif
-      // un-premultiply alpha (with rounding)
-      if (a != 0) {
-        const uint32_t rnd_a = a/2;
-        r = ((r << 15) + rnd_a) / a;
-        g = ((g << 15) + rnd_a) / a;
-        b = ((b << 15) + rnd_a) / a;
-      } else {
-        r = g = b = 0;
-      }
-#ifdef HEAVY_DEBUG
-      assert(a<=(1<<15));
-      assert(r<=(1<<15));
-      assert(g<=(1<<15));
-      assert(b<=(1<<15));
-#endif
+
       /*
       // Variant A) rounding
       const uint32_t add_r = (1<<15)/2;
@@ -268,17 +259,58 @@ tile_convert_rgba16_to_rgba8_c (const uint16_t* const src,
       //const uint32_t add_b = add_r;
       const uint32_t add_a = dithering_noise[noise_idx+1];
       noise_idx += 4;
-
 #ifdef HEAVY_DEBUG
       assert(add_a < (1<<15));
       assert(add_a >= 0);
       assert(noise_idx <= dithering_noise_size);
 #endif
-
+      
+#ifndef USE_SSE
+      // XXX Original version
+      // Fixed point version
+      // un-premultiply alpha (with rounding)
+      if (a != 0) {
+        const uint32_t rnd_a = a/2;
+        r = ((r << 15) + rnd_a) / a;
+        g = ((g << 15) + rnd_a) / a;
+        b = ((b << 15) + rnd_a) / a;
+      } else {
+        r = g = b = 0;
+      }
+      #ifdef HEAVY_DEBUG
+          assert(a<=(1<<15));
+          assert(r<=(1<<15));
+          assert(g<=(1<<15));
+          assert(b<=(1<<15));
+      #endif
       *dst_p++ = uint8_t(fastpow((float)r / (1<<15) + add_r, 1.0/2.4) * 255);
       *dst_p++ = uint8_t(fastpow((float)g / (1<<15) + add_r, 1.0/2.4) * 255);
       *dst_p++ = uint8_t(fastpow((float)b / (1<<15) + add_r, 1.0/2.4) * 255);
       *dst_p++ = ((a * 255 + add_a) / (1<<15));
+#else
+      // XXX SSE version
+
+      v4sf rgbv={(float)r, (float)g, (float)b, 1.0f};
+      // un-premultiply alpha (with rounding)
+      if (a != 0) {
+          // un-premultiply alpha (with rounding)
+          float fa = (float)a - 0.5f;
+          rgbv /= fa;
+      }
+      else {
+          rgbv = _mm_set1_ps(0.0f);
+      }  
+
+      rgbv += add_r;
+      rgbv = vfastpow(rgbv, multv_1o2_4); 
+      rgbv *= 255.0;
+
+      *dst_p++ = (uint8_t)rgbv[0];
+      *dst_p++ = (uint8_t)rgbv[1];
+      *dst_p++ = (uint8_t)rgbv[2];
+      *dst_p++ = (uint8_t)((a * 255 + add_a) / (1<<15));
+      // XXX for `sse-pixops` end
+#endif
     }
     src_p += src_strides;
     dst_p += dst_strides;
@@ -327,12 +359,20 @@ tile_convert_rgbu16_to_rgbu8_c(const uint16_t* const src,
                                const int dst_strides)
 {
   precalculate_dithering_noise_if_required();
-
+//#pragma omp parallel for // Effect, but not speed up(race condition?)
   for (int y=0; y<MYPAINT_TILE_SIZE; y++) {
     int noise_idx = y*MYPAINT_TILE_SIZE*4;
     const uint16_t *src_p = (uint16_t*)((char *)src + y*src_strides);
     uint8_t *dst_p = (uint8_t*)((char *)dst + y*dst_strides);
     for (int x=0; x<MYPAINT_TILE_SIZE; x++) {
+      /*
+      // rounding
+      const uint32_t add = (1<<15)/2;
+      */
+      // dithering
+      const float add = (float)dithering_noise[noise_idx++] / (1<<30);
+#ifndef USE_SSE 
+      // Fixed point version
       float r, g, b;
       r = ((float)*src_p++ / (1<<15));
       g = ((float)*src_p++ / (1<<15));
@@ -344,17 +384,26 @@ tile_convert_rgbu16_to_rgbu8_c(const uint16_t* const src,
       assert(b<=(1<<15));
 #endif
 
-      /*
-      // rounding
-      const uint32_t add = (1<<15)/2;
-      */
-      // dithering
-      const float add = (float)dithering_noise[noise_idx++] / (1<<30);
-
       *dst_p++ = (fastpow(r + add, 1.0/2.4) ) * 255 + 0.5;
       *dst_p++ = (fastpow(g + add, 1.0/2.4) ) * 255 + 0.5;
       *dst_p++ = (fastpow(b + add, 1.0/2.4) ) * 255 + 0.5;
       *dst_p++ = 255;
+#else
+        // SSE version
+        v4sf rgbv = {(float)*src_p++, (float)*src_p++, (float)*src_p++, 1.0};
+        src_p++; // alpha unused
+        rgbv *= (float)((1.0)/(1<<15));
+        rgbv += add;
+        rgbv = vfastpow(rgbv, multv_1o2_4); 
+        rgbv *= 255.0;
+        rgbv += 0.5;
+
+        *dst_p++ = (uint8_t)rgbv[0];
+        *dst_p++ = (uint8_t)rgbv[1];
+        *dst_p++ = (uint8_t)rgbv[2];
+        *dst_p++ = 255;
+      // XXX for `sse-pixops` end
+#endif
     }
 #ifdef HEAVY_DEBUG
     assert(noise_idx <= dithering_noise_size);
@@ -423,12 +472,13 @@ void tile_convert_rgba8_to_rgba16(PyObject * src, PyObject * dst) {
     uint8_t  * src_p = (uint8_t*)((char *)PyArray_DATA(src_arr) + y*PyArray_STRIDES(src_arr)[0]);
     uint16_t * dst_p = (uint16_t*)((char *)PyArray_DATA(dst_arr) + y*PyArray_STRIDES(dst_arr)[0]);
     for (int x=0; x<MYPAINT_TILE_SIZE; x++) {
+#ifndef USE_SSE
+      // Fixed-floating point version
       uint32_t r, g, b, a;
       r = *src_p++;
       g = *src_p++;
       b = *src_p++;
       a = *src_p++;
-
       // convert to fixed point (with rounding)
       r = uint32_t(fastpow((float)r/255.0, 2.4) * (1<<15) + 0.5);
       g = uint32_t(fastpow((float)g/255.0, 2.4) * (1<<15) + 0.5);
@@ -440,6 +490,22 @@ void tile_convert_rgba8_to_rgba16(PyObject * src, PyObject * dst) {
       *dst_p++ = (g * a + (1<<15)/2) / (1<<15);
       *dst_p++ = (b * a + (1<<15)/2) / (1<<15);
       *dst_p++ = a;
+#else
+      // SSE version
+      v4sf rgbvs = {(float)*src_p++, (float)*src_p++, (float)*src_p++, 1.0};
+      uint32_t a = ((*src_p++) * (1<<15) + 255/2) / 255;
+
+      v4sf rgbv = rgbvs / 255.0f;
+      rgbv = vfastpow(rgbv, multv_2_4); 
+      rgbv *= (float)a;
+
+      *dst_p++ = (uint16_t)rgbv[0];
+      *dst_p++ = (uint16_t)rgbv[1];
+      *dst_p++ = (uint16_t)rgbv[2];
+      *dst_p++ = a;
+      // XXX for `sse-pixops` end
+#endif
+
     }
   }
 }

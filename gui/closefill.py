@@ -98,7 +98,6 @@ class _Prefs:
     FILL_METHOD_PREF = 'fill_method'
     SHARE_SETTING_PREF = 'share_setting'
     ALPHA_THRESHOLD_PREF = 'alpha_threshold'
-    FILL_ALL_HOLES_PREF = 'fill_all_holes'
     TOLERANCE_LIMIT_PREF = 'tolerance_limit'
 
     DEFAULT_TOLERANCE = 0.05
@@ -110,7 +109,6 @@ class _Prefs:
     DEFAULT_FILL_METHOD = _FillMethod.FLOOD_FILL
     DEFAULT_SHARE_SETTING = True
     DEFAULT_ALPHA_THRESHOLD = 0.0156
-    DEFAULT_FILL_ALL_HOLES = False
     DEFAULT_TOLERANCE_LIMIT = True
 
     PREFIX = {
@@ -979,7 +977,6 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                 dilation_size=opts.dilation_size,
                 pyramid_level=opts.gap_level,
                 erase_pixel=erase_pixel,
-                fill_all_holes=opts.fill_all_holes,
                 alpha_threshold=opts.alpha_threshold,
                 # XXX Debug arguments
                 show_flag=opts.show_flag,
@@ -998,7 +995,6 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                 targ_color_pos=targ_color_pos,
                 pyramid_level=opts.gap_level,
                 erase_pixel=erase_pixel,
-                fill_all_holes=opts.fill_all_holes,
                 alpha_threshold=opts.alpha_threshold,
                 # debug options
                 show_flag = opts.show_flag,
@@ -1016,7 +1012,6 @@ class ClosefillMode (gui.mode.ScrollableModeMixin,
                 opts.dilation_size,
                 # kwds params
                 erase_pixel=erase_pixel,
-                fill_all_holes=opts.fill_all_holes,
                 alpha_threshold=opts.alpha_threshold,
                 # debug options
                 show_flag = opts.show_flag,
@@ -1415,16 +1410,6 @@ class OptionsPresenter(Gtk.Grid):
             _("Other fill options."),
             row
         )
-        text = _("Fill all holes")
-        checkbut = Gtk.CheckButton.new_with_label(text)
-        checkbut.set_tooltip_text(
-            _("Fill all small holes and detached contour area\n"
-              "within large filled area.")
-        )
-        self.attach(checkbut, 1, row, 1, 1)
-        checkbut.set_active(_Prefs.DEFAULT_FILL_ALL_HOLES)
-        checkbut.connect("toggled", self._fill_all_holes_toggled_cb)
-        self._fill_all_holes_toggle = checkbut
 
         row += 1
         text = _("Fill immidiately")
@@ -1437,10 +1422,8 @@ class OptionsPresenter(Gtk.Grid):
         checkbut.set_active(_Prefs.DEFAULT_FILL_IMMIDIATELY)
         checkbut.connect("toggled", self._fill_immidiately_toggled_cb)
         self._fill_immidiately_toggle = checkbut
-
         
         ## Advanced options
-        
         row += 1
         exp = Gtk.Expander()
         adv_grid = Gtk.Grid()
@@ -1570,9 +1553,6 @@ class OptionsPresenter(Gtk.Grid):
         self._fill_immidiately_toggle.set_sensitive(
             method==_FillMethod.CLOSED_AREA_FILL
         )
-        self._fill_all_holes_toggle.set_sensitive(
-            method!=_FillMethod.FLOOD_FILL
-        )
 
         if not self.share_setting or force:
             value = self.get_pref_value(
@@ -1611,12 +1591,6 @@ class OptionsPresenter(Gtk.Grid):
             )
             self._alpha_threshold_adj.set_value(float(value))
             
-            active = self.get_pref_value(
-                _Prefs.FILL_ALL_HOLES_PREF,
-                _Prefs.DEFAULT_FILL_ALL_HOLES
-            )
-            self._fill_all_holes_toggle.set_active(bool(active))
-
         self._update_ui = prev
 
     def _get_setting_name(self, pref_name):
@@ -1718,10 +1692,6 @@ class OptionsPresenter(Gtk.Grid):
     def alpha_threshold(self):
         return self._alpha_threshold_adj.get_value()
         
-    @property
-    def fill_all_holes(self):
-        return self._fill_all_holes_toggle.get_active()
-
     # Option event handlers
     # These event should use self.set_pref_value method
     # to deal with `share setting` advanced option.
@@ -1759,12 +1729,6 @@ class OptionsPresenter(Gtk.Grid):
         self.set_pref_value(
             _Prefs.ALPHA_THRESHOLD_PREF,
             adj.get_value()
-        )
-        
-    def _fill_all_holes_toggled_cb(self, btn):
-        self.set_pref_value(
-            _Prefs.FILL_ALL_HOLES_PREF,
-            btn.get_active()
         )
         
     # `Fill method` and `Share setting between methods`

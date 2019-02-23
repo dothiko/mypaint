@@ -2226,7 +2226,6 @@ class ClosedAreaFill (FloodFill):
         assert self.pyramid_level >= 0
         assert self.pyramid_level <= 6
         self.alpha_threshold = float(kwds.get('alpha_threshold', 0.2))
-        self.fill_all_holes = bool(kwds.get('fill_all_holes', False))
         self.remove_disconnected = kwds.get('remove_disconnected', True)
 
         # XXX DEBUG options
@@ -2255,7 +2254,6 @@ class ClosedAreaFill (FloodFill):
         info['tolerance'] = self.tolerance
         info['level'] = self.pyramid_level
         info['erase_pixel'] = self.erase_pixel
-        info['fill_all_holes'] = self.fill_all_holes
         targ_pos = self.targ_color_pos
         if targ_pos is not None:
             info['targ_color_pos'] = targ_pos
@@ -2290,6 +2288,11 @@ class ClosedAreaFill (FloodFill):
             combine_mode = lib.mypaintlib.CombineDestinationOut
         else:
             combine_mode = lib.mypaintlib.CombineNormal
+
+        if self.doc.frame_enabled:
+            frame_bbox = self.doc.get_frame()
+        else:
+            frame_bbox = None
     
         lib.pyramidfill.close_fill(
             self._get_target_surface(),
@@ -2299,12 +2302,11 @@ class ClosedAreaFill (FloodFill):
             self.pyramid_level,
             self.color,
             combine_mode,
-
-            self.tolerance,
-            self.alpha_threshold,
-            self.dilation_size,
-            self.fill_all_holes,
-            self._create_debug_info()
+            tolerance=self.tolerance,
+            alpha_threshold=self.alpha_threshold,
+            dilation=self.dilation_size,
+            frame_bbox=frame_bbox,
+            debug_info=self._create_debug_info()
         )
 
 
@@ -2333,6 +2335,11 @@ class LassoFill(ClosedAreaFill):
         else:
             combine_mode = lib.mypaintlib.CombineSourceAtop
 
+        if self.doc.frame_enabled:
+            frame_bbox = self.doc.get_frame()
+        else:
+            frame_bbox = None
+
         lib.pyramidfill.lasso_fill(
             self._get_target_surface(),
             self._get_source_surface(),
@@ -2341,12 +2348,11 @@ class LassoFill(ClosedAreaFill):
             self.pyramid_level,
             self.color,
             combine_mode,
-
-            self.tolerance,
-            self.alpha_threshold,
-            self.dilation_size,
-            self.fill_all_holes,
-            self._create_debug_info()
+            tolerance=self.tolerance,
+            alpha_threshold=self.alpha_threshold,
+            dilation=self.dilation_size,
+            frame_bbox=frame_bbox,
+            debug_info=self._create_debug_info()
         )
 
 # XXX for `close-and-fill / lasso-fill` feature end.

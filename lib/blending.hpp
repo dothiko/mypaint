@@ -18,6 +18,25 @@
 #include "fix15.hpp"
 #include "compositing.hpp"
 
+#ifdef USE_SSE
+#define ALIGNMENT __attribute__((aligned(16))) 
+#define MAX_SPEC 12
+static const float T_MATRIX_SMALL_SSE[10][4] ALIGNMENT {
+    {0.026595621243689, -0.032601672674412, 0.339475473216284, 1.0},
+    {0.049779426257903, -0.061021043498478, 0.635401374177222, 1.0},
+    {0.022449850859496, -0.052490001018404, 0.771520797089589, 1.0},
+    {-0.218453689278271, 0.206659098273522, 0.113222640692379, 1.0},
+    {-0.256894883201278, 0.572496335158169, -0.055251113343776, 1.0},
+    {0.445881722194840, 0.317837248815438, -0.048222578468680, 1.0},
+    {0.772365886289756, -0.021216624031211, -0.012966666339586, 1.0},
+    {0.194498761382537, -0.019387668756117, -0.001523814504223, 1.0},
+    {0.014038157587820, -0.001521339050858, -0.000094718948810, 1.0},
+    {0.007687264480513, -0.000835181622534, -0.000051604594741, 1.0}
+};
+#else
+#define ALIGNMENT
+#endif
+
 static const float T_MATRIX_SMALL[3][10] = {{0.026595621243689,0.049779426257903,0.022449850859496,-0.218453689278271
 ,-0.256894883201278,0.445881722194840,0.772365886289756,0.194498761382537
 ,0.014038157587820,0.007687264480513}
@@ -28,19 +47,92 @@ static const float T_MATRIX_SMALL[3][10] = {{0.026595621243689,0.049779426257903
 ,-0.055251113343776,-0.048222578468680,-0.012966666339586
 ,-0.001523814504223,-0.000094718948810,-0.000051604594741}};
 
-static const float spectral_r_small[10] = {0.009281362787953,0.009732627042016,0.011254252737167,0.015105578649573
+static const float spectral_r_small[10] ALIGNMENT = {0.009281362787953,0.009732627042016,0.011254252737167,0.015105578649573
 ,0.024797924177217,0.083622585502406,0.977865045723212,1.000000000000000
 ,0.999961046144372,0.999999992756822};
 
-static const float spectral_g_small[10] = {0.002854127435775,0.003917589679914,0.012132151699187,0.748259205918013
+static const float spectral_g_small[10] ALIGNMENT = {0.002854127435775,0.003917589679914,0.012132151699187,0.748259205918013
 ,1.000000000000000,0.865695937531795,0.037477469241101,0.022816789725717
 ,0.021747419446456,0.021384940572308};
 
-static const float spectral_b_small[10] = {0.537052150373386,0.546646402401469,0.575501819073983,0.258778829633924
+static const float spectral_b_small[10] ALIGNMENT = {0.537052150373386,0.546646402401469,0.575501819073983,0.258778829633924
 ,0.041709923751716,0.012662638828324,0.007485593127390,0.006766900622462
 ,0.006699764779016,0.006676219883241};
 
 
+
+#ifdef USE_SSE
+void
+rgb_to_spectral (float r, float g, float b, float *spectral_) {
+  float offset = 1.0 - WGM_EPSILON;
+  // Almost same as rgb_to_spectral_SSE,
+  // A bit faster than original rgb_to_spectral.
+  v4sf rv = _mm_set1_ps(r * offset + WGM_EPSILON);
+  v4sf gv = _mm_set1_ps(g * offset + WGM_EPSILON);
+  v4sf bv = _mm_set1_ps(b * offset + WGM_EPSILON);
+  for (int i=0; i < MAX_SPEC; i+=4) {
+      v4sf spec_r = _mm_load_ps(&spectral_r_small[i]); 
+      v4sf spec_g = _mm_load_ps(&spectral_g_small[i]); 
+      v4sf spec_b = _mm_load_ps(&spectral_b_small[i]); 
+      spec_r *= rv;
+      spec_g *= gv;
+      spec_b *= bv;
+      // XXX WARNING: spectral_ MUST be aligned memory!!
+     v4sf result_v = _mm_load_ps(&spectral_[i]);
+     result_v += (spec_r + spec_g + spec_b); // Important: add all RGB components before add in spectral_.
+     _mm_store_ps(&spectral_[i], result_v);
+  }
+}
+
+void
+rgb_to_spectral_SSE (float r, float g, float b, float *spectral_) {
+// XXX CAUTION: NEEDS 16bytes aligned memory for `spectral_`.
+  float offset = 1.0 - WGM_EPSILON;
+  //upsample rgb to spectral primaries
+  v4sf rv = _mm_set1_ps(r * offset + WGM_EPSILON);
+  v4sf gv = _mm_set1_ps(g * offset + WGM_EPSILON);
+  v4sf bv = _mm_set1_ps(b * offset + WGM_EPSILON);
+  for (int i=0; i < MAX_SPEC; i+=4) {
+      v4sf spec_r = _mm_load_ps(&spectral_r_small[i]); 
+      v4sf spec_g = _mm_load_ps(&spectral_g_small[i]); 
+      v4sf spec_b = _mm_load_ps(&spectral_b_small[i]); 
+      spec_r *= rv;
+      spec_g *= gv;
+      spec_b *= bv;
+      // XXX WARNING: spectral_ MUST be aligned memory!!
+     v4sf result_v = _mm_load_ps(&spectral_[i]);
+     result_v += (spec_r + spec_g + spec_b); // Important: add all RGB components before add in spectral_.
+     _mm_store_ps(&spectral_[i], result_v);
+  }
+}
+
+void
+spectral_to_rgb_SSE (float *spectral, v4sf* rgbv) {
+// XXX CAUTION: NEEDS 16bytes aligned memory for `spectral`.
+  float offset = 1.0 - WGM_EPSILON;
+  for (int i=0; i<10; i++) {
+    // For SSE, T_MATRIX_SMALL is re-defined as 4 packed array `T_MATRIX_SMALL_SSE`.
+    v4sf mat_v = _mm_load_ps(&T_MATRIX_SMALL_SSE[i][0]);
+    *rgbv += (mat_v * _mm_set1_ps(spectral[i]));
+  }
+  
+  *rgbv -= (float)WGM_EPSILON;
+  *rgbv /= offset;
+  // Clamping result within 0.0 to 1.0
+  *rgbv = _mm_max_ps(_mm_min_ps(*rgbv, _mm_set1_ps(1.0f)), _mm_set1_ps(0.0f));
+}
+
+void
+spectral_to_rgb (float *spectral, float *rgb_) {
+    v4sf rgbv = {rgb_[0], rgb_[1], rgb_[2], 0.0f};
+    spectral_to_rgb_SSE(spectral, &rgbv);
+    rgb_[0] = rgbv[0];
+    rgb_[1] = rgbv[1];
+    rgb_[2] = rgbv[2];
+}
+
+#else
+// XXX original floating-point codes.
 void
 rgb_to_spectral (float r, float g, float b, float *spectral_) {
   float offset = 1.0 - WGM_EPSILON;
@@ -64,7 +156,6 @@ rgb_to_spectral (float r, float g, float b, float *spectral_) {
   for (int i=0; i<10; i++) {
     spectral_[i] += spec_r[i] + spec_g[i] + spec_b[i];
   }
-
 }
 
 void
@@ -79,8 +170,7 @@ spectral_to_rgb (float *spectral, float *rgb_) {
     rgb_[i] = CLAMP((rgb_[i] - WGM_EPSILON) / offset, 0.0f, 1.0f);
   }
 }
-
-
+#endif
 
 // Normal: http://www.w3.org/TR/compositing/#blendingnormal
 
@@ -167,7 +257,7 @@ class BufferCombineFunc <DSTALPHA, BUFSIZE, BlendNormal, CompositeSpectralWGM>
               }   
             } else {
               //alpha-weighted ratio for WGM (sums to 1.0)
-              //fix15_t dst_alpha = (1<<15);
+              //fix15_t dst_alpha = (1<<15); // XXX initially commented out
               float fac_a;
               if (DSTALPHA) {
                 fac_a = (float)Sa / (Sa + one_minus_Sa * dst[i+3] / (1<<15));
@@ -175,7 +265,56 @@ class BufferCombineFunc <DSTALPHA, BUFSIZE, BlendNormal, CompositeSpectralWGM>
                 fac_a = (float)Sa / (1<<15);
               }
               float fac_b = 1.0 - fac_a;
+#ifdef USE_SSE
+              //convert bottom to spectral.  Un-premult alpha to obtain reflectance
+              //color noise is not a problem since low alpha also implies low weight
+              float spectral_b[MAX_SPEC] ALIGNMENT = {0};
+              v4sf rgbv  = {(float)dst[i], (float)dst[i+1], (float)dst[i+2], 1.0f };
+              if (DSTALPHA && dst[i+3] > 0) {
+                  rgbv /= (float)dst[i+3];
+              } else {
+                  rgbv /= (float)(1<<15);
+              }
+              rgb_to_spectral_SSE(rgbv[0], rgbv[1], rgbv[2], spectral_b);
 
+              // convert top to spectral.  Already straight color
+              float spectral_a[MAX_SPEC] ALIGNMENT = {0};
+              v4sf srcv  = {(float)src[i], (float)src[i+1], (float)src[i+2], 1.0f };
+              if (src[i+3] > 0) {
+                  srcv /= (float)src[i+3];
+              } else {
+                  srcv /= (float)(1<<15);
+              }
+              rgb_to_spectral_SSE(srcv[0], srcv[1], srcv[2], spectral_a);
+
+              // mix to the two spectral reflectances using WGM
+              float spectral_result[MAX_SPEC] ALIGNMENT = {0};
+              v4sf vfac_a = _mm_set1_ps(fac_a);
+              v4sf vfac_b = _mm_set1_ps(fac_b);
+              for (int i=0; i<MAX_SPEC; i+=4) {
+                v4sf va = _mm_load_ps(&spectral_a[i]);
+                v4sf vb = _mm_load_ps(&spectral_b[i]);
+                v4sf sv = vfastpow(va, vfac_a) * vfastpow(vb, vfac_b);
+                _mm_store_ps(&spectral_result[i], sv);
+              }
+              
+              // convert back to RGB and premultiply alpha
+              v4sf rgb_result_v = _mm_set1_ps(0.0f);
+              // TODO this might produces some slight error , compare to non-sse codes. 
+              // due to floating point operation?
+              spectral_to_rgb_SSE(spectral_result, &rgb_result_v);
+              if (DSTALPHA) {
+                dst[i+3] = fix15_short_clamp(Sa + fix15_mul(dst[i+3], one_minus_Sa));
+              } else {
+                dst[i+3] = (1<<15);
+              }
+              rgb_result_v *= (float)dst[i+3];
+
+              // we cannot use _mm_storeu_ps because rgba is fix15_short_t buffer.
+              dst[i] = (fix15_short_t)rgb_result_v[0];
+              dst[i+1] = (fix15_short_t)rgb_result_v[1];
+              dst[i+2] = (fix15_short_t)rgb_result_v[2];
+#else
               //convert bottom to spectral.  Un-premult alpha to obtain reflectance
               //color noise is not a problem since low alpha also implies low weight
               float spectral_b[10] = {0};
@@ -212,6 +351,7 @@ class BufferCombineFunc <DSTALPHA, BUFSIZE, BlendNormal, CompositeSpectralWGM>
               if (DSTALPHA) {
                   dst[i+3] = rgb_result[3];
               }            
+#endif
             }
 
         }
@@ -341,9 +481,20 @@ class BlendMultiply : public BlendFunc
         (const fix15_t src_r, const fix15_t src_g, const fix15_t src_b,
          fix15_t &dst_r, fix15_t &dst_g, fix15_t &dst_b) const
     {
+#ifdef USE_SSE  
+        // XXX is this code safe? or not so fast.
+        __v4si vs = {(int)src_r, (int)src_g, (int)src_b, 0};
+        __v4si vd = {(int)dst_r, (int)dst_g, (int)dst_b, 0};
+        __v4si outv = vs * vd;
+        outv >>= 15;
+        dst_r = outv[0];
+        dst_g = outv[1];
+        dst_b = outv[2];
+#else
         dst_r = fix15_mul(src_r, dst_r);
         dst_g = fix15_mul(src_g, dst_g);
         dst_b = fix15_mul(src_b, dst_b);
+#endif
     }
 };
 
@@ -359,6 +510,18 @@ class BlendScreen : public BlendFunc
         (const fix15_t src_r, const fix15_t src_g, const fix15_t src_b,
          fix15_t &dst_r, fix15_t &dst_g, fix15_t &dst_b) const
     {
+/*
+#ifdef USE_SSE  
+        // XXX a bit slower? meaningless.
+        __v4si vs = {(int)src_r, (int)src_g, (int)src_b, 0};
+        __v4si vd = {(int)dst_r, (int)dst_g, (int)dst_b, 0};
+        __v4si outv, multv = vs * vd;
+        multv >>= 15;
+        outv = vd + vs - multv;
+        dst_r = outv[0];
+        dst_g = outv[1];
+        dst_b = outv[2];
+*/
         dst_r = dst_r + src_r - fix15_mul(dst_r, src_r);
         dst_g = dst_g + src_g - fix15_mul(dst_g, src_g);
         dst_b = dst_b + src_b - fix15_mul(dst_b, src_b);
