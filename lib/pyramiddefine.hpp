@@ -56,6 +56,12 @@
 // For Flagtile class. to get progress-level ptr from
 #define BUF_PTR(l, x, y) (m_buf + m_buf_offsets[(l)] + ((y) * PYRAMID_TILE_SIZE((l)) + (x)))
 
+// For Flagtile class. pixel-counter buffer size, in bytes.
+#define FLAGTILE_CNT_SIZE ((PIXEL_MAX+1) * (MAX_PYRAMID+1) * sizeof(uint16_t))
+
+// For Flagtile class. to get pixel-counter ptr from
+#define CNT_PTR(l, p) (m_pixcnt + ((l) * (PIXEL_MAX+1)) + ((p) & PIXEL_MASK))
+
 // XXX PIXEL_ Constants.
 //
 // PIXEL_ values are not bitwise flag. They are just number.

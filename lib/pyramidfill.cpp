@@ -636,10 +636,11 @@ Flagtile::fill(const uint8_t val)
     // Fill only equal and above of assigned level.
 
     memset(m_buf, val, FLAGTILE_BUF_SIZE);
-    memset(m_pixcnt, 0, sizeof(uint16_t) * PIXEL_MAX * MAX_PYRAMID);
-    for(int l=0; l < MAX_PYRAMID; l++) {
+    memset(m_pixcnt, 0, sizeof(uint16_t) * PIXEL_MAX * (MAX_PYRAMID + 1));
+    
+    for(int l=0; l <= MAX_PYRAMID; l++) {
         int tile_size = PYRAMID_TILE_SIZE(l);
-        m_pixcnt[l][val] = tile_size * tile_size;
+        m_pixcnt[l][val & PIXEL_MASK] = tile_size * tile_size;
     }
 }
 
@@ -647,24 +648,35 @@ Flagtile::fill(const uint8_t val)
 * @to_nparray
 * Get internal m_buf buffer as numpy.array
 *
+* @param readonly Swear that requested object is used as read-only.
 * @return numpy array object.
 *
 * You can get and manipulate m_buf buffer pixel, via numpy API.
 * That numpy array is just `view`, and you must discard(or just
-* stop using) it before this Flagtile instance is released.
+* stop using) view-object before this Flagtile instance is released.
+*
+* Also, you can `swear` that view is used as readonly object.
+* Although, actually you are still enable to change numpy-buffer flag and
+* write change its contents, do not do it. 
 *
 * Use this method carefully.
 */
 PyObject*
-Flagtile::lock()
+Flagtile::lock(const bool readonly)
 {
 #ifdef HEAVY_DEBUG
     assert(m_npbuf == NULL); 
 #endif
-    m_statflag |= COUNT_DIRTY;
     npy_intp dim = FLAGTILE_BUF_SIZE;
     m_npbuf = PyArray_SimpleNewFromData(1, &dim, NPY_UINT8, m_buf);
     Py_INCREF(m_npbuf);
+    
+    if (readonly) {
+        PyArray_CLEARFLAGS((PyArrayObject*)m_npbuf, NPY_ARRAY_WRITEABLE);
+    }
+    else {
+        m_statflag |= COUNT_DIRTY;
+    }
     return m_npbuf;
 }
 
@@ -684,11 +696,11 @@ Flagtile::unlock(PyObject *nparray)
     // Assert strictly, even not in HEAVY_DEBUG.
     assert(nparray == m_npbuf); 
 
-    // COUNT_DIRTY statflag should not be cleared here.
-    // To save processing time, pixel-count update 
-    // should be done on-demand.
-    // And, in some case (e.g. frame-bbox trimming, after all pixel decided)
-    // we might not need pixel count anymore.
+    if (!PyArray_ISWRITEABLE((PyArrayObject*)m_npbuf)) {
+        // View object might be changed to writable one. 
+        // Force counting flag.
+        m_statflag |= COUNT_DIRTY;
+    }
 
     Py_DECREF(m_npbuf);
     m_npbuf = NULL;
@@ -808,7 +820,7 @@ FlagtileSurface::flood_fill(const int sx, const int sy, Filler* w)
         if (t != NULL) {
             if (flagtile_flood_fill(t, q, w)) {
                 for(int i=0; i < 4; i++) {
-                    if (! q->is_empty(i)) {
+                    if (! q->is_empty_queue(i)) {
                         int ntx = BorderQueue::adjust_tx(tx, i);
                         int nty = BorderQueue::adjust_ty(ty, i);
                         if(ntx >= 0 && nty >= 0 && ntx < get_width() && nty < get_height()) { 
@@ -1657,12 +1669,16 @@ flagtile_flood_fill(Flagtile *t, BorderQueue *q, Filler *w)
                     break;
                 }
 
-                if (x != x0) { // Test was already done for queued pixels
-                    pix = t->get(level, x, y);
-                    if (!w->match(pix)) {
-                        break;
-                    }
+                // Test was already done for queued pixels ,
+                // However, for initial (border) seed, that test is done against
+                // `pre-filled` pixel. 
+                // Such pixels might be changed by other(previously popped) queue.
+                // So, always do match-check. 
+                pix = t->get(level, x, y);
+                if (!w->match(pix)) {
+                    break;
                 }
+                
                 // Operate this pixel, and continue iterating in this direction
                 w->step(t, x, y);
 

@@ -229,7 +229,7 @@ def _trim_border(ft, bbox):
                 sy = max_py + 1 # Start from the next of max_py
             if sx != 0 or sy != 0 or ex != N or ey != N:
        #        print("processing %d, %d - %d,%d to %d, %d" % (tx, ty, sx,sy,ex,ey))
-                npary = tile.lock()
+                npary = tile.lock(True)
                 w = np.reshape(npary[0:N*N], (N,N))
                 w[sy:ey, sx:ex] = _PIXEL.EMPTY
                 tile.unlock(npary)
@@ -309,11 +309,32 @@ def close_fill(targ, src, nodes, targ_pos, level,
                         False
                     )
 
+
     # Build pyramid
     ft.propagate_upward(level)
 
+    # XXX Debug/profiling code
+    if show_flag:
+        _dbg_show_flag(
+            ft, 
+            'contour,filled,outside,area', 
+            title='propagated',
+            level=level
+        )
+    #XXX debug code end
+
     # Deciding outside of filling area
     ft.decide_outside(level)
+    # XXX Debug/profiling code
+    if show_flag:
+        _dbg_show_flag(
+            ft, 
+            'contour,filled,outside,area,workarea', 
+            title='decided',
+            level=level
+        )
+    #XXX debug code end
+
       
     # Then, start progressing tiles.
     for i in range(level, 0, -1):
@@ -843,7 +864,7 @@ def flood_fill(src, x, y, color, bbox, tolerance, dst, **kwargs):
                #overflows = lib.mypaintlib.flagtile_flood_fill(
                 if lib.mypaintlib.flagtile_flood_fill(flag_tile, eq, w):
                     for i in range(4):
-                        if not eq.is_empty(i):
+                        if not eq.is_empty_queue(i):
                             ntx = lib.mypaintlib.BorderQueue.adjust_tx(tx, i)
                             nty = lib.mypaintlib.BorderQueue.adjust_ty(ty, i)
                             if (ntx <= max_tx and nty <= max_ty
@@ -1000,6 +1021,7 @@ def _dbg_show_flag(ft, method, level=0, title=None):
     # From lib/progfilldefine.hpp
     FLAG_WORK = 0x10
     FLAG_AA = 0x80
+    FLAG_MASK = 0xF0
     npbuf = None
     if title is None:
         title = method
@@ -1043,10 +1065,16 @@ def _dbg_show_flag(ft, method, level=0, title=None):
     def create_npbuf(npbuf, level, pix):
         if npbuf is None:
             npbuf = np.zeros((th*SN, tw*SN, 3), 'uint8')
+
+        if (pix & FLAG_MASK) == 0:
+            color = colors[pix]
+        else:
+            color = colors[pix & FLAG_MASK]
+
         _dbg_render_to_numpy(
             ft,
             npbuf, pix,
-            colors[pix],
+            color,
             level,
             origins=origins
         )
@@ -1060,8 +1088,6 @@ def _dbg_show_flag(ft, method, level=0, title=None):
             npbuf = create_npbuf(npbuf, level, _PIXEL.CONTOUR)
         elif m == 'area':
             npbuf = create_npbuf(npbuf, level, _PIXEL.AREA)
-        elif m == 'close_area':
-            npbuf = create_npbuf(npbuf, 0, _PIXEL.AREA)
         elif m == 'initial_level' or m == 'empty':
             npbuf = create_npbuf(npbuf, level, 0)
         elif m == 'contour':
@@ -1072,6 +1098,8 @@ def _dbg_show_flag(ft, method, level=0, title=None):
             npbuf = create_npbuf(npbuf, level, _PIXEL.OVERWRAP)
         elif m == 'reserve':
             npbuf = create_npbuf(npbuf, level, _PIXEL.RESERVE)
+        elif m == 'workarea':
+            npbuf = create_npbuf(npbuf, level, FLAG_WORK | _PIXEL.AREA)
         elif m == 'level':
             npbuf = create_npbuf(npbuf, level, _PIXEL.AREA)
             npbuf = create_npbuf(npbuf, level, _PIXEL.FILLED)
@@ -1138,7 +1166,7 @@ def _dbg_render_to_numpy(ft, npbuf, pix, color, level, origins=None):
 
     def _render_tile(tile, tx, ty):
         if tile is not None and tile.get_pixel_count(level, pix) > 0:
-            nptile = tile.lock()
+            nptile = tile.lock(True)
             srcview = np.reshape(nptile[l_idx:l_idx+VN*VN], (VN,VN))
             x = tx * VN
             y = ty * VN
