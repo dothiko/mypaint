@@ -25,6 +25,9 @@ from random import randint
 import uuid
 import struct
 import contextlib
+import base64 # XXX for vector-layer-from-current
+import tempfile # XXX for vector-layer-from-current
+from gi.repository import Gio # XXX for reference-layer
 
 from lib.gettext import C_
 from lib.tiledsurface import N
@@ -436,6 +439,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         return self._save_rect_to_ora(orazip, tmpdir, "layer", path,
                                       frame_bbox, rect, **kwargs)
 
+    # XXX for `project`
     def save_to_project(self, projdir, path,
                            canvas_bbox,
                            force_write, **kwargs):
@@ -448,6 +452,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
 
         rect = self.get_bbox()
         return self._save_rect_to_project(projdir, rect, force_write, **kwargs)
+    # XXX for `project` end
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
         """Queues the layer for auto-saving"""
@@ -528,6 +533,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
         elem.attrib["src"] = storepath
         return elem
 
+    # XXX for `project`
     def _save_rect_to_project(self, projdir,
                           rect, force_write,
                           only_element = False,
@@ -605,6 +611,7 @@ class SurfaceBackedLayer (core.LayerBase, lib.projectsave.Projectsaveable):
             self.clear_project_dirty()
 
         return elem
+    # XXX for `project` end
 
     ## Painting symmetry axis
 
@@ -883,6 +890,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         elem.attrib["src"] = unicode(storepath)
         return elem
 
+    # XXX for `project`
     def save_to_project(self, projdir, path,
                            canvas_bbox,
                            force_write, **kwargs):
@@ -900,6 +908,7 @@ class FileBackedLayer (SurfaceBackedLayer, core.ExternallyEditable):
         elem.attrib["src"] = self.workfilename
         elem.attrib[self.PRJ_LAYERID_ATTR] = self.unique_id
         return elem
+    # XXX for `project` end
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
         """Queues the layer for auto-saving"""
@@ -1237,6 +1246,7 @@ class BackgroundLayer (SurfaceBackedLayer):
         progress.close()
         return elem
 
+    # XXX for `project`
     def save_to_project(self, projdir, path,
                            canvas_bbox,
                            force_write, progress=None,
@@ -1289,6 +1299,7 @@ class BackgroundLayer (SurfaceBackedLayer):
         elem.attrib[self.ORA_BGTILE_ATTR] = store_relpath
         elem.attrib['src'] = store_relpath # For compatibility with other apps.
         return elem
+    # XXX for `project` end
 
     def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
         """Queues the layer for auto-saving"""
@@ -1322,6 +1333,7 @@ class BackgroundLayer (SurfaceBackedLayer):
         """Snapshots the state of the layer, for undo purposes"""
         return BackgroundLayerSnapshot(self)
 
+    # XXX for `project`
     def init_unique_id(self, id):
         """ Clear filename and uuid information.
         This is for project-save/load functionality.
@@ -1333,6 +1345,7 @@ class BackgroundLayer (SurfaceBackedLayer):
         self._unique_id = id
         if hasattr(self, '_filename'):
             del self._filename
+    # XXX for `project` end
 
 class BackgroundLayerSnapshot (core.LayerBaseSnapshot):
     """Snapshot of a root layer stack's state"""
@@ -1385,32 +1398,349 @@ class VectorLayer (FileBackedLayer):
     def write_blank_backing_file(self, file, **kwargs):
         x = kwargs.get("x", 0)
         y = kwargs.get("y", 0)
-        outline = kwargs.get("outline")
-        if outline:
-            outline = [(px - x, py - y) for (px, py) in outline]
-        else:
-            outline = [(0, 0), (0, N), (N, N), (N, 0)]
+
+        # XXX for vector-layer-from-current
         svg = (
             '<?xml version="1.0" encoding="UTF-8" standalone="no"?>'
             '<!-- Created by MyPaint (http://mypaint.org/) -->'
-            '<svg version="1.1" width="{w}" height="{h}">'
-            '<path d="M '
+            '<svg version="1.1" width="{w}" height="{h}" '
         ).format(**kwargs)
-        for px, py in outline:
-            svg += "{x},{y} ".format(x=px, y=py)
-        rgb = tuple([randint(0x33, 0x99) for i in range(3)])
-        col = "#%02x%02x%02x" % rgb
-        svg += (
-            'Z" id="path0" '
-            'style="fill:none;stroke:{col};stroke-width:5;'
-            'stroke-linecap:round;stroke-linejoin:round;'
-            'stroke-dasharray:9, 9;stroke-dashoffset:0" />'
-            '</svg>'
-        ).format(col=col)
+
+        outline = kwargs.get("outline")
+        src_layer = kwargs.get("source-layer", None)
+        if src_layer is not None:
+            sx, sy , sw, sh = src_layer.get_bbox()
+            outline = None
+            # If we remove this `xmlns descriptor`,
+            # the reference layer image would not be rendered in mypaint
+            # but shown in Inkscape.
+            # It might be rather handy, but shows warning at GdkPixbuf.PixbufLoader.
+            svg += ('xmlns="http://www.w3.org/2000/svg" '
+                    'xmlns:xlink="http://www.w3.org/1999/xlink" ')
+        elif outline:
+            outline = [(px - x, py - y) for (px, py) in outline]
+        else:
+            outline = [(0, 0), (0, N), (N, N), (N, 0)]
+        svg += '>'
+
+        if outline is not None:
+            svg += '<path d="M '
+            for px, py in outline:
+                svg += "{x},{y} ".format(x=px, y=py)
+            rgb = tuple([randint(0x33, 0x99) for i in range(3)])
+            col = "#%02x%02x%02x" % rgb
+            svg += (
+                'Z" id="path0" '
+                'style="fill:none;stroke:{col};stroke-width:5;'
+                'stroke-linecap:round;stroke-linejoin:round;'
+                'stroke-dasharray:9, 9;stroke-dashoffset:0" />'
+            ).format(col=col)
+        elif src_layer is not None:
+            fd, filename = tempfile.mkstemp(suffix='.png')
+            os.close(fd) # Filedescriptor is unused.
+            src_layer.save_as_png(filename, sx, sy, sw, sh)
+            svg += '<image xlink:href="data:image/png;base64,\n'
+            with open(filename, 'rb') as ifp:
+                svg += base64.b64encode(ifp.read())
+            svg += ('"\nwidth="{width}" '
+               'height="{height}" '
+               'preserveAspectRatio="none" '
+               'x="{left}" '
+               'y="{top}" />'
+            ).format(left=sx-x, top=sy-y, width=sw, height=sh, filename=filename)
+            os.unlink(filename) # PNG file embedded into svg at above.
+
+        svg+='</svg>' # Place closing tag
+        # XXX for vector-layer-from-current END
 
         if not isinstance(svg, bytes):
             svg = svg.encode("utf-8")
         file.write(svg)
+
+class ReferenceLayerMove (object):
+    """Move object wrapper for reference image layers
+
+    Almost copied from SurfaceBackedLayerMove
+    """
+
+    def __init__(self, layer, x, y):
+        super(ReferenceLayerMove, self).__init__()
+        surface_move = layer._surface.get_move(x, y)
+        self._wrapped = surface_move
+        self._layer = layer
+
+    def update(self, dx, dy):
+        self._wrapped.update(dx, dy)
+        # ReferenceImageLayer never trims surface at save time,
+        # (It just write XML, nothing is done for source picture file)
+        # and layer location from get_bbox() method might not be
+        # same as original picture file.
+        # Therefore, we must record `current location`
+        # along with layer-move.
+        self._layer._x += int(dx)
+        self._layer._y += int(dy)
+
+    def cleanup(self):
+        self._wrapped.cleanup()
+
+    def process(self, n=200):
+        return self._wrapped.process(n)
+
+class ReferenceImageLayer (FileBackedLayer):
+    """An unpaintable, reference image layer,
+    which shows a picture file within local filesystem.
+
+    Actually, this layer do nothing. This just write some information
+    to XML.
+    Actual file monitoring would be done with gui.externalapp.LayerEditManager .
+    """
+
+    def get_icon_name(self):
+        # TODO This should be changed.
+        return "mypaint-layer-fallback-symbolic"
+
+    # TRANSLATORS: Short default name for renderable fallback layers
+    DEFAULT_NAME = C_(
+        "layer default names",
+        "Reference Image",
+    )
+
+    TYPE_DESCRIPTION = C_(
+        "layer type descriptions",
+        u"Reference Image Layer",
+    )
+
+    #: Any suffix is allowed, no preference for defaults
+    ALLOWED_SUFFIXES = [""]
+
+    def __init__(self, **kwargs):
+        super(ReferenceImageLayer, self).__init__(**kwargs)
+        self._x = 0
+        self._y = 0
+        self._edit_info = None
+        self._reference_path = ""
+        # This kwarg would send from gui.document.new_layer_cb
+        file_path = kwargs.get("reference-filename", None)
+        if file_path is not None:
+            self.set_reference_path(file_path)
+
+    @property
+    def reference_path(self):
+        return self._reference_path
+
+    def set_reference_path(self, file_path, progress=None):
+        if (os.path.exists(file_path) 
+                and file_path != self._reference_path):
+            # TODO Progress object might be needed here.
+            self._load_picture_file(file_path, self._x, self._y, progress)
+            self.begin_file_monitoring_using_gio(file_changed=True)
+        self._reference_path = file_path
+
+    def get_move(self, x, y):
+        return ReferenceLayerMove(self, x, y)
+
+    def _get_fallback_svg(self, w, h):
+        """ Generate fallback image with SVG.
+        This fallback image is used when reference target file is
+        not found.
+        """
+        # XXX Copied large part from FallbackDataLayer.FALLBACK_CONTENT
+        w = max(w, N)
+        h = max(h, N)
+        return (
+            '''<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+            <svg width="{width}" height="{height}" version="1.1"
+                    xmlns="http://www.w3.org/2000/svg">
+            <rect width="{rect_width}" height="{rect_height}" x="0.5" y="0.5"
+                    style="{rectstyle};fill:{shadow};stroke:{shadow}" />
+                <rect width="{rect_width}" height="{rect_height}" x="0.0" y="0.0"
+                    style="{rectstyle};fill:{base};stroke:{basestroke}" />
+                <text x="{shadow_x}" y="{shadow_y}"
+                    style="{textstyle};fill:{textshadow};stroke:{textshadow}"
+                    >?</text>
+                <text x="{text_x}" y="{text_y}"
+                    style="{textstyle};fill:{text};stroke:{textstroke}"
+                    >?</text>
+            </svg>'''
+        ).format(
+            rectstyle="stroke-width:1",
+            shadow="#000",
+            base="#eee",
+            basestroke="#fff",
+            textstyle="text-align:center;text-anchor:middle;"
+                      "font-size:48px;font-weight:bold;font-family:sans",
+            text="#9c0",
+            textshadow="#360",
+            textstroke="#ad1",
+            width=w, height=h,
+            rect_width=w-2, rect_height=h-2,
+            text_x=(w/2), text_y=(h/2),
+            shadow_x=(w/2)+1, shadow_y=(h/2)+1,
+        )
+
+    ## Loading
+
+    def _load_fallback(self, bbox=None):
+        if bbox is None:
+            bbox = self.get_bbox()
+        x, y, w, h = bbox
+        pixbuf = lib.pixbuf.load_from_stream(
+            StringIO(self._get_fallback_svg(w, h)),
+        )
+        return self.load_surface_from_pixbuf(pixbuf, x, y)
+
+    def _load_picture_file(self, filename, x, y, progress):
+        if os.path.exists(filename):
+            self.load_surface_from_pixbuf_file(filename, x=x, y=y, progress=progress)
+            return True
+        else:
+            self.load_fallback(bbox=(x, y, w, h))
+            return False
+
+    def _load_from_element(self, elem, progress, x, y):
+        if elem.tag != "reference_layer":
+            raise lib.layer.error.LoadingFailed("<reference_layer/> expected")
+
+        # The reference image file should be in somewhere of local storage,
+        # not inside of orazip or oradir.
+        # So you can not use ordinary openraster methods.
+        attrs = elem.attrib
+        x += int(attrs.get("x", 0))
+        y += int(attrs.get("y", 0))
+        w = int(attrs.get("width", N))
+        h = int(attrs.get("height", N))
+        src = attrs.get("src", "")
+
+        self._x = x
+        self._y = y
+        # You must set _x & _y attribute before call set_reference_path.
+        self.set_reference_path(src, progress)
+
+    def load_from_openraster(self, orazip, elem, cache_dir, progress,
+                             x=0, y=0, **kwargs):
+        """Loads layer flags and bitmap/surface data from a .ora zipfile
+
+        The normal behaviour is to load the surface data directly from
+        the OpenRaster zipfile without using a temporary file. This
+        method also checks the src attribute's suffix against
+        ALLOWED_SUFFIXES before attempting to load the surface.
+
+        See: _load_surface_from_orazip_member()
+
+        """
+        self._load_from_element(elem, progress, x, y)
+
+    def load_from_openraster_dir(self, oradir, elem, cache_dir, progress,
+                                 x=0, y=0, **kwargs):
+        """Loads layer flags and data from an OpenRaster-style dir"""
+        self._load_from_element(elem, progress, x, y)
+
+    ## Saving
+
+    def _save_elements(self, frame_bbox, progress):
+        if progress:
+            progress.items = 2
+
+        jx, jy, w, h = self.get_bbox()
+        # Boundary box is Tile-aligned, trimmed/padded by move command.
+        # But `ReferenceImageLayer` never save picture file, any result
+        # of layer-move cannot be reflected to that file.
+        # So we cannot use bbox information as layer location.
+        x = int(self._x)
+        y = int(self._y)
+        if frame_bbox is not None:
+            frame_x, frame_y = frame_bbox[0:2]
+            x -= frame_x
+            y -= frame_y
+        elem = self._get_stackxml_element("reference_layer", x, y)
+        elem.attrib['src'] = self._reference_path
+        # Width and Height is actually used for fallback.
+        # They are only used when target reference file is removed from filesystem.
+        elem.attrib['width'] = str(w)
+        elem.attrib['height'] = str(h)
+
+        if progress:
+            progress.close()
+        return elem
+
+    def save_to_openraster(self, orazip, tmpdir, path,
+                           canvas_bbox, frame_bbox,
+                           progress=None, **kwargs):
+
+        return self._save_elements(frame_bbox, progress)
+
+    # XXX for `project`
+    def save_to_project(self, projdir, path,
+                           canvas_bbox,
+                           force_write, progress=None,
+                           **kwargs):
+        return self._save_elements(None, progress)
+    # XXX for `project` end
+
+    def queue_autosave(self, oradir, taskproc, manifest, bbox, **kwargs):
+        """Queues the layer for auto-saving"""
+        # Arrange for the tile PNG to be rewritten, if necessary
+        return self._save_elements(bbox, None)
+
+    ## File monitoring
+    # XXX Copied from gui.externalapp.LayerEditManager
+    def begin_file_monitoring_using_gio(self, file_changed=False):
+        self.cleanup_stale_monitors(file_changed=file_changed)
+        file_path = self._reference_path
+        if not os.path.exists(file_path):
+            logger.warning("Cannot find file entity of layer %r (%r)", self, file_path)
+            return
+        logger.debug("Begin monitoring reference layer %r for changes (layer=%r)",
+                     file_path, self)
+        file = Gio.File.new_for_path(file_path)
+        file_mon = file.monitor_file(Gio.FileMonitorFlags.NONE, None)
+        file_mon.connect("changed", self._file_changed_cb)
+        logger.info("Installed monitor of reference layer %r", file_path)
+        self._edit_info = (file_mon, file, file_path)
+
+    def _commit(self):
+        """Commit a layer's ongoing external edit"""
+        logger.debug("Commit %r's current reference", self)
+        self.cleanup_stale_monitors()
+        mon, file, file_path = self._edit_info
+        if os.path.exists(file_path):
+            self.load_from_external_edit_tempfile(file_path)
+            if self._x != 0 or self._y != 0:
+                dx, dy = self._x, self_y
+                self._x = self._y = 0
+                move = self.get_move(0, 0)
+                move.update(dx, dy)
+                move.process()
+        else:
+            self._load_fallback(bbox=None)
+        return
+
+    def _file_changed_cb(self, mon, file1, file2, event_type):
+        if event_type == Gio.FileMonitorEvent.DELETED:
+            logger.debug("File %r was deleted", file1.get_path())
+            # For Reference layer, keep monitoring even if
+            # that file is removed(renamed).
+            return
+        if event_type == Gio.FileMonitorEvent.CHANGES_DONE_HINT:
+            logger.debug("File %r was changed", file1.get_path())
+            a_mon, file, file_path = self._edit_info
+            if a_mon is mon:
+                self._commit()
+                return
+
+    def cleanup_stale_monitors(self, file_changed=False, layer_removed=False):
+        if self._edit_info is not None:
+            mon, file, file_path = self._edit_info
+            stale = False
+            if file_changed:
+                logger.info("Removing monitor - target(source) file changed")
+                stale = True
+            if layer_removed:
+                logger.info("Removing monitor - layer removed")
+                stale = True
+            if stale:
+                mon.cancel()
+                logger.info("File %r is no longer monitored", file.get_path())
 
 
 class FallbackBitmapLayer (FileBackedLayer):
@@ -1927,12 +2257,12 @@ class StrokemappedPaintingLayer (SimplePaintingLayer):
             assert major == 0x01
             assert minor == 0x01
         else:
-            errmsg = "Invalid version of strokemap-v1a" 
+            errmsg = "Invalid version of strokemap-v1a"
            #raise ValueError(errmsg)
             # XXX Currently, just exit.
             logger.warning(errmsg)
             return
-            
+
 
         while True:
             t = f.read(1)

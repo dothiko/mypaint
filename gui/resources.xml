@@ -575,6 +575,32 @@ Vocabulary
           <signal name="activate" handler="new_layer_cb"/>
         </object>
       </child>
+      <!-- XXX for vectorlayer from current -->
+      <child>
+        <object class="GtkAction" id="NewVectorLayerCurrent">
+          <property name="icon-name">mypaint-layer-vector-symbolic</property>
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">New Vector Layer from current…</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Add a new vector layer above the current layer which based on currently selected layer, and begin editing it.</property>
+          <signal name="activate" handler="new_layer_cb"/>
+        </object>
+      </child>
+      <!-- XXX for vectorlayer from current end -->
+      <!-- XXX for `reference layer` -->
+      <child>
+        <object class="GtkAction" id="NewReferenceLayerAbove">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">New Reference Layer…</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Add a new reference image layer above the current layer. That layer only shows a image file of another location, cannot edit it.</property>
+          <signal name="activate" handler="import_layers_cb"/>
+        </object>
+      </child>
+      <child>
+        <object class="GtkAction" id="NewReferenceLayerBelow">
+          <property name="label" translatable="yes" context="Menu→Layer (labels), Accel Editor (labels)">New Reference Layer Below</property>
+          <property name="tooltip" translatable="yes" context="Accel Editor (descriptions)">Add a new reference image layer below the current layer. That layer only shows a image file of another location, cannot edit it.</property>
+          <signal name="activate" handler="import_layers_cb"/>
+        </object>
+      </child>
+      <!-- XXX for `reference layer` end -->
       <child>
         <object class="GtkAction" id="NewLayerGroupAbove">
           <property name="icon-name">mypaint-layer-group-new-symbolic</property>

@@ -687,11 +687,11 @@ class LayerStackMove (object):
             incomplete = move.process(n=n) or incomplete
         return incomplete
 
-
 ## Layer factory func
 
 _LAYER_LOADER_CLASS_ORDER = [
     LayerStack,
+    data.ReferenceImageLayer, # XXX for `reference layer`
     data.PaintingLayer,
     data.VectorLayer,
     data.FallbackBitmapLayer,

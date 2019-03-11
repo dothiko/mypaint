@@ -24,6 +24,7 @@ from lib.modes import MODE_STRINGS
 import lib.xml
 from lib.gettext import C_
 import gui.mvp
+import lib.layer # XXX for `reference-layer`
 
 import cairo
 from gi.repository import Gtk
@@ -115,17 +116,25 @@ class LayerPropertiesUI (gui.mvp.BuiltUIPresenter, object):
         root.layer_thumbnail_updated += self._m_layer_thumbnail_updated_cb
         self._store = None
 
+        # XXX To detect whether this view is active(i.e. shown as dialog)
+        # or not.
+        self.attached = False  
+
     def init_view(self):
         """Set initial state of the view objects."""
-
         # 3-column mode liststore (id, name, sensitive)
-        store = Gtk.ListStore(int, str, bool)
-        modes = STACK_MODES + STANDARD_MODES
-        for mode in modes:
-            label, desc = MODE_STRINGS.get(mode)
-            store.append([mode, label, True])
-        self._store = store
-        self.view.layer_mode_combo.set_model(store)
+        if self._store is None:
+            store = Gtk.ListStore(int, str, bool)
+            modes = STACK_MODES + STANDARD_MODES
+            for mode in modes:
+                label, desc = MODE_STRINGS.get(mode)
+                store.append([mode, label, True])
+            self._store = store
+            self.view.layer_mode_combo.set_model(store)
+        else:
+            self.view.layer_mode_combo.set_model(self._store)
+
+        self.attached = True
 
         # The eye button is greyed out while the view is locked.
         lvm = self._docmodel.layer_view_manager
@@ -143,6 +152,15 @@ class LayerPropertiesUI (gui.mvp.BuiltUIPresenter, object):
 
     @property
     def _layer(self):
+        # XXX Workaround: To avoid GTK-warning and 
+        # Segfault(abort) Mypaint. 
+        # Once Layer-property dialog is destroied,
+        # the event handler still active, and it causes
+        # some problems around dialog widgets.
+        # So add `attached` attribute and use this to
+        # identify the dialog is exist.
+        if not self.attached:
+            return None
         root = self._docmodel.layer_stack
         return root.current
 
@@ -192,6 +210,8 @@ class LayerPropertiesUI (gui.mvp.BuiltUIPresenter, object):
         self._m2v_layerview_locked()
 
     def _m2v_all(self):
+        if not self._layer:
+            return
         self._m2v_preview()
         self._m2v_name()
         self._m2v_mode()
@@ -199,6 +219,7 @@ class LayerPropertiesUI (gui.mvp.BuiltUIPresenter, object):
         for info in self._BOOL_PROPERTIES:
             self._m2v_layer_flag(info)
         self._m2v_layerview_locked()
+        self._m2v_refsource() # XXX for `reference_layer`
         
     def _m2v_preview(self):
         layer = self._layer
@@ -246,13 +267,15 @@ class LayerPropertiesUI (gui.mvp.BuiltUIPresenter, object):
         combo.set_active_iter(active_iter)
 
     def _m2v_opacity(self):
+        layer = self._layer
+        if not layer:
+            return
+
         adj = self.view.layer_opacity_adjustment
         scale = self.view.layer_opacity_scale
-        layer = self._layer
 
         opacity_is_adjustable = not (
-            layer is None
-            or layer is self._docmodel.layer_stack
+            layer is self._docmodel.layer_stack
             or layer.mode == PASS_THROUGH_MODE
         )
         scale.set_sensitive(opacity_is_adjustable)
@@ -264,6 +287,9 @@ class LayerPropertiesUI (gui.mvp.BuiltUIPresenter, object):
 
     def _m2v_layer_flag(self, info):
         layer = self._layer
+        if not layer:
+            return
+
         propval = getattr(layer, info.property)
         propval_idx = int(propval)
 
@@ -280,6 +306,22 @@ class LayerPropertiesUI (gui.mvp.BuiltUIPresenter, object):
         sensitive = not lvm.current_view_locked
         btn = self.view.layer_hidden_togglebutton
         btn.set_sensitive(sensitive)
+
+    # XXX for `reference-layer`
+    def _m2v_refsource(self):
+        layer = self._layer
+        show_flag = isinstance(layer, lib.layer.ReferenceImageLayer)
+        refsource_label = self.view.layer_source_label
+        refsource_chooser = self.view.layer_source_chooser
+        if show_flag:
+            refsource_label.show()
+            refsource_chooser.show()
+            assert hasattr(layer, 'reference_path')
+            refsource_chooser.set_filename(layer.reference_path)
+        else:
+            refsource_label.hide()
+            refsource_chooser.hide()
+    # XXX for `reference-layer` end
 
     # View monitoring and response (callback names defined in .glade XML):
 
@@ -350,6 +392,15 @@ class LayerPropertiesUI (gui.mvp.BuiltUIPresenter, object):
                 if (i.property == "marked")][0]
         self._v2m_layer_flag(info)
     # XXX 'marked' layer flag end
+
+    # XXX for `reference_layer`
+    @gui.mvp.model_updater
+    def _v_layer_source_changed_cb(self, btn):
+        cl = self._layer
+        if not cl or not isinstance(cl, lib.layer.ReferenceImageLayer):
+            return
+        cl.set_reference_path(btn.get_filename())
+    # XXX for `reference_layer` end
     
     def _v2m_layer_flag(self, info):
         layer = self._layer
@@ -420,7 +471,13 @@ class LayerPropertiesDialog (Gtk.Dialog):
         self._ui = LayerPropertiesUI(docmodel)
         self.vbox.pack_start(self._ui.widget, True, True, 0)
         self.set_default_response(Gtk.ResponseType.OK)
+        self.connect("destroy", self.destroy_cb) # XXX workaround for GTK segfault
 
+    def destroy_cb(self, widget):
+        """Destroy handler, to notify LayerPropertiesUI that
+        the parent dialog is already destroyed.
+        """
+        self._ui.attached = False
 
 # Helpers:
 

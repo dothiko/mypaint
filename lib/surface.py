@@ -309,6 +309,7 @@ def save_as_png(surface, filename, *rect, **kwargs):
         # those indicate incorrect coding usually; just raise them
         # normally.
 
+
 # XXX for `marked layer operations (and cut layer operation)`
 def finalize_surface_changes(surf, tiles):
     """Finalize surface processing.
@@ -317,11 +318,11 @@ def finalize_surface_changes(surf, tiles):
         tiles = surf.get_tiles()
     for pos in tiles:
         surf._mark_mipmap_dirty(*pos)
-        
+
     # XXX This line moved from the last of this function.
     # This line seems to be called prior to notify_observers().
     surf.remove_empty_tiles()
-            
+
     bbox = lib.surface.get_tiles_bbox(tiles)
     surf.notify_observers(*bbox)
     #surf.remove_empty_tiles()

@@ -859,6 +859,16 @@ class FileHandler (object):
             return
         logger.info('Imported layers from %r', filenames)
 
+    # XXX for `reference layer`
+    def add_reference_layers(self, filenames):
+        """Load a file, replacing the current working document."""
+
+        if not self._call_doc_load_method(self.doc.model.add_reference_layers,
+                                          filenames, True):
+            return
+        logger.info('Add reference layers from %r', filenames)
+    # XXX for `reference layer` end
+
     def _call_doc_load_method(self, method, arg, is_import):
         """Internal: common GUI aspects of loading or importing files.
 
@@ -1129,11 +1139,21 @@ class FileHandler (object):
 
     def import_layers_cb(self, action):
         """Action callback: import layers from multiple files."""
-        dialog = Gtk.FileChooserDialog(
+        # XXX for `reference layer`
+        if "Import" in action.get_name():
             title = C_(
                 u'Layers→Import Layers: files-chooser dialog: title',
                 u"Import Layers",
-            ),
+            )
+        else:
+            title = C_(
+                u'Layers→Add Reference Layer: files-chooser dialog: title',
+                u"Add Reference Layer",
+            )
+
+
+        dialog = Gtk.FileChooserDialog(
+            title = title,
             parent = self.app.drawWindow,
             action = Gtk.FileChooserAction.OPEN,
             buttons = [
@@ -1152,15 +1172,17 @@ class FileHandler (object):
 
         _add_filters_to_dialog(self.file_filters, dialog)
 
-        # Choose the most recent save folder.
-        self._update_recent_items()
-        for item in reversed(self._recent_items):
-            uri = item.get_uri()
-            fn, _h = lib.glib.filename_from_uri(uri)
-            dn = os.path.dirname(fn)
-            if os.path.isdir(dn):
-                dialog.set_current_folder(dn)
-                break
+        # XXX for `reference layer`
+        if "Import" in action.get_name():
+            # Choose the most recent save folder.
+            self._update_recent_items()
+            for item in reversed(self._recent_items):
+                uri = item.get_uri()
+                fn, _h = lib.glib.filename_from_uri(uri)
+                dn = os.path.dirname(fn)
+                if os.path.isdir(dn):
+                    dialog.set_current_folder(dn)
+                    break
 
         filenames = []
         try:
@@ -1172,7 +1194,10 @@ class FileHandler (object):
 
         if filenames:
             filenames = [filename_to_unicode(f) for f in filenames]
-            self.import_layers(filenames)
+            if "Import" in action.get_name():
+                self.import_layers(filenames)
+            else:
+                self.add_reference_layers(filenames)
 
     def save_cb(self, action):
         if not self.filename:

@@ -1298,7 +1298,13 @@ class Document (object):
         """Delete the current layer"""
         if not self.layer_stack.current_path:
             return
-        self.do(command.RemoveLayer(self))
+        # XXX for `reference image`
+        cl = self.layer_stack.current
+        if isinstance(cl, layer.ReferenceImageLayer):
+            self.do(command.RemoveReferenceLayer(self))
+        else:
+            self.do(command.RemoveLayer(self)) # Original code.
+        # XXX for `reference image` end
 
     def rename_current_layer(self, name):
         """Rename the current layer"""
@@ -1811,6 +1817,61 @@ class Document (object):
 
         path = self.layer_stack.current_path
         cmd = command.AddLayer(self, path, layer=import_group, is_import=True)
+        self.do(cmd)
+        progress.close()
+
+    def add_reference_layers(self, filenames, progress=None, **kwargs):
+        """Add reference layers at the current position from files.
+
+        >>> doc = Document()
+        >>> len(doc.layer_stack)
+        1
+        >>> doc.add_reference_layers([
+        ...    "tests/smallimage.ora",
+        ...    "tests/bigimage.ora",
+        ... ])
+        >>> len(doc.layer_stack)
+        2
+        >>> doc.cleanup()
+
+        """
+        if progress is None:
+            progress = lib.feedback.Progress()
+        progress.items = len(filenames)
+
+        logger.info(
+            "Adding reference image layers from %d file(s) via a temporary document",
+            len(filenames),
+        )
+        reference_layers = []
+        for filename in filenames:
+            filebase, ext = os.path.splitext(filename)
+            ext = ext.lower()
+            kwds = {}
+            kwds['reference-filename'] = filename
+            if ext in ('.png', '.jpg', '.jpeg'):
+                rl = layer.ReferenceImageLayer(**kwds)
+            elif ext == '.ora':
+                raise NotImplementedError("Ora reference layer is not supported yet.")
+            else:
+                continue
+            reference_layers.append(rl)
+
+        if len(reference_layers) == 0:
+            return
+        elif len(reference_layers) == 1:
+            add_group = reference_layers[0]
+        else:
+            add_group = layer.LayerStack()
+            add_group.name = C_(
+                "Document IO: group name for referenced ora file.",
+                u"Reference Image layers",
+            )
+            for cl in reference_layers:
+                add_group.append(cl)
+
+        path = self.layer_stack.current_path
+        cmd = command.AddReferenceLayer(self, path, layer=add_group)
         self.do(cmd)
         progress.close()
 

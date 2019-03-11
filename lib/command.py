@@ -1258,6 +1258,73 @@ class RemoveLayer (Command):
         layers.deepinsert(self._unwanted_path, self._removed_layer)
         layers.set_current_path(self._unwanted_path)
         self._removed_layer = None
+
+class AddReferenceLayer (AddLayer):
+    """Inserts a Reference layer into the layer stack.
+
+    The layer can be supplied at construction time. Alternatively a
+    constructor function or class can be passed in, along with a name
+    and any other **kwds you need. The default class if neither is
+    specified is the normal painting layer type.
+
+    In both cases, the command object takes ownership of the layer.
+
+    """
+
+    def __init__(self, doc, insert_path, name=None,
+                 layer=None, **kwds):
+        super(AddReferenceLayer, self).__init__(
+            doc, insert_path, name=name, layer=layer,
+            **kwds
+        )
+
+    def redo(self):
+        super(AddReferenceLayer, self).redo()
+        cl = self._layer
+        assert hasattr(cl, 'begin_file_monitoring_using_gio')
+        cl.begin_file_monitoring_using_gio()
+
+    def undo(self):
+        super(AddReferenceLayer, self).undo()
+        cl = self._layer
+        assert hasattr(cl, 'cleanup_stale_monitors')
+        cl.cleanup_stale_monitors(layer_removed=True)
+
+class RemoveReferenceLayer (RemoveLayer):
+    """Inserts a Reference layer into the layer stack.
+
+    The layer can be supplied at construction time. Alternatively a
+    constructor function or class can be passed in, along with a name
+    and any other **kwds you need. The default class if neither is
+    specified is the normal painting layer type.
+
+    In both cases, the command object takes ownership of the layer.
+
+    """
+
+    def __init__(self, doc, name=None,
+                 layer=None, **kwds):
+        super(RemoveReferenceLayer, self).__init__(
+            doc, **kwds
+        )
+
+    def redo(self):
+        super(RemoveReferenceLayer, self).redo()
+        cl = self._removed_layer
+        assert hasattr(cl, 'cleanup_stale_monitors')
+        cl.cleanup_stale_monitors(layer_removed=True)
+
+    def undo(self):
+        # RemoveLayer.undo erases _removed_layer.
+        # So setting file monitoring before calling 
+        # superclass undo(). 
+        assert self._removed_layer is not None
+        cl = self._removed_layer
+        assert hasattr(cl, 'begin_file_monitoring_using_gio')
+        cl.begin_file_monitoring_using_gio()
+
+        super(RemoveReferenceLayer, self).undo()
+
 class SelectLayer (Command):
     """Select a layer"""
 

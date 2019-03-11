@@ -248,10 +248,13 @@
       <menuitem action='NewPaintingLayerAbove'/>
       <menuitem action='NewLayerGroupAbove'/>
       <menuitem action='NewVectorLayerAbove'/>
+      <menuitem action='NewVectorLayerCurrent'/>
+      <menuitem action='NewReferenceLayerAbove'/>
       <menu action="LayerNewBelowMenu">
         <menuitem action='NewPaintingLayerBelow'/>
         <menuitem action='NewLayerGroupBelow'/>
         <menuitem action='NewVectorLayerBelow'/>
+        <menuitem action='NewReferenceLayerBelow'/>
       </menu>
       <!-- Current layer: editing: Clipboard -->
       <separator/>

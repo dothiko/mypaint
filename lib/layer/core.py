@@ -187,8 +187,10 @@ class LayerBase (Renderable):
         self.visible = (visible != "hidden")
         locked = attrs.get("edit-locked", 'false').lower()
         self.locked = lib.xml.xsd2bool(locked)
+        # XXX for `select marker`
         selected = attrs.get("selected", 'false').lower()
         self.initially_selected = lib.xml.xsd2bool(selected)
+        # XXX for `select marker` end
 
     def __deepcopy__(self, memo):
         """Returns an independent copy of the layer, for Duplicate Layer

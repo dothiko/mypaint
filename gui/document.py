@@ -1412,6 +1412,9 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             layer_kwds["y"] = y
             layer_kwds["w"] = w
             layer_kwds["h"] = h
+            if "Current" in action.get_name():
+                layer_kwds["source-layer"] = layers.current
+
         elif "Group" in action.get_name():
             layer_class = lib.layer.LayerStack
 
@@ -1424,23 +1427,6 @@ class Document (CanvasController):  # TODO: rename to "DocumentController"
             path = layers.path_below(path, insert=True)
         assert path is not None
 
-        if "Import" in action.get_name():
-            app = self.app
-            try:
-                dlg = app.filehandler.get_open_dialog(
-                        file_filters=app.filehandler.file_filters)
-                preview = Gtk.Image()
-                dlg.set_preview_widget(preview)
-                dlg.connect("update-preview", 
-                        app.filehandler.update_preview_cb, preview)
-
-                if dlg.run() == Gtk.ResponseType.OK:
-                    layer_kwds["import-filename"] = dlg.get_filename().decode('utf-8')
-                else:
-                    return
-            finally:
-                dlg.destroy()
-            
         self.model.add_layer(path, layer_class=layer_class, **layer_kwds)
 
         self.layerblink_state.activate(action)

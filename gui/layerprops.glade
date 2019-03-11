@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Generated with glade 3.18.3 -->
+<!-- Generated with glade 3.22.1 -->
 <interface domain="mypaint">
   <requires lib="gtk+" version="3.12"/>
   <object class="GtkAdjustment" id="layer-opacity-adjustment">
@@ -242,6 +242,28 @@ With marking layer(s),you can do some actions which uses other layer(s) as sourc
           <packing>
             <property name="left_attach">1</property>
             <property name="top_attach">3</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="layer-source-label">
+            <property name="can_focus">False</property>
+            <property name="label" translatable="yes">Source</property>
+          </object>
+          <packing>
+            <property name="left_attach">0</property>
+            <property name="top_attach">4</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkFileChooserButton" id="layer-source-chooser">
+            <property name="can_focus">False</property>
+            <property name="create_folders">False</property>
+            <property name="title" translatable="yes"/>
+            <signal name="file-set" handler="_v_layer_source_changed_cb" swapped="no"/>
+          </object>
+          <packing>
+            <property name="left_attach">1</property>
+            <property name="top_attach">4</property>
           </packing>
         </child>
       </object>
